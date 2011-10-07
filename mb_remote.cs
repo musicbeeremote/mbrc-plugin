@@ -8,6 +8,13 @@ namespace MusicBeePlugin
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
         private SocketServer _mbSoc;
+        private bool _songChanged;
+
+        public bool SongChanged
+        {
+            get { return _songChanged; }
+            set { _songChanged = value; }
+        }
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
@@ -66,7 +73,7 @@ namespace MusicBeePlugin
                     }
                     break;
                 case NotificationType.TrackChanged:
-
+                    SongChanged = true;
 
                     // ...
                     break;
@@ -112,9 +119,32 @@ namespace MusicBeePlugin
         }
         public int DecreaseVolume()
         {
+            if ((int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1) == 0) return 0;
             float vol = (float)Math.Round(_mbApiInterface.Player_GetVolume() - (float)0.1, 1);
             _mbApiInterface.Player_SetVolume(vol);
             return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
+        }
+        public int GetVolume()
+        {
+            return (int) Math.Round(_mbApiInterface.Player_GetVolume()*10, 1);
+        }
+        public string GetPlayState()
+        {
+            switch (_mbApiInterface.Player_GetPlayState())
+            {
+                case PlayState.Undefined:
+                    return "UNDEFIN";
+                case PlayState.Loading:
+                    return "LOADING";
+                case PlayState.Playing:
+                    return "PLAYING";
+                case PlayState.Paused:
+                    return "PAUSEDD";
+                case PlayState.Stopped:
+                    return "STOPPED";
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
     }
 }

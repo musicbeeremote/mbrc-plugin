@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 
 namespace MusicBeePlugin
 {
@@ -88,9 +89,9 @@ namespace MusicBeePlugin
             {
                 _clientSocket = _listener.EndAcceptSocket(result);
                 string address = ((IPEndPoint)_clientSocket.RemoteEndPoint).Address.ToString();
-                if (string.Compare(address, "127.0.0.1", StringComparison.Ordinal) != 0)
-                {
-                    bool matched = false;
+                //if (string.Compare(address, "127.0.0.1", StringComparison.Ordinal) != 0)
+                //{
+                   // bool matched = false;
                     //    if (UserConfiguration.SystemOptions.ExternalHosts != null) {
                     //        for (int index = 0; index <= UserConfiguration.SystemOptions.ExternalHosts.Count - 1; index++) {
                     //            if (string.Compare(address, UserConfiguration.SystemOptions.ExternalHosts(index), StringComparison.Ordinal) == 0 || string.Compare(UserConfiguration.SystemOptions.ExternalHosts(index), "0.0.0.0", StringComparison.Ordinal) == 0) {
@@ -99,12 +100,13 @@ namespace MusicBeePlugin
                     //            }
                     //        }
                     //    }
-                    if (!matched) return;
-                }
-                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("100 MusicBee\n"));
+                   // if (!matched) return;
+               // }
+                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("100 MusicBee Welcome {0}\n", address)));
                 byte[] buffer = new byte[4096];
                 bool connectionClosing = false;
                 int count = 0;
+
                 do
                 {
                     int eocIndex = -1;
@@ -136,8 +138,10 @@ namespace MusicBeePlugin
                     }
                     else
                     {
-                        commands =
-                            System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "\n").Split('\n');
+
+                        commands = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\0", "").Split("\r\n".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+               
+                            
                     }
                     foreach (string commandLine in commands)
                     {
@@ -147,7 +151,7 @@ namespace MusicBeePlugin
                             {
                                 case "NEXT":
                                     _plugin.PlayNextTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("250 OK\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("200 NEXT OK\n"));
                                     break;
                                 case "PLAYPAUSE":
                                     _plugin.PlayPauseTrack();
@@ -155,7 +159,13 @@ namespace MusicBeePlugin
                                     break;
                                 case "PREVIOUS":
                                     _plugin.PlayPreviousTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("250 OK\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("210 PREVIOUS OK\n"));
+                                    break;
+                                case "GETPLAYSTATE":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("220 PLAY STATE:{0}\n", _plugin.GetPlayState())));
+                                    break;
+                                case "GETVOL":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("250 VOL CUR:{0}\n", _plugin.GetVolume())));
                                     break;
                                 case "INCREASEVOL":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("260 VOL UP:{0}\n", _plugin.IncreaseVolume())));
@@ -163,7 +173,14 @@ namespace MusicBeePlugin
                                 case "DECREASEVOL":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("270 VOL DOWN:{0}\n", _plugin.DecreaseVolume())));
                                     break;
-                                    
+                                case "ISSONGCHANGED":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("280 SONGCHANGE:{0}\n", _plugin.SongChanged)));
+                                    _plugin.SongChanged = false;
+                                    break;
+                                case "SENDSONGDATA":
+                                    break;
+                                case "SENDSONGCOVER":
+                                    break;
                                 default:
                                     break;
 
