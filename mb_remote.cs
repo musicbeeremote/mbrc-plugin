@@ -8,14 +8,9 @@ namespace MusicBeePlugin
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
         private SocketServer _mbSoc;
-        private bool _songChanged;
 
-        public bool SongChanged
-        {
-            get { return _songChanged; }
-            set { _songChanged = value; }
-        }
-
+        public bool SongChanged { get; set; }
+        public SongInfo CurrentSong;
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
             _mbApiInterface = (MusicBeeApiInterface)Marshal.PtrToStructure(apiInterfacePtr, typeof(MusicBeeApiInterface));
@@ -34,6 +29,7 @@ namespace MusicBeePlugin
             _about.ConfigurationPanelHeight = 10;   // not implemented yet: height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
             _mbSoc = new SocketServer(this);
             SocketServer.Start();
+            CurrentSong = new SongInfo();
             return _about;
         }
 
@@ -74,10 +70,19 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.TrackChanged:
                     SongChanged = true;
-
+                    GetTrackInfo();
                     // ...
                     break;
             }
+        }
+
+        private void GetTrackInfo()
+        {
+            CurrentSong.Artist = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist);
+            CurrentSong.Album = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album);
+            CurrentSong.Title = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
+            CurrentSong.Year = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year);
+            CurrentSong.ImageData = _mbApiInterface.NowPlaying_GetArtwork();
         }
 
         // return lyrics for the requested artist/title

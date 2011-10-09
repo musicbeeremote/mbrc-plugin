@@ -151,33 +151,44 @@ namespace MusicBeePlugin
                             {
                                 case "NEXT":
                                     _plugin.PlayNextTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("200 NEXT OK\n"));
-                                    break;
-                                case "PLAYPAUSE":
-                                    _plugin.PlayPauseTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("250 OK\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("200 NEXT OK\r\n"));
                                     break;
                                 case "PREVIOUS":
                                     _plugin.PlayPreviousTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("210 PREVIOUS OK\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("210 PREVIOUS OK\r\n"));
+                                    break;
+                                case "PLAYPAUSE":
+                                    _plugin.PlayPauseTrack();
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("220 PLAYPAUSE OK\r\n"));
                                     break;
                                 case "GETPLAYSTATE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("220 PLAY STATE:{0}\n", _plugin.GetPlayState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("230 PLAY STATE:{0}\r\n", _plugin.GetPlayState())));
                                     break;
                                 case "GETVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("250 VOL CUR:{0}\n", _plugin.GetVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("250 VOL CUR:{0}\r\n", _plugin.GetVolume())));
                                     break;
                                 case "INCREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("260 VOL UP:{0}\n", _plugin.IncreaseVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("260 VOL UP:{0}\r\n", _plugin.IncreaseVolume())));
                                     break;
                                 case "DECREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("270 VOL DOWN:{0}\n", _plugin.DecreaseVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("270 VOL DOWN:{0}\r\n", _plugin.DecreaseVolume())));
                                     break;
                                 case "ISSONGCHANGED":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("280 SONGCHANGE:{0}\n", _plugin.SongChanged)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("300 SONGCHANGE:{0}\r\n", _plugin.SongChanged)));
                                     _plugin.SongChanged = false;
                                     break;
                                 case "SENDSONGDATA":
+                                    if (_plugin.CurrentSong == null)
+                                    {
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("998 NULL DATA ERROR"));
+                                        break;
+                                    }
+                                        
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("400 NOW PLAYING\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Artist + "\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Title+ "\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Album + "\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Year + "\r\n"));
                                     break;
                                 case "SENDSONGCOVER":
                                     break;
@@ -194,7 +205,7 @@ namespace MusicBeePlugin
                         {
                             try
                             {
-                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("Error"));
+                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("999 UNKNOWN ERROR"));
                             }
                             catch
                             {
