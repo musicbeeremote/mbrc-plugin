@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
@@ -102,7 +105,7 @@ namespace MusicBeePlugin
                     //    }
                    // if (!matched) return;
                // }
-                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("100 MusicBee Welcome {0}\n", address)));
+                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("100 MusicBee Welcome {0}\r\n", address)));
                 byte[] buffer = new byte[4096];
                 bool connectionClosing = false;
                 int count = 0;
@@ -191,6 +194,14 @@ namespace MusicBeePlugin
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Year + "\r\n"));
                                     break;
                                 case "SENDSONGCOVER":
+                                    if (_plugin.CurrentSong ==null)
+                                    {
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("998 NULL DATA ERROR"));
+                                        break;
+                                    }
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("410 IMAGE COVER\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.ResizedImage()));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("411 IMAGE COVER END\r\n"));
                                     break;
                                 default:
                                     break;
