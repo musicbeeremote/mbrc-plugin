@@ -201,7 +201,7 @@ namespace MusicBeePlugin
                                     }
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("410 IMAGE COVER\r\n"));
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.ResizedImage()));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("411 IMAGE COVER END\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("\n411 IMAGE COVER END\r\n"));
                                     break;
                                 default:
                                     break;

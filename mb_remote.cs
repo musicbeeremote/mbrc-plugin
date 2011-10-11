@@ -69,8 +69,8 @@ namespace MusicBeePlugin
                     }
                     break;
                 case NotificationType.TrackChanged:
-                    SongChanged = true;
                     GetTrackInfo();
+                    SongChanged = true;
                     // ...
                     break;
             }
@@ -98,7 +98,7 @@ namespace MusicBeePlugin
         // return null if no artwork is found
         public string RetrieveArtwork(string sourceFileUrl, string albumArtist, string album)
         {
-            //Return Convert.ToBase64String(artworkBinaryData)
+            //return Convert.ToBase64String(artworkBinaryData)
             return null;
         }
         public void PlayNextTrack()
