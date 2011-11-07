@@ -142,15 +142,15 @@ namespace MusicBeePlugin
             switch (_mbApiInterface.Player_GetPlayState())
             {
                 case PlayState.Undefined:
-                    return "UNDEFIN";
+                    return "undefined";
                 case PlayState.Loading:
-                    return "LOADING";
+                    return "loading";
                 case PlayState.Playing:
-                    return "PLAYING";
+                    return "playing";
                 case PlayState.Paused:
-                    return "PAUSEDD";
+                    return "paused";
                 case PlayState.Stopped:
-                    return "STOPPED";
+                    return "stopped";
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -172,15 +172,15 @@ namespace MusicBeePlugin
             {
                 case RepeatMode.None:
                     _mbApiInterface.Player_SetRepeat(RepeatMode.All);
-                    return "All";
+                    return "all";
                 case RepeatMode.All:
-                    _mbApiInterface.Player_SetRepeat(RepeatMode.One);
-                    return "One";
+                    _mbApiInterface.Player_SetRepeat(RepeatMode.None);
+                    return "none";
                 case RepeatMode.One:
                     _mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                    return "None";
+                    return "none";
             }
-            return "None";
+            return "none";
         }
         public string ChangeMuteState()
         {

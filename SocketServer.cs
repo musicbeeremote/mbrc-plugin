@@ -101,7 +101,7 @@ namespace MusicBeePlugin
                     //    }
                    // if (!matched) return;
                // }
-                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<MusicBeeClientIP>{0}</MusicBeeClientIP>", address)));
+                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<MusicBeeClientIP>{0}</MusicBeeClientIP>\0", address)));
                 byte[] buffer = new byte[4096];
                 bool connectionClosing = false;
                 int count = 0;
@@ -176,7 +176,7 @@ namespace MusicBeePlugin
                                 case "SENDSONGDATA":
                                     if (_plugin.CurrentSong == null)
                                     {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />"));
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />\0"));
                                         break;
                                     }
                                         
@@ -200,16 +200,16 @@ namespace MusicBeePlugin
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<stopplayback></stopplayback>\0"));
                                     break;
                                 case "SHUFFLE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>", _plugin.ChangeShuffleState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0", _plugin.ChangeShuffleState())));
                                     break;
                                 case "MUTE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>", _plugin.ChangeMuteState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0", _plugin.ChangeMuteState())));
                                     break;
                                 case "REPEAT":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>", _plugin.ChangeRepeatState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0", _plugin.ChangeRepeatState())));
                                     break;
                                 case "PLAYLIST":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>", _plugin.GetPlaylist())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>\0", _plugin.GetPlaylist())));
                                     break;
                                     
                             }

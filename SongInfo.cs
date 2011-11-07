@@ -29,8 +29,8 @@ namespace MusicBeePlugin
             var sourceWidth = imageCover.Width;
             var sourceHeight = imageCover.Height;
 
-            var nPercentW = (250 / (float)sourceWidth);
-            var nPercentH = (250 / (float)sourceHeight);
+            var nPercentW = (300 / (float)sourceWidth);
+            var nPercentH = (300 / (float)sourceHeight);
 
             var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
             var destWidth = (int)(sourceWidth * nPercent);
