@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Runtime.InteropServices;
 
 namespace MusicBeePlugin
@@ -105,7 +106,10 @@ namespace MusicBeePlugin
         {
             _mbApiInterface.Player_PlayNextTrack();
         }
-
+        public void StopPlayback()
+        {
+            _mbApiInterface.Player_Stop();
+        }
         public void PlayPauseTrack()
         {
             _mbApiInterface.Player_PlayPause();
@@ -120,7 +124,7 @@ namespace MusicBeePlugin
             float vol = (float)Math.Round(_mbApiInterface.Player_GetVolume() + (float)0.1, 1);
             _mbApiInterface.Player_SetVolume(vol);
             return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
-            
+
         }
         public int DecreaseVolume()
         {
@@ -131,7 +135,7 @@ namespace MusicBeePlugin
         }
         public int GetVolume()
         {
-            return (int) Math.Round(_mbApiInterface.Player_GetVolume()*10, 1);
+            return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
         }
         public string GetPlayState()
         {
@@ -150,6 +154,58 @@ namespace MusicBeePlugin
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+        }
+        public string ChangeShuffleState()
+        {
+            if (_mbApiInterface.Player_GetShuffle())
+            {
+                _mbApiInterface.Player_SetShuffle(false);
+                return "False";
+            }
+            _mbApiInterface.Player_SetShuffle(true);
+            return "True";
+        }
+
+        public string ChangeRepeatState()
+        {
+            switch (_mbApiInterface.Player_GetRepeat())
+            {
+                case RepeatMode.None:
+                    _mbApiInterface.Player_SetRepeat(RepeatMode.All);
+                    return "All";
+                case RepeatMode.All:
+                    _mbApiInterface.Player_SetRepeat(RepeatMode.One);
+                    return "One";
+                case RepeatMode.One:
+                    _mbApiInterface.Player_SetRepeat(RepeatMode.None);
+                    return "None";
+            }
+            return "None";
+        }
+        public string ChangeMuteState()
+        {
+            if (_mbApiInterface.Player_GetMute())
+            {
+                _mbApiInterface.Player_SetMute(false);
+                return "False";
+            }
+            _mbApiInterface.Player_SetMute(true);
+            return "True";
+        }
+        public string GetPlaylist()
+        {
+            _mbApiInterface.NowPlayingList_QueryFiles("*");
+            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(),StringSplitOptions.RemoveEmptyEntries);
+            string songlist="";
+
+            foreach (var playListTrack in playListTracks)
+            {
+                songlist+="<playlistItem>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + " - " +
+                       _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)+"</playlistItem>";
+
+            }
+            return songlist;
+
         }
     }
 }

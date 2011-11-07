@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.IO;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace MusicBeePlugin
 {
@@ -105,7 +101,7 @@ namespace MusicBeePlugin
                     //    }
                    // if (!matched) return;
                // }
-                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("100 MusicBee Welcome {0}\r\n", address)));
+                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<MusicBeeClientIP>{0}</MusicBeeClientIP>", address)));
                 byte[] buffer = new byte[4096];
                 bool connectionClosing = false;
                 int count = 0;
@@ -141,10 +137,7 @@ namespace MusicBeePlugin
                     }
                     else
                     {
-
-                        commands = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\0", "").Split("\r\n".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-               
-                            
+                        commands = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "").Split("\00".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);    
                     }
                     foreach (string commandLine in commands)
                     {
@@ -154,59 +147,71 @@ namespace MusicBeePlugin
                             {
                                 case "NEXT":
                                     _plugin.PlayNextTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("200 NEXT OK\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<next>OK</next>\0"));
                                     break;
                                 case "PREVIOUS":
                                     _plugin.PlayPreviousTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("210 PREVIOUS OK\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<previous>OK</previous>\0"));
                                     break;
                                 case "PLAYPAUSE":
                                     _plugin.PlayPauseTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("220 PLAYPAUSE OK\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playPause>OK</playPause>\0"));
                                     break;
                                 case "GETPLAYSTATE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("230 PLAY STATE:{0}\r\n", _plugin.GetPlayState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playState>{0}</playState>\0", _plugin.GetPlayState())));
                                     break;
                                 case "GETVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("250 VOL CUR:{0}\r\n", _plugin.GetVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<currentVolume>{0}</currentVolume>\0", _plugin.GetVolume())));
                                     break;
                                 case "INCREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("260 VOL UP:{0}\r\n", _plugin.IncreaseVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<increasedVolume>{0}</increasedVolume>\0", _plugin.IncreaseVolume())));
                                     break;
                                 case "DECREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("270 VOL DOWN:{0}\r\n", _plugin.DecreaseVolume())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<decreasedVolume>{0}</decreasedVolume>\0", _plugin.DecreaseVolume())));
                                     break;
                                 case "ISSONGCHANGED":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("300 SONGCHANGE:{0}\r\n", _plugin.SongChanged)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songChanged>{0}</songChanged>\0", _plugin.SongChanged)));
                                     _plugin.SongChanged = false;
                                     break;
                                 case "SENDSONGDATA":
                                     if (_plugin.CurrentSong == null)
                                     {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("998 NULL DATA ERROR"));
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />"));
                                         break;
                                     }
                                         
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("400 NOW PLAYING\n"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Artist + "\n"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Title+ "\n"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Album + "\n"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.Year + "\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<songInfo>"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<artist>{0}</artist>", _plugin.CurrentSong.Artist)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<title>{0}</title>", _plugin.CurrentSong.Title)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<album>{0}</album>", _plugin.CurrentSong.Album)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<year>{0}</year>", _plugin.CurrentSong.Year)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("</songInfo>\0"));
                                     break;
                                 case "SENDSONGCOVER":
                                     if (_plugin.CurrentSong ==null)
                                     {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("998 NULL DATA ERROR"));
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />\0"));
                                         break;
                                     }
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("410 IMAGE COVER\r\n"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(_plugin.CurrentSong.ResizedImage()));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("\n411 IMAGE COVER END\r\n"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<image>{0}</image>\0", _plugin.CurrentSong.ResizedImage())));
                                     break;
-                                default:
+                                case "STOPPLAYBACK":
+                                    _plugin.StopPlayback();
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<stopplayback></stopplayback>\0"));
                                     break;
-
-
+                                case "SHUFFLE":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>", _plugin.ChangeShuffleState())));
+                                    break;
+                                case "MUTE":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>", _plugin.ChangeMuteState())));
+                                    break;
+                                case "REPEAT":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>", _plugin.ChangeRepeatState())));
+                                    break;
+                                case "PLAYLIST":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>", _plugin.GetPlaylist())));
+                                    break;
+                                    
                             }
                         }
                         catch (ThreadAbortException ex)
@@ -216,7 +221,7 @@ namespace MusicBeePlugin
                         {
                             try
                             {
-                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("999 UNKNOWN ERROR"));
+                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<error />\0"));
                             }
                             catch
                             {
