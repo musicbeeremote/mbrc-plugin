@@ -119,24 +119,19 @@ namespace MusicBeePlugin
             _mbApiInterface.Player_PlayPreviousTrack();
         }
 
-        public int IncreaseVolume()
+        public int GetVolume(String vol)
         {
-            float vol = (float)Math.Round(_mbApiInterface.Player_GetVolume() + (float)0.1, 1);
-            _mbApiInterface.Player_SetVolume(vol);
+            int iVolume;
+            if (int.TryParse(vol, out iVolume))
+            {
+                if (iVolume >= 0 && iVolume <= 10)
+                {
+                    _mbApiInterface.Player_SetVolume((float)iVolume / 10);
+                }
+            }
             return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
+        }
 
-        }
-        public int DecreaseVolume()
-        {
-            if ((int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1) == 0) return 0;
-            float vol = (float)Math.Round(_mbApiInterface.Player_GetVolume() - (float)0.1, 1);
-            _mbApiInterface.Player_SetVolume(vol);
-            return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
-        }
-        public int GetVolume()
-        {
-            return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
-        }
         public string GetPlayState()
         {
             switch (_mbApiInterface.Player_GetPlayState())
@@ -155,53 +150,48 @@ namespace MusicBeePlugin
                     throw new ArgumentOutOfRangeException();
             }
         }
-        public string ChangeShuffleState()
+        public string ShuffleState(string action)
         {
-            if (_mbApiInterface.Player_GetShuffle())
-            {
-                _mbApiInterface.Player_SetShuffle(false);
-                return "False";
-            }
-            _mbApiInterface.Player_SetShuffle(true);
-            return "True";
+            if (action == "toggle")
+                _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
+            return _mbApiInterface.Player_GetShuffle().ToString();
         }
 
-        public string ChangeRepeatState()
+        public string ChangeRepeatState(string action)
         {
+            if(action=="toggle")
+            {
             switch (_mbApiInterface.Player_GetRepeat())
             {
                 case RepeatMode.None:
                     _mbApiInterface.Player_SetRepeat(RepeatMode.All);
-                    return "all";
+                    break;
                 case RepeatMode.All:
                     _mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                    return "none";
+                    break;
                 case RepeatMode.One:
                     _mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                    return "none";
+                    break;
             }
-            return "none";
+            }
+            return _mbApiInterface.Player_GetRepeat().ToString();
         }
-        public string ChangeMuteState()
+        public string MuteState(string action)
         {
-            if (_mbApiInterface.Player_GetMute())
-            {
-                _mbApiInterface.Player_SetMute(false);
-                return "False";
-            }
-            _mbApiInterface.Player_SetMute(true);
-            return "True";
+            if (action=="toggle")
+                _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
+            return _mbApiInterface.Player_GetMute().ToString();
         }
         public string GetPlaylist()
         {
             _mbApiInterface.NowPlayingList_QueryFiles("*");
-            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(),StringSplitOptions.RemoveEmptyEntries);
-            string songlist="";
+            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            string songlist = "";
 
             foreach (var playListTrack in playListTracks)
             {
-                songlist+="<playlistItem>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + " - " +
-                       _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)+"</playlistItem>";
+                songlist += "<playlistItem>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + " - " +
+                       _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) + "</playlistItem>";
 
             }
             return songlist;

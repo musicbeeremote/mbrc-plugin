@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
+using System.Xml;
 
 namespace MusicBeePlugin
 {
@@ -130,53 +131,51 @@ namespace MusicBeePlugin
                     {
                         connectionClosing = true;
                     }
-                    string[] commands;
+                  
+                    string clientData;
                     if (count == 0)
                     {
-                        commands = new string[20];
+                        clientData = "";
                     }
                     else
                     {
-                        commands = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "").Split("\00".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);    
+                        clientData = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n","");
                     }
-                    foreach (string commandLine in commands)
+                    string xmlData = "<serverData>" + clientData.Replace("\0","") + "</serverData>";
+                    XmlDocument xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(xmlData);
+                    foreach (XmlNode xmNode in xmlDoc.FirstChild.ChildNodes)
                     {
                         try
                         {
-                            switch (commandLine)
+                            switch (xmNode.Name)
                             {
-                                case "NEXT":
+                                case "next":
                                     _plugin.PlayNextTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<next>OK</next>\0"));
                                     break;
-                                case "PREVIOUS":
+                                case "previous":
                                     _plugin.PlayPreviousTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<previous>OK</previous>\0"));
                                     break;
-                                case "PLAYPAUSE":
+                                case "playPause":
                                     _plugin.PlayPauseTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playPause>OK</playPause>\0"));
                                     break;
-                                case "GETPLAYSTATE":
+                                case "playState":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playState>{0}</playState>\0", _plugin.GetPlayState())));
                                     break;
-                                case "GETVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<currentVolume>{0}</currentVolume>\0", _plugin.GetVolume())));
+                                case "volume":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<volume>{0}</volume>\0", _plugin.GetVolume(xmNode.InnerText))));
                                     break;
-                                case "INCREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<increasedVolume>{0}</increasedVolume>\0", _plugin.IncreaseVolume())));
-                                    break;
-                                case "DECREASEVOL":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<decreasedVolume>{0}</decreasedVolume>\0", _plugin.DecreaseVolume())));
-                                    break;
-                                case "ISSONGCHANGED":
+                                case "songChanged":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songChanged>{0}</songChanged>\0", _plugin.SongChanged)));
                                     _plugin.SongChanged = false;
                                     break;
-                                case "SENDSONGDATA":
+                                case "songInfo":
                                     if (_plugin.CurrentSong == null)
                                     {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />\0"));
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata/>\0"));
                                         break;
                                     }
                                         
@@ -187,28 +186,28 @@ namespace MusicBeePlugin
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<year>{0}</year>", _plugin.CurrentSong.Year)));
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("</songInfo>\0"));
                                     break;
-                                case "SENDSONGCOVER":
+                                case "songCover":
                                     if (_plugin.CurrentSong ==null)
                                     {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata />\0"));
+                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata/>\0"));
                                         break;
                                     }
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<image>{0}</image>\0", _plugin.CurrentSong.ResizedImage())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songCover>{0}</songCover>\0", _plugin.CurrentSong.ResizedImage())));
                                     break;
-                                case "STOPPLAYBACK":
+                                case "stopPlayback":
                                     _plugin.StopPlayback();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<stopplayback></stopplayback>\0"));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<stopPlayback></stopPlayback>\0"));
                                     break;
-                                case "SHUFFLE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0", _plugin.ChangeShuffleState())));
+                                case "shuffle":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0", _plugin.ShuffleState(xmNode.InnerText))));
                                     break;
-                                case "MUTE":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0", _plugin.ChangeMuteState())));
+                                case "mute":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0", _plugin.MuteState(xmNode.InnerText))));
                                     break;
-                                case "REPEAT":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0", _plugin.ChangeRepeatState())));
+                                case "repeat":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0", _plugin.ChangeRepeatState(xmNode.InnerText))));
                                     break;
-                                case "PLAYLIST":
+                                case "playlist":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>\0", _plugin.GetPlaylist())));
                                     break;
                                     
@@ -221,7 +220,7 @@ namespace MusicBeePlugin
                         {
                             try
                             {
-                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<error />\0"));
+                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<error/>\0"));
                             }
                             catch
                             {
