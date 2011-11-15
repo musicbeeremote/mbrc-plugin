@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace MusicBeePlugin
 {
@@ -102,24 +103,24 @@ namespace MusicBeePlugin
             //return Convert.ToBase64String(artworkBinaryData)
             return null;
         }
-        public void PlayNextTrack()
+        public void PlayerPlayNextTrack()
         {
             _mbApiInterface.Player_PlayNextTrack();
         }
-        public void StopPlayback()
+        public void PlayerStopPlayback()
         {
             _mbApiInterface.Player_Stop();
         }
-        public void PlayPauseTrack()
+        public void PlayerPlayPauseTrack()
         {
             _mbApiInterface.Player_PlayPause();
         }
-        public void PlayPreviousTrack()
+        public void PlayerPlayPreviousTrack()
         {
             _mbApiInterface.Player_PlayPreviousTrack();
         }
 
-        public int GetVolume(String vol)
+        public int PlayerVolume(String vol)
         {
             int iVolume;
             if (int.TryParse(vol, out iVolume))
@@ -132,7 +133,7 @@ namespace MusicBeePlugin
             return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 10, 1);
         }
 
-        public string GetPlayState()
+        public string PlayerPlayState()
         {
             switch (_mbApiInterface.Player_GetPlayState())
             {
@@ -150,39 +151,39 @@ namespace MusicBeePlugin
                     throw new ArgumentOutOfRangeException();
             }
         }
-        public string ShuffleState(string action)
+        public string PlayerShuffleState(string action)
         {
             if (action == "toggle")
                 _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
             return _mbApiInterface.Player_GetShuffle().ToString();
         }
 
-        public string ChangeRepeatState(string action)
+        public string PlayerRepeatState(string action)
         {
-            if(action=="toggle")
+            if (action == "toggle")
             {
-            switch (_mbApiInterface.Player_GetRepeat())
-            {
-                case RepeatMode.None:
-                    _mbApiInterface.Player_SetRepeat(RepeatMode.All);
-                    break;
-                case RepeatMode.All:
-                    _mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                    break;
-                case RepeatMode.One:
-                    _mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                    break;
-            }
+                switch (_mbApiInterface.Player_GetRepeat())
+                {
+                    case RepeatMode.None:
+                        _mbApiInterface.Player_SetRepeat(RepeatMode.All);
+                        break;
+                    case RepeatMode.All:
+                        _mbApiInterface.Player_SetRepeat(RepeatMode.None);
+                        break;
+                    case RepeatMode.One:
+                        _mbApiInterface.Player_SetRepeat(RepeatMode.None);
+                        break;
+                }
             }
             return _mbApiInterface.Player_GetRepeat().ToString();
         }
-        public string MuteState(string action)
+        public string PlayerMuteState(string action)
         {
-            if (action=="toggle")
+            if (action == "toggle")
                 _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
             return _mbApiInterface.Player_GetMute().ToString();
         }
-        public string GetPlaylist()
+        public string PlaylistGetTracks()
         {
             _mbApiInterface.NowPlayingList_QueryFiles("*");
             string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -196,6 +197,28 @@ namespace MusicBeePlugin
             }
             return songlist;
 
+        }
+
+        public void PlaylistGoToSpecifiedTrack(string trackInfo)
+        {
+            string trackInformation = trackInfo.Replace(" - ", "\0");
+            int index = trackInformation.IndexOf("\0");
+            trackInformation = trackInformation.Substring(index + 1);
+            _mbApiInterface.NowPlayingList_QueryFiles("*");
+            string trackList = _mbApiInterface.NowPlayingList_QueryGetAllFiles();
+            string[] tracks= trackList.Split("\0".ToCharArray(),StringSplitOptions.RemoveEmptyEntries);
+            
+            for (int i = 0; i < tracks.Length;i++ )
+            {
+                if (_mbApiInterface.Library_GetFileTag(tracks[i], MetaDataType.TrackTitle)==trackInformation)
+                {
+                    _mbApiInterface.NowPlayingList_PlayNow(tracks[i]);
+                    break;
+                }
+            }
+
+
+                
         }
     }
 }

@@ -50,7 +50,7 @@ namespace MusicBeePlugin
                 //{
                 //    _listener = new TcpListener(IPAddress.Any, UserConfiguration.SystemOptions.ServerPort);
                 //}
-                _listener = new TcpListener(IPAddress.Any, 9999);
+                _listener = new TcpListener(IPAddress.Any, 3000);
                 _listener.Start();
                 _clientConnected = new ManualResetEvent(false);
                 _listenerThread = new Thread(ListenForClients);
@@ -151,22 +151,22 @@ namespace MusicBeePlugin
                             switch (xmNode.Name)
                             {
                                 case "next":
-                                    _plugin.PlayNextTrack();
+                                    _plugin.PlayerPlayNextTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<next>OK</next>\0"));
                                     break;
                                 case "previous":
-                                    _plugin.PlayPreviousTrack();
+                                    _plugin.PlayerPlayPreviousTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<previous>OK</previous>\0"));
                                     break;
                                 case "playPause":
-                                    _plugin.PlayPauseTrack();
+                                    _plugin.PlayerPlayPauseTrack();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playPause>OK</playPause>\0"));
                                     break;
                                 case "playState":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playState>{0}</playState>\0", _plugin.GetPlayState())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playState>{0}</playState>\0", _plugin.PlayerPlayState())));
                                     break;
                                 case "volume":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<volume>{0}</volume>\0", _plugin.GetVolume(xmNode.InnerText))));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<volume>{0}</volume>\0", _plugin.PlayerVolume(xmNode.InnerText))));
                                     break;
                                 case "songChanged":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songChanged>{0}</songChanged>\0", _plugin.SongChanged)));
@@ -177,8 +177,7 @@ namespace MusicBeePlugin
                                     {
                                         _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata/>\0"));
                                         break;
-                                    }
-                                        
+                                    }     
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<songInfo>"));
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<artist>{0}</artist>", _plugin.CurrentSong.Artist)));
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<title>{0}</title>", _plugin.CurrentSong.Title)));
@@ -195,26 +194,30 @@ namespace MusicBeePlugin
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songCover>{0}</songCover>\0", _plugin.CurrentSong.ResizedImage())));
                                     break;
                                 case "stopPlayback":
-                                    _plugin.StopPlayback();
+                                    _plugin.PlayerStopPlayback();
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<stopPlayback></stopPlayback>\0"));
                                     break;
                                 case "shuffle":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0", _plugin.ShuffleState(xmNode.InnerText))));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0", _plugin.PlayerShuffleState(xmNode.InnerText))));
                                     break;
                                 case "mute":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0", _plugin.MuteState(xmNode.InnerText))));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0", _plugin.PlayerMuteState(xmNode.InnerText))));
                                     break;
                                 case "repeat":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0", _plugin.ChangeRepeatState(xmNode.InnerText))));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0", _plugin.PlayerRepeatState(xmNode.InnerText))));
                                     break;
                                 case "playlist":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>\0", _plugin.GetPlaylist())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>\0", _plugin.PlaylistGetTracks())));
                                     break;
-                                    
+                                case "playNow":
+                                    _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playNow/>\0"));
+                                    break;
                             }
                         }
                         catch (ThreadAbortException ex)
                         {
+                            
                         }
                         catch
                         {
