@@ -213,6 +213,9 @@ namespace MusicBeePlugin
                                     _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playNow/>\0"));
                                     break;
+                                case "scrobbler":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<scrobbler>{0}</scrobbler>\0", _plugin.ScrobblerState(xmNode.InnerText))));
+                                    break;
                             }
                         }
                         catch (ThreadAbortException ex)
