@@ -3,10 +3,11 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using System.Xml;
+using System.Diagnostics;
 
 namespace MusicBeePlugin
 {
-    public class SocketServer
+    public sealed class SocketServer
     {
         private static bool _isStopping;
         private static TcpListener _listener;
@@ -15,13 +16,29 @@ namespace MusicBeePlugin
 
         private static Socket _clientSocket;
         private static Plugin _plugin;
+        private static XmlDocument _xmlDoc;
 
-        public SocketServer(Plugin plugin)
+        private static readonly SocketServer ServerInstance = new SocketServer();
+
+        static SocketServer()
+        {
+            //Empty Constructor
+        }
+        SocketServer()
+        {
+         //Empty Constructor   
+        }
+        public void ConnectToPlugin(Plugin plugin)
         {
             _plugin = plugin;
         }
 
-        public static bool Stop()
+        public static SocketServer Instance
+        {
+            get { return ServerInstance; }
+        }
+
+        public bool Stop()
         {
             _isStopping = true;
             if (_listenerThread != null && _listenerThread.IsAlive)
@@ -37,7 +54,7 @@ namespace MusicBeePlugin
             return true;
         }
 
-        public static bool Start()
+        public bool Start()
         {
             _isStopping = false;
             try
@@ -53,20 +70,19 @@ namespace MusicBeePlugin
                 _listener = new TcpListener(IPAddress.Any, 3000);
                 _listener.Start();
                 _clientConnected = new ManualResetEvent(false);
-                _listenerThread = new Thread(ListenForClients);
-                _listenerThread.IsBackground = true;
-                _listenerThread.Priority = ThreadPriority.Lowest;
+                _listenerThread = new Thread(ListenForClients) {IsBackground = true, Priority = ThreadPriority.Lowest};
                 _listenerThread.Start();
+                _xmlDoc = new XmlDocument();
                 return true;
             }
             catch (Exception ex)
             {
-                //ErrorHandler.LogError(ex);
+                ErrorHandler.LogError(ex);
                 return false;
             }
         }
 
-        private static void ListenForClients()
+        private void ListenForClients()
         {
             do
             {
@@ -74,15 +90,15 @@ namespace MusicBeePlugin
                 {
                     _clientConnected.Reset();
                     _listener.BeginAcceptSocket(new AsyncCallback(AcceptSocketCallback), null);
-                    _clientConnected.WaitOne();
+                   _clientConnected.WaitOne();
                 }
                 catch
-                {
+                {  
                 }
             } while (true);
         }
 
-        private static void AcceptSocketCallback(IAsyncResult result)
+        private void AcceptSocketCallback(IAsyncResult result)
         {
             if (_isStopping) return;
             try
@@ -91,19 +107,19 @@ namespace MusicBeePlugin
                 string address = ((IPEndPoint)_clientSocket.RemoteEndPoint).Address.ToString();
                 //if (string.Compare(address, "127.0.0.1", StringComparison.Ordinal) != 0)
                 //{
-                   // bool matched = false;
-                    //    if (UserConfiguration.SystemOptions.ExternalHosts != null) {
-                    //        for (int index = 0; index <= UserConfiguration.SystemOptions.ExternalHosts.Count - 1; index++) {
-                    //            if (string.Compare(address, UserConfiguration.SystemOptions.ExternalHosts(index), StringComparison.Ordinal) == 0 || string.Compare(UserConfiguration.SystemOptions.ExternalHosts(index), "0.0.0.0", StringComparison.Ordinal) == 0) {
-                    //                matched = true;
-                    //                break;
-                    //            }
-                    //        }
-                    //    }
-                   // if (!matched) return;
-               // }
+                // bool matched = false;
+                //    if (UserConfiguration.SystemOptions.ExternalHosts != null) {
+                //        for (int index = 0; index <= UserConfiguration.SystemOptions.ExternalHosts.Count - 1; index++) {
+                //            if (string.Compare(address, UserConfiguration.SystemOptions.ExternalHosts(index), StringComparison.Ordinal) == 0 || string.Compare(UserConfiguration.SystemOptions.ExternalHosts(index), "0.0.0.0", StringComparison.Ordinal) == 0) {
+                //                matched = true;
+                //                break;
+                //            }
+                //        }
+                //    }
+                // if (!matched) return;
+                // }
                 _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<MusicBeeClientIP>{0}</MusicBeeClientIP>\0", address)));
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[_clientSocket.ReceiveBufferSize];
                 bool connectionClosing = false;
                 int count = 0;
 
@@ -116,7 +132,7 @@ namespace MusicBeePlugin
                         {
                             if (_clientSocket.Poll(-1, SelectMode.SelectRead))
                             {
-                                int bytesRead = _clientSocket.Receive(buffer, count, 4096 - count, SocketFlags.None);
+                                int bytesRead = _clientSocket.Receive(buffer, count, _clientSocket.ReceiveBufferSize - count, SocketFlags.None);
                                 if (bytesRead == 0)
                                 {
                                     connectionClosing = true;
@@ -125,13 +141,13 @@ namespace MusicBeePlugin
                                 count += bytesRead;
                                 eocIndex = Array.LastIndexOf<byte>(buffer, 10, count - 1);
                             }
-                        } while ((count < 4096) && (eocIndex == -1));
+                        } while ((count < _clientSocket.ReceiveBufferSize) && (eocIndex == -1));
                     }
                     catch
                     {
                         connectionClosing = true;
                     }
-                  
+
                     string clientData;
                     if (count == 0)
                     {
@@ -139,13 +155,13 @@ namespace MusicBeePlugin
                     }
                     else
                     {
-                        clientData = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n","");
+                        clientData = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "");
                     }
-                    string xmlData = "<serverData>" + clientData.Replace("\0","") + "</serverData>";
-                    XmlDocument xmlDoc = new XmlDocument();
-                    xmlDoc.LoadXml(xmlData);
-                    foreach (XmlNode xmNode in xmlDoc.FirstChild.ChildNodes)
+                    string xmlData = "<serverData>" + clientData.Replace("\0", "") + "</serverData>";
+                    _xmlDoc.LoadXml(xmlData);
+                    foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
                     {
+                        if(_isStopping) return;
                         try
                         {
                             switch (xmNode.Name)
@@ -173,25 +189,15 @@ namespace MusicBeePlugin
                                     _plugin.SongChanged = false;
                                     break;
                                 case "songInfo":
-                                    if (_plugin.CurrentSong == null)
-                                    {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata/>\0"));
-                                        break;
-                                    }     
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<songInfo>"));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<artist>{0}</artist>", _plugin.CurrentSong.Artist)));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<title>{0}</title>", _plugin.CurrentSong.Title)));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<album>{0}</album>", _plugin.CurrentSong.Album)));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<year>{0}</year>", _plugin.CurrentSong.Year)));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<artist>{0}</artist>", _plugin.GetCurrentTrackArtist())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<title>{0}</title>", _plugin.GetCurrentTrackTitle())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<album>{0}</album>", _plugin.GetCurrentTrackAlbum())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<year>{0}</year>", _plugin.GetCurrentTrackYear())));
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("</songInfo>\0"));
                                     break;
                                 case "songCover":
-                                    if (_plugin.CurrentSong ==null)
-                                    {
-                                        _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<nulldata/>\0"));
-                                        break;
-                                    }
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songCover>{0}</songCover>\0", _plugin.CurrentSong.ResizedImage())));
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<songCover>{0}</songCover>\0", _plugin.GetCurrentTrackCover())));
                                     break;
                                 case "stopPlayback":
                                     _plugin.PlayerStopPlayback();
@@ -216,11 +222,21 @@ namespace MusicBeePlugin
                                 case "scrobbler":
                                     _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<scrobbler>{0}</scrobbler>\0", _plugin.ScrobblerState(xmNode.InnerText))));
                                     break;
+                                case "lyrics":
+                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("<lyrics>{0}</lyrics>\0", _plugin.RetrieveCurrentTrackLyrics())));
+                                    break;
+                                case "rating":
+                                    _clientSocket.Send(
+                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<rating>{0}</rating>\0",
+                                                                                         _plugin.TrackRating(
+                                                                                             xmNode.InnerText))));
+                                    break;
                             }
+                            _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("\r\n")));
                         }
                         catch (ThreadAbortException ex)
                         {
-                            
+                            ErrorHandler.LogError(ex);
                         }
                         catch
                         {
@@ -228,8 +244,9 @@ namespace MusicBeePlugin
                             {
                                 _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<error/>\0"));
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                ErrorHandler.LogError(ex);
                             }
                         }
                     }
@@ -245,8 +262,9 @@ namespace MusicBeePlugin
                     }
                 } while (!connectionClosing);
             }
-            catch
+            catch (Exception ex)
             {
+                ErrorHandler.LogError(ex);
             }
             finally
             {
@@ -256,12 +274,14 @@ namespace MusicBeePlugin
                     {
                         _clientSocket.Close();
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        ErrorHandler.LogError(ex);
                     }
                     _clientSocket = null;
                 }
                 _clientConnected.Set();
+                Debug.Write("Finally: " + DateTime.Now);
             }
         }
     }

@@ -1,7 +1,9 @@
 ﻿using System;
-using System.Collections;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 
 namespace MusicBeePlugin
 {
@@ -9,16 +11,14 @@ namespace MusicBeePlugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
-        private SocketServer _mbSoc;
 
         public bool SongChanged { get; set; }
-        public SongInfo CurrentSong;
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
             _mbApiInterface = (MusicBeeApiInterface)Marshal.PtrToStructure(apiInterfacePtr, typeof(MusicBeeApiInterface));
             _about.PluginInfoVersion = PluginInfoVersion;
             _about.Name = "MusicBee Remote Control";
-            _about.Description = "A plugin to allow music bee remote controll through mobile applications and network.";
+            _about.Description = "A plugin to allow music bee remote control through mobile applications and network.";
             _about.Author = "Kelsos";
             _about.TargetApplication = "MusicBee Remote";   // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.General;
@@ -28,10 +28,10 @@ namespace MusicBeePlugin
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
-            _about.ConfigurationPanelHeight = 10;   // not implemented yet: height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
-            _mbSoc = new SocketServer(this);
-            SocketServer.Start();
-            CurrentSong = new SongInfo();
+            _about.ConfigurationPanelHeight = 10;   // not implemented yet: height in pixels that MusicBee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
+            SocketServer.Instance.ConnectToPlugin(this);
+            SocketServer.Instance.Start();
+            ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
             return _about;
         }
 
@@ -45,7 +45,7 @@ namespace MusicBeePlugin
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
         public void Close(PluginCloseReason reason)
         {
-            SocketServer.Stop();
+            SocketServer.Instance.Stop();
         }
 
         // uninstall this plugin - clean up any persisted files
@@ -61,7 +61,7 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.PluginStartup:
-                    // perform startup initialisation
+                    // perform startup initialization
                     switch (_mbApiInterface.Player_GetPlayState())
                     {
                         case PlayState.Playing:
@@ -71,28 +71,74 @@ namespace MusicBeePlugin
                     }
                     break;
                 case NotificationType.TrackChanged:
-                    GetTrackInfo();
                     SongChanged = true;
-                    // ...
                     break;
             }
         }
 
-        private void GetTrackInfo()
+        public string GetCurrentTrackArtist()
         {
-            CurrentSong.Artist = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist);
-            CurrentSong.Album = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album);
-            CurrentSong.Title = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
-            CurrentSong.Year = _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year);
-            CurrentSong.ImageData = _mbApiInterface.NowPlaying_GetArtwork();
+            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist);
         }
 
+        public string GetCurrentTrackAlbum()
+        {
+            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album);
+        }
+
+        public string GetCurrentTrackTitle()
+        {
+            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
+        }
+
+        public string GetCurrentTrackYear()
+        {
+            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year);
+        }
+
+        public string GetCurrentTrackCover()
+        {
+            using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork())))
+            using (Image albumCover = Image.FromStream(ms, true))
+            {
+                ms.Flush();
+                int sourceWidth = albumCover.Width;
+                int sourceHeight = albumCover.Height;
+
+                float nPercentW = (300 / (float)sourceWidth);
+                float nPercentH = (300 / (float)sourceHeight);
+
+                var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
+                int destWidth = (int)(sourceWidth * nPercent);
+                int destHeight = (int)(sourceHeight * nPercent);
+                using (var bmp = new Bitmap(destWidth, destHeight))
+                using (MemoryStream ms2 = new MemoryStream())
+                {
+                    Graphics graph = Graphics.FromImage(bmp);
+                    graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
+                    graph.Dispose();
+   
+                    bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
+                    bmp.Dispose();
+                    return Convert.ToBase64String(ms2.ToArray());
+                }
+            }
+        }
+        
         // return lyrics for the requested artist/title
         // only required if PluginType = LyricsRetrieval
         // return null if no lyrics are found
         public string RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album, bool synchronisedPreferred)
         {
             return null;
+        }
+
+        public string RetrieveCurrentTrackLyrics()
+        {
+            //return _mbApiInterface.Library_GetLyrics(_mbApiInterface.NowPlaying_GetFileUrl(), 0);
+            Debug.Write("Lyrics:"+_mbApiInterface.NowPlaying_GetLyrics());
+            return _mbApiInterface.NowPlaying_GetLyrics();
         }
 
         // return Base64 string representation of the artwork binary data
@@ -188,12 +234,22 @@ namespace MusicBeePlugin
             _mbApiInterface.NowPlayingList_QueryFiles("*");
             string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             string songlist = "";
-
-            foreach (var playListTrack in playListTracks)
+            if (playListTracks.Length <= 100)
             {
-                songlist += "<playlistItem><artist>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + "</artist><title>" +
-                       _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) + "</title></playlistItem>";
+                foreach (var playListTrack in playListTracks)
+                {
+                    songlist += "<playlistItem><artist>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + "</artist><title>" +
+                           _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) + "</title></playlistItem>";
 
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    songlist += "<playlistItem><artist>" + _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist) + "</artist><title>" +
+                            _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle) + "</title></playlistItem>";
+                }
             }
             return songlist;
 
@@ -206,7 +262,7 @@ namespace MusicBeePlugin
             trackInformation = trackInformation.Substring(index + 1);
             _mbApiInterface.NowPlayingList_QueryFiles("*");
             string trackList = _mbApiInterface.NowPlayingList_QueryGetAllFiles();
-            string[] tracks= trackList.Split("\0".ToCharArray(),StringSplitOptions.RemoveEmptyEntries);
+            string[] tracks = trackList.Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
             for (int i = 0; i < tracks.Length; i++)
             {
@@ -222,6 +278,18 @@ namespace MusicBeePlugin
             if (action == "toggle")
                 _mbApiInterface.Player_SetScrobbleEnabled(!_mbApiInterface.Player_GetScrobbleEnabled());
             return _mbApiInterface.Player_GetScrobbleEnabled().ToString();
+        }
+
+        public string TrackRating(string rating)
+        {
+            if (!string.IsNullOrEmpty(rating)&&(float.Parse(rating)>=0&&float.Parse(rating)<=5))
+            {
+                Debug.WriteLine("Passed");
+               bool tag = _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating,
+                                                   rating);
+                _mbApiInterface.Library_CommitTagsToFile(_mbApiInterface.NowPlaying_GetFileUrl());
+            }
+            return _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating);
         }
     }
 }
