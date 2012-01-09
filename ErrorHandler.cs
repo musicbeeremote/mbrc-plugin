@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace MusicBeePlugin
@@ -6,13 +7,18 @@ namespace MusicBeePlugin
     class ErrorHandler
     {
         private static string _logFilePath;
+        /// <summary>
+        /// Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
+        /// </summary>
+        /// <param name="ex"></param>
+        /// <returns></returns>
         public static void LogError(Exception ex)
         {
             try
             {
                 if (String.IsNullOrEmpty(_logFilePath))
                     return;
-                Stream stream = new FileStream(_logFilePath + "mb_remote.log",FileMode.Append);
+                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log",FileMode.Append);
                 using (StreamWriter fWriter = new StreamWriter(stream))
                 {
                     fWriter.WriteLine(DateTime.Now + "\n");
@@ -20,12 +26,20 @@ namespace MusicBeePlugin
                     fWriter.Write(ex.ToString());
                     fWriter.WriteLine(Environment.NewLine);
                 }
+                stream.Close();
+                stream.Dispose();
             }
-            catch (Exception iEx)
+            catch (Exception iException)
             {
-                //
+                Debug.WriteLine(iException);
             }
         }
+
+        /// <summary>
+        /// Sets the path where the Errors will be logged
+        /// </summary>
+        /// <param name="path">Path to store the log file.</param>
+        /// <returns></returns>
         public static void SetLogFilePath(String path)
         {
             _logFilePath = path;

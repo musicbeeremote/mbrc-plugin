@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -13,22 +14,26 @@ namespace MusicBeePlugin
         private readonly PluginInfo _about = new PluginInfo();
 
         public bool SongChanged { get; set; }
+
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            _mbApiInterface = (MusicBeeApiInterface)Marshal.PtrToStructure(apiInterfacePtr, typeof(MusicBeeApiInterface));
+            _mbApiInterface =
+                (MusicBeeApiInterface) Marshal.PtrToStructure(apiInterfacePtr, typeof (MusicBeeApiInterface));
             _about.PluginInfoVersion = PluginInfoVersion;
             _about.Name = "MusicBee Remote Control";
             _about.Description = "A plugin to allow music bee remote control through mobile applications and network.";
             _about.Author = "Kelsos";
-            _about.TargetApplication = "MusicBee Remote";   // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
+            _about.TargetApplication = "MusicBee Remote";
+                // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.General;
-            _about.VersionMajor = 1;  // your plugin version
+            _about.VersionMajor = 1; // your plugin version
             _about.VersionMinor = 0;
             _about.Revision = 1;
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
-            _about.ConfigurationPanelHeight = 10;   // not implemented yet: height in pixels that MusicBee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
+            _about.ConfigurationPanelHeight = 10;
+
             SocketServer.Instance.ConnectToPlugin(this);
             SocketServer.Instance.Start();
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
@@ -38,7 +43,7 @@ namespace MusicBeePlugin
         public bool Configure(IntPtr panelHandle)
         {
             // save any persistent settings in a sub-folder of this path
-            var dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            // var dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
             return false;
         }
 
@@ -61,14 +66,6 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.PluginStartup:
-                    // perform startup initialization
-                    switch (_mbApiInterface.Player_GetPlayState())
-                    {
-                        case PlayState.Playing:
-                        case PlayState.Paused:
-                            // ...
-                            break;
-                    }
                     break;
                 case NotificationType.TrackChanged:
                     SongChanged = true;
@@ -76,41 +73,63 @@ namespace MusicBeePlugin
             }
         }
 
+        /// <summary>
+        /// Returns the artist name for the track playing.
+        /// </summary>
+        /// <returns>Track artist string</returns>
         public string GetCurrentTrackArtist()
         {
             return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist);
         }
 
+        /// <summary>
+        /// Returns the album for the track playing.
+        /// </summary>
+        /// <returns>Track album string</returns>
         public string GetCurrentTrackAlbum()
         {
             return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album);
         }
 
+        /// <summary>
+        /// Returns the title for the track playing.
+        /// </summary>
+        /// <returns>Track title string</returns>
         public string GetCurrentTrackTitle()
         {
             return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
         }
 
+        /// <summary>
+        /// Returns the Year for the track playing.
+        /// </summary>
+        /// <returns>Track year string</returns>
         public string GetCurrentTrackYear()
         {
             return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year);
         }
 
+        /// <summary>
+        /// It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
+        /// 300x300 and returns the resized image in a Base64 encoded string.
+        /// </summary>
+        /// <returns></returns>
         public string GetCurrentTrackCover()
         {
-            using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork())))
+            using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
+                )
             using (Image albumCover = Image.FromStream(ms, true))
             {
                 ms.Flush();
                 int sourceWidth = albumCover.Width;
                 int sourceHeight = albumCover.Height;
 
-                float nPercentW = (300 / (float)sourceWidth);
-                float nPercentH = (300 / (float)sourceHeight);
+                float nPercentW = (300/(float) sourceWidth);
+                float nPercentH = (300/(float) sourceHeight);
 
                 var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                int destWidth = (int)(sourceWidth * nPercent);
-                int destHeight = (int)(sourceHeight * nPercent);
+                int destWidth = (int) (sourceWidth*nPercent);
+                int destHeight = (int) (sourceHeight*nPercent);
                 using (var bmp = new Bitmap(destWidth, destHeight))
                 using (MemoryStream ms2 = new MemoryStream())
                 {
@@ -118,26 +137,29 @@ namespace MusicBeePlugin
                     graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
                     graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
                     graph.Dispose();
-   
+
                     bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
                     bmp.Dispose();
                     return Convert.ToBase64String(ms2.ToArray());
                 }
             }
         }
-        
+
         // return lyrics for the requested artist/title
         // only required if PluginType = LyricsRetrieval
         // return null if no lyrics are found
-        public string RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album, bool synchronisedPreferred)
+        public string RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album,
+                                     bool synchronisedPreferred)
         {
             return null;
         }
 
+        /// <summary>
+        /// Retrieves the lyrics for the track playing.
+        /// </summary>
+        /// <returns>Lyrics String</returns>
         public string RetrieveCurrentTrackLyrics()
         {
-            //return _mbApiInterface.Library_GetLyrics(_mbApiInterface.NowPlaying_GetFileUrl(), 0);
-            Debug.Write("Lyrics:"+_mbApiInterface.NowPlaying_GetLyrics());
             return _mbApiInterface.NowPlaying_GetLyrics();
         }
 
@@ -146,26 +168,52 @@ namespace MusicBeePlugin
         // return null if no artwork is found
         public string RetrieveArtwork(string sourceFileUrl, string albumArtist, string album)
         {
-            //return Convert.ToBase64String(artworkBinaryData)
             return null;
         }
+
+        /// <summary>
+        /// When called plays the next track.
+        /// </summary>
+        /// <returns></returns>
         public void PlayerPlayNextTrack()
         {
             _mbApiInterface.Player_PlayNextTrack();
         }
+
+        /// <summary>
+        /// When called stops the playback.
+        /// </summary>
+        /// <returns></returns>
         public void PlayerStopPlayback()
         {
             _mbApiInterface.Player_Stop();
         }
+
+        /// <summary>
+        /// When called changes the play/pause state or starts playing a track if the status is stopped.
+        /// </summary>
+        /// <returns></returns>
         public void PlayerPlayPauseTrack()
         {
             _mbApiInterface.Player_PlayPause();
         }
+
+        /// <summary>
+        /// When called plays the previous track.
+        /// </summary>
+        /// <returns></returns>
         public void PlayerPlayPreviousTrack()
         {
             _mbApiInterface.Player_PlayPreviousTrack();
         }
 
+        /// <summary>
+        /// When called if the volume string is an integer in the range [0,100] it 
+        /// changes the volume to the specific value and returns the new value.
+        /// In any other case it just returns the current value for the volume.
+        /// </summary>
+        /// <param name="vol">New volume String</param>
+        /// <returns>Volume int [0,100]</returns>
         public int PlayerVolume(String vol)
         {
             int iVolume;
@@ -173,12 +221,16 @@ namespace MusicBeePlugin
             {
                 if (iVolume >= 0 && iVolume <= 100)
                 {
-                    _mbApiInterface.Player_SetVolume((float)iVolume / 100);
+                    _mbApiInterface.Player_SetVolume((float) iVolume/100);
                 }
             }
-            return (int)Math.Round(_mbApiInterface.Player_GetVolume() * 100, 1);
+            return (int) Math.Round(_mbApiInterface.Player_GetVolume()*100, 1);
         }
 
+        /// <summary>
+        /// Returns the state of the player.
+        /// </summary>
+        /// <returns>possible values: undefined, loading, playing, paused, stopped</returns>
         public string PlayerPlayState()
         {
             switch (_mbApiInterface.Player_GetPlayState())
@@ -197,13 +249,26 @@ namespace MusicBeePlugin
                     throw new ArgumentOutOfRangeException();
             }
         }
+
+        /// <summary>
+        /// If the action equals toggle then it changes the shuffle state, in any other case
+        /// it just returns the current value of the shuffle.
+        /// </summary>
+        /// <param name="action">toggle or state</param>
+        /// <returns>Shuffle state: True or False</returns>
         public string PlayerShuffleState(string action)
         {
             if (action == "toggle")
                 _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
-            return _mbApiInterface.Player_GetShuffle().ToString();
+            return _mbApiInterface.Player_GetShuffle().ToString(CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// If the action equals toggle then it changes the repeat state, in any other case
+        /// it just returns the current value of the repeat.
+        /// </summary>
+        /// <param name="action">toggle or state</param>
+        /// <returns>Repeat state: None, All, One</returns>
         public string PlayerRepeatState(string action)
         {
             if (action == "toggle")
@@ -223,42 +288,65 @@ namespace MusicBeePlugin
             }
             return _mbApiInterface.Player_GetRepeat().ToString();
         }
+
+        /// <summary>
+        /// If the action is toggle then the function changes the repeat state, in any other case
+        /// it just returns the current value of the Mute.
+        /// </summary>
+        /// <param name="action">toggle or state</param>
+        /// <returns>Mute state: True or False</returns>
         public string PlayerMuteState(string action)
         {
             if (action == "toggle")
                 _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
-            return _mbApiInterface.Player_GetMute().ToString();
+            return _mbApiInterface.Player_GetMute().ToString(CultureInfo.InvariantCulture);
         }
+
+        /// <summary>
+        /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
+        /// </summary>
+        /// <returns>XML formated string without root element</returns>
         public string PlaylistGetTracks()
         {
             _mbApiInterface.NowPlayingList_QueryFiles("*");
-            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(),
+                                                                                              StringSplitOptions.
+                                                                                                  RemoveEmptyEntries);
             string songlist = "";
             if (playListTracks.Length <= 100)
             {
                 foreach (var playListTrack in playListTracks)
                 {
-                    songlist += "<playlistItem><artist>" + _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) + "</artist><title>" +
-                           _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) + "</title></playlistItem>";
-
+                    songlist += "<playlistItem><artist>" +
+                                _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) +
+                                "</artist><title>" +
+                                _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) +
+                                "</title></playlistItem>";
                 }
             }
             else
             {
                 for (int i = 0; i < 100; i++)
                 {
-                    songlist += "<playlistItem><artist>" + _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist) + "</artist><title>" +
-                            _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle) + "</title></playlistItem>";
+                    songlist += "<playlistItem><artist>" +
+                                _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist) +
+                                "</artist><title>" +
+                                _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle) +
+                                "</title></playlistItem>";
                 }
             }
             return songlist;
-
         }
 
+        /// <summary>
+        /// Searches in the Now playing list for the track specified and plays it.
+        /// </summary>
+        /// <param name="trackInfo">The track to play</param>
+        /// <returns></returns>
         public void PlaylistGoToSpecifiedTrack(string trackInfo)
         {
             string trackInformation = trackInfo.Replace(" - ", "\0");
-            int index = trackInformation.IndexOf("\0");
+            int index = trackInformation.IndexOf("\0", System.StringComparison.Ordinal);
             trackInformation = trackInformation.Substring(index + 1);
             _mbApiInterface.NowPlayingList_QueryFiles("*");
             string trackList = _mbApiInterface.NowPlayingList_QueryGetAllFiles();
@@ -273,19 +361,32 @@ namespace MusicBeePlugin
                 }
             }
         }
+
+        /// <summary>
+        /// If the action is toggle then the function changes the scrobbler state, in any other case
+        /// it just returns the current value of the Scrobbler.
+        /// </summary>
+        /// <param name="action">toggle or action</param>
+        /// <returns>Scrobbler state</returns>
         public string ScrobblerState(string action)
         {
             if (action == "toggle")
                 _mbApiInterface.Player_SetScrobbleEnabled(!_mbApiInterface.Player_GetScrobbleEnabled());
-            return _mbApiInterface.Player_GetScrobbleEnabled().ToString();
+            return _mbApiInterface.Player_GetScrobbleEnabled().ToString(CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
+        /// the function will set the new rating as the current track's new track rating. In any other case it will
+        /// just return the rating for the current track.
+        /// </summary>
+        /// <param name="rating">New Track Rating</param>
+        /// <returns>Track Rating</returns>
         public string TrackRating(string rating)
         {
-            if (!string.IsNullOrEmpty(rating)&&(float.Parse(rating)>=0&&float.Parse(rating)<=5))
+            if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
             {
-                Debug.WriteLine("Passed");
-               bool tag = _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating,
+                _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating,
                                                    rating);
                 _mbApiInterface.Library_CommitTagsToFile(_mbApiInterface.NowPlaying_GetFileUrl());
             }
