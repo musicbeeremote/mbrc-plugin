@@ -160,7 +160,7 @@ namespace MusicBeePlugin
         /// <returns>Lyrics String</returns>
         public string RetrieveCurrentTrackLyrics()
         {
-            return _mbApiInterface.NowPlaying_GetLyrics();
+            return _mbApiInterface.NowPlaying_GetLyrics().Trim().Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;").Replace("&", "&amp;").Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n", "&lt;br&gt;");
         }
 
         // return Base64 string representation of the artwork binary data

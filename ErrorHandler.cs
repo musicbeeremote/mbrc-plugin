@@ -18,6 +18,8 @@ namespace MusicBeePlugin
             {
                 if (String.IsNullOrEmpty(_logFilePath))
                     return;
+                if (!Directory.Exists(_logFilePath + "mb_remote"))
+                    Directory.CreateDirectory(_logFilePath + "mb_remote");
                 Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log",FileMode.Append);
                 using (StreamWriter fWriter = new StreamWriter(stream))
                 {

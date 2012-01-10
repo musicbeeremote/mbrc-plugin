@@ -115,9 +115,15 @@ namespace MusicBeePlugin
                 }
                 catch
                 {
-                    //empty catch;
+                    Debug.WriteLine("Listener exception");
                 }
             } while (!_isStopping);
+        }
+
+        private static void Send(Socket handler,string data)
+        {
+            byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
+            handler.Send(byteData);
         }
 
         private static void AcceptSocketCallback(IAsyncResult result)
@@ -186,105 +192,93 @@ namespace MusicBeePlugin
                             {
                                 case "next":
                                     _plugin.PlayerPlayNextTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<next>OK</next>\0"));
+                                    Send(_clientSocket,"<next>OK</next>\0");
                                     break;
                                 case "previous":
                                     _plugin.PlayerPlayPreviousTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<previous>OK</previous>\0"));
+                                    Send(_clientSocket,"<previous>OK</previous>\0");
                                     break;
                                 case "playPause":
                                     _plugin.PlayerPlayPauseTrack();
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playPause>OK</playPause>\0"));
+                                    Send(_clientSocket,"<playPause>OK</playPause>\0");
                                     break;
                                 case "playState":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format(
-                                            "<playState>{0}</playState>\0", _plugin.PlayerPlayState())));
+                                    Send(_clientSocket,String.Format(
+                                            "<playState>{0}</playState>\0", _plugin.PlayerPlayState()));
                                     break;
                                 case "volume":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<volume>{0}</volume>\0",
+                                    Send(_clientSocket,String.Format("<volume>{0}</volume>\0",
                                                                                          _plugin.PlayerVolume(
-                                                                                             xmNode.InnerText))));
+                                                                                             xmNode.InnerText)));
                                     break;
                                 case "songChanged":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(
-                                            String.Format("<songChanged>{0}</songChanged>\0", _plugin.SongChanged)));
+                                    Send(_clientSocket,String.Format("<songChanged>{0}</songChanged>\0", _plugin.SongChanged));
                                     _plugin.SongChanged = false;
                                     break;
                                 case "songInfo":
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<songInfo>"));
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<artist>{0}</artist>",
-                                                                                         _plugin.GetCurrentTrackArtist())));
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<title>{0}</title>",
-                                                                                         _plugin.GetCurrentTrackTitle())));
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<album>{0}</album>",
-                                                                                         _plugin.GetCurrentTrackAlbum())));
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<year>{0}</year>",
-                                                                                         _plugin.GetCurrentTrackYear())));
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("</songInfo>\0"));
+                                    Send(_clientSocket, "<songInfo>");
+                                    Send(_clientSocket, String.Format("<artist>{0}</artist>",
+                                                                      _plugin.GetCurrentTrackArtist()));
+                                    Send(_clientSocket, String.Format("<title>{0}</title>",
+                                                                      _plugin.GetCurrentTrackTitle()));
+                                    Send(_clientSocket, String.Format("<album>{0}</album>",
+                                                                      _plugin.GetCurrentTrackAlbum()));
+                                    Send(_clientSocket, String.Format("<year>{0}</year>",
+                                                                      _plugin.GetCurrentTrackYear()));
+                                    Send(_clientSocket, "</songInfo>\0");
                                     break;
                                 case "songCover":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format(
-                                            "<songCover>{0}</songCover>\0", _plugin.GetCurrentTrackCover())));
+                                    new Thread(
+                                        () =>
+                                        Send(_clientSocket,
+                                             String.Format("<songCover>{0}</songCover>\0",
+                                                           _plugin.GetCurrentTrackCover()))).Start();
                                     break;
                                 case "stopPlayback":
                                     _plugin.PlayerStopPlayback();
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes("<stopPlayback></stopPlayback>\0"));
+                                    Send(_clientSocket,"<stopPlayback></stopPlayback>\0");
                                     break;
                                 case "shuffle":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<shuffle>{0}</shuffle>\0",
+                                    Send(_clientSocket,String.Format("<shuffle>{0}</shuffle>\0",
                                                                                          _plugin.PlayerShuffleState(
-                                                                                             xmNode.InnerText))));
+                                                                                             xmNode.InnerText)));
                                     break;
                                 case "mute":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<mute>{0}</mute>\0",
+                                    Send(_clientSocket,String.Format("<mute>{0}</mute>\0",
                                                                                          _plugin.PlayerMuteState(
-                                                                                             xmNode.InnerText))));
+                                                                                             xmNode.InnerText)));
                                     break;
                                 case "repeat":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<repeat>{0}</repeat>\0",
+                                    Send(_clientSocket,String.Format("<repeat>{0}</repeat>\0",
                                                                                          _plugin.PlayerRepeatState(
-                                                                                             xmNode.InnerText))));
+                                                                                             xmNode.InnerText)));
                                     break;
                                 case "playlist":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<playlist>{0}</playlist>\0",
-                                                                                         _plugin.PlaylistGetTracks())));
+                                        Send(_clientSocket,String.Format("<playlist>{0}</playlist>\0",
+                                                                                         _plugin.PlaylistGetTracks()));
                                     break;
                                 case "playNow":
                                     _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
-                                    _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<playNow/>\0"));
+                                    Send(_clientSocket,"<playNow/>\0");
                                     break;
                                 case "scrobbler":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format(
-                                            "<scrobbler>{0}</scrobbler>\0", _plugin.ScrobblerState(xmNode.InnerText))));
+                                    Send(_clientSocket,String.Format(
+                                            "<scrobbler>{0}</scrobbler>\0", _plugin.ScrobblerState(xmNode.InnerText)));
                                     break;
                                 case "lyrics":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<lyrics>{0}</lyrics>\0",
+                                     new Thread(
+                                        () =>
+                                            Send(_clientSocket,String.Format("<lyrics>{0}</lyrics>\0",
                                                                                          _plugin.
-                                                                                             RetrieveCurrentTrackLyrics())));
+                                                                                             RetrieveCurrentTrackLyrics()))).Start();
                                     break;
                                 case "rating":
-                                    _clientSocket.Send(
-                                        System.Text.Encoding.UTF8.GetBytes(String.Format("<rating>{0}</rating>\0",
+                                    Send(_clientSocket,String.Format("<rating>{0}</rating>\0",
                                                                                          _plugin.TrackRating(
-                                                                                             xmNode.InnerText))));
+                                                                                             xmNode.InnerText)));
                                     break;
                             }
-                            _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes(String.Format("\r\n")));
+                            Send(_clientSocket,String.Format("\r\n"));
                         }
                         catch (ThreadAbortException ex)
                         {
@@ -294,7 +288,7 @@ namespace MusicBeePlugin
                         {
                             try
                             {
-                                _clientSocket.Send(System.Text.Encoding.UTF8.GetBytes("<error/>\0"));
+                                Send(_clientSocket,"<error/>\0");
                             }
                             catch (Exception ex)
                             {

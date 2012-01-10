@@ -56,9 +56,9 @@ namespace MusicBeePlugin
             }
             XmlDocument xmD = new XmlDocument();
             xmD.Load(SettingsFilePath + SettingsFileName);
-            WriteXmlNode(xmD, "pattern", _nowPlayingPattern);
-            WriteXmlNode(xmD, "displaynote", _displayNote.ToString());
-            WriteXmlNode(xmD, "displayNowPlaying", _displayNowPlayingString.ToString());
+            //WriteXmlNode(xmD, "pattern", _nowPlayingPattern);
+            //WriteXmlNode(xmD, "displaynote", _displayNote.ToString());
+            //WriteXmlNode(xmD, "displayNowPlaying", _displayNowPlayingString.ToString());
             xmD.Save(SettingsFilePath + SettingsFileName);
         }
 
@@ -70,17 +70,17 @@ namespace MusicBeePlugin
         {
             if (!File.Exists(SettingsFilePath + SettingsFileName))
             {
-                _nowPlayingPattern = "<Artist> - <Title>";
-                _displayNote = true;
-                _displayNowPlayingString = true;
+                //_nowPlayingPattern = "<Artist> - <Title>";
+                //_displayNote = true;
+                //_displayNowPlayingString = true;
             }
             else
             {
-                XmlDocument xmD = new XmlDocument();
-                xmD.Load(_settingFile);
-                _nowPlayingPattern = ReadPatternFromXml(xmD, "pattern");
-                _displayNote = ReadBooleanValuesFromXml(xmD, "displaynote");
-                _displayNowPlayingString = ReadBooleanValuesFromXml(xmD, "displayNowPlaying");
+                //XmlDocument xmD = new XmlDocument();
+                //xmD.Load(_settingFile);
+                //_nowPlayingPattern = ReadPatternFromXml(xmD, "pattern");
+                //_displayNote = ReadBooleanValuesFromXml(xmD, "displaynote");
+                //_displayNowPlayingString = ReadBooleanValuesFromXml(xmD, "displayNowPlaying");
             }
         }
     }
