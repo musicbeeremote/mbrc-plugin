@@ -277,6 +277,16 @@ namespace MusicBeePlugin
                                                                                          _plugin.TrackRating(
                                                                                              xmNode.InnerText)));
                                     break;
+                                case "playerStatus":
+                                    Send(_clientSocket, "<playerStatus>");
+                                    Send(_clientSocket, String.Format("<repeat>{0}</repeat>", _plugin.PlayerRepeatState("state")));
+                                    Send(_clientSocket, String.Format("<mute>{0}</mute>", _plugin.PlayerMuteState("state")));
+                                    Send(_clientSocket, String.Format("<shuffle>{0}</shuffle>",_plugin.PlayerShuffleState("state")));
+                                    Send(_clientSocket, String.Format("<scrobbler>{0}</scrobbler>", _plugin.ScrobblerState("state")));
+                                    Send(_clientSocket, String.Format("<playState>{0}</playState>", _plugin.PlayerPlayState()));
+                                    Send(_clientSocket, String.Format("<volume>{0}</volume>",_plugin.PlayerVolume("-1")));
+                                    Send(_clientSocket, "</playerStatus>\0");
+                                    break;
                             }
                             Send(_clientSocket,String.Format("\r\n"));
                         }
@@ -327,7 +337,6 @@ namespace MusicBeePlugin
                     _clientSocket = null;
                 }
                 _clientConnected.Set();
-                Debug.Write("Finally: " + DateTime.Now);
             }
         }
     }

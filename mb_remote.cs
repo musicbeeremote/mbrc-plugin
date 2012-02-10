@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
 
 namespace MusicBeePlugin
 {
@@ -24,7 +24,7 @@ namespace MusicBeePlugin
             _about.Description = "A plugin to allow music bee remote control through mobile applications and network.";
             _about.Author = "Kelsos";
             _about.TargetApplication = "MusicBee Remote";
-                // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
+            // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.General;
             _about.VersionMajor = 1; // your plugin version
             _about.VersionMinor = 0;
@@ -79,7 +79,7 @@ namespace MusicBeePlugin
         /// <returns>Track artist string</returns>
         public string GetCurrentTrackArtist()
         {
-            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist);
+            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist));
         }
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace MusicBeePlugin
         /// <returns>Track album string</returns>
         public string GetCurrentTrackAlbum()
         {
-            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album);
+            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album));
         }
 
         /// <summary>
@@ -97,7 +97,7 @@ namespace MusicBeePlugin
         /// <returns>Track title string</returns>
         public string GetCurrentTrackTitle()
         {
-            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
+            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle));
         }
 
         /// <summary>
@@ -116,6 +116,8 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public string GetCurrentTrackCover()
         {
+            if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
+                return "";
             using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
                 )
             using (Image albumCover = Image.FromStream(ms, true))
@@ -160,7 +162,9 @@ namespace MusicBeePlugin
         /// <returns>Lyrics String</returns>
         public string RetrieveCurrentTrackLyrics()
         {
-            return _mbApiInterface.NowPlaying_GetLyrics().Trim().Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;").Replace("&", "&amp;").Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n", "&lt;br&gt;");
+            return
+                SecurityElement.Escape(_mbApiInterface.NowPlaying_GetLyrics().Trim().Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").
+                    Replace("\n", "&lt;br&gt;"));
         }
 
         // return Base64 string representation of the artwork binary data
@@ -346,7 +350,7 @@ namespace MusicBeePlugin
         public void PlaylistGoToSpecifiedTrack(string trackInfo)
         {
             string trackInformation = trackInfo.Replace(" - ", "\0");
-            int index = trackInformation.IndexOf("\0", System.StringComparison.Ordinal);
+            int index = trackInformation.IndexOf("\0", StringComparison.Ordinal);
             trackInformation = trackInformation.Substring(index + 1);
             _mbApiInterface.NowPlayingList_QueryFiles("*");
             string trackList = _mbApiInterface.NowPlayingList_QueryGetAllFiles();
