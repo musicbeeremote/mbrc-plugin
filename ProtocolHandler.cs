@@ -31,24 +31,25 @@ namespace MusicBeePlugin
     {
         private static XmlDocument _xmlDoc = new XmlDocument();
         private static XmlNode _xmlNode;
-        public static string PlayPause = "playPause";
-        public static string Previous = "previous";
-        public static string Next = "next";
-        public static string Stop = "";
-        public static string PlayState = "playState";
-        public static string Volume = "volume";
-        public static string SongChangedStatus = "songChanged";
-        public static string SongInformation = "songInfo";
-        public static string SongCover = "songCover";
-        public static string Shuffle = "";
-        public static string Mute = "";
-        public static string Repeat = "";
-        public static string Playlist = "";
-        public static string PlayNow = "";
-        public static string Scrobble = "";
-        public static string Lyrics = "";
-        public static string Rating = "";
-        public static string PlayerStatus = "";
+        public const string PlayPause = "playPause";
+        public const string Previous = "previous";
+        public const string Next = "next";
+        public const string Stop = "stopPlayback";
+        public const string PlayState = "playState";
+        public const string Volume = "volume";
+        public const string SongChangedStatus = "songChanged";
+        public const string SongInformation = "songInfo";
+        public const string SongCover = "songCover";
+        public const string Shuffle = "shuffle";
+        public const string Mute = "mute";
+        public const string Repeat = "repeat";
+        public const string Playlist = "playlist";
+        public const string PlayNow = "playNow";
+        public const string Scrobble = "scrobble";
+        public const string Lyrics = "lyrics";
+        public const string Rating = "rating";
+        public const string PlayerStatus = "playerStatus";
+        public const string Error = "error";
 
         public static String GetActionString(PlayerAction action, String actionContent)
         {
@@ -60,23 +61,30 @@ namespace MusicBeePlugin
             return InternalGetAction(action, "");
         }
 
+        private static String PrepareXml(String name, String content, bool isFinishedByNullChar)
+        {
+            string result = "<" + name + ">" + content + "</" + name + ">";
+            if (isFinishedByNullChar)
+                return result + "\0";
+            return result;
+        }
+
         private static String InternalGetAction(PlayerAction action, String actionContent)
         {
-            const string result = "";
             switch (action)
             {
                 case PlayerAction.PlayPause:
-                    return String.Format("<playPause>{0}</playPause>\0", actionContent);     
+                    return PrepareXml(PlayPause, actionContent, true);
                 case PlayerAction.Previous:
-                    return String.Format("<previous>{0}</previous>\0", actionContent);
+                    return PrepareXml(Previous, actionContent, true);
                 case PlayerAction.Next:
-                    return String.Format("<next>{0}</next>\0", actionContent);
+                    return PrepareXml(Next, actionContent, true);
                 case PlayerAction.Stop:
-                    break;
+                    return PrepareXml(Stop, actionContent, true);
                 case PlayerAction.PlayState:
-                    return String.Format("<playState>{0}</playState>\0", actionContent);
+                    return PrepareXml(PlayState, actionContent, true);
                 case PlayerAction.Volume:
-                    return String.Format("<volume>{0}</volume>\0", actionContent);
+                    return PrepareXml(Volume, actionContent, true);
                 case PlayerAction.SongChangedStatus:
                     return String.Format("<songChanged>{0}</songChanged>\0", actionContent);
                 case PlayerAction.SongInformation:
@@ -104,7 +112,6 @@ namespace MusicBeePlugin
                 default:
                     throw new ArgumentOutOfRangeException("action");
             }
-            return result;
         }
         private static string GetPlayerStatus()
         {
@@ -138,100 +145,93 @@ namespace MusicBeePlugin
                 {
                     switch (xmNode.Name)
                     {
-                        case "next":
+                        case Next:
                             SocketServer.Send(GetActionString(PlayerAction.Next,
-                                                                 SocketServer._plugin.PlayerPlayNextTrack()));
+                                                                 _plugin.PlayerPlayNextTrack()));
                             break;
-                        case "previous":
-                            SocketServer.Send(SocketServer._clientSocket,
+                        case Previous:
+                            SocketServer.Send(
                                  GetActionString(PlayerAction.Previous,
-                                                                 SocketServer._plugin.PlayerPlayPreviousTrack()));
+                                                                 _plugin.PlayerPlayPreviousTrack()));
                             break;
-                        case "playPause":
-                            SocketServer.Send(SocketServer._clientSocket,
+                        case PlayPause:
+                            SocketServer.Send(
                                  GetActionString(PlayerAction.PlayState,
-                                                                 SocketServer._plugin.PlayerPlayPauseTrack()));
+                                                                 _plugin.PlayerPlayPauseTrack()));
                             break;
-                        case "playState":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 GetActionString(PlayerAction.PlayState, SocketServer._plugin.PlayerPlayState()));
+                        case PlayState:
+                            SocketServer.Send(
+                                 GetActionString(PlayerAction.PlayState, _plugin.PlayerPlayState()));
                             break;
-                        case "volume":
-                            SocketServer.Send(SocketServer._clientSocket,
+                        case Volume:
+                            SocketServer.Send(
                                  GetActionString(PlayerAction.Volume,
-                                                                 SocketServer._plugin.PlayerVolume(xmNode.InnerText)));
+                                                                 _plugin.PlayerVolume(xmNode.InnerText)));
                             break;
-                        case "songChanged":
-                            SocketServer.Send(SocketServer._clientSocket,
+                        case SongChangedStatus:
+                            SocketServer.Send(
                                  GetActionString(PlayerAction.SongChangedStatus,
-                                                                 SocketServer._plugin.SongChanged.ToString(CultureInfo.InvariantCulture)));
-                            SocketServer._plugin.SongChanged = false;
+                                                                 _plugin.SongChanged.ToString(CultureInfo.InvariantCulture)));
+                            _plugin.SongChanged = false;
                             break;
-                        case "songInfo":
-                            SocketServer.Send(SocketServer._clientSocket,
+                        case SongInformation:
+                            SocketServer.Send(
                                  GetActionString(PlayerAction.SongInformation, SocketServer.GetSongInfo()));
                             break;
-                        case "songCover":
+                        case SongCover:
                             new Thread(
                                 () =>
-                                SocketServer.Send(SocketServer._clientSocket,
-                                     String.Format("<songCover>{0}</songCover>\0", SocketServer._plugin.GetCurrentTrackCover()))).
+                                SocketServer.Send(
+                                     String.Format("<songCover>{0}</songCover>\0", _plugin.GetCurrentTrackCover()))).
                                 Start();
                             break;
-                        case "stopPlayback":
-                            SocketServer._plugin.PlayerStopPlayback();
-                            SocketServer.Send(SocketServer._clientSocket, "<stopPlayback>{0}</stopPlayback>\0");
+                        case Stop:
+                            _plugin.PlayerStopPlayback();
+                            SocketServer.Send( "<stopPlayback>{0}</stopPlayback>\0");
                             break;
-                        case "shuffle":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 String.Format("<shuffle>{0}</shuffle>\0", SocketServer._plugin.PlayerShuffleState(xmNode.InnerText)));
+                        case Shuffle:
+                            SocketServer.Send(
+                                 String.Format("<shuffle>{0}</shuffle>\0", _plugin.PlayerShuffleState(xmNode.InnerText)));
                             break;
-                        case "mute":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 String.Format("<mute>{0}</mute>\0", SocketServer._plugin.PlayerMuteState(xmNode.InnerText)));
+                        case Mute:
+                            SocketServer.Send(
+                                 String.Format("<mute>{0}</mute>\0", _plugin.PlayerMuteState(xmNode.InnerText)));
                             break;
-                        case "repeat":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 String.Format("<repeat>{0}</repeat>\0", SocketServer._plugin.PlayerRepeatState(xmNode.InnerText)));
+                        case Repeat:
+                            SocketServer.Send(
+                                 String.Format("<repeat>{0}</repeat>\0", _plugin.PlayerRepeatState(xmNode.InnerText)));
                             break;
-                        case "playlist":
-                            SocketServer.Send(SocketServer._clientSocket, String.Format("<playlist>{0}</playlist>\0", SocketServer._plugin.PlaylistGetTracks()));
+                        case Playlist:
+                            SocketServer.Send( String.Format("<playlist>{0}</playlist>\0", _plugin.PlaylistGetTracks()));
                             break;
-                        case "playNow":
-                            SocketServer._plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
-                            SocketServer.Send(SocketServer._clientSocket, "<playNow/>\0");
+                        case PlayNow:
+                            _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
+                            SocketServer.Send( "<playNow/>\0");
                             break;
-                        case "scrobbler":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 String.Format("<scrobbler>{0}</scrobbler>\0", SocketServer._plugin.ScrobblerState(xmNode.InnerText)));
+                        case Scrobble:
+                            SocketServer.Send(
+                                 String.Format("<scrobbler>{0}</scrobbler>\0", _plugin.ScrobblerState(xmNode.InnerText)));
                             break;
-                        case "lyrics":
+                        case Lyrics:
                             new Thread(
                                 () =>
-                                SocketServer.Send(SocketServer._clientSocket,
-                                     String.Format("<lyrics>{0}</lyrics>\0", SocketServer._plugin.RetrieveCurrentTrackLyrics()))).
+                                SocketServer.Send(String.Format("<lyrics>{0}</lyrics>\0", _plugin.RetrieveCurrentTrackLyrics()))).
                                 Start();
                             break;
-                        case "rating":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 String.Format("<rating>{0}</rating>\0", SocketServer._plugin.TrackRating(xmNode.InnerText)));
+                        case Rating:
+                            SocketServer.Send(String.Format("<rating>{0}</rating>\0", _plugin.TrackRating(xmNode.InnerText)));
                             break;
-                        case "playerStatus":
-                            SocketServer.Send(SocketServer._clientSocket,
-                                 GetActionString(PlayerAction.PlayerStatus, SocketServer.GetPlayerStatus()));
+                        case PlayerStatus:
+                            SocketServer.Send(GetActionString(PlayerAction.PlayerStatus, GetPlayerStatus()));
                             break;
                     }
-                    SocketServer.Send(SocketServer._clientSocket, String.Format("\r\n"));
-                }
-                catch (ThreadAbortException ex)
-                {
-                    ErrorHandler.LogError(ex);
+                    SocketServer.Send(String.Format("\r\n"));
                 }
                 catch
                 {
                     try
                     {
-                        SocketServer.Send(SocketServer._clientSocket, "<error/>\0");
+                        SocketServer.Send("<error/>\0");
                     }
                     catch (Exception ex)
                     {
