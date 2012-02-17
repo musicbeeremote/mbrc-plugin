@@ -147,68 +147,56 @@ namespace MusicBeePlugin
             }
         }
 
-        // return lyrics for the requested artist/title
-        // only required if PluginType = LyricsRetrieval
-        // return null if no lyrics are found
-        public string RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album,
-                                     bool synchronisedPreferred)
-        {
-            return null;
-        }
-
         /// <summary>
         /// Retrieves the lyrics for the track playing.
         /// </summary>
         /// <returns>Lyrics String</returns>
         public string RetrieveCurrentTrackLyrics()
         {
+            string lyricsString = _mbApiInterface.NowPlaying_GetLyrics().Trim();
+            if (lyricsString.Contains("\r\r\n\r\r\n"))
+            {
+                lyricsString = lyricsString.Replace("\r\r\n\r\r\n", " &lt;p&gt; ").Replace("\r\r\n", " &lt;br&gt; ");
+            }
+            
             return
-                SecurityElement.Escape(_mbApiInterface.NowPlaying_GetLyrics().Trim().Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").
-                    Replace("\n", "&lt;br&gt;"));
-        }
-
-        // return Base64 string representation of the artwork binary data
-        // only required if PluginType = ArtworkRetrieval
-        // return null if no artwork is found
-        public string RetrieveArtwork(string sourceFileUrl, string albumArtist, string album)
-        {
-            return null;
+                SecurityElement.Escape(lyricsString.Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n", "&lt;br&gt;"));
         }
 
         /// <summary>
         /// When called plays the next track.
         /// </summary>
         /// <returns></returns>
-        public void PlayerPlayNextTrack()
+        public string PlayerPlayNextTrack()
         {
-            _mbApiInterface.Player_PlayNextTrack();
+            return _mbApiInterface.Player_PlayNextTrack().ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>
         /// When called stops the playback.
         /// </summary>
         /// <returns></returns>
-        public void PlayerStopPlayback()
+        public string PlayerStopPlayback()
         {
-            _mbApiInterface.Player_Stop();
+            return _mbApiInterface.Player_Stop().ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>
         /// When called changes the play/pause state or starts playing a track if the status is stopped.
         /// </summary>
         /// <returns></returns>
-        public void PlayerPlayPauseTrack()
+        public string PlayerPlayPauseTrack()
         {
-            _mbApiInterface.Player_PlayPause();
+            return _mbApiInterface.Player_PlayPause().ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>
         /// When called plays the previous track.
         /// </summary>
         /// <returns></returns>
-        public void PlayerPlayPreviousTrack()
+        public string PlayerPlayPreviousTrack()
         {
-            _mbApiInterface.Player_PlayPreviousTrack();
+            return _mbApiInterface.Player_PlayPreviousTrack().ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>
@@ -218,7 +206,7 @@ namespace MusicBeePlugin
         /// </summary>
         /// <param name="vol">New volume String</param>
         /// <returns>Volume int [0,100]</returns>
-        public int PlayerVolume(String vol)
+        public string PlayerVolume(string vol)
         {
             int iVolume;
             if (int.TryParse(vol, out iVolume))
@@ -228,7 +216,7 @@ namespace MusicBeePlugin
                     _mbApiInterface.Player_SetVolume((float) iVolume/100);
                 }
             }
-            return (int) Math.Round(_mbApiInterface.Player_GetVolume()*100, 1);
+            return ((int) Math.Round(_mbApiInterface.Player_GetVolume()*100, 1)).ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>

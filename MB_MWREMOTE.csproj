@@ -74,6 +74,7 @@
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="mb_remote.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ProtocolHandler.cs" />
     <Compile Include="SocketServer.cs" />
     <Compile Include="UserSettings.cs" />
   </ItemGroup>
