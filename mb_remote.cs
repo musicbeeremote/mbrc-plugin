@@ -13,7 +13,21 @@ namespace MusicBeePlugin
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
 
-        public bool SongChanged { get; set; }
+        private bool _songChanged;
+        public bool SongChanged
+        {
+            get
+            {
+                if (_songChanged)
+                {
+                    bool songCh = _songChanged;
+                    _songChanged = !_songChanged;
+                    return songCh;
+                }
+                return _songChanged;
+            }
+            set { _songChanged = value; }
+        }
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
