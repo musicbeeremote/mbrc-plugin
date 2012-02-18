@@ -5,10 +5,9 @@ using System.Xml;
 
 namespace MusicBeePlugin
 {
-    class ProtocolHandler
+    internal class ProtocolHandler
     {
-        private static XmlDocument _xmlDoc = new XmlDocument();
-        private static XmlNode _xmlNode;
+        private readonly XmlDocument _xmlDoc;
         public const string PlayPause = "playPause";
         public const string Previous = "previous";
         public const string Next = "next";
@@ -23,46 +22,75 @@ namespace MusicBeePlugin
         public const string Repeat = "repeat";
         public const string Playlist = "playlist";
         public const string PlayNow = "playNow";
-        public const string Scrobble = "scrobble";
+        public const string Scrobble = "scrobbler";
         public const string Lyrics = "lyrics";
         public const string Rating = "rating";
         public const string PlayerStatus = "playerStatus";
         public const string Error = "error";
+        public const string Artist = "artist";
+        public const string Title = "title";
+        public const string Album = "album";
+        public const string Year = "year";
+        public const string State = "state";
 
-        private static String PrepareXml(String name, String content, bool isFinishedByNullChar)
+        private static readonly ProtocolHandler ProtocolHandlerInstance = new ProtocolHandler();
+
+        private IPlugin _plugin;
+
+        static ProtocolHandler()
+        {
+        }
+
+        private ProtocolHandler()
+        {
+            _xmlDoc = new XmlDocument();
+        }
+
+        public static ProtocolHandler Instance
+        {
+            get { return ProtocolHandlerInstance; }
+        }
+
+        public void Initialize(IPlugin plugin)
+        {
+            _plugin = plugin;
+        }
+
+        private string PrepareXml(string name, string content, bool isNullFinished)
         {
             string result = "<" + name + ">" + content + "</" + name + ">";
-            if (isFinishedByNullChar)
+            if (isNullFinished)
                 return result + "\0";
             return result;
         }
 
-        private static string GetPlayerStatus()
+        private string GetPlayerStatus()
         {
-            string playerstatus = "";
-//             playerstatus += String.Format("<repeat>{0}</repeat>", _plugin.PlayerRepeatState("state"));
-//             playerstatus += String.Format("<mute>{0}</mute>", _plugin.PlayerMuteState("state"));
-//             playerstatus += String.Format("<shuffle>{0}</shuffle>", _plugin.PlayerShuffleState("state"));
-//             playerstatus += String.Format("<scrobbler>{0}</scrobbler>", _plugin.ScrobblerState("state"));
-//             playerstatus += String.Format("<playState>{0}</playState>", _plugin.PlayerPlayState());
-//             playerstatus += String.Format("<volume>{0}</volume>", _plugin.PlayerVolume("-1"));
+            string playerstatus = PrepareXml(Repeat, _plugin.PlayerRepeatState(State), false);
+            playerstatus += PrepareXml(Mute, _plugin.PlayerMuteState(State), false);
+            playerstatus += PrepareXml(Shuffle, _plugin.PlayerShuffleState(State), false);
+            playerstatus += PrepareXml(Scrobble, _plugin.ScrobblerState(State), false);
+            playerstatus += PrepareXml(PlayState, _plugin.PlayerPlayState(), false);
+            playerstatus += PrepareXml(Volume, _plugin.PlayerVolume(String.Empty), false);
             return playerstatus;
         }
 
-        private static string GetSongInfo()
+        private string GetSongInfo()
         {
-            string songInfo = "";
-//             songInfo += String.Format("<artist>{0}</artist>", _plugin.GetCurrentTrackArtist());
-//             songInfo += String.Format("<title>{0}</title>", _plugin.GetCurrentTrackTitle());
-//             songInfo += String.Format("<album>{0}</album>", _plugin.GetCurrentTrackAlbum());
-//             songInfo += String.Format("<year>{0}</year>", _plugin.GetCurrentTrackYear());
+            string songInfo = PrepareXml(Artist, _plugin.GetCurrentTrackArtist(), false);
+            songInfo += PrepareXml(Title, _plugin.GetCurrentTrackArtist(), false);
+            songInfo += PrepareXml(Album, _plugin.GetCurrentTrackTitle(), false);
+            songInfo += PrepareXml(Year, _plugin.GetCurrentTrackAlbum(), false);
             return songInfo;
         }
 
-        public static void ProcessIncomingMessage(string incomingMessage)
+        public void ProcessIncomingMessage(string incomingMessage)
         {
-            string xmlData = "<serverData>" + incomingMessage.Replace("\0", "") + "</serverData>";
-            _xmlDoc.LoadXml(xmlData);
+            if (String.IsNullOrEmpty(incomingMessage))
+                return;
+
+            _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false));
+
             foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
             {
                 try
@@ -70,73 +98,81 @@ namespace MusicBeePlugin
                     switch (xmNode.Name)
                     {
                         case Next:
-                            SocketServer.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true));
+                            SocketServer.Instance.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true));
                             break;
                         case Previous:
-                            SocketServer.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true));
+                            SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true));
                             break;
                         case PlayPause:
-                            SocketServer.Send(PrepareXml(PlayPause,  _plugin.PlayerPlayPauseTrack(), true));
+                            SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(), true));
                             break;
                         case PlayState:
-                            SocketServer.Send(PrepareXml(PlayState, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true));
                             break;
                         case Volume:
-                            SocketServer.Send(PrepareXml(Volume, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText), true));
                             break;
                         case SongChangedStatus:
-                            SocketServer.Send(PrepareXml(SongChangedStatus, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
+                                                                  _plugin.SongChanged.ToString(
+                                                                      CultureInfo.InvariantCulture), true));
                             break;
                         case SongInformation:
-                            SocketServer.Send(PrepareXml(SongInformation, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(), true));
                             break;
                         case SongCover:
                             new Thread(
                                 () =>
-                                SocketServer.Send(PrepareXml(SongCover, actionContent, true))).Start();
+                                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true)))
+                                .Start();
                             break;
                         case Stop:
-                            SocketServer.Send(PrepareXml(Stop, _plugin.Stop(), true));
+                            SocketServer.Instance.Send(PrepareXml(Stop, _plugin.PlayerStopPlayback(), true));
                             break;
                         case Shuffle:
-                            SocketServer.Send(PrepareXml(Shuffle, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(xmNode.InnerText),
+                                                                  true));
                             break;
                         case Mute:
-                            SocketServer.Send(PrepareXml(Mute, actionContent, true));
+                            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText), true));
                             break;
                         case Repeat:
-                            SocketServer.Send(PrepareXml(Repeat,actionContent,true));
+                            SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(xmNode.InnerText),
+                                                                  true));
                             break;
                         case Playlist:
-                            SocketServer.Send(PrepareXml(Playlist,actionContent),true);
+                            SocketServer.Instance.Send(PrepareXml(Playlist, _plugin.PlaylistGetTracks(), true));
                             break;
                         case PlayNow:
-                            _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText);
-                            SocketServer.Send( "<playNow/>\0");
+                            SocketServer.Instance.Send(PrepareXml(PlayNow,
+                                                                  _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText),
+                                                                  true));
                             break;
                         case Scrobble:
-                            SocketServer.Send(PrepareXml(Scrobble,actionContent,true));
+                            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
+                                                                  true));
                             break;
                         case Lyrics:
                             new Thread(
                                 () =>
-                                SocketServer.Send(PrepareXml(Lyrics,actionContent,true))).
+                                SocketServer.Instance.Send(PrepareXml(Lyrics, _plugin.RetrieveCurrentTrackLyrics(), true)))
+                                .
                                 Start();
                             break;
                         case Rating:
-                            SocketServer.Send(PrepareXml(Rating,actionContent,true));
+                            SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText), true));
                             break;
                         case PlayerStatus:
-                            SocketServer.Send(PrepareXml(PlayerStatus,actionContent,true));
+                            SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(), true));
                             break;
                     }
-                    SocketServer.Send("\r\n");
+                    SocketServer.Instance.Send("\r\n");
                 }
                 catch
                 {
                     try
                     {
-                        SocketServer.Send(PrepareXml(Error,string.Empty,true));
+                        SocketServer.Instance.Send(PrepareXml(Error, xmNode.Name, true));
                     }
                     catch (Exception ex)
                     {

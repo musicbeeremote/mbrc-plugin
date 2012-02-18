@@ -99,7 +99,7 @@ namespace MusicBeePlugin
             } while (!_isStopping);
         }
 
-        public static void Send(string data)
+        public void Send(string data)
         {
             byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
             _clientSocket.Send(byteData);
@@ -126,7 +126,9 @@ namespace MusicBeePlugin
                         {
                             if (_clientSocket.Poll(-1, SelectMode.SelectRead))
                             {
-                                int bytesRead = _clientSocket.Receive(buffer, count,_clientSocket.ReceiveBufferSize - count, SocketFlags.None);
+                                int bytesRead = _clientSocket.Receive(buffer, count,
+                                                                      _clientSocket.ReceiveBufferSize - count,
+                                                                      SocketFlags.None);
                                 if (bytesRead == 0)
                                 {
                                     connectionClosing = true;
@@ -142,8 +144,12 @@ namespace MusicBeePlugin
                         connectionClosing = true;
                     }
 
-                    if(_isStopping) return;
-                    ProtocolHandler.ProcessIncomingMessage(count == 0 ? "" : System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", ""));
+                    if (_isStopping) return;
+                    ProtocolHandler.Instance.ProcessIncomingMessage(count == 0
+                                                                        ? ""
+                                                                        : System.Text.Encoding.UTF8.GetString(buffer, 0,
+                                                                                                              count).
+                                                                              Replace("\r\n", ""));
                     if (eocIndex == -1 || eocIndex == count - 1)
                     {
                         count = 0;
@@ -177,7 +183,5 @@ namespace MusicBeePlugin
                 _clientConnected.Set();
             }
         }
-
-
     }
 }

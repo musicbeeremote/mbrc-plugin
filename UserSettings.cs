@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+﻿using System.IO;
 using System.Xml;
 
 namespace MusicBeePlugin
@@ -41,7 +38,7 @@ namespace MusicBeePlugin
         /// <remarks></remarks>
         private static void SaveSettings()
         {
-            if (!File.Exists(SettingsFilePath+SettingsFileName))
+            if (!File.Exists(SettingsFilePath + SettingsFileName))
             {
                 XmlDocument xmNew = new XmlDocument();
 

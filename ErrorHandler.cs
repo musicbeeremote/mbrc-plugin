@@ -4,9 +4,10 @@ using System.IO;
 
 namespace MusicBeePlugin
 {
-    class ErrorHandler
+    internal class ErrorHandler
     {
         private static string _logFilePath;
+
         /// <summary>
         /// Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
         /// </summary>
@@ -20,7 +21,7 @@ namespace MusicBeePlugin
                     return;
                 if (!Directory.Exists(_logFilePath + "mb_remote"))
                     Directory.CreateDirectory(_logFilePath + "mb_remote");
-                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log",FileMode.Append);
+                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log", FileMode.Append);
                 using (StreamWriter fWriter = new StreamWriter(stream))
                 {
                     fWriter.WriteLine(DateTime.Now + "\n");

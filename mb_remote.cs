@@ -8,12 +8,13 @@ using System.Security;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin
+    public partial class Plugin : IPlugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
 
         private bool _songChanged;
+
         public bool SongChanged
         {
             get
@@ -48,7 +49,7 @@ namespace MusicBeePlugin
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
             _about.ConfigurationPanelHeight = 10;
 
-            SocketServer.Instance.ConnectToPlugin(this);
+            ProtocolHandler.Instance.Initialize(this);
             SocketServer.Instance.Start();
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
             return _about;
@@ -172,9 +173,10 @@ namespace MusicBeePlugin
             {
                 lyricsString = lyricsString.Replace("\r\r\n\r\r\n", " &lt;p&gt; ").Replace("\r\r\n", " &lt;br&gt; ");
             }
-            
+
             return
-                SecurityElement.Escape(lyricsString.Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n", "&lt;br&gt;"));
+                SecurityElement.Escape(lyricsString.Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n",
+                                                                                                            "&lt;br&gt;"));
         }
 
         /// <summary>
@@ -349,8 +351,9 @@ namespace MusicBeePlugin
         /// </summary>
         /// <param name="trackInfo">The track to play</param>
         /// <returns></returns>
-        public void PlaylistGoToSpecifiedTrack(string trackInfo)
+        public string PlaylistGoToSpecifiedTrack(string trackInfo)
         {
+            string result = false.ToString(CultureInfo.InvariantCulture);
             string trackInformation = trackInfo.Replace(" - ", "\0");
             int index = trackInformation.IndexOf("\0", StringComparison.Ordinal);
             trackInformation = trackInformation.Substring(index + 1);
@@ -363,9 +366,11 @@ namespace MusicBeePlugin
                 if (_mbApiInterface.Library_GetFileTag(tracks[i], MetaDataType.TrackTitle) == trackInformation)
                 {
                     _mbApiInterface.NowPlayingList_PlayNow(tracks[i]);
+                    result = true.ToString(CultureInfo.InvariantCulture);
                     break;
                 }
             }
+            return result;
         }
 
         /// <summary>
