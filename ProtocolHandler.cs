@@ -5,7 +5,12 @@ using System.Xml;
 
 namespace MusicBeePlugin
 {
-    internal class ProtocolHandler
+    internal interface IProtocolHandler
+    {
+        void ProcessIncomingMessage(string incomingMessage);
+    }
+
+    internal class ProtocolHandler : IProtocolHandler
     {
         private readonly XmlDocument _xmlDoc;
         public const string PlayPause = "playPause";
@@ -56,7 +61,7 @@ namespace MusicBeePlugin
             _plugin = plugin;
         }
 
-        private string PrepareXml(string name, string content, bool isNullFinished)
+        private static string PrepareXml(string name, string content, bool isNullFinished)
         {
             string result = "<" + name + ">" + content + "</" + name + ">";
             if (isNullFinished)
@@ -84,6 +89,10 @@ namespace MusicBeePlugin
             return songInfo;
         }
 
+        /// <summary>
+        /// Processes the incoming message and answer's sending back the needed data.
+        /// </summary>
+        /// <param name="incomingMessage">The incoming message.</param>
         public void ProcessIncomingMessage(string incomingMessage)
         {
             if (String.IsNullOrEmpty(incomingMessage))
