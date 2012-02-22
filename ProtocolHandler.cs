@@ -37,6 +37,7 @@ namespace MusicBeePlugin
         public const string Album = "album";
         public const string Year = "year";
         public const string State = "state";
+        public const string PollerState = "pollerState";
 
         private static readonly ProtocolHandler ProtocolHandlerInstance = new ProtocolHandler();
 

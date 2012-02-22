@@ -64,7 +64,7 @@ namespace MusicBeePlugin
             _isStopping = false;
             try
             {
-                _listener = new TcpListener(IPAddress.Any, 3000);
+                _listener = new TcpListener(IPAddress.Any, Int32.Parse(UserSettings.ListeningPort));
                 _listener.Start();
                 _clientConnected = new ManualResetEvent(false);
                 _listenerThread = new Thread(ListenForClients) {IsBackground = true, Priority = ThreadPriority.Lowest};

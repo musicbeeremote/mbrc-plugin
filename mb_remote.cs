@@ -3,12 +3,13 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin : IPlugin
+    public partial class Plugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
@@ -35,32 +36,50 @@ namespace MusicBeePlugin
             _mbApiInterface =
                 (MusicBeeApiInterface) Marshal.PtrToStructure(apiInterfacePtr, typeof (MusicBeeApiInterface));
             _about.PluginInfoVersion = PluginInfoVersion;
-            _about.Name = "MusicBee Remote Control";
-            _about.Description = "A plugin to allow music bee remote control through mobile applications and network.";
+            _about.Name = "Remote Control: Server";
+            _about.Description = "Used to manage MusicBee remotely though network.";
             _about.Author = "Kelsos";
             _about.TargetApplication = "MusicBee Remote";
+            Version v = Assembly.GetExecutingAssembly().GetName().Version;
             // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.General;
-            _about.VersionMajor = 1; // your plugin version
-            _about.VersionMinor = 0;
-            _about.Revision = 1;
+            _about.VersionMajor = Convert.ToInt16(v.Major);
+            _about.VersionMinor = Convert.ToInt16(v.Minor);
+            _about.Revision = Convert.ToInt16(v.Revision);
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
-            _about.ConfigurationPanelHeight = 10;
+            _about.ConfigurationPanelHeight = 50;
 
             ProtocolHandler.Instance.Initialize(this);
-            SocketServer.Instance.Start();
+            
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
+
+            UserSettings.SettingsFilePath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            UserSettings.SettingsFileName = "mb_remote\\settings.xml";
+            UserSettings.LoadSettings();
+            SocketServer.Instance.Start();
+
             return _about;
         }
 
         public bool Configure(IntPtr panelHandle)
         {
             // save any persistent settings in a sub-folder of this path
-            // var dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            return false;
+            string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            SettingsMenuHandler handler = new SettingsMenuHandler();
+
+            int backround = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
+                                                                         ElementState.ElementStateDefault,
+                                                                         ElementComponent.
+                                                                             ComponentBackground);
+            int foreground = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
+                                                                          ElementState.ElementStateDefault,
+                                                                          ElementComponent.
+                                                                              ComponentForeground);
+            return handler.ConfigureSettingsPanel(panelHandle, backround, foreground);
         }
+
 
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
         public void Close(PluginCloseReason reason)
@@ -71,6 +90,16 @@ namespace MusicBeePlugin
         // uninstall this plugin - clean up any persisted files
         public void Uninstall()
         {
+        }
+
+        // called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
+        // its up to you to figure out whether anything has changed and needs updating
+        public void SaveSettings()
+        {
+            // save any persistent settings in a sub-folder of this path
+            string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            UserSettings.ListeningPort = SettingsMenuHandler.PortNumber; 
+            UserSettings.SaveSettings("mbremote");
         }
 
         // receive event notifications from MusicBee
