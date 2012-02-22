@@ -48,5 +48,29 @@ namespace MusicBeePlugin
             EventHandler handler = PlayStateChanged;
             if (handler != null) handler(this, e);
         }
+
+        public event EventHandler RepeatStateChanged;
+
+        public void OnRepeatStateChanged(EventArgs e)
+        {
+            EventHandler handler = RepeatStateChanged;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler ShuffleStateChanged;
+
+        public void OnShuffleStateChanged(EventArgs e)
+        {
+            EventHandler handler = ShuffleStateChanged;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler ScrobbleStateChanged;
+
+        public void OnScrobbleStateChanged(EventArgs e)
+        {
+            EventHandler handler = ScrobbleStateChanged;
+            if (handler != null) handler(this, e);
+        }
     }
 }

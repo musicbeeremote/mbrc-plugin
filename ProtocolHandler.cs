@@ -54,6 +54,26 @@ namespace MusicBeePlugin
             Messenger.Instance.TrackChanged += InstanceTrackChanged;
             Messenger.Instance.VolumeLevelChanged += InstanceVolumeLevelChanged;
             Messenger.Instance.VolumeMuteChanged += InstanceVolumeMuteChanged;
+            Messenger.Instance.RepeatStateChanged += HandleRepeatStateChanged;
+            Messenger.Instance.ScrobbleStateChanged += HandleScrobbleStateChanged;
+            Messenger.Instance.ShuffleStateChanged += HandleShuffleStateChanged;
+        }
+
+        private void HandleShuffleStateChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(State),
+                                                                 true) +"\r\n");
+        }
+
+        private void HandleScrobbleStateChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(State),
+                                       true)+"\r\n");
+        }
+
+        private void HandleRepeatStateChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(State), true) + "\r\n");
         }
 
         void InstanceVolumeMuteChanged(object sender, EventArgs e)

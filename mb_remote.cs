@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Timers;
 
 namespace MusicBeePlugin
 {
@@ -13,6 +14,10 @@ namespace MusicBeePlugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
+        private Timer _timer;
+        private bool _shuffle;
+        private RepeatMode _repeat;
+        private bool _scrobble;
 
         private bool _songChanged;
 
@@ -55,13 +60,41 @@ namespace MusicBeePlugin
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
             _about.ConfigurationPanelHeight = 50;
 
+            _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
+            _repeat = _mbApiInterface.Player_GetRepeat();
+            _shuffle = _mbApiInterface.Player_GetShuffle();
+
+
             ProtocolHandler.Instance.Initialize(this);
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
             SocketServer.Instance.Start();
+            _timer = new Timer {Interval = 3000};
+            _timer.Elapsed += HandleTimerElapsed;
+            _timer.Enabled=true;
+
 
             return _about;
+        }
+
+        void HandleTimerElapsed(object sender, ElapsedEventArgs e)
+        {
+            if(_mbApiInterface.Player_GetShuffle()!=_shuffle)
+            {
+                Messenger.Instance.OnShuffleStateChanged(null);
+                _shuffle = _mbApiInterface.Player_GetShuffle();
+            }
+            if(_mbApiInterface.Player_GetScrobbleEnabled()!=_scrobble)
+            {
+                Messenger.Instance.OnScrobbleStateChanged(null);
+                _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
+            }
+            if (_mbApiInterface.Player_GetRepeat()!=_repeat)
+            {
+                Messenger.Instance.OnRepeatStateChanged(null);
+                _repeat = _mbApiInterface.Player_GetRepeat();
+            }
         }
 
         public bool Configure(IntPtr panelHandle)
