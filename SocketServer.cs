@@ -101,6 +101,8 @@ namespace MusicBeePlugin
 
         public void Send(string data)
         {
+            if(_clientSocket==null||!_clientSocket.Connected)
+                return;
             byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
             _clientSocket.Send(byteData);
         }

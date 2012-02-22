@@ -33,8 +33,12 @@ namespace MusicBeePlugin
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
+           
             _mbApiInterface =
                 (MusicBeeApiInterface) Marshal.PtrToStructure(apiInterfacePtr, typeof (MusicBeeApiInterface));
+            UserSettings.SettingsFilePath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            UserSettings.SettingsFileName = "mb_remote\\settings.xml";
+            UserSettings.LoadSettings();
             _about.PluginInfoVersion = PluginInfoVersion;
             _about.Name = "Remote Control: Server";
             _about.Description = "Used to manage MusicBee remotely though network.";
@@ -52,12 +56,9 @@ namespace MusicBeePlugin
             _about.ConfigurationPanelHeight = 50;
 
             ProtocolHandler.Instance.Initialize(this);
-            
+
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
-            UserSettings.SettingsFilePath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            UserSettings.SettingsFileName = "mb_remote\\settings.xml";
-            UserSettings.LoadSettings();
             SocketServer.Instance.Start();
 
             return _about;
@@ -98,7 +99,7 @@ namespace MusicBeePlugin
         {
             // save any persistent settings in a sub-folder of this path
             string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            UserSettings.ListeningPort = SettingsMenuHandler.PortNumber; 
+            UserSettings.ListeningPort = SettingsMenuHandler.PortNumber;
             UserSettings.SaveSettings("mbremote");
         }
 
@@ -113,6 +114,16 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.TrackChanged:
                     SongChanged = true;
+                    Messenger.Instance.OnTrackChanged(null);
+                    break;
+                case NotificationType.VolumeLevelChanged:
+                    Messenger.Instance.OnVolumeLevelChanged(null);
+                    break;
+                case NotificationType.VolumeMuteChanged:
+                    Messenger.Instance.OnVolumeMuteChanged(null);
+                    break;
+                case NotificationType.PlayStateChanged:
+                    Messenger.Instance.OnPlayStateChanged(null);
                     break;
             }
         }

@@ -50,6 +50,38 @@ namespace MusicBeePlugin
         private ProtocolHandler()
         {
             _xmlDoc = new XmlDocument();
+            Messenger.Instance.PlayStateChanged += InstancePlayStateChanged;
+            Messenger.Instance.TrackChanged += InstanceTrackChanged;
+            Messenger.Instance.VolumeLevelChanged += InstanceVolumeLevelChanged;
+            Messenger.Instance.VolumeMuteChanged += InstanceVolumeMuteChanged;
+        }
+
+        void InstanceVolumeMuteChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true));
+            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(State), true));
+            SocketServer.Instance.Send("\r\n");
+        }
+
+        void InstanceVolumeLevelChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true));
+            SocketServer.Instance.Send("\r\n");
+        }
+
+        void InstanceTrackChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(), true) + "\r\n");
+            new Thread(
+                () =>
+                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true) + "\r\n"))
+                .Start();
+        }
+
+        void InstancePlayStateChanged(object sender, EventArgs e)
+        {
+            SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true));
+            SocketServer.Instance.Send("\r\n");
         }
 
         public static ProtocolHandler Instance
