@@ -70,7 +70,7 @@ namespace MusicBeePlugin
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
             SocketServer.Instance.Start();
-            _timer = new Timer {Interval = 3000};
+            _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled=true;
 
@@ -132,7 +132,7 @@ namespace MusicBeePlugin
         {
             // save any persistent settings in a sub-folder of this path
             string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            UserSettings.ListeningPort = SettingsMenuHandler.PortNumber;
+            UserSettings.ListeningPort = int.Parse(SettingsMenuHandler.PortNumber);
             UserSettings.SaveSettings("mbremote");
         }
 

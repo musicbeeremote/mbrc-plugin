@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
 
 namespace MusicBeePlugin
@@ -27,7 +28,7 @@ namespace MusicBeePlugin
                 return false;
 
             Panel panel = (Panel)Control.FromHandle(panelHandle);
-            _listeningPort.Text = UserSettings.ListeningPort;
+            _listeningPort.Text = UserSettings.ListeningPort.ToString(CultureInfo.InvariantCulture);
             
             Label textBoxLabel = new Label
             {

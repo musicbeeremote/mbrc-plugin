@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Globalization;
+using System.IO;
 using System.Xml;
 
 namespace MusicBeePlugin
@@ -7,7 +8,7 @@ namespace MusicBeePlugin
     {
         public static string SettingsFilePath { get; set; }
         public static string SettingsFileName { get; set; }
-        public static string ListeningPort { get; set; }
+        public static int ListeningPort { get; set; }
         private const string PortNumber = "portNumber";
 
         /// <summary>
@@ -59,10 +60,11 @@ namespace MusicBeePlugin
 
         private static void WriteApplicationSetting(XmlDocument document)
         {
-            WriteNodeValue(document,PortNumber,ListeningPort);
+            if (ListeningPort > 0 && ListeningPort < 65535)
+            WriteNodeValue(document,PortNumber,ListeningPort.ToString(CultureInfo.InvariantCulture));
         }
 
-        private static string ReadNodeValue(XmlDocument document, string name)
+        private static string ReadNodeValue(XmlNode document, string name)
         {
             XmlNode node = document.SelectSingleNode("//" + name);
             return node != null ? node.InnerText : string.Empty;
@@ -76,13 +78,14 @@ namespace MusicBeePlugin
         {
             if (!File.Exists(SettingsFilePath + SettingsFileName))
             {
-                ListeningPort = "03000";
+                ListeningPort = 3000;
             }
             else
             {
                 XmlDocument document = new XmlDocument();
                 document.Load(SettingsFilePath + SettingsFileName);
-                ListeningPort = ReadNodeValue(document, PortNumber);
+                int listeningPort;
+                ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
             }
         }
     }
