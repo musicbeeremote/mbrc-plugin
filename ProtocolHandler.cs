@@ -38,6 +38,10 @@ namespace MusicBeePlugin
         public const string Year = "year";
         public const string State = "state";
         public const string PollerState = "pollerState";
+        public const string Protocol = "protocol";
+        public const string Player = "player";
+        public const string ProtocolVersion = "1.0";
+        public const string PlayerName = "MusicBee";
 
         private static readonly ProtocolHandler ProtocolHandlerInstance = new ProtocolHandler();
 
@@ -62,13 +66,13 @@ namespace MusicBeePlugin
         private void HandleShuffleStateChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(State),
-                                                                 true, true));
+                                                  true, true));
         }
 
         private void HandleScrobbleStateChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(State),
-                                       true, true));
+                                                  true, true));
         }
 
         private void HandleRepeatStateChanged(object sender, EventArgs e)
@@ -76,18 +80,18 @@ namespace MusicBeePlugin
             SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(State), true, true));
         }
 
-        void HandleVolumeMuteChanged(object sender, EventArgs e)
+        private void HandleVolumeMuteChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true, true));
             SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(State), true, true));
         }
 
-        void HandleVolumeLevelChanged(object sender, EventArgs e)
+        private void HandleVolumeLevelChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true, true));
         }
 
-        void HandleTrackChanged(object sender, EventArgs e)
+        private void HandleTrackChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(), true, true));
             new Thread(
@@ -96,7 +100,7 @@ namespace MusicBeePlugin
                 .Start();
         }
 
-        void HandlePlayStateChanged(object sender, EventArgs e)
+        private void HandlePlayStateChanged(object sender, EventArgs e)
         {
             SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
         }
@@ -135,9 +139,9 @@ namespace MusicBeePlugin
         private string GetSongInfo()
         {
             string songInfo = PrepareXml(Artist, _plugin.GetCurrentTrackArtist(), false, false);
-            songInfo += PrepareXml(Title, _plugin.GetCurrentTrackArtist(), false, false);
-            songInfo += PrepareXml(Album, _plugin.GetCurrentTrackTitle(), false, false);
-            songInfo += PrepareXml(Year, _plugin.GetCurrentTrackAlbum(), false, false);
+            songInfo += PrepareXml(Title, _plugin.GetCurrentTrackTitle(), false, false);
+            songInfo += PrepareXml(Album, _plugin.GetCurrentTrackAlbum(), false, false);
+            songInfo += PrepareXml(Year, _plugin.GetCurrentTrackYear(), false, false);
             return songInfo;
         }
 
@@ -162,7 +166,8 @@ namespace MusicBeePlugin
                             SocketServer.Instance.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true, true));
                             break;
                         case Previous:
-                            SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true, true));
+                            SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true,
+                                                                  true));
                             break;
                         case PlayPause:
                             SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(), true, true));
@@ -171,7 +176,8 @@ namespace MusicBeePlugin
                             SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
                             break;
                         case Volume:
-                            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText), true, true));
+                            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText), true,
+                                                                  true));
                             break;
                         case SongChangedStatus:
                             SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
@@ -184,7 +190,8 @@ namespace MusicBeePlugin
                         case SongCover:
                             new Thread(
                                 () =>
-                                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true, true)))
+                                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true,
+                                                                      true)))
                                 .Start();
                             break;
                         case Stop:
@@ -195,7 +202,8 @@ namespace MusicBeePlugin
                                                                   true, true));
                             break;
                         case Mute:
-                            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText), true, true));
+                            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText), true,
+                                                                  true));
                             break;
                         case Repeat:
                             SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(xmNode.InnerText),
@@ -216,15 +224,23 @@ namespace MusicBeePlugin
                         case Lyrics:
                             new Thread(
                                 () =>
-                                SocketServer.Instance.Send(PrepareXml(Lyrics, _plugin.RetrieveCurrentTrackLyrics(), true, true)))
+                                SocketServer.Instance.Send(PrepareXml(Lyrics, _plugin.RetrieveCurrentTrackLyrics(), true,
+                                                                      true)))
                                 .
                                 Start();
                             break;
                         case Rating:
-                            SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText), true, true));
+                            SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText), true,
+                                                                  true));
                             break;
                         case PlayerStatus:
                             SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(), true, true));
+                            break;
+                        case Protocol:
+                            SocketServer.Instance.Send(PrepareXml(Protocol, ProtocolVersion, true, true));
+                            break;
+                        case Player:
+                            SocketServer.Instance.Send(PrepareXml(Player, PlayerName, true, true));
                             break;
                     }
                 }

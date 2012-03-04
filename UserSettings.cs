@@ -40,6 +40,8 @@ namespace MusicBeePlugin
         /// <remarks></remarks>
         public static void SaveSettings(string application)
         {
+            if (!Directory.Exists(SettingsFileName + "mb_remote"))
+                Directory.CreateDirectory(SettingsFilePath + "mb_remote");
             if (!File.Exists(SettingsFilePath + SettingsFileName))
                 CreateEmptySettingsFile(application);
             XmlDocument document = new XmlDocument();
