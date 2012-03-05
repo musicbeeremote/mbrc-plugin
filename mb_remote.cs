@@ -399,9 +399,9 @@ namespace MusicBeePlugin
                 foreach (var playListTrack in playListTracks)
                 {
                     songlist += "<playlistItem><artist>" +
-                                _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
                                 "</artist><title>" +
-                                _mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
                                 "</title></playlistItem>";
                 }
             }
@@ -410,9 +410,9 @@ namespace MusicBeePlugin
                 for (int i = 0; i < 100; i++)
                 {
                     songlist += "<playlistItem><artist>" +
-                                _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist)) +
                                 "</artist><title>" +
-                                _mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle)) +
                                 "</title></playlistItem>";
                 }
             }
