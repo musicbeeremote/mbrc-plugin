@@ -24,7 +24,6 @@ namespace MusicBeePlugin
 
         private SocketServer()
         {
-            //Empty Constructor   
         }
 
         /// <summary>
@@ -41,19 +40,27 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Stop()
         {
-            _isStopping = true;
-            if (_listenerThread != null && _listenerThread.IsAlive)
+            try
             {
-                _listenerThread.Abort();
+                _isStopping = true;
+                if (_listenerThread != null && _listenerThread.IsAlive)
+                {
+                    _listenerThread.Abort();
+                }
+                _listenerThread = null;
+                if (_listener != null)
+                {
+                    _listener.Stop();
+                    _listener = null;
+                }
+                return true;
             }
-            _listenerThread = null;
-            if (_listener != null)
+            catch (Exception exception)
             {
-                _listener.Stop();
-                _listener = null;
+                Debug.WriteLine("SocketServer: L60: " + exception.Message);
             }
-            return true;
-        }
+            return false;
+        }   
 
         /// <summary>
         /// It starts the SocketServer.
@@ -94,27 +101,33 @@ namespace MusicBeePlugin
                 }
                 catch
                 {
-                    Debug.WriteLine("Listener exception");
+                    Debug.WriteLine("ListenForClients Exception");
                 }
             } while (!_isStopping);
         }
 
         public void Send(string data)
         {
-            if(_clientSocket==null||!_clientSocket.Connected)
-                return;
-            byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
-            _clientSocket.Send(byteData);
+            try
+            {
+                if (_clientSocket == null || !_clientSocket.Connected)
+                    return;
+                byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
+                _clientSocket.Send(byteData);
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine("Send Function: " + exception.Message);
+            }
         }
 
         private static void AcceptSocketCallback(IAsyncResult result)
         {
+            _clientConnected.Set();
             if (_isStopping) return;
             try
             {
                 _clientSocket = _listener.EndAcceptSocket(result);
-                //string address = ((IPEndPoint) _clientSocket.RemoteEndPoint).Address.ToString();
-                //Send(_clientSocket,String.Format("<MusicBeeClientIP>{0}</MusicBeeClientIP>\0", address));
                 byte[] buffer = new byte[_clientSocket.ReceiveBufferSize];
                 bool connectionClosing = false;
                 int count = 0;
@@ -128,9 +141,7 @@ namespace MusicBeePlugin
                         {
                             if (_clientSocket.Poll(-1, SelectMode.SelectRead))
                             {
-                                int bytesRead = _clientSocket.Receive(buffer, count,
-                                                                      _clientSocket.ReceiveBufferSize - count,
-                                                                      SocketFlags.None);
+                                int bytesRead = _clientSocket.Receive(buffer, count, _clientSocket.ReceiveBufferSize - count, SocketFlags.None);
                                 if (bytesRead == 0)
                                 {
                                     connectionClosing = true;
@@ -147,11 +158,8 @@ namespace MusicBeePlugin
                     }
 
                     if (_isStopping) return;
-                    ProtocolHandler.Instance.ProcessIncomingMessage(count == 0
-                                                                        ? ""
-                                                                        : System.Text.Encoding.UTF8.GetString(buffer, 0,
-                                                                                                              count).
-                                                                              Replace("\r\n", ""));
+                    string message = count == 0 ? "" : System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "");
+                    ProtocolHandler.Instance.ProcessIncomingMessage(message);
                     if (eocIndex == -1 || eocIndex == count - 1)
                     {
                         count = 0;
