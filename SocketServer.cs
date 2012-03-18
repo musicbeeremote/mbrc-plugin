@@ -10,10 +10,10 @@ namespace MusicBeePlugin
     public sealed class SocketServer
     {
         // New Code Stuff
-        private Socket m_mainSocket;
-        private ArrayList m_workerSocketList;
-        private int m_clientCount;
-        public AsyncCallback pfnWorkerCallback;
+        private Socket _mMainSocket;
+        private readonly ArrayList _mWorkerSocketList;
+        private int _mClientCount;
+        public AsyncCallback PfnWorkerCallback;
 
         private static readonly SocketServer ServerInstance = new SocketServer();
 
@@ -25,8 +25,8 @@ namespace MusicBeePlugin
         private SocketServer()
         {
             // New Code Stuff
-            m_clientCount = 0;
-            m_workerSocketList = ArrayList.Synchronized(new ArrayList());
+            _mClientCount = 0;
+            _mWorkerSocketList = ArrayList.Synchronized(new ArrayList());
         }
 
         /// <summary>
@@ -43,17 +43,17 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Stop()
         {
-            if(m_mainSocket!=null)
+            if(_mMainSocket!=null)
             {
-                m_mainSocket.Close();
+                _mMainSocket.Close();
             }
 
-            for(int i = 0; i<m_workerSocketList.Count; i++)
+            for(int i = 0; i<_mWorkerSocketList.Count; i++)
             {
-                Socket workerSocket = (Socket) m_workerSocketList[i];
+                Socket workerSocket = (Socket) _mWorkerSocketList[i];
                 if (workerSocket == null) continue;
                 workerSocket.Close();
-                workerSocket = null;
+                workerSocket=null;
             }
 
             return true;
@@ -67,15 +67,15 @@ namespace MusicBeePlugin
         {
             try
             {
-                m_mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                _mMainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 // Create the listening socket.    
                 IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.ListeningPort);
                 // Bind to local IP address.
-                m_mainSocket.Bind(ipLocal);
+                _mMainSocket.Bind(ipLocal);
                 // Start Listening.
-                m_mainSocket.Listen(4);
+                _mMainSocket.Listen(4);
                 // Create the call back for any client connections.
-                m_mainSocket.BeginAccept(new AsyncCallback(OnClientConnect), null);
+                _mMainSocket.BeginAccept(OnClientConnect, null);
                 return true;
             }
             catch (SocketException se)
@@ -94,24 +94,24 @@ namespace MusicBeePlugin
                 // Here we complete/end the BeginAccept asyncronus call
                 // by calling EndAccept() - Which returns the reference
                 // to a new Socket object.
-                Socket workerSocket = m_mainSocket.EndAccept(ar);
+                Socket workerSocket = _mMainSocket.EndAccept(ar);
 
                 // Now increment the client count for this client
                 //in a thread safe manner
-                Interlocked.Increment(ref m_clientCount);
+                Interlocked.Increment(ref _mClientCount);
 
                 // Add the workerSocket reference to our ArrayList.
-                m_workerSocketList.Add(workerSocket);
+                _mWorkerSocketList.Add(workerSocket);
 
                 //Sendmsg to client
 
                 // Let the worker Socket do the further processing 
                 // for the just connected client.
-                WaitForData(workerSocket, m_clientCount);
+                WaitForData(workerSocket, _mClientCount);
 
                 // Since the main Socket is now free, it can go back and
                 // wait for the other clients who are attempting to connect
-                m_mainSocket.BeginAccept(new AsyncCallback(OnClientConnect), null);
+                _mMainSocket.BeginAccept(OnClientConnect, null);
                 
 
             }
@@ -131,14 +131,14 @@ namespace MusicBeePlugin
            // Constructor which takes a Socket and a client number
             public SocketPacket(Socket socket, int clientNumber)
             {
-                m_currentSocket = socket;
-                m_clientNumber = clientNumber;
+                MCurrentSocket = socket;
+                MClientNumber = clientNumber;
             }
 
-            public Socket m_currentSocket;
-            public int m_clientNumber;
+            public Socket MCurrentSocket;
+            public int MClientNumber;
             // Buffer to store the data sent by the client
-            public byte[] dataBuffer = new byte[1024];
+            public byte[] DataBuffer = new byte[1024];
         }
 
         // Start waiting for data from the client
@@ -146,18 +146,18 @@ namespace MusicBeePlugin
         {
             try
             {
-                if(pfnWorkerCallback == null)
+                if(PfnWorkerCallback == null)
                 {
                     // Specify the call back function which is to be
                     // invoked when ther is any write activity by the
                     // connected client.
-                    pfnWorkerCallback = new AsyncCallback(OnDataReceived);
+                    PfnWorkerCallback = OnDataReceived;
                 }
 
                 SocketPacket socketPacket = new SocketPacket(socket,clientNumber);
 
-                socket.BeginReceive(socketPacket.dataBuffer, 0, socketPacket.dataBuffer.Length, SocketFlags.None,
-                                    pfnWorkerCallback, socketPacket);
+                socket.BeginReceive(socketPacket.DataBuffer, 0, socketPacket.DataBuffer.Length, SocketFlags.None,
+                                    PfnWorkerCallback, socketPacket);
 
             }
             catch (SocketException se)
@@ -177,19 +177,19 @@ namespace MusicBeePlugin
                 // which will return the number of characters writter to the stream
                 // by the client.
 
-                int iRx = socketData.m_currentSocket.EndReceive(ar);
+                int iRx = socketData.MCurrentSocket.EndReceive(ar);
                 char[] chars = new char[iRx + 1];
 
                 System.Text.Decoder decoder = System.Text.Encoding.UTF8.GetDecoder();
 
-                int charLen = decoder.GetChars(socketData.dataBuffer, 0, iRx, chars, 0);
+                decoder.GetChars(socketData.DataBuffer, 0, iRx, chars, 0);
 
                 String szData = new string(chars);
 
                 ProtocolHandler.Instance.ProcessIncomingMessage(szData);
 
                 // Continue the waiting for data on the Socket.
-                WaitForData(socketData.m_currentSocket, socketData.m_clientNumber);
+                WaitForData(socketData.MCurrentSocket, socketData.MClientNumber);
             }
             catch (ObjectDisposedException)
             {
@@ -199,7 +199,7 @@ namespace MusicBeePlugin
             {
                 if(se.ErrorCode == 10054) // Error code for Connection reset by peer
                 {
-                    m_workerSocketList[socketData.m_clientNumber - 1] = null;
+                    _mWorkerSocketList[socketData.MClientNumber - 1] = null;
                 }
                 else
                 {
@@ -212,16 +212,16 @@ namespace MusicBeePlugin
         public void Send(string message, int clientNumber)
         {
             byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
-            Socket workerSocket = (Socket) m_workerSocketList[clientNumber - 1];
+            Socket workerSocket = (Socket) _mWorkerSocketList[clientNumber - 1];
             workerSocket.Send(data);
         }
 
         public void Send(string message)
         {
             byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
-            for (int i = 0; i < m_workerSocketList.Count; i++)
+            for (int i = 0; i < _mWorkerSocketList.Count; i++)
             {
-                Socket workerSocket = (Socket)m_workerSocketList[i];
+                Socket workerSocket = (Socket)_mWorkerSocketList[i];
                 if (workerSocket.Connected)
                 {
                     workerSocket.Send(data);
