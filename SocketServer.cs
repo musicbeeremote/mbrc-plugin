@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
@@ -8,22 +9,24 @@ namespace MusicBeePlugin
 {
     public sealed class SocketServer
     {
-        private static bool _isStopping;
-        private static TcpListener _listener;
-        private static Thread _listenerThread;
-        private static ManualResetEvent _clientConnected;
-
-        private static Socket _clientSocket;
+        // New Code Stuff
+        private Socket m_mainSocket;
+        private ArrayList m_workerSocketList;
+        private int m_clientCount;
+        public AsyncCallback pfnWorkerCallback;
 
         private static readonly SocketServer ServerInstance = new SocketServer();
 
         static SocketServer()
         {
-            //Empty Constructor
+            
         }
 
         private SocketServer()
         {
+            // New Code Stuff
+            m_clientCount = 0;
+            m_workerSocketList = ArrayList.Synchronized(new ArrayList());
         }
 
         /// <summary>
@@ -40,26 +43,20 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Stop()
         {
-            try
+            if(m_mainSocket!=null)
             {
-                _isStopping = true;
-                if (_listenerThread != null && _listenerThread.IsAlive)
-                {
-                    _listenerThread.Abort();
-                }
-                _listenerThread = null;
-                if (_listener != null)
-                {
-                    _listener.Stop();
-                    _listener = null;
-                }
-                return true;
+                m_mainSocket.Close();
             }
-            catch (Exception exception)
+
+            for(int i = 0; i<m_workerSocketList.Count; i++)
             {
-                Debug.WriteLine("SocketServer: L60: " + exception.Message);
+                Socket workerSocket = (Socket) m_workerSocketList[i];
+                if (workerSocket == null) continue;
+                workerSocket.Close();
+                workerSocket = null;
             }
-            return false;
+
+            return true;
         }   
 
         /// <summary>
@@ -68,130 +65,170 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Start()
         {
-            _isStopping = false;
             try
             {
-                _listener = new TcpListener(IPAddress.Any, UserSettings.ListeningPort);
-                _listener.Start();
-                _clientConnected = new ManualResetEvent(false);
-                _listenerThread = new Thread(ListenForClients) {IsBackground = true, Priority = ThreadPriority.Lowest};
-                _listenerThread.Start();
+                m_mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                // Create the listening socket.    
+                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.ListeningPort);
+                // Bind to local IP address.
+                m_mainSocket.Bind(ipLocal);
+                // Start Listening.
+                m_mainSocket.Listen(4);
+                // Create the call back for any client connections.
+                m_mainSocket.BeginAccept(new AsyncCallback(OnClientConnect), null);
                 return true;
             }
-            catch (Exception ex)
+            catch (SocketException se)
             {
-                ErrorHandler.LogError(ex);
+                ErrorHandler.LogError(se);
                 return false;
             }
+
         }
 
-        /// <summary>
-        /// Listens for clients.
-        /// </summary>
-        /// <returns></returns>
-        private static void ListenForClients()
-        {
-            do
-            {
-                try
-                {
-                    _clientConnected.Reset();
-                    _listener.BeginAcceptSocket(AcceptSocketCallback, null);
-                    _clientConnected.WaitOne();
-                }
-                catch
-                {
-                    Debug.WriteLine("ListenForClients Exception");
-                }
-            } while (!_isStopping);
-        }
-
-        public void Send(string data)
+        // this is the call back function,
+        private void OnClientConnect(IAsyncResult ar)
         {
             try
             {
-                if (_clientSocket == null || !_clientSocket.Connected)
-                    return;
-                byte[] byteData = System.Text.Encoding.UTF8.GetBytes(data);
-                _clientSocket.Send(byteData);
+                // Here we complete/end the BeginAccept asyncronus call
+                // by calling EndAccept() - Which returns the reference
+                // to a new Socket object.
+                Socket workerSocket = m_mainSocket.EndAccept(ar);
+
+                // Now increment the client count for this client
+                //in a thread safe manner
+                Interlocked.Increment(ref m_clientCount);
+
+                // Add the workerSocket reference to our ArrayList.
+                m_workerSocketList.Add(workerSocket);
+
+                //Sendmsg to client
+
+                // Let the worker Socket do the further processing 
+                // for the just connected client.
+                WaitForData(workerSocket, m_clientCount);
+
+                // Since the main Socket is now free, it can go back and
+                // wait for the other clients who are attempting to connect
+                m_mainSocket.BeginAccept(new AsyncCallback(OnClientConnect), null);
+                
+
             }
-            catch (Exception exception)
+            catch (ObjectDisposedException)
             {
-                Debug.WriteLine("Send Function: " + exception.Message);
+                Debug.WriteLine("OnClientConnection: Socket has been closed\n");
+                
+            }
+            catch(SocketException se)
+            {
+                ErrorHandler.LogError(se);
             }
         }
 
-        private static void AcceptSocketCallback(IAsyncResult result)
+        public class SocketPacket
         {
-            _clientConnected.Set();
-            if (_isStopping) return;
+           // Constructor which takes a Socket and a client number
+            public SocketPacket(Socket socket, int clientNumber)
+            {
+                m_currentSocket = socket;
+                m_clientNumber = clientNumber;
+            }
+
+            public Socket m_currentSocket;
+            public int m_clientNumber;
+            // Buffer to store the data sent by the client
+            public byte[] dataBuffer = new byte[1024];
+        }
+
+        // Start waiting for data from the client
+        public void WaitForData(Socket socket, int clientNumber)
+        {
             try
             {
-                _clientSocket = _listener.EndAcceptSocket(result);
-                byte[] buffer = new byte[_clientSocket.ReceiveBufferSize];
-                bool connectionClosing = false;
-                int count = 0;
-
-                do
+                if(pfnWorkerCallback == null)
                 {
-                    int eocIndex = -1;
-                    try
-                    {
-                        do
-                        {
-                            if (_clientSocket.Poll(-1, SelectMode.SelectRead))
-                            {
-                                int bytesRead = _clientSocket.Receive(buffer, count, _clientSocket.ReceiveBufferSize - count, SocketFlags.None);
-                                if (bytesRead == 0)
-                                {
-                                    connectionClosing = true;
-                                    break;
-                                }
-                                count += bytesRead;
-                                eocIndex = Array.LastIndexOf<byte>(buffer, 10, count - 1);
-                            }
-                        } while ((count < _clientSocket.ReceiveBufferSize) && (eocIndex == -1));
-                    }
-                    catch
-                    {
-                        connectionClosing = true;
-                    }
-
-                    if (_isStopping) return;
-                    string message = count == 0 ? "" : System.Text.Encoding.UTF8.GetString(buffer, 0, count).Replace("\r\n", "");
-                    ProtocolHandler.Instance.ProcessIncomingMessage(message);
-                    if (eocIndex == -1 || eocIndex == count - 1)
-                    {
-                        count = 0;
-                    }
-                    else
-                    {
-                        int remainder = count - (eocIndex + 1);
-                        Array.Copy(buffer, eocIndex + 1, buffer, 0, remainder);
-                        count = remainder;
-                    }
-                } while (!connectionClosing);
-            }
-            catch (Exception ex)
-            {
-                ErrorHandler.LogError(ex);
-            }
-            finally
-            {
-                if (_clientSocket != null)
-                {
-                    try
-                    {
-                        _clientSocket.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        ErrorHandler.LogError(ex);
-                    }
-                    _clientSocket = null;
+                    // Specify the call back function which is to be
+                    // invoked when ther is any write activity by the
+                    // connected client.
+                    pfnWorkerCallback = new AsyncCallback(OnDataReceived);
                 }
-                _clientConnected.Set();
+
+                SocketPacket socketPacket = new SocketPacket(socket,clientNumber);
+
+                socket.BeginReceive(socketPacket.dataBuffer, 0, socketPacket.dataBuffer.Length, SocketFlags.None,
+                                    pfnWorkerCallback, socketPacket);
+
+            }
+            catch (SocketException se)
+            {
+               ErrorHandler.LogError(se);
             }
         }
+
+        // This is the call back function which will be invoked when the socket
+        // detects any client writing of data on the stream
+        public void OnDataReceived(IAsyncResult ar)
+        {
+            SocketPacket socketData = (SocketPacket) ar.AsyncState;
+            try
+            {
+                // Complete the BeginReceive() asynchronus call by EndReceive() method
+                // which will return the number of characters writter to the stream
+                // by the client.
+
+                int iRx = socketData.m_currentSocket.EndReceive(ar);
+                char[] chars = new char[iRx + 1];
+
+                System.Text.Decoder decoder = System.Text.Encoding.UTF8.GetDecoder();
+
+                int charLen = decoder.GetChars(socketData.dataBuffer, 0, iRx, chars, 0);
+
+                String szData = new string(chars);
+
+                ProtocolHandler.Instance.ProcessIncomingMessage(szData);
+
+                // Continue the waiting for data on the Socket.
+                WaitForData(socketData.m_currentSocket, socketData.m_clientNumber);
+            }
+            catch (ObjectDisposedException)
+            {
+                Debug.WriteLine("OnDataReceived: Socket has been closed\n");
+            }
+            catch(SocketException se)
+            {
+                if(se.ErrorCode == 10054) // Error code for Connection reset by peer
+                {
+                    m_workerSocketList[socketData.m_clientNumber - 1] = null;
+                }
+                else
+                {
+                    ErrorHandler.LogError(se);    
+                }
+                
+            }
+        }
+
+        public void Send(string message, int clientNumber)
+        {
+            byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+            Socket workerSocket = (Socket) m_workerSocketList[clientNumber - 1];
+            workerSocket.Send(data);
+        }
+
+        public void Send(string message)
+        {
+            byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+            for (int i = 0; i < m_workerSocketList.Count; i++)
+            {
+                Socket workerSocket = (Socket)m_workerSocketList[i];
+                if (workerSocket.Connected)
+                {
+                    workerSocket.Send(data);
+                }
+            }
+
+        }
+
     }
 }
