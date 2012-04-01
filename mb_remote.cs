@@ -100,7 +100,6 @@ namespace MusicBeePlugin
         public bool Configure(IntPtr panelHandle)
         {
             // save any persistent settings in a sub-folder of this path
-            string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
             SettingsMenuHandler handler = new SettingsMenuHandler();
 
             int backround = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,

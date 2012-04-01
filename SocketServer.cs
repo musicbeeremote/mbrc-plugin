@@ -55,6 +55,7 @@ namespace MusicBeePlugin
                 workerSocket.Close();
                 workerSocket=null;
             }
+            _mMainSocket = null;
 
             return true;
         }   
@@ -91,7 +92,7 @@ namespace MusicBeePlugin
         {
             try
             {
-                // Here we complete/end the BeginAccept asyncronus call
+                // Here we complete/end the BeginAccept asynchronous call
                 // by calling EndAccept() - Which returns the reference
                 // to a new Socket object.
                 Socket workerSocket = _mMainSocket.EndAccept(ar);
@@ -103,7 +104,7 @@ namespace MusicBeePlugin
                 // Add the workerSocket reference to our ArrayList.
                 _mWorkerSocketList.Add(workerSocket);
 
-                //Sendmsg to client
+                //Send msg to client
 
                 // Let the worker Socket do the further processing 
                 // for the just connected client.
@@ -184,9 +185,11 @@ namespace MusicBeePlugin
 
                 decoder.GetChars(socketData.DataBuffer, 0, iRx, chars, 0);
 
-                String szData = new string(chars);
+                String message = new string(chars);
 
-                ProtocolHandler.Instance.ProcessIncomingMessage(szData);
+                if(String.IsNullOrEmpty(message))
+                    return;
+                ProtocolHandler.Instance.ProcessIncomingMessage(message);
 
                 // Continue the waiting for data on the Socket.
                 WaitForData(socketData.MCurrentSocket, socketData.MClientNumber);
@@ -222,7 +225,7 @@ namespace MusicBeePlugin
             for (int i = 0; i < _mWorkerSocketList.Count; i++)
             {
                 Socket workerSocket = (Socket)_mWorkerSocketList[i];
-                if (workerSocket.Connected)
+                if (workerSocket!=null&&workerSocket.Connected)
                 {
                     workerSocket.Send(data);
                 }

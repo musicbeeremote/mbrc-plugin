@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Xml;
@@ -153,8 +154,15 @@ namespace MusicBeePlugin
         {
             if (String.IsNullOrEmpty(incomingMessage))
                 return;
-
-            _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
+            try
+            {
+	            _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
+            }
+            catch (Exception ex)
+            {
+            	ErrorHandler.LogError(ex);
+                Debug.WriteLine("Error at: " + incomingMessage);
+            }
 
             foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
             {
