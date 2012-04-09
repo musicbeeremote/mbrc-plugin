@@ -28,6 +28,14 @@ namespace MusicBeePlugin
             // New Code Stuff
             _mClientCount = 0;
             _mWorkerSocketList = ArrayList.Synchronized(new ArrayList());
+            Messenger.Instance.DisconnectClient += HandleDisconnectClient;
+        }
+
+        private void HandleDisconnectClient(object sender, MessageEventArgs e)
+        {
+            Socket workerSocket = (Socket)_mWorkerSocketList[e.ClientId-1];
+            workerSocket.Close();
+            workerSocket = null;
         }
 
         /// <summary>
@@ -115,6 +123,9 @@ namespace MusicBeePlugin
 
                 // Add the workerSocket reference to our ArrayList.
                 _mWorkerSocketList.Add(workerSocket);
+
+                // Inform the the Protocol Handler that a new Client has been connected, prepare for handshake.
+                Messenger.Instance.OnClientConnected(new MessageEventArgs(_mClientCount));
 
                 //Send msg to client
 
@@ -245,7 +256,7 @@ namespace MusicBeePlugin
                 for (int i = 0; i < _mWorkerSocketList.Count; i++)
                 {
                     Socket workerSocket = (Socket)_mWorkerSocketList[i];
-                    if (workerSocket != null && workerSocket.Connected)
+                    if (workerSocket != null && workerSocket.Connected && ProtocolHandler.Instance.IsClientAuthenticated(i+1))
                     {
                         workerSocket.Send(data);
                     }

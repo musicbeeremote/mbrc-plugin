@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Xml;
 using MusicBeePlugin.Events;
@@ -24,6 +25,7 @@ namespace MusicBeePlugin
 
         public int ClientId { get; private set; }
         public int PacketNumber { get; private set; }
+        public bool Authenticated { get; set; }
 
         public void IncreasePacketNumber()
         {
@@ -66,7 +68,7 @@ namespace MusicBeePlugin
         public const string PlayerName = "MusicBee";
         private float clientProtocolVersion;
 
-        private List<SocketClient> socketClients;
+        private readonly List<SocketClient> _socketClients;
         private static readonly ProtocolHandler ProtocolHandlerInstance = new ProtocolHandler();
 
         private IPlugin _plugin;
@@ -78,7 +80,7 @@ namespace MusicBeePlugin
         private ProtocolHandler()
         {
             _xmlDoc = new XmlDocument();
-            socketClients = new List<SocketClient>();
+            _socketClients = new List<SocketClient>();
             Messenger.Instance.PlayStateChanged += HandlePlayStateChanged;
             Messenger.Instance.TrackChanged += HandleTrackChanged;
             Messenger.Instance.VolumeLevelChanged += HandleVolumeLevelChanged;
@@ -90,39 +92,32 @@ namespace MusicBeePlugin
             Messenger.Instance.ClientDisconnected += HandleClientDisconnected;
         }
 
-        private int GetClientIndex(int clientId)
+        public bool IsClientAuthenticated(int clientId)
         {
-            for (int i = 0; i < socketClients.Count-1; i++)
-            {
-                if(socketClients[i].ClientId==clientId)
-                {
-                    return i;
-                }
-            }
-            return -1;
+            return (from socketClient in _socketClients where socketClient.ClientId == clientId select socketClient.Authenticated).FirstOrDefault();
         }
 
         private void HandleClientDisconnected(object sender, MessageEventArgs e)
         {
-            foreach (SocketClient client in socketClients)
+            foreach (SocketClient client in _socketClients)
             {
                 if (client.ClientId != e.ClientId) continue;
-                socketClients.Remove(client);
+                _socketClients.Remove(client);
                 break;
             }
         }
 
         private void HandleClientConnected(object sender, MessageEventArgs e)
         {
-            foreach (SocketClient client in socketClients)
+            foreach (SocketClient client in _socketClients)
             {
                 if (client.ClientId != e.ClientId) continue;
-                socketClients.Remove(client);
+                _socketClients.Remove(client);
                 break;
             }
 
             SocketClient newClient = new SocketClient(e.ClientId);
-            socketClients.Add(newClient);
+            _socketClients.Add(newClient);
         }
 
         private void HandleShuffleStateChanged(object sender, EventArgs e)
@@ -210,11 +205,10 @@ namespace MusicBeePlugin
         /// </summary>
         /// <param name="incomingMessage">The incoming message.</param>
         /// <param name="cliendId"> </param>
-        public void ProcessIncomingMessage(string incomingMessage, int cliendId = -1)
+        public void ProcessIncomingMessage(string incomingMessage, int cliendId)
         {
             try
             {
-                int clientIndex = GetClientIndex(cliendId);
 
                 if (String.IsNullOrEmpty(incomingMessage))
                     return;
@@ -228,15 +222,26 @@ namespace MusicBeePlugin
                     Debug.WriteLine("Error at: " + incomingMessage);
                 }
 
+                int clientIndex = 0;
+
+                foreach (SocketClient socketClient in _socketClients.Where(socketClient => socketClient.ClientId==cliendId))
+                {
+                    clientIndex = _socketClients.IndexOf(socketClient);
+                }
+
                 foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
                 {
-                    if (socketClients[clientIndex].PacketNumber == 0 && xmNode.Name != Player)
+                    if (_socketClients[clientIndex].PacketNumber == 0 && xmNode.Name != Player)
                     {
-                        //Invalid first packet disconnect
+                        Messenger.Instance.OnDisconnectClient(new MessageEventArgs(cliendId));
                     }
-                    if (socketClients[clientIndex].PacketNumber == 1 && xmNode.Name != Protocol)
+                    else if (_socketClients[clientIndex].PacketNumber == 1 && xmNode.Name != Protocol)
                     {
-                        //Invalid Second packet disconnect
+                        Messenger.Instance.OnDisconnectClient(new MessageEventArgs(cliendId));
+                    }
+                    else if(_socketClients[clientIndex].PacketNumber==2)
+                    {
+                        _socketClients[clientIndex].Authenticated = true;
                     }
                     try
                     {
@@ -353,7 +358,7 @@ namespace MusicBeePlugin
                             ErrorHandler.LogError(ex);
                         }
                     }
-                    socketClients[clientIndex].IncreasePacketNumber();
+                    _socketClients[clientIndex].IncreasePacketNumber();
                 }
             }
             catch (Exception ex)
