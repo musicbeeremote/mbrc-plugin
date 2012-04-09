@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace MusicBeePlugin
+namespace MusicBeePlugin.Events
 {
     class Messenger
     {
@@ -70,6 +70,30 @@ namespace MusicBeePlugin
         public void OnScrobbleStateChanged(EventArgs e)
         {
             EventHandler handler = ScrobbleStateChanged;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler<MessageEventArgs> ClientConnected;
+
+        public void OnClientConnected(MessageEventArgs e)
+        {
+            EventHandler<MessageEventArgs> handler = ClientConnected;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler<MessageEventArgs> ClientDisconnected;
+
+        public void OnClientDisconnected(MessageEventArgs e)
+        {
+            EventHandler<MessageEventArgs> handler = ClientDisconnected;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler<MessageEventArgs> DisconnectClient;
+
+        public void OnDisconnectClient(MessageEventArgs e)
+        {
+            EventHandler<MessageEventArgs> handler = DisconnectClient;
             if (handler != null) handler(this, e);
         }
     }

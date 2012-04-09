@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
+using MusicBeePlugin.Events;
 
 namespace MusicBeePlugin
 {
@@ -38,7 +39,6 @@ namespace MusicBeePlugin
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-           
             _mbApiInterface =
                 (MusicBeeApiInterface) Marshal.PtrToStructure(apiInterfacePtr, typeof (MusicBeeApiInterface));
             UserSettings.SettingsFilePath = _mbApiInterface.Setting_GetPersistentStoragePath();
@@ -72,25 +72,25 @@ namespace MusicBeePlugin
             SocketServer.Instance.Start();
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
-            _timer.Enabled=true;
+            _timer.Enabled = true;
 
 
             return _about;
         }
 
-        void HandleTimerElapsed(object sender, ElapsedEventArgs e)
+        private void HandleTimerElapsed(object sender, ElapsedEventArgs e)
         {
-            if(_mbApiInterface.Player_GetShuffle()!=_shuffle)
+            if (_mbApiInterface.Player_GetShuffle() != _shuffle)
             {
                 Messenger.Instance.OnShuffleStateChanged(null);
                 _shuffle = _mbApiInterface.Player_GetShuffle();
             }
-            if(_mbApiInterface.Player_GetScrobbleEnabled()!=_scrobble)
+            if (_mbApiInterface.Player_GetScrobbleEnabled() != _scrobble)
             {
                 Messenger.Instance.OnScrobbleStateChanged(null);
                 _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
             }
-            if (_mbApiInterface.Player_GetRepeat()!=_repeat)
+            if (_mbApiInterface.Player_GetRepeat() != _repeat)
             {
                 Messenger.Instance.OnRepeatStateChanged(null);
                 _repeat = _mbApiInterface.Player_GetRepeat();
@@ -203,34 +203,42 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public string GetCurrentTrackCover()
         {
-            if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
-                return "";
-            using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
-                )
-            using (Image albumCover = Image.FromStream(ms, true))
+            try
             {
-                ms.Flush();
-                int sourceWidth = albumCover.Width;
-                int sourceHeight = albumCover.Height;
-
-                float nPercentW = (300/(float) sourceWidth);
-                float nPercentH = (300/(float) sourceHeight);
-
-                var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                int destWidth = (int) (sourceWidth*nPercent);
-                int destHeight = (int) (sourceHeight*nPercent);
-                using (var bmp = new Bitmap(destWidth, destHeight))
-                using (MemoryStream ms2 = new MemoryStream())
+                if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
+                    return "";
+                using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
+                    )
+                using (Image albumCover = Image.FromStream(ms, true))
                 {
-                    Graphics graph = Graphics.FromImage(bmp);
-                    graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
-                    graph.Dispose();
+                    ms.Flush();
+                    int sourceWidth = albumCover.Width;
+                    int sourceHeight = albumCover.Height;
 
-                    bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
-                    bmp.Dispose();
-                    return Convert.ToBase64String(ms2.ToArray());
+                    float nPercentW = (300 / (float)sourceWidth);
+                    float nPercentH = (300 / (float)sourceHeight);
+
+                    var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
+                    int destWidth = (int)(sourceWidth * nPercent);
+                    int destHeight = (int)(sourceHeight * nPercent);
+                    using (var bmp = new Bitmap(destWidth, destHeight))
+                    using (MemoryStream ms2 = new MemoryStream())
+                    {
+                        Graphics graph = Graphics.FromImage(bmp);
+                        graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
+                        graph.Dispose();
+
+                        bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
+                        bmp.Dispose();
+                        return Convert.ToBase64String(ms2.ToArray());
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                ErrorHandler.LogError(ex);
+                return String.Empty;
             }
         }
 
@@ -388,32 +396,22 @@ namespace MusicBeePlugin
         /// <returns>XML formated string without root element</returns>
         public string PlaylistGetTracks()
         {
-            _mbApiInterface.NowPlayingList_QueryFiles("*");
-            string[] playListTracks = _mbApiInterface.NowPlayingList_QueryGetAllFiles().Split("\0".ToCharArray(),
-                                                                                              StringSplitOptions.
-                                                                                                  RemoveEmptyEntries);
+            _mbApiInterface.NowPlayingList_QueryFiles(null);
+
+
             string songlist = "";
-            if (playListTracks.Length <= 100)
+            int count = 0;
+            while (true && count <= 500)
             {
-                foreach (var playListTrack in playListTracks)
-                {
-                    songlist += "<playlistItem><artist>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
-                                "</artist><title>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
-                                "</title></playlistItem>";
-                }
-            }
-            else
-            {
-                for (int i = 0; i < 100; i++)
-                {
-                    songlist += "<playlistItem><artist>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.Artist)) +
-                                "</artist><title>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTracks[i], MetaDataType.TrackTitle)) +
-                                "</title></playlistItem>";
-                }
+                string playListTrack = _mbApiInterface.NowPlayingList_QueryGetNextFile();
+                if (String.IsNullOrEmpty(playListTrack))
+                    break;
+                songlist += "<playlistItem><artist>" +
+                            SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
+                            "</artist><title>" +
+                            SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
+                            "</title></playlistItem>";
+                count++;
             }
             return songlist;
         }

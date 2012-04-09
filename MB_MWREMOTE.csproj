@@ -65,8 +65,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ErrorHandler.cs" />
+    <Compile Include="Events\MessageEventArgs.cs" />
+    <Compile Include="Events\Messenger.cs" />
     <Compile Include="IPlugin.cs" />
-    <Compile Include="Messenger.cs" />
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="mb_remote.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

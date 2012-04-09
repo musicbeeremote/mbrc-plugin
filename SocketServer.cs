@@ -4,6 +4,7 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using System.Diagnostics;
+using MusicBeePlugin.Events;
 
 namespace MusicBeePlugin
 {
@@ -43,21 +44,30 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Stop()
         {
-            if(_mMainSocket!=null)
+            try
             {
-                _mMainSocket.Close();
-            }
+                if (_mMainSocket != null)
+                {
+                    _mMainSocket.Close();
+                }
 
-            for(int i = 0; i<_mWorkerSocketList.Count; i++)
+                for (int i = 0; i < _mWorkerSocketList.Count; i++)
+                {
+                    Socket workerSocket = (Socket)_mWorkerSocketList[i];
+                    if (workerSocket == null) continue;
+                    workerSocket.Close();
+                    workerSocket = null;
+                }
+                _mMainSocket = null;
+                GC.Collect();
+
+                return true;
+            }
+            catch (Exception ex)
             {
-                Socket workerSocket = (Socket) _mWorkerSocketList[i];
-                if (workerSocket == null) continue;
-                workerSocket.Close();
-                workerSocket=null;
+               ErrorHandler.LogError(ex);
+                return false;
             }
-            _mMainSocket = null;
-
-            return true;
         }   
 
         /// <summary>
@@ -90,6 +100,8 @@ namespace MusicBeePlugin
         // this is the call back function,
         private void OnClientConnect(IAsyncResult ar)
         {
+            if(ar==null)
+                return;
             try
             {
                 // Here we complete/end the BeginAccept asynchronous call
@@ -124,6 +136,11 @@ namespace MusicBeePlugin
             catch(SocketException se)
             {
                 ErrorHandler.LogError(se);
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine("Teh ex" + ex.Message);
+                ErrorHandler.LogError(ex);
             }
         }
 
@@ -189,7 +206,7 @@ namespace MusicBeePlugin
 
                 if(String.IsNullOrEmpty(message))
                     return;
-                ProtocolHandler.Instance.ProcessIncomingMessage(message);
+                ProtocolHandler.Instance.ProcessIncomingMessage(message, socketData.MClientNumber);
 
                 // Continue the waiting for data on the Socket.
                 WaitForData(socketData.MCurrentSocket, socketData.MClientNumber);
@@ -203,6 +220,7 @@ namespace MusicBeePlugin
                 if(se.ErrorCode == 10054) // Error code for Connection reset by peer
                 {
                     _mWorkerSocketList[socketData.MClientNumber - 1] = null;
+                    Messenger.Instance.OnClientDisconnected(new MessageEventArgs(socketData.MClientNumber));
                 }
                 else
                 {
@@ -221,14 +239,21 @@ namespace MusicBeePlugin
 
         public void Send(string message)
         {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
-            for (int i = 0; i < _mWorkerSocketList.Count; i++)
+            try
             {
-                Socket workerSocket = (Socket)_mWorkerSocketList[i];
-                if (workerSocket!=null&&workerSocket.Connected)
+                byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+                for (int i = 0; i < _mWorkerSocketList.Count; i++)
                 {
-                    workerSocket.Send(data);
+                    Socket workerSocket = (Socket)_mWorkerSocketList[i];
+                    if (workerSocket != null && workerSocket.Connected)
+                    {
+                        workerSocket.Send(data);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                ErrorHandler.LogError(ex);
             }
 
         }

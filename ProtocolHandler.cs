@@ -1,14 +1,35 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Xml;
+using MusicBeePlugin.Events;
 
 namespace MusicBeePlugin
 {
     internal interface IProtocolHandler
     {
-        void ProcessIncomingMessage(string incomingMessage);
+        void ProcessIncomingMessage(string incomingMessage, int cliendId = -1);
+    }
+
+    internal class SocketClient
+    {
+        public SocketClient(int clientId)
+        {
+            ClientId = clientId;
+            PacketNumber = 0;
+        }
+
+        public int ClientId { get; private set; }
+        public int PacketNumber { get; private set; }
+
+        public void IncreasePacketNumber()
+        {
+            if (PacketNumber >= 0 && PacketNumber < 40)
+                PacketNumber++;
+        }
     }
 
     internal class ProtocolHandler : IProtocolHandler
@@ -38,12 +59,14 @@ namespace MusicBeePlugin
         public const string Album = "album";
         public const string Year = "year";
         public const string State = "state";
-        public const string PollerState = "pollerState";
         public const string Protocol = "protocol";
         public const string Player = "player";
+        private const double PROTOCOL_VERSION_MAJOR = 1.0;
         public const string ProtocolVersion = "1.0";
         public const string PlayerName = "MusicBee";
+        private float clientProtocolVersion;
 
+        private List<SocketClient> socketClients;
         private static readonly ProtocolHandler ProtocolHandlerInstance = new ProtocolHandler();
 
         private IPlugin _plugin;
@@ -55,6 +78,7 @@ namespace MusicBeePlugin
         private ProtocolHandler()
         {
             _xmlDoc = new XmlDocument();
+            socketClients = new List<SocketClient>();
             Messenger.Instance.PlayStateChanged += HandlePlayStateChanged;
             Messenger.Instance.TrackChanged += HandleTrackChanged;
             Messenger.Instance.VolumeLevelChanged += HandleVolumeLevelChanged;
@@ -62,18 +86,53 @@ namespace MusicBeePlugin
             Messenger.Instance.RepeatStateChanged += HandleRepeatStateChanged;
             Messenger.Instance.ScrobbleStateChanged += HandleScrobbleStateChanged;
             Messenger.Instance.ShuffleStateChanged += HandleShuffleStateChanged;
+            Messenger.Instance.ClientConnected += HandleClientConnected;
+            Messenger.Instance.ClientDisconnected += HandleClientDisconnected;
+        }
+
+        private int GetClientIndex(int clientId)
+        {
+            for (int i = 0; i < socketClients.Count-1; i++)
+            {
+                if(socketClients[i].ClientId==clientId)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private void HandleClientDisconnected(object sender, MessageEventArgs e)
+        {
+            foreach (SocketClient client in socketClients)
+            {
+                if (client.ClientId != e.ClientId) continue;
+                socketClients.Remove(client);
+                break;
+            }
+        }
+
+        private void HandleClientConnected(object sender, MessageEventArgs e)
+        {
+            foreach (SocketClient client in socketClients)
+            {
+                if (client.ClientId != e.ClientId) continue;
+                socketClients.Remove(client);
+                break;
+            }
+
+            SocketClient newClient = new SocketClient(e.ClientId);
+            socketClients.Add(newClient);
         }
 
         private void HandleShuffleStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(State),
-                                                  true, true));
+            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(State), true, true));
         }
 
         private void HandleScrobbleStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(State),
-                                                  true, true));
+            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(State), true, true));
         }
 
         private void HandleRepeatStateChanged(object sender, EventArgs e)
@@ -150,119 +209,156 @@ namespace MusicBeePlugin
         /// Processes the incoming message and answer's sending back the needed data.
         /// </summary>
         /// <param name="incomingMessage">The incoming message.</param>
-        public void ProcessIncomingMessage(string incomingMessage)
+        /// <param name="cliendId"> </param>
+        public void ProcessIncomingMessage(string incomingMessage, int cliendId = -1)
         {
-            if (String.IsNullOrEmpty(incomingMessage))
-                return;
             try
             {
-	            _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
+                int clientIndex = GetClientIndex(cliendId);
+
+                if (String.IsNullOrEmpty(incomingMessage))
+                    return;
+                try
+                {
+                    _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
+                }
+                catch (Exception ex)
+                {
+                    ErrorHandler.LogError(ex);
+                    Debug.WriteLine("Error at: " + incomingMessage);
+                }
+
+                foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
+                {
+                    if (socketClients[clientIndex].PacketNumber == 0 && xmNode.Name != Player)
+                    {
+                        //Invalid first packet disconnect
+                    }
+                    if (socketClients[clientIndex].PacketNumber == 1 && xmNode.Name != Protocol)
+                    {
+                        //Invalid Second packet disconnect
+                    }
+                    try
+                    {
+                        switch (xmNode.Name)
+                        {
+                            case Next:
+                                if (cliendId == -1)
+                                {
+                                    SocketServer.Instance.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true,
+                                                                          true));
+                                }
+                                else
+                                {
+                                    SocketServer.Instance.Send(
+                                        PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true, true), cliendId);
+                                }
+                                break;
+                            case Previous:
+                                SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true,
+                                                                      true));
+                                break;
+                            case PlayPause:
+                                SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(), true,
+                                                                      true));
+                                break;
+                            case PlayState:
+                                SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
+                                break;
+                            case Volume:
+                                SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText),
+                                                                      true,
+                                                                      true));
+                                break;
+                            case SongChangedStatus:
+                                SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
+                                                                      _plugin.SongChanged.ToString(
+                                                                          CultureInfo.InvariantCulture), true, true));
+                                break;
+                            case SongInformation:
+                                SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(), true, true));
+                                break;
+                            case SongCover:
+                                new Thread(
+                                    () =>
+                                    SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(),
+                                                                          true,
+                                                                          true)))
+                                    .Start();
+                                break;
+                            case Stop:
+                                SocketServer.Instance.Send(PrepareXml(Stop, _plugin.PlayerStopPlayback(), true, true));
+                                break;
+                            case Shuffle:
+                                SocketServer.Instance.Send(PrepareXml(Shuffle,
+                                                                      _plugin.PlayerShuffleState(xmNode.InnerText),
+                                                                      true, true));
+                                break;
+                            case Mute:
+                                SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText),
+                                                                      true,
+                                                                      true));
+                                break;
+                            case Repeat:
+                                SocketServer.Instance.Send(PrepareXml(Repeat,
+                                                                      _plugin.PlayerRepeatState(xmNode.InnerText),
+                                                                      true, true));
+                                break;
+                            case Playlist:
+                                SocketServer.Instance.Send(PrepareXml(Playlist, _plugin.PlaylistGetTracks(), true, true));
+                                break;
+                            case PlayNow:
+                                SocketServer.Instance.Send(PrepareXml(PlayNow,
+                                                                      _plugin.PlaylistGoToSpecifiedTrack(
+                                                                          xmNode.InnerText),
+                                                                      true, true));
+                                break;
+                            case Scrobble:
+                                SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
+                                                                      true, true));
+                                break;
+                            case Lyrics:
+                                new Thread(
+                                    () =>
+                                    SocketServer.Instance.Send(PrepareXml(Lyrics, _plugin.RetrieveCurrentTrackLyrics(),
+                                                                          true,
+                                                                          true)))
+                                    .
+                                    Start();
+                                break;
+                            case Rating:
+                                SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText),
+                                                                      true,
+                                                                      true));
+                                break;
+                            case PlayerStatus:
+                                SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(), true, true));
+                                break;
+                            case Protocol:
+                                SocketServer.Instance.Send(PrepareXml(Protocol, ProtocolVersion, true, true));
+                                break;
+                            case Player:
+                                SocketServer.Instance.Send(PrepareXml(Player, PlayerName, true, true));
+                                break;
+                        }
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            SocketServer.Instance.Send(PrepareXml(Error, xmNode.Name, true, true));
+                        }
+                        catch (Exception ex)
+                        {
+                            ErrorHandler.LogError(ex);
+                        }
+                    }
+                    socketClients[clientIndex].IncreasePacketNumber();
+                }
             }
             catch (Exception ex)
             {
-            	ErrorHandler.LogError(ex);
-                Debug.WriteLine("Error at: " + incomingMessage);
-            }
-
-            foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
-            {
-                try
-                {
-                    switch (xmNode.Name)
-                    {
-                        case Next:
-                            SocketServer.Instance.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true, true));
-                            break;
-                        case Previous:
-                            SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true,
-                                                                  true));
-                            break;
-                        case PlayPause:
-                            SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(), true, true));
-                            break;
-                        case PlayState:
-                            SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
-                            break;
-                        case Volume:
-                            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText), true,
-                                                                  true));
-                            break;
-                        case SongChangedStatus:
-                            SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
-                                                                  _plugin.SongChanged.ToString(
-                                                                      CultureInfo.InvariantCulture), true, true));
-                            break;
-                        case SongInformation:
-                            SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(), true, true));
-                            break;
-                        case SongCover:
-                            new Thread(
-                                () =>
-                                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true,
-                                                                      true)))
-                                .Start();
-                            break;
-                        case Stop:
-                            SocketServer.Instance.Send(PrepareXml(Stop, _plugin.PlayerStopPlayback(), true, true));
-                            break;
-                        case Shuffle:
-                            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(xmNode.InnerText),
-                                                                  true, true));
-                            break;
-                        case Mute:
-                            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText), true,
-                                                                  true));
-                            break;
-                        case Repeat:
-                            SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(xmNode.InnerText),
-                                                                  true, true));
-                            break;
-                        case Playlist:
-                            SocketServer.Instance.Send(PrepareXml(Playlist, _plugin.PlaylistGetTracks(), true, true));
-                            break;
-                        case PlayNow:
-                            SocketServer.Instance.Send(PrepareXml(PlayNow,
-                                                                  _plugin.PlaylistGoToSpecifiedTrack(xmNode.InnerText),
-                                                                  true, true));
-                            break;
-                        case Scrobble:
-                            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
-                                                                  true, true));
-                            break;
-                        case Lyrics:
-                            new Thread(
-                                () =>
-                                SocketServer.Instance.Send(PrepareXml(Lyrics, _plugin.RetrieveCurrentTrackLyrics(), true,
-                                                                      true)))
-                                .
-                                Start();
-                            break;
-                        case Rating:
-                            SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText), true,
-                                                                  true));
-                            break;
-                        case PlayerStatus:
-                            SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(), true, true));
-                            break;
-                        case Protocol:
-                            SocketServer.Instance.Send(PrepareXml(Protocol, ProtocolVersion, true, true));
-                            break;
-                        case Player:
-                            SocketServer.Instance.Send(PrepareXml(Player, PlayerName, true, true));
-                            break;
-                    }
-                }
-                catch
-                {
-                    try
-                    {
-                        SocketServer.Instance.Send(PrepareXml(Error, xmNode.Name, true, true));
-                    }
-                    catch (Exception ex)
-                    {
-                        ErrorHandler.LogError(ex);
-                    }
-                }
+                ErrorHandler.LogError(ex);
             }
         }
     }

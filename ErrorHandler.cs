@@ -4,7 +4,7 @@ using System.IO;
 
 namespace MusicBeePlugin
 {
-    internal class ErrorHandler
+    internal static class ErrorHandler
     {
         private static string _logFilePath;
 
