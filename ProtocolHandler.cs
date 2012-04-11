@@ -63,7 +63,7 @@ namespace MusicBeePlugin
         public const string State = "state";
         public const string Protocol = "protocol";
         public const string Player = "player";
-        private const double PROTOCOL_VERSION_MAJOR = 1.0;
+        private const double ServerProtocolVersion = 1.0;
         public const string ProtocolVersion = "1.0";
         public const string PlayerName = "MusicBee";
         private double _clientProtocolVersion = 1.0;
@@ -440,13 +440,13 @@ namespace MusicBeePlugin
             if (cliendId == -1)
             {
                 SocketServer.Instance.Send(PrepareXml(Playlist,
-                                                      _plugin.PlaylistGetTracks(_clientProtocolVersion, PROTOCOL_VERSION_MAJOR),
+                                                      _plugin.PlaylistGetTracks(_clientProtocolVersion, ServerProtocolVersion),
                                                       true, true));
             }
             else
             {
                 SocketServer.Instance.Send(
-                    PrepareXml(Playlist, _plugin.PlaylistGetTracks(_clientProtocolVersion, PROTOCOL_VERSION_MAJOR), true, true),
+                    PrepareXml(Playlist, _plugin.PlaylistGetTracks(_clientProtocolVersion, ServerProtocolVersion), true, true),
                     cliendId);
             }
         }
