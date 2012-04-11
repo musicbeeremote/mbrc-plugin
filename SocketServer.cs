@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Linq;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
@@ -21,7 +22,6 @@ namespace MusicBeePlugin
 
         static SocketServer()
         {
-            
         }
 
         private SocketServer()
@@ -34,7 +34,7 @@ namespace MusicBeePlugin
 
         private void HandleDisconnectClient(object sender, MessageEventArgs e)
         {
-            Socket workerSocket = (Socket)_mWorkerSocketList[e.ClientId-1];
+            Socket workerSocket = (Socket) _mWorkerSocketList[e.ClientId - 1];
             workerSocket.Close();
             workerSocket = null;
         }
@@ -62,7 +62,7 @@ namespace MusicBeePlugin
 
                 foreach (object t in _mWorkerSocketList)
                 {
-                    Socket workerSocket = (Socket)t;
+                    Socket workerSocket = (Socket) t;
                     if (workerSocket == null) continue;
                     workerSocket.Close();
                     workerSocket = null;
@@ -74,10 +74,10 @@ namespace MusicBeePlugin
             }
             catch (Exception ex)
             {
-               ErrorHandler.LogError(ex);
+                ErrorHandler.LogError(ex);
                 return false;
             }
-        }   
+        }
 
         /// <summary>
         /// It starts the SocketServer.
@@ -103,14 +103,11 @@ namespace MusicBeePlugin
                 ErrorHandler.LogError(se);
                 return false;
             }
-
         }
 
         // this is the call back function,
         private void OnClientConnect(IAsyncResult ar)
         {
-            if(ar==null)
-                return;
             try
             {
                 // Here we complete/end the BeginAccept asynchronous call
@@ -121,10 +118,45 @@ namespace MusicBeePlugin
                 // Validate If client should connect.
                 string address = ((IPEndPoint) workerSocket.RemoteEndPoint).Address.ToString();
                 Debug.WriteLine(address);
-                if(string.Compare(address,"192.168.110.103",StringComparison.Ordinal)!=0)
+                bool isAllowed = false;
+                switch (UserSettings.Settings.FilterSelection)
+                {
+                    case FilteringSelection.Specific:
+                        foreach (
+                            string s in
+                                UserSettings.Settings.IpAddressList.Where(
+                                    s => string.Compare(address, s, StringComparison.Ordinal) == 0))
+                        {
+                            isAllowed = true;
+                        }
+                        break;
+                    case FilteringSelection.Range:
+                        string[] connectingAddress = address.Split(".".ToCharArray(),
+                                                                   StringSplitOptions.RemoveEmptyEntries);
+                        string[] baseIp = UserSettings.Settings.BaseIp.Split(".".ToCharArray(),
+                                                                             StringSplitOptions.RemoveEmptyEntries);
+                        if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
+                            connectingAddress[2] == baseIp[2])
+                        {
+                            int connectingAddressLowOctet;
+                            int baseIpAddressLowOctet;
+                            int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
+                            int.TryParse(baseIp[3], out baseIpAddressLowOctet);
+                            if (connectingAddressLowOctet >= baseIpAddressLowOctet && baseIpAddressLowOctet <= UserSettings.Settings.LastOctetMax)
+                            {
+                                isAllowed = true;
+                            }
+                        }
+                        break;
+                    default:
+                        isAllowed = true;
+                        break;
+                }
+                if (!isAllowed)
                 {
                     workerSocket.Close();
                     Debug.WriteLine("Force Disconnected not valid range");
+                    _mMainSocket.BeginAccept(OnClientConnect, null);
                     return;
                 }
 
@@ -147,19 +179,16 @@ namespace MusicBeePlugin
                 // Since the main Socket is now free, it can go back and
                 // wait for the other clients who are attempting to connect
                 _mMainSocket.BeginAccept(OnClientConnect, null);
-                
-
             }
             catch (ObjectDisposedException)
             {
                 Debug.WriteLine("OnClientConnection: Socket has been closed\n");
-                
             }
-            catch(SocketException se)
+            catch (SocketException se)
             {
                 ErrorHandler.LogError(se);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Debug.WriteLine("Teh ex" + ex.Message);
                 ErrorHandler.LogError(ex);
@@ -168,7 +197,7 @@ namespace MusicBeePlugin
 
         public class SocketPacket
         {
-           // Constructor which takes a Socket and a client number
+            // Constructor which takes a Socket and a client number
             public SocketPacket(Socket socket, int clientNumber)
             {
                 MCurrentSocket = socket;
@@ -186,7 +215,7 @@ namespace MusicBeePlugin
         {
             try
             {
-                if(PfnWorkerCallback == null)
+                if (PfnWorkerCallback == null)
                 {
                     // Specify the call back function which is to be
                     // invoked when ther is any write activity by the
@@ -194,15 +223,14 @@ namespace MusicBeePlugin
                     PfnWorkerCallback = OnDataReceived;
                 }
 
-                SocketPacket socketPacket = new SocketPacket(socket,clientNumber);
+                SocketPacket socketPacket = new SocketPacket(socket, clientNumber);
 
                 socket.BeginReceive(socketPacket.DataBuffer, 0, socketPacket.DataBuffer.Length, SocketFlags.None,
                                     PfnWorkerCallback, socketPacket);
-
             }
             catch (SocketException se)
             {
-               ErrorHandler.LogError(se);
+                ErrorHandler.LogError(se);
             }
         }
 
@@ -226,7 +254,7 @@ namespace MusicBeePlugin
 
                 String message = new string(chars);
 
-                if(String.IsNullOrEmpty(message))
+                if (String.IsNullOrEmpty(message))
                     return;
                 ProtocolHandler.Instance.ProcessIncomingMessage(message, socketData.MClientNumber);
 
@@ -237,18 +265,17 @@ namespace MusicBeePlugin
             {
                 Debug.WriteLine("OnDataReceived: Socket has been closed\n");
             }
-            catch(SocketException se)
+            catch (SocketException se)
             {
-                if(se.ErrorCode == 10054) // Error code for Connection reset by peer
+                if (se.ErrorCode == 10054) // Error code for Connection reset by peer
                 {
                     _mWorkerSocketList[socketData.MClientNumber - 1] = null;
                     Messenger.Instance.OnClientDisconnected(new MessageEventArgs(socketData.MClientNumber));
                 }
                 else
                 {
-                    ErrorHandler.LogError(se);    
+                    ErrorHandler.LogError(se);
                 }
-                
             }
         }
 
@@ -266,8 +293,9 @@ namespace MusicBeePlugin
                 byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
                 for (int i = 0; i < _mWorkerSocketList.Count; i++)
                 {
-                    Socket workerSocket = (Socket)_mWorkerSocketList[i];
-                    if (workerSocket != null && workerSocket.Connected && ProtocolHandler.Instance.IsClientAuthenticated(i+1))
+                    Socket workerSocket = (Socket) _mWorkerSocketList[i];
+                    if (workerSocket != null && workerSocket.Connected &&
+                        ProtocolHandler.Instance.IsClientAuthenticated(i + 1))
                     {
                         workerSocket.Send(data);
                     }
@@ -277,8 +305,6 @@ namespace MusicBeePlugin
             {
                 ErrorHandler.LogError(ex);
             }
-
         }
-
     }
 }

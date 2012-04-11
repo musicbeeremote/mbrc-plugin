@@ -45,8 +45,6 @@ namespace MusicBeePlugin.Settings
             _removeAddressButton = new Button();
         }
 
-
-
         public bool ConfigureSettingsPanel(IntPtr panelHandle, int background, int foreground)
         {
             if (panelHandle == IntPtr.Zero)
@@ -55,14 +53,6 @@ namespace MusicBeePlugin.Settings
             Panel panel = (Panel) Control.FromHandle(panelHandle);
             // Settings Loaded
             _applicationSettings = UserSettings.Settings;
-            _listeningPort.Text = _applicationSettings.ListeningPort.ToString(CultureInfo.InvariantCulture);
-            _lastOctetMax.Value = _applicationSettings.LastOctetMax;
-            BindListToCombo();
-            if(_applicationSettings.FilterSelection==FilteringSelection.Range)
-            {
-                _addressInputTextBox.Text = _applicationSettings.BaseIp;
-            }
-            
 
             
             Label textBoxLabel = new Label
@@ -132,6 +122,14 @@ namespace MusicBeePlugin.Settings
             _lastOctetMax.Maximum = 254;
             _lastOctetMax.ValueChanged += HandleLastOctetMaxValueChanged;
 
+            // Getting settings out of the ApplicationSettings item.
+            _listeningPort.Text = _applicationSettings.ListeningPort.ToString(CultureInfo.InvariantCulture);
+            _lastOctetMax.Value = _applicationSettings.LastOctetMax;
+            BindListToCombo();
+            if (_applicationSettings.FilterSelection == FilteringSelection.Range)
+            {
+                _addressInputTextBox.Text = _applicationSettings.BaseIp;
+            }
 
             panel.Controls.AddRange(new Control[]
                                         {
