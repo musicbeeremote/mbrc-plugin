@@ -89,7 +89,7 @@ namespace MusicBeePlugin
             {
                 _mMainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 // Create the listening socket.    
-                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.ListeningPort);
+                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.Settings.ListeningPort);
                 // Bind to local IP address.
                 _mMainSocket.Bind(ipLocal);
                 // Start Listening.

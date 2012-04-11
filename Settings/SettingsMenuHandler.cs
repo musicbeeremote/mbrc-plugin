@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
 using System.Globalization;
 using System.Net;
@@ -9,7 +7,7 @@ using System.Windows.Forms;
 
 namespace MusicBeePlugin.Settings
 {
-    internal enum HostsSelection
+    internal enum FilteringSelection
     {
         All,
         Range,
@@ -21,17 +19,19 @@ namespace MusicBeePlugin.Settings
         private readonly TextBox _listeningPort;
         private readonly ToolTip _listeningPortToolTip;
         private readonly Button _restartButton;
-        private readonly NumericUpDown _ipRange;
+        private readonly NumericUpDown _lastOctetMax;
         private readonly ComboBox _allowedIpAddressedCb;
         private readonly Button _addAddressButton;
         private readonly Button _removeAddressButton;
-        private ComboBox _allowedHostsComboBox;
-        private static string _portNumber;
-        private static HostsSelection _hostsSelection;
-        private static int _maxIp;
-        private static string _startingIp;
-        private static BindingList<string> _addressBindingList;
+        private ComboBox _filterSelectionComboBox;
         private readonly TextBox _addressInputTextBox;
+
+        private static ApplicationSettings _applicationSettings;
+
+        public static ApplicationSettings Settings
+        {
+            get { return _applicationSettings; }
+        }
 
         public SettingsMenuHandler()
         {
@@ -39,37 +39,13 @@ namespace MusicBeePlugin.Settings
             _listeningPortToolTip = new ToolTip();
             _restartButton = new Button();
             _addressInputTextBox = new TextBox();
-            _ipRange = new NumericUpDown();
+            _lastOctetMax = new NumericUpDown();
             _allowedIpAddressedCb = new ComboBox();
             _addAddressButton = new Button();
             _removeAddressButton = new Button();
-            _addressBindingList = new BindingList<string>();
         }
 
-        public static string PortNumber
-        {
-            get { return _portNumber; }
-        }
 
-        public static HostsSelection HostSelection
-        {
-            get { return _hostsSelection; }
-        }
-
-        public static BindingList<string> AllowedIpAddresses
-        {
-            get { return _addressBindingList; }
-        }
-
-        public static int MaxIp
-        {
-            get { return _maxIp; }
-        }
-
-        public static string StartingIp
-        {
-            get { return _startingIp; }
-        }
 
         public bool ConfigureSettingsPanel(IntPtr panelHandle, int background, int foreground)
         {
@@ -78,14 +54,16 @@ namespace MusicBeePlugin.Settings
 
             Panel panel = (Panel) Control.FromHandle(panelHandle);
             // Settings Loaded
-            _listeningPort.Text = _portNumber = UserSettings.ListeningPort.ToString(CultureInfo.InvariantCulture);
-            _hostsSelection = UserSettings.HostSelection;
-            if(_hostsSelection==HostsSelection.Range)
+            _applicationSettings = UserSettings.Settings;
+            _listeningPort.Text = _applicationSettings.ListeningPort.ToString(CultureInfo.InvariantCulture);
+            _lastOctetMax.Value = _applicationSettings.LastOctetMax;
+            BindListToCombo();
+            if(_applicationSettings.FilterSelection==FilteringSelection.Range)
             {
-                _addressInputTextBox.Text = _startingIp = UserSettings.StartingIp;
-                _ipRange.Value = _maxIp = UserSettings.MaxIp;
+                _addressInputTextBox.Text = _applicationSettings.BaseIp;
             }
-            _addressBindingList = UserSettings.IpAddressList;
+            
+
             
             Label textBoxLabel = new Label
                                      {
@@ -105,26 +83,28 @@ namespace MusicBeePlugin.Settings
             _restartButton.Text = "Restart Socket";
             _restartButton.Click += HandleRestartButtonClick;
 
-            List<String> allHostList = new List<String> {"All", "Address Range", "Specific Address"};
-            _allowedHostsComboBox = new ComboBox {DataSource = allHostList, DropDownStyle = ComboBoxStyle.DropDownList};
-            _allowedHostsComboBox.Bounds = new Rectangle(0, _listeningPort.Bottom + 5, 120, _allowedHostsComboBox.Height);
-            _allowedHostsComboBox.SelectedValueChanged += HandleSelectedValueChanged;
-            switch (_hostsSelection)
+            _filterSelectionComboBox = new ComboBox {DropDownStyle = ComboBoxStyle.DropDownList};
+            _filterSelectionComboBox.Bounds = new Rectangle(0, _listeningPort.Bottom + 5, 120, _filterSelectionComboBox.Height);
+            _filterSelectionComboBox.Items.AddRange(new object[] {"All","Range", "Specific"});
+         
+            _filterSelectionComboBox.SelectedValueChanged += HandleSelectedValueChanged;
+
+            switch (_applicationSettings.FilterSelection)
             {
-                case HostsSelection.All:
-                    _allowedHostsComboBox.SelectedText = "All";
+                case FilteringSelection.All:
+                    _filterSelectionComboBox.SelectedIndex = _filterSelectionComboBox.Items.IndexOf("All");
                     break;
-                case HostsSelection.Range:
-                    _allowedHostsComboBox.SelectedText = "Address Range";
+                case FilteringSelection.Range:
+                    _filterSelectionComboBox.SelectedIndex = _filterSelectionComboBox.Items.IndexOf("Range");
                     break;
-                case HostsSelection.Specific:
-                    _allowedHostsComboBox.SelectedText = "Specific Address";
+                case FilteringSelection.Specific:
+                    _filterSelectionComboBox.SelectedIndex = _filterSelectionComboBox.Items.IndexOf("Specific");
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
 
-            _addressInputTextBox.Bounds = new Rectangle(_allowedHostsComboBox.Width + 10, _listeningPort.Bottom + 5, 100,
+            _addressInputTextBox.Bounds = new Rectangle(_filterSelectionComboBox.Width + 10, _listeningPort.Bottom + 5, 100,
                                                         _addressInputTextBox.Height);
             _addressInputTextBox.MaxLength = 15;
             _addressInputTextBox.BorderStyle = BorderStyle.FixedSingle;
@@ -144,40 +124,48 @@ namespace MusicBeePlugin.Settings
             _allowedIpAddressedCb.Bounds = new Rectangle(_removeAddressButton.Right + 5, _listeningPort.Bottom + 5, 120,
                                                          _addressInputTextBox.Height);
             _allowedIpAddressedCb.DropDownStyle = ComboBoxStyle.DropDownList;
-            _allowedIpAddressedCb.DataSource = _addressBindingList;
+            _allowedIpAddressedCb.DataSource = _applicationSettings.IpAddressList;
 
-            _ipRange.Bounds = new Rectangle(_addressInputTextBox.Right + 5, _listeningPort.Bottom + 5, 50,
-                                            _ipRange.Height);
-            _ipRange.Minimum = 1;
-            _ipRange.Maximum = 254;
-            _ipRange.ValueChanged += HandleIpRangeValueChanged;
+            _lastOctetMax.Bounds = new Rectangle(_addressInputTextBox.Right + 5, _listeningPort.Bottom + 5, 50,
+                                            _lastOctetMax.Height);
+            _lastOctetMax.Minimum = 1;
+            _lastOctetMax.Maximum = 254;
+            _lastOctetMax.ValueChanged += HandleLastOctetMaxValueChanged;
 
 
             panel.Controls.AddRange(new Control[]
                                         {
-                                            textBoxLabel, _listeningPort, _restartButton, _allowedHostsComboBox,
-                                            _addressInputTextBox, _ipRange, _addAddressButton, _removeAddressButton,
+                                            textBoxLabel, _listeningPort, _restartButton, _filterSelectionComboBox,
+                                            _addressInputTextBox, _lastOctetMax, _addAddressButton, _removeAddressButton,
                                             _allowedIpAddressedCb
                                         });
 
             return false;
         }
 
-        private void HandleIpRangeValueChanged(object sender, EventArgs e)
+        private void BindListToCombo()
         {
-            _maxIp = Convert.ToInt32(_ipRange.Value);
+            _allowedIpAddressedCb.DataSource = null;
+            _allowedIpAddressedCb.DataSource = _applicationSettings.IpAddressList;
+        }
+
+        private void HandleLastOctetMaxValueChanged(object sender, EventArgs e)
+        {
+            _applicationSettings.LastOctetMax = Convert.ToInt32(_lastOctetMax.Value);
         }
 
         private void HandleRemoveAddressButtonClick(object sender, EventArgs e)
         {
             if (String.IsNullOrEmpty(_allowedIpAddressedCb.Text)) return;
-            _addressBindingList.Remove(_allowedIpAddressedCb.Text);
+            _applicationSettings.IpAddressList.Remove(_allowedIpAddressedCb.Text);
+            BindListToCombo();
         }
 
         private void HandleAddAddressButtonClick(object sender, EventArgs e)
         {
-            if (_addressBindingList.Contains(_addressInputTextBox.Text)) return;
-            _addressBindingList.Add(_addressInputTextBox.Text);
+            if (_applicationSettings.IpAddressList.Contains(_addressInputTextBox.Text)) return;
+            _applicationSettings.IpAddressList.Add(_addressInputTextBox.Text);
+            BindListToCombo();
         }
 
         private void HandleAddressInputTextTextChanged(object sender, EventArgs e)
@@ -190,36 +178,36 @@ namespace MusicBeePlugin.Settings
                                                  ? Color.LightGreen
                                                  : Color.Red;
             _addAddressButton.Enabled = isValid;
-            if(isValid&&_hostsSelection==HostsSelection.Range)
+            if(isValid&&_applicationSettings.FilterSelection==FilteringSelection.Range)
             {
-                _startingIp = _addressInputTextBox.Text;
+                _applicationSettings.BaseIp = _addressInputTextBox.Text;
             }
         }
 
         private void HandleSelectedValueChanged(object sender, EventArgs e)
         {
-            switch (_allowedHostsComboBox.Text)
+            switch (_filterSelectionComboBox.Text)
             {
                 case "All":
-                    _hostsSelection = HostsSelection.All;
+                    _applicationSettings.FilterSelection = FilteringSelection.All;
                     _addressInputTextBox.Hide();
-                    _ipRange.Hide();
+                    _lastOctetMax.Hide();
                     _addAddressButton.Hide();
                     _removeAddressButton.Hide();
                     _allowedIpAddressedCb.Hide();
                     break;
-                case "Address Range":
-                    _hostsSelection = HostsSelection.Range;
+                case "Range":
+                    _applicationSettings.FilterSelection = FilteringSelection.Range;
                     _addressInputTextBox.Show();
-                    _ipRange.Show();
+                    _lastOctetMax.Show();
                     _addAddressButton.Hide();
                     _removeAddressButton.Hide();
                     _allowedIpAddressedCb.Hide();
                     break;
-                case "Specific Address":
-                    _hostsSelection = HostsSelection.Specific;
+                case "Specific":
+                    _applicationSettings.FilterSelection = FilteringSelection.Specific;
                     _addressInputTextBox.Show();
-                    _ipRange.Hide();
+                    _lastOctetMax.Hide();
                     _addAddressButton.Show();
                     _removeAddressButton.Show();
                     _allowedIpAddressedCb.Show();
@@ -255,7 +243,7 @@ namespace MusicBeePlugin.Settings
             }
             else
             {
-                _portNumber = _listeningPort.Text;
+                _applicationSettings.ListeningPort = int.Parse(_listeningPort.Text);
             }
         }
     }

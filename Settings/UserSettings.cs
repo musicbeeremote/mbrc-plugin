@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Xml;
 
 namespace MusicBeePlugin.Settings
@@ -12,29 +8,17 @@ namespace MusicBeePlugin.Settings
     {
         public static string SettingsFilePath { get; set; }
         public static string SettingsFileName { get; set; }
-        public static int ListeningPort { get; set; }
-        public static HostsSelection HostSelection { get; set; }
-        public static string StartingIp { get; set; }
-        public static int MaxIp { get; set; }
-        public static BindingList<string> IpAddressList { get; set; }
+        private static ApplicationSettings _applicationSettings;
         private const string PortNumber = "portNumber";
         private const string AllowedAddresses = "allowedAddresses";
         private const string HostTypeSelection = "cbSelection";
         private const string StartingIpAddress = "startingIp";
         private const string MaxIpAddress = "maxIp";
 
-        private static string FlattenAllowedAddressList()
+        public static ApplicationSettings Settings
         {
-            if(IpAddressList==null)
-            {
-                IpAddressList = new BindingList<string>();
-            }
-            return IpAddressList.Aggregate<string, string>(null, (current, s) => current + (s + ", "));
-        }
-
-        private static void UnflattenAllowedAddressList(string allowedAddresses)
-        {
-           IpAddressList = new BindingList<string>(allowedAddresses.Split(",".ToCharArray(),StringSplitOptions.RemoveEmptyEntries));
+            get { return _applicationSettings; }
+            set { _applicationSettings = value; }
         }
 
         /// <summary>
@@ -88,12 +72,12 @@ namespace MusicBeePlugin.Settings
 
         private static void WriteApplicationSetting(XmlDocument document)
         {
-            if (ListeningPort > 0 && ListeningPort < 65535)
-            WriteNodeValue(document,PortNumber,ListeningPort.ToString(CultureInfo.InvariantCulture));
-            WriteNodeValue(document,AllowedAddresses,FlattenAllowedAddressList());
-            WriteNodeValue(document,HostTypeSelection,HostSelection.ToString());
-            WriteNodeValue(document,StartingIpAddress,StartingIp);
-            WriteNodeValue(document,MaxIpAddress,MaxIp.ToString(CultureInfo.InvariantCulture));
+            if (_applicationSettings.ListeningPort > 0 && _applicationSettings.ListeningPort < 65535)
+                WriteNodeValue(document, PortNumber, _applicationSettings.ListeningPort.ToString(CultureInfo.InvariantCulture));
+            WriteNodeValue(document, AllowedAddresses, _applicationSettings.FlattenAllowedAddressList());
+            WriteNodeValue(document, HostTypeSelection, _applicationSettings.FilterSelection.ToString());
+            WriteNodeValue(document,StartingIpAddress,_applicationSettings.BaseIp);
+            WriteNodeValue(document,MaxIpAddress,_applicationSettings.LastOctetMax.ToString(CultureInfo.InvariantCulture));
         }
 
         private static string ReadNodeValue(XmlNode document, string name)
@@ -108,36 +92,28 @@ namespace MusicBeePlugin.Settings
         /// <remarks></remarks>
         public static void LoadSettings()
         {
+            if(_applicationSettings==null)
+            {
+                _applicationSettings = new ApplicationSettings();
+            }
             if (!File.Exists(SettingsFilePath + SettingsFileName))
             {
-                ListeningPort = 3000;
+                _applicationSettings.ListeningPort = 3000;
             }
             else
             {
                 XmlDocument document = new XmlDocument();
                 document.Load(SettingsFilePath + SettingsFileName);
-                int listeningPort, maxIp;
-                ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
-                int.TryParse(ReadNodeValue(document, MaxIpAddress), out maxIp);
-                MaxIp = maxIp;
-                StartingIp = ReadNodeValue(document, StartingIpAddress);
-                HostSelection = GetHostSelection(ReadNodeValue(document, HostTypeSelection));
-                UnflattenAllowedAddressList(ReadNodeValue(document,AllowedAddresses));
+                int listeningPort, lastOctetMax;
+                _applicationSettings.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
+                int.TryParse(ReadNodeValue(document, MaxIpAddress), out lastOctetMax);
+                _applicationSettings.LastOctetMax = lastOctetMax;
+                _applicationSettings.BaseIp = ReadNodeValue(document, StartingIpAddress);
+                _applicationSettings.UpdateFilteringSelection(ReadNodeValue(document, HostTypeSelection));
+                _applicationSettings.UnflattenAllowedAddressList(ReadNodeValue(document,AllowedAddresses));
             }
         }
 
-        private static HostsSelection GetHostSelection(string node)
-        {
-            switch (node)
-            {
-                case "All":
-                    return HostsSelection.All;
-                case "Range":
-                    return HostsSelection.Range;
-                case "Specific":
-                    return HostsSelection.Specific;
-            }
-            return HostsSelection.All;
-        }
+
     }
 }

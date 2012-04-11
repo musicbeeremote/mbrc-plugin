@@ -103,7 +103,7 @@ namespace MusicBeePlugin
             // save any persistent settings in a sub-folder of this path
             SettingsMenuHandler handler = new SettingsMenuHandler();
 
-            int backround = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
+            int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
                                                                          ElementState.ElementStateDefault,
                                                                          ElementComponent.
                                                                              ComponentBackground);
@@ -111,7 +111,7 @@ namespace MusicBeePlugin
                                                                           ElementState.ElementStateDefault,
                                                                           ElementComponent.
                                                                               ComponentForeground);
-            return handler.ConfigureSettingsPanel(panelHandle, backround, foreground);
+            return handler.ConfigureSettingsPanel(panelHandle, background, foreground);
         }
 
 
@@ -130,13 +130,7 @@ namespace MusicBeePlugin
         // its up to you to figure out whether anything has changed and needs updating
         public void SaveSettings()
         {
-            // save any persistent settings in a sub-folder of this path
-            string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            UserSettings.ListeningPort = int.Parse(SettingsMenuHandler.PortNumber);
-            UserSettings.HostSelection = SettingsMenuHandler.HostSelection;
-            UserSettings.IpAddressList = SettingsMenuHandler.AllowedIpAddresses;
-            UserSettings.MaxIp = SettingsMenuHandler.MaxIp;
-            UserSettings.StartingIp = SettingsMenuHandler.StartingIp;
+            UserSettings.Settings = SettingsMenuHandler.Settings;
             UserSettings.SaveSettings("mbremote");
         }
 
