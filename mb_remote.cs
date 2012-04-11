@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
 using MusicBeePlugin.Events;
+using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin
 {
@@ -131,7 +132,6 @@ namespace MusicBeePlugin
         {
             // save any persistent settings in a sub-folder of this path
             string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
-            UserSettings.ListeningPort = int.Parse(SettingsMenuHandler.PortNumber);
             UserSettings.SaveSettings("mbremote");
         }
 

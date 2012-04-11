@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Diagnostics;
 using MusicBeePlugin.Events;
+using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin
 {
@@ -59,9 +60,9 @@ namespace MusicBeePlugin
                     _mMainSocket.Close();
                 }
 
-                for (int i = 0; i < _mWorkerSocketList.Count; i++)
+                foreach (object t in _mWorkerSocketList)
                 {
-                    Socket workerSocket = (Socket)_mWorkerSocketList[i];
+                    Socket workerSocket = (Socket)t;
                     if (workerSocket == null) continue;
                     workerSocket.Close();
                     workerSocket = null;
@@ -116,6 +117,16 @@ namespace MusicBeePlugin
                 // by calling EndAccept() - Which returns the reference
                 // to a new Socket object.
                 Socket workerSocket = _mMainSocket.EndAccept(ar);
+
+                // Validate If client should connect.
+                string address = ((IPEndPoint) workerSocket.RemoteEndPoint).Address.ToString();
+                Debug.WriteLine(address);
+                if(string.Compare(address,"192.168.110.103",StringComparison.Ordinal)!=0)
+                {
+                    workerSocket.Close();
+                    Debug.WriteLine("Force Disconnected not valid range");
+                    return;
+                }
 
                 // Now increment the client count for this client
                 //in a thread safe manner

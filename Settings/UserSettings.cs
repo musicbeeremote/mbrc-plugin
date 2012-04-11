@@ -1,14 +1,15 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Xml;
 
-namespace MusicBeePlugin
+namespace MusicBeePlugin.Settings
 {
-    internal class UserSettings
+    internal static class UserSettings
     {
         public static string SettingsFilePath { get; set; }
         public static string SettingsFileName { get; set; }
         public static int ListeningPort { get; set; }
+        public static string AllowedHostSelection { get; set; }
         private const string PortNumber = "portNumber";
 
         /// <summary>
