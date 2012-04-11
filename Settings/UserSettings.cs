@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Xml;
 
 namespace MusicBeePlugin.Settings
@@ -9,8 +13,29 @@ namespace MusicBeePlugin.Settings
         public static string SettingsFilePath { get; set; }
         public static string SettingsFileName { get; set; }
         public static int ListeningPort { get; set; }
-        public static string AllowedHostSelection { get; set; }
+        public static HostsSelection HostSelection { get; set; }
+        public static string StartingIp { get; set; }
+        public static int MaxIp { get; set; }
+        public static BindingList<string> IpAddressList { get; set; }
         private const string PortNumber = "portNumber";
+        private const string AllowedAddresses = "allowedAddresses";
+        private const string HostTypeSelection = "cbSelection";
+        private const string StartingIpAddress = "startingIp";
+        private const string MaxIpAddress = "maxIp";
+
+        private static string FlattenAllowedAddressList()
+        {
+            if(IpAddressList==null)
+            {
+                IpAddressList = new BindingList<string>();
+            }
+            return IpAddressList.Aggregate<string, string>(null, (current, s) => current + (s + ", "));
+        }
+
+        private static void UnflattenAllowedAddressList(string allowedAddresses)
+        {
+           IpAddressList = new BindingList<string>(allowedAddresses.Split(",".ToCharArray(),StringSplitOptions.RemoveEmptyEntries));
+        }
 
         /// <summary>
         /// Writes an XML node.
@@ -65,6 +90,10 @@ namespace MusicBeePlugin.Settings
         {
             if (ListeningPort > 0 && ListeningPort < 65535)
             WriteNodeValue(document,PortNumber,ListeningPort.ToString(CultureInfo.InvariantCulture));
+            WriteNodeValue(document,AllowedAddresses,FlattenAllowedAddressList());
+            WriteNodeValue(document,HostTypeSelection,HostSelection.ToString());
+            WriteNodeValue(document,StartingIpAddress,StartingIp);
+            WriteNodeValue(document,MaxIpAddress,MaxIp.ToString(CultureInfo.InvariantCulture));
         }
 
         private static string ReadNodeValue(XmlNode document, string name)
@@ -87,9 +116,28 @@ namespace MusicBeePlugin.Settings
             {
                 XmlDocument document = new XmlDocument();
                 document.Load(SettingsFilePath + SettingsFileName);
-                int listeningPort;
+                int listeningPort, maxIp;
                 ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
+                int.TryParse(ReadNodeValue(document, MaxIpAddress), out maxIp);
+                MaxIp = maxIp;
+                StartingIp = ReadNodeValue(document, StartingIpAddress);
+                HostSelection = GetHostSelection(ReadNodeValue(document, HostTypeSelection));
+                UnflattenAllowedAddressList(ReadNodeValue(document,AllowedAddresses));
             }
+        }
+
+        private static HostsSelection GetHostSelection(string node)
+        {
+            switch (node)
+            {
+                case "All":
+                    return HostsSelection.All;
+                case "Range":
+                    return HostsSelection.Range;
+                case "Specific":
+                    return HostsSelection.Specific;
+            }
+            return HostsSelection.All;
         }
     }
 }

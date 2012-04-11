@@ -132,6 +132,11 @@ namespace MusicBeePlugin
         {
             // save any persistent settings in a sub-folder of this path
             string dataPath = _mbApiInterface.Setting_GetPersistentStoragePath();
+            UserSettings.ListeningPort = int.Parse(SettingsMenuHandler.PortNumber);
+            UserSettings.HostSelection = SettingsMenuHandler.HostSelection;
+            UserSettings.IpAddressList = SettingsMenuHandler.AllowedIpAddresses;
+            UserSettings.MaxIp = SettingsMenuHandler.MaxIp;
+            UserSettings.StartingIp = SettingsMenuHandler.StartingIp;
             UserSettings.SaveSettings("mbremote");
         }
 
