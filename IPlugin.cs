@@ -107,8 +107,10 @@ namespace MusicBeePlugin
         /// <summary>
         /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
         /// </summary>
+        /// <param name="clientProtocolVersion"> </param>
+        /// <param name="serverProtocolVersion"> </param>
         /// <returns>XML formated string without root element</returns>
-        string PlaylistGetTracks();
+        string PlaylistGetTracks(double clientProtocolVersion, double serverProtocolVersion);
 
         /// <summary>
         /// Searches in the Now playing list for the track specified and plays it.

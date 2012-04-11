@@ -392,27 +392,32 @@ namespace MusicBeePlugin
         /// <summary>
         /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
         /// </summary>
+        /// <param name="clientProtocolVersion"> </param>
+        /// <param name="serverProtocolVersion"> </param>
         /// <returns>XML formated string without root element</returns>
-        public string PlaylistGetTracks()
+        public string PlaylistGetTracks(double clientProtocolVersion, double serverProtocolVersion)
         {
-            _mbApiInterface.NowPlayingList_QueryFiles(null);
-
-
-            string songlist = "";
-            int count = 0;
-            while (true && count <= 500)
+            if (clientProtocolVersion>=1)
             {
-                string playListTrack = _mbApiInterface.NowPlayingList_QueryGetNextFile();
-                if (String.IsNullOrEmpty(playListTrack))
-                    break;
-                songlist += "<playlistItem><artist>" +
-                            SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
-                            "</artist><title>" +
-                            SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
-                            "</title></playlistItem>";
-                count++;
+                _mbApiInterface.NowPlayingList_QueryFiles(null);
+
+                string songlist = "";
+                int count = 0;
+                while (true && count <= 500)
+                {
+                    string playListTrack = _mbApiInterface.NowPlayingList_QueryGetNextFile();
+                    if (String.IsNullOrEmpty(playListTrack))
+                        break;
+                    songlist += "<playlistItem><artist>" +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
+                                "</artist><title>" +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
+                                "</title></playlistItem>";
+                    count++;
+                }
+                return songlist; 
             }
-            return songlist;
+            return string.Empty;
         }
 
         /// <summary>
