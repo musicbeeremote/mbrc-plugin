@@ -2,16 +2,16 @@ using System;
 
 namespace MusicBeePlugin.Events
 {
-    class Messenger
+    class StatusMessenger
     {
-        private static readonly Messenger ClassInstance = new Messenger();
+        private static readonly StatusMessenger ClassInstance = new StatusMessenger();
         
-        private Messenger()
+        private StatusMessenger()
         {
             
         }
 
-        public static Messenger Instance { get { return ClassInstance; } }
+        public static StatusMessenger Instance { get { return ClassInstance; } }
         public event EventHandler VolumeLevelChanged;
 
         public void OnVolumeLevelChanged(EventArgs e)

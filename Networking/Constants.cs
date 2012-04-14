@@ -1,4 +1,4 @@
-﻿namespace MusicBeePlugin
+﻿namespace MusicBeePlugin.Networking
 {
     static class Constants
     {
@@ -28,7 +28,6 @@
         public const string State = "state";
         public const string Protocol = "protocol";
         public const string Player = "player";
-        public const double ServerProtocolVersion = 1.0;
         public const string ProtocolVersion = "1.0";
         public const string PlayerName = "MusicBee";
     }

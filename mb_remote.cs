@@ -7,11 +7,16 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
+using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
+using MusicBeePlugin.Networking;
 using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin
 {
+    /// <summary>
+    /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
+    /// </summary>
     public partial class Plugin
     {
         private MusicBeeApiInterface _mbApiInterface;
@@ -23,6 +28,9 @@ namespace MusicBeePlugin
 
         private bool _songChanged;
 
+        /// <summary>
+        /// Returns true if the song changed recently. If the song changed indeed then the Property returns true and changes the internal value to false.
+        /// </summary>
         public bool SongChanged
         {
             get
@@ -38,6 +46,11 @@ namespace MusicBeePlugin
             set { _songChanged = value; }
         }
 
+        /// <summary>
+        /// This function initialized the Plugin.
+        /// </summary>
+        /// <param name="apiInterfacePtr"></param>
+        /// <returns></returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
             _mbApiInterface =
@@ -65,7 +78,6 @@ namespace MusicBeePlugin
             _repeat = _mbApiInterface.Player_GetRepeat();
             _shuffle = _mbApiInterface.Player_GetShuffle();
 
-
             ProtocolHandler.Instance.Initialize(this);
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
@@ -75,7 +87,6 @@ namespace MusicBeePlugin
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
 
-
             return _about;
         }
 
@@ -83,24 +94,28 @@ namespace MusicBeePlugin
         {
             if (_mbApiInterface.Player_GetShuffle() != _shuffle)
             {
-                Messenger.Instance.OnShuffleStateChanged(null);
+                StatusMessenger.Instance.OnShuffleStateChanged(null);
                 _shuffle = _mbApiInterface.Player_GetShuffle();
             }
             if (_mbApiInterface.Player_GetScrobbleEnabled() != _scrobble)
             {
-                Messenger.Instance.OnScrobbleStateChanged(null);
+                StatusMessenger.Instance.OnScrobbleStateChanged(null);
                 _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
             }
             if (_mbApiInterface.Player_GetRepeat() != _repeat)
             {
-                Messenger.Instance.OnRepeatStateChanged(null);
+                StatusMessenger.Instance.OnRepeatStateChanged(null);
                 _repeat = _mbApiInterface.Player_GetRepeat();
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="panelHandle"></param>
+        /// <returns></returns>
         public bool Configure(IntPtr panelHandle)
         {
-            // save any persistent settings in a sub-folder of this path
             SettingsMenuHandler handler = new SettingsMenuHandler();
 
             int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
@@ -114,47 +129,56 @@ namespace MusicBeePlugin
             return handler.ConfigureSettingsPanel(panelHandle, background, foreground);
         }
 
-
-        // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
+        /// <summary>
+        /// MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
+        /// </summary>
+        /// <param name="reason"></param>
         public void Close(PluginCloseReason reason)
         {
+            /** When the plugin closes for whatever reason the SocketServer must stop **/
             SocketServer.Instance.Stop();
         }
 
-        // uninstall this plugin - clean up any persisted files
+        /// <summary>
+        /// Cleans up any persisted files during the plugin uninstall.
+        /// </summary>
         public void Uninstall()
         {
+            //TODO: add cleanup code bit to remove the plugin settings and log directory.
         }
 
-        // called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
-        // its up to you to figure out whether anything has changed and needs updating
+        /// <summary>
+        /// Called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
+        /// Used to save the temporary Plugin Settings if the have changed.
+        /// </summary>
         public void SaveSettings()
         {
             UserSettings.Settings = SettingsMenuHandler.Settings;
             UserSettings.SaveSettings("mbremote");
         }
 
-        // receive event notifications from MusicBee
-        // only required if about.ReceiveNotificationFlags = PlayerEvents
+        /// <summary>
+        /// Receives event Notifications from MusicBee. It is only required if the about.ReceiveNotificationFlags = PlayerEvents.
+        /// </summary>
+        /// <param name="sourceFileUrl"></param>
+        /// <param name="type"></param>
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
-            // perform some action depending on the notification type
+            /** Perfom an action depending on the notification type **/
             switch (type)
             {
-                case NotificationType.PluginStartup:
-                    break;
                 case NotificationType.TrackChanged:
                     SongChanged = true;
-                    Messenger.Instance.OnTrackChanged(null);
+                    StatusMessenger.Instance.OnTrackChanged(null);
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    Messenger.Instance.OnVolumeLevelChanged(null);
+                    StatusMessenger.Instance.OnVolumeLevelChanged(null);
                     break;
                 case NotificationType.VolumeMuteChanged:
-                    Messenger.Instance.OnVolumeMuteChanged(null);
+                    StatusMessenger.Instance.OnVolumeMuteChanged(null);
                     break;
                 case NotificationType.PlayStateChanged:
-                    Messenger.Instance.OnPlayStateChanged(null);
+                    StatusMessenger.Instance.OnPlayStateChanged(null);
                     break;
             }
         }
@@ -319,6 +343,7 @@ namespace MusicBeePlugin
         /// <summary>
         /// Returns the state of the player.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
         /// <returns>possible values: undefined, loading, playing, paused, stopped</returns>
         public string PlayerPlayState()
         {

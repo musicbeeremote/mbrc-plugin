@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace MusicBeePlugin
+namespace MusicBeePlugin.Error
 {
     internal static class ErrorHandler
     {

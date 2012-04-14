@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using MusicBeePlugin.Networking;
 
 namespace MusicBeePlugin.Settings
 {
@@ -91,7 +92,7 @@ namespace MusicBeePlugin.Settings
                     _filterSelectionComboBox.SelectedIndex = _filterSelectionComboBox.Items.IndexOf("Specific");
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException("Undefined Filtering option");
+                    throw new ArgumentOutOfRangeException(string.Format("{0}Undefined Filtering option", "ARG0"));
             }
 
             _addressInputTextBox.Bounds = new Rectangle(_filterSelectionComboBox.Width + 10, _listeningPort.Bottom + 5, 100,
@@ -103,12 +104,12 @@ namespace MusicBeePlugin.Settings
             _addressInputTextBox.TextChanged += HandleAddressInputTextTextChanged;
 
             _addAddressButton.Bounds = new Rectangle(_addressInputTextBox.Right + 5, _listeningPort.Bottom + 5, 20, 20);
-            _addAddressButton.Text = "+";
+            _addAddressButton.Text = Properties.Resources.plus;
             _addAddressButton.Enabled = false;
             _addAddressButton.Click += HandleAddAddressButtonClick;
 
             _removeAddressButton.Bounds = new Rectangle(_addAddressButton.Right + 5, _listeningPort.Bottom + 5, 20, 20);
-            _removeAddressButton.Text = "-";
+            _removeAddressButton.Text = Properties.Resources.minus;
             _removeAddressButton.Click += HandleRemoveAddressButtonClick;
 
             _allowedIpAddressedCb.Bounds = new Rectangle(_removeAddressButton.Right + 5, _listeningPort.Bottom + 5, 120,
@@ -234,8 +235,8 @@ namespace MusicBeePlugin.Settings
             int listeningPort = Int32.Parse(_listeningPort.Text);
             if (listeningPort < 1 || listeningPort > 65535)
             {
-                _listeningPortToolTip.ToolTipTitle = "Invalid Port Number";
-                _listeningPortToolTip.Show("A valid port number is a number from 1 to 65535", _listeningPort, 0, -40,
+                _listeningPortToolTip.ToolTipTitle = Properties.Resources.InvalidPort;
+                _listeningPortToolTip.Show(Properties.Resources.ValidRange, _listeningPort, 0, -40,
                                            2500);
                 _listeningPort.Clear();
             }
