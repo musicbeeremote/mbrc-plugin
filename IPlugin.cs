@@ -7,33 +7,33 @@ namespace MusicBeePlugin
         /// <summary>
         /// Returns the artist name for the track playing.
         /// </summary>
-        /// <returns>Track artist string</returns>
-        string GetCurrentTrackArtist();
+        /// <value> Track artist string </value>
+        string CurrentTrackArtist { get; }
 
         /// <summary>
         /// Returns the album for the track playing.
         /// </summary>
-        /// <returns>Track album string</returns>
-        string GetCurrentTrackAlbum();
+        /// <value> Track album string </value>
+        string CurrentTrackAlbum { get; }
 
         /// <summary>
         /// Returns the title for the track playing.
         /// </summary>
-        /// <returns>Track title string</returns>
-        string GetCurrentTrackTitle();
+        /// <value> Track title string </value>
+        string CurrentTrackTitle { get; }
 
         /// <summary>
         /// Returns the Year for the track playing.
         /// </summary>
-        /// <returns>Track year string</returns>
-        string GetCurrentTrackYear();
+        /// <value> Track year string </value>
+        string CurrentTrackYear { get; }
 
         /// <summary>
         /// It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
         /// 300x300 and returns the resized image in a Base64 encoded string.
         /// </summary>
-        /// <returns></returns>
-        string GetCurrentTrackCover();
+        /// <value> </value>
+        string CurrentTrackCover { get; }
 
         /// <summary>
         /// Retrieves the lyrics for the track playing.
@@ -108,9 +108,8 @@ namespace MusicBeePlugin
         /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
         /// </summary>
         /// <param name="clientProtocolVersion"> </param>
-        /// <param name="serverProtocolVersion"> </param>
         /// <returns>XML formated string without root element</returns>
-        string PlaylistGetTracks(double clientProtocolVersion, double serverProtocolVersion);
+        string PlaylistGetTracks(double clientProtocolVersion);
 
         /// <summary>
         /// Searches in the Now playing list for the track specified and plays it.

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Linq;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
@@ -10,19 +9,15 @@ using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin
 {
-    public sealed class SocketServer
+    public sealed class SocketServer:IDisposable
     {
         // New Code Stuff
         private Socket _mMainSocket;
         private readonly ArrayList _mWorkerSocketList;
         private int _mClientCount;
-        public AsyncCallback PfnWorkerCallback;
+        private AsyncCallback _pfnWorkerCallback;
 
         private static readonly SocketServer ServerInstance = new SocketServer();
-
-        static SocketServer()
-        {
-        }
 
         private SocketServer()
         {
@@ -30,13 +25,33 @@ namespace MusicBeePlugin
             _mClientCount = 0;
             _mWorkerSocketList = ArrayList.Synchronized(new ArrayList());
             Messenger.Instance.DisconnectClient += HandleDisconnectClient;
+            ServerMessenger.Instance.ReplyAvailable += HandleReplyAvailable;
+        }
+
+        private void HandleReplyAvailable(object sender, MessageEventArgs e)
+        {
+            if(e.ClientId==-1)
+            {
+                Send(e.Message); 
+            }
+            else
+            {
+                Send(e.Message,e.ClientId);
+            }
         }
 
         private void HandleDisconnectClient(object sender, MessageEventArgs e)
         {
-            Socket workerSocket = (Socket) _mWorkerSocketList[e.ClientId - 1];
-            workerSocket.Close();
-            workerSocket = null;
+            try
+            {
+                Socket workerSocket = (Socket)_mWorkerSocketList[e.ClientId - 1];
+                workerSocket.Close();
+                workerSocket = null;
+            }
+            catch (Exception ex)
+            {
+                ErrorHandler.LogError(ex);
+            }
         }
 
         /// <summary>
@@ -51,7 +66,7 @@ namespace MusicBeePlugin
         /// It stops the SocketServer.
         /// </summary>
         /// <returns></returns>
-        public bool Stop()
+        public void Stop()
         {
             try
             {
@@ -68,14 +83,10 @@ namespace MusicBeePlugin
                     workerSocket = null;
                 }
                 _mMainSocket = null;
-                GC.Collect();
-
-                return true;
             }
             catch (Exception ex)
             {
                 ErrorHandler.LogError(ex);
-                return false;
             }
         }
 
@@ -83,7 +94,7 @@ namespace MusicBeePlugin
         /// It starts the SocketServer.
         /// </summary>
         /// <returns></returns>
-        public bool Start()
+        public void Start()
         {
             try
             {
@@ -96,12 +107,10 @@ namespace MusicBeePlugin
                 _mMainSocket.Listen(4);
                 // Create the call back for any client connections.
                 _mMainSocket.BeginAccept(OnClientConnect, null);
-                return true;
             }
             catch (SocketException se)
             {
                 ErrorHandler.LogError(se);
-                return false;
             }
         }
 
@@ -122,12 +131,12 @@ namespace MusicBeePlugin
                 switch (UserSettings.Settings.FilterSelection)
                 {
                     case FilteringSelection.Specific:
-                        foreach (
-                            string s in
-                                UserSettings.Settings.IpAddressList.Where(
-                                    s => string.Compare(address, s, StringComparison.Ordinal) == 0))
+                        foreach (string source in UserSettings.Settings.IpAddressList)
                         {
-                            isAllowed = true;
+                            if(string.Compare(address, source, StringComparison.Ordinal) == 0)
+                            {
+                                isAllowed = true;
+                            }
                         }
                         break;
                     case FilteringSelection.Range:
@@ -190,12 +199,12 @@ namespace MusicBeePlugin
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Teh ex" + ex.Message);
+                Debug.WriteLine("Exception: \r\n" + ex.Message +"\r\n");
                 ErrorHandler.LogError(ex);
             }
         }
 
-        public class SocketPacket
+        private class SocketPacket
         {
             // Constructor which takes a Socket and a client number
             public SocketPacket(Socket socket, int clientNumber)
@@ -204,29 +213,32 @@ namespace MusicBeePlugin
                 MClientNumber = clientNumber;
             }
 
-            public Socket MCurrentSocket;
-            public int MClientNumber;
+            public Socket MCurrentSocket { get; private set; }
+
+            public int MClientNumber { get; private set; }
+
             // Buffer to store the data sent by the client
-            public byte[] DataBuffer = new byte[1024];
+            private byte[] _dataBuffer = new byte[1024];
+            public byte[] DataBuffer { get { return _dataBuffer; } set { _dataBuffer = value; } }
         }
 
         // Start waiting for data from the client
-        public void WaitForData(Socket socket, int clientNumber)
+        private void WaitForData(Socket socket, int clientNumber)
         {
             try
             {
-                if (PfnWorkerCallback == null)
+                if (_pfnWorkerCallback == null)
                 {
                     // Specify the call back function which is to be
-                    // invoked when ther is any write activity by the
+                    // invoked when there is any write activity by the
                     // connected client.
-                    PfnWorkerCallback = OnDataReceived;
+                    _pfnWorkerCallback = OnDataReceived;
                 }
 
                 SocketPacket socketPacket = new SocketPacket(socket, clientNumber);
 
                 socket.BeginReceive(socketPacket.DataBuffer, 0, socketPacket.DataBuffer.Length, SocketFlags.None,
-                                    PfnWorkerCallback, socketPacket);
+                                    _pfnWorkerCallback, socketPacket);
             }
             catch (SocketException se)
             {
@@ -236,7 +248,7 @@ namespace MusicBeePlugin
 
         // This is the call back function which will be invoked when the socket
         // detects any client writing of data on the stream
-        public void OnDataReceived(IAsyncResult ar)
+        private void OnDataReceived(IAsyncResult ar)
         {
             SocketPacket socketData = (SocketPacket) ar.AsyncState;
             try
@@ -281,9 +293,16 @@ namespace MusicBeePlugin
 
         public void Send(string message, int clientNumber)
         {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
-            Socket workerSocket = (Socket) _mWorkerSocketList[clientNumber - 1];
-            workerSocket.Send(data);
+            try
+            {
+                byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+                Socket workerSocket = (Socket)_mWorkerSocketList[(clientNumber-1)>0?clientNumber - 1:0];
+                workerSocket.Send(data);
+            }
+            catch (Exception ex)
+            {
+                ErrorHandler.LogError(ex);
+            }
         }
 
         public void Send(string message)
@@ -305,6 +324,11 @@ namespace MusicBeePlugin
             {
                 ErrorHandler.LogError(ex);
             }
+        }
+
+        public void Dispose()
+        {
+            _mMainSocket.Dispose();
         }
     }
 }

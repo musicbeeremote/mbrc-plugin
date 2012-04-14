@@ -30,9 +30,8 @@ namespace MusicBeePlugin
                     fWriter.WriteLine(Environment.NewLine);
                 }
                 stream.Close();
-                stream.Dispose();
             }
-            catch (Exception iException)
+            catch (IOException iException)
             {
                 Debug.WriteLine(iException);
             }

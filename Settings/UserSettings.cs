@@ -106,8 +106,7 @@ namespace MusicBeePlugin.Settings
                 document.Load(SettingsFilePath + SettingsFileName);
                 int listeningPort, lastOctetMax;
                 _applicationSettings.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
-                int.TryParse(ReadNodeValue(document, MaxIpAddress), out lastOctetMax);
-                _applicationSettings.LastOctetMax = lastOctetMax;
+                _applicationSettings.LastOctetMax = int.TryParse(ReadNodeValue(document, MaxIpAddress), out lastOctetMax)? lastOctetMax:0;
                 _applicationSettings.BaseIp = ReadNodeValue(document, StartingIpAddress);
                 _applicationSettings.UpdateFilteringSelection(ReadNodeValue(document, HostTypeSelection));
                 _applicationSettings.UnflattenAllowedAddressList(ReadNodeValue(document,AllowedAddresses));

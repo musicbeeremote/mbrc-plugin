@@ -65,9 +65,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Constants.cs" />
     <Compile Include="ErrorHandler.cs" />
     <Compile Include="Events\MessageEventArgs.cs" />
     <Compile Include="Events\Messenger.cs" />
+    <Compile Include="Events\ServerMessenger.cs" />
     <Compile Include="IPlugin.cs" />
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="mb_remote.cs" />

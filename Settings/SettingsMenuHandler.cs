@@ -14,7 +14,7 @@ namespace MusicBeePlugin.Settings
         Specific
     }
 
-    internal class SettingsMenuHandler
+    internal class SettingsMenuHandler:IDisposable
     {
         private readonly TextBox _listeningPort;
         private readonly ToolTip _listeningPortToolTip;
@@ -91,7 +91,7 @@ namespace MusicBeePlugin.Settings
                     _filterSelectionComboBox.SelectedIndex = _filterSelectionComboBox.Items.IndexOf("Specific");
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException("Undefined Filtering option");
             }
 
             _addressInputTextBox.Bounds = new Rectangle(_filterSelectionComboBox.Width + 10, _listeningPort.Bottom + 5, 100,
@@ -243,6 +243,19 @@ namespace MusicBeePlugin.Settings
             {
                 _applicationSettings.ListeningPort = int.Parse(_listeningPort.Text);
             }
+        }
+
+        public void Dispose()
+        {
+          _listeningPort.Dispose();
+          _listeningPortToolTip.Dispose();
+          _restartButton.Dispose();
+          _lastOctetMax.Dispose();
+          _allowedIpAddressedCb.Dispose();
+          _addAddressButton.Dispose();
+          _removeAddressButton.Dispose();
+          _filterSelectionComboBox.Dispose();
+          _addressInputTextBox.Dispose();
         }
     }
 }

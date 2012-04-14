@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -10,10 +9,6 @@ using MusicBeePlugin.Events;
 
 namespace MusicBeePlugin
 {
-    internal interface IProtocolHandler
-    {
-        void ProcessIncomingMessage(string incomingMessage, int cliendId = -1);
-    }
 
     internal class SocketClient
     {
@@ -34,38 +29,10 @@ namespace MusicBeePlugin
         }
     }
 
-    internal class ProtocolHandler : IProtocolHandler
+    internal class ProtocolHandler
     {
         private readonly XmlDocument _xmlDoc;
-        public const string PlayPause = "playPause";
-        public const string Previous = "previous";
-        public const string Next = "next";
-        public const string Stop = "stopPlayback";
-        public const string PlayState = "playState";
-        public const string Volume = "volume";
-        public const string SongChangedStatus = "songChanged";
-        public const string SongInformation = "songInfo";
-        public const string SongCover = "songCover";
-        public const string Shuffle = "shuffle";
-        public const string Mute = "mute";
-        public const string Repeat = "repeat";
-        public const string Playlist = "playlist";
-        public const string PlayNow = "playNow";
-        public const string Scrobble = "scrobbler";
-        public const string Lyrics = "lyrics";
-        public const string Rating = "rating";
-        public const string PlayerStatus = "playerStatus";
-        public const string Error = "error";
-        public const string Artist = "artist";
-        public const string Title = "title";
-        public const string Album = "album";
-        public const string Year = "year";
-        public const string State = "state";
-        public const string Protocol = "protocol";
-        public const string Player = "player";
-        private const double ServerProtocolVersion = 1.0;
-        public const string ProtocolVersion = "1.0";
-        public const string PlayerName = "MusicBee";
+
         private double _clientProtocolVersion = 1.0;
 
         private readonly List<SocketClient> _socketClients;
@@ -73,9 +40,6 @@ namespace MusicBeePlugin
 
         private IPlugin _plugin;
 
-        static ProtocolHandler()
-        {
-        }
 
         private ProtocolHandler()
         {
@@ -125,42 +89,43 @@ namespace MusicBeePlugin
 
         private void HandleShuffleStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Shuffle, _plugin.PlayerShuffleState(State), true, true));
+            string packet = PrepareXml(Constants.Shuffle, _plugin.PlayerShuffleState(Constants.State), true, true);
+            ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet));
         }
 
         private void HandleScrobbleStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(State), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.Scrobble, _plugin.ScrobblerState(Constants.State), true, true));
         }
 
         private void HandleRepeatStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Repeat, _plugin.PlayerRepeatState(State), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.Repeat, _plugin.PlayerRepeatState(Constants.State), true, true));
         }
 
         private void HandleVolumeMuteChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true, true));
-            SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(State), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.Volume, _plugin.PlayerVolume("get"), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.Mute, _plugin.PlayerMuteState(Constants.State), true, true));
         }
 
         private void HandleVolumeLevelChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume("get"), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.Volume, _plugin.PlayerVolume("get"), true, true));
         }
 
         private void HandleTrackChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(_clientProtocolVersion), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.SongInformation, GetSongInfo(_clientProtocolVersion), true, true));
             new Thread(
                 () =>
-                SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(), true, true)))
+                SocketServer.Instance.Send(PrepareXml(Constants.SongCover, _plugin.CurrentTrackCover, true, true)))
                 .Start();
         }
 
         private void HandlePlayStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
+            SocketServer.Instance.Send(PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), true, true));
         }
 
         public static ProtocolHandler Instance
@@ -187,12 +152,12 @@ namespace MusicBeePlugin
         {
             if (clientProtocolVersion>=1)
             {
-                string playerstatus = PrepareXml(Repeat, _plugin.PlayerRepeatState(State), false, false);
-                playerstatus += PrepareXml(Mute, _plugin.PlayerMuteState(State), false, false);
-                playerstatus += PrepareXml(Shuffle, _plugin.PlayerShuffleState(State), false, false);
-                playerstatus += PrepareXml(Scrobble, _plugin.ScrobblerState(State), false, false);
-                playerstatus += PrepareXml(PlayState, _plugin.PlayerPlayState(), false, false);
-                playerstatus += PrepareXml(Volume, _plugin.PlayerVolume(String.Empty), false, false);
+                string playerstatus = PrepareXml(Constants.Repeat, _plugin.PlayerRepeatState(Constants.State), false, false);
+                playerstatus += PrepareXml(Constants.Mute, _plugin.PlayerMuteState(Constants.State), false, false);
+                playerstatus += PrepareXml(Constants.Shuffle, _plugin.PlayerShuffleState(Constants.State), false, false);
+                playerstatus += PrepareXml(Constants.Scrobble, _plugin.ScrobblerState(Constants.State), false, false);
+                playerstatus += PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), false, false);
+                playerstatus += PrepareXml(Constants.Volume, _plugin.PlayerVolume(String.Empty), false, false);
                 return playerstatus; 
             }
             return String.Empty;
@@ -202,10 +167,10 @@ namespace MusicBeePlugin
         {
             if (clientProtocolVersion>=1)
             {
-                string songInfo = PrepareXml(Artist, _plugin.GetCurrentTrackArtist(), false, false);
-                songInfo += PrepareXml(Title, _plugin.GetCurrentTrackTitle(), false, false);
-                songInfo += PrepareXml(Album, _plugin.GetCurrentTrackAlbum(), false, false);
-                songInfo += PrepareXml(Year, _plugin.GetCurrentTrackYear(), false, false);
+                string songInfo = PrepareXml(Constants.Artist, _plugin.CurrentTrackArtist, false, false);
+                songInfo += PrepareXml(Constants.Title, _plugin.CurrentTrackTitle, false, false);
+                songInfo += PrepareXml(Constants.Album, _plugin.CurrentTrackAlbum, false, false);
+                songInfo += PrepareXml(Constants.Year, _plugin.CurrentTrackYear, false, false);
                 return songInfo; 
             }
             return string.Empty;
@@ -243,11 +208,11 @@ namespace MusicBeePlugin
 
                 foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
                 {
-                    if (_socketClients[clientIndex].PacketNumber == 0 && xmNode.Name != Player)
+                    if (_socketClients[clientIndex].PacketNumber == 0 && xmNode.Name != Constants.Player)
                     {
                         Messenger.Instance.OnDisconnectClient(new MessageEventArgs(cliendId));
                     }
-                    else if (_socketClients[clientIndex].PacketNumber == 1 && xmNode.Name != Protocol)
+                    else if (_socketClients[clientIndex].PacketNumber == 1 && xmNode.Name != Constants.Protocol)
                     {
                         Messenger.Instance.OnDisconnectClient(new MessageEventArgs(cliendId));
                     }
@@ -259,61 +224,61 @@ namespace MusicBeePlugin
                     {
                         switch (xmNode.Name)
                         {
-                            case Next:
+                            case Constants.Next:
                                 HandleNextReceived(cliendId);
                                 break;
-                            case Previous:
+                            case Constants.Previous:
                                 HandlePreviousReceived(cliendId);
                                 break;
-                            case PlayPause:
+                            case Constants.PlayPause:
                                 HandlePlayPauseReceived(cliendId);
                                 break;
-                            case PlayState:
+                            case Constants.PlayState:
                                 HandlePlayStateReceived(cliendId);
                                 break;
-                            case Volume:
+                            case Constants.Volume:
                                 HandleVolumeReceived(cliendId, xmNode);
                                 break;
-                            case SongChangedStatus:
+                            case Constants.SongChangedStatus:
                                 HandleSongChangedStatusReceived(cliendId);
                                 break;
-                            case SongInformation:
+                            case Constants.SongInformation:
                                 HandleSongInformationReceived(cliendId);
                                 break;
-                            case SongCover:
+                            case Constants.SongCover:
                                 HandleSongCoverReceived(cliendId);
                                 break;
-                            case Stop:
+                            case Constants.Stop:
                                 HandleStopReceived(cliendId);
                                 break;
-                            case Shuffle:
+                            case Constants.Shuffle:
                                 HandleShuffleReceived(cliendId, xmNode);
                                 break;
-                            case Mute:
+                            case Constants.Mute:
                                 HandleMuteReceived(cliendId, xmNode);
                                 break;
-                            case Repeat:
+                            case Constants.Repeat:
                                 HandleRepeatReceived(cliendId, xmNode);
                                 break;
-                            case Playlist:
+                            case Constants.Playlist:
                                 HandlePlaylistReceived(cliendId);
                                 break;
-                            case PlayNow:
+                            case Constants.PlayNow:
                                 HandlePlayNowReceived(cliendId, xmNode);
                                 break;
-                            case Scrobble:
+                            case Constants.Scrobble:
                                 HandleScrobbleReceived(cliendId, xmNode);
                                 break;
-                            case Lyrics:
+                            case Constants.Lyrics:
                                 HandleLyricsReceived(cliendId);
                                 break; 
-                            case Rating:
+                            case Constants.Rating:
                                 HandleRatingReceived(cliendId, xmNode);
                                 break;
-                            case PlayerStatus:
+                            case Constants.PlayerStatus:
                                 HandlePlayerStatusReceived(cliendId);
                                 break;
-                            case Protocol:
+                            case Constants.Protocol:
                                 string protocolString = xmNode.InnerText;
                                 if (!string.IsNullOrEmpty(protocolString))
                                 {
@@ -322,10 +287,10 @@ namespace MusicBeePlugin
                                         _clientProtocolVersion = 1.0;
                                     }
                                 }
-                                SocketServer.Instance.Send(PrepareXml(Protocol, ProtocolVersion, true, true));
+                                SocketServer.Instance.Send(PrepareXml(Constants.Protocol, Constants.ProtocolVersion, true, true));
                                 break;
-                            case Player:
-                                SocketServer.Instance.Send(PrepareXml(Player, PlayerName, true, true));
+                            case Constants.Player:
+                                SocketServer.Instance.Send(PrepareXml(Constants.Player, Constants.PlayerName, true, true));
                                 break;
                         }
                     }
@@ -333,7 +298,7 @@ namespace MusicBeePlugin
                     {
                         try
                         {
-                            SocketServer.Instance.Send(PrepareXml(Error, xmNode.Name, true, true));
+                            SocketServer.Instance.Send(PrepareXml(Constants.Error, xmNode.Name, true, true));
                         }
                         catch (Exception ex)
                         {
@@ -353,11 +318,11 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(_clientProtocolVersion), true, true));
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayerStatus, GetPlayerStatus(_clientProtocolVersion), true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(PlayerStatus, GetPlayerStatus(_clientProtocolVersion), true, true), cliendId);
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayerStatus, GetPlayerStatus(_clientProtocolVersion), true, true), cliendId);
             }
         }
 
@@ -365,13 +330,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Rating, _plugin.TrackRating(xmNode.InnerText),
                                                       true,
                                                       true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Rating, _plugin.TrackRating(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Rating, _plugin.TrackRating(xmNode.InnerText),
                                                       true,
                                                       true), cliendId);
             }
@@ -383,7 +348,7 @@ namespace MusicBeePlugin
             {
                 new Thread(
                     () =>
-                    SocketServer.Instance.Send(PrepareXml(Lyrics,
+                    SocketServer.Instance.Send(PrepareXml(Constants.Lyrics,
                                                           _plugin.RetrieveCurrentTrackLyrics(),
                                                           true,
                                                           true)))
@@ -394,7 +359,7 @@ namespace MusicBeePlugin
             {
                 new Thread(
                     () =>
-                    SocketServer.Instance.Send(PrepareXml(Lyrics,
+                    SocketServer.Instance.Send(PrepareXml(Constants.Lyrics,
                                                           _plugin.RetrieveCurrentTrackLyrics(),
                                                           true,
                                                           true), cliendId))
@@ -407,12 +372,12 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
                                                       true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Scrobble, _plugin.ScrobblerState(xmNode.InnerText),
                                                       true, true), cliendId);
             }
         }
@@ -421,14 +386,14 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(PlayNow,
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayNow,
                                                       _plugin.PlaylistGoToSpecifiedTrack(
                                                           xmNode.InnerText),
                                                       true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(PlayNow,
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayNow,
                                                       _plugin.PlaylistGoToSpecifiedTrack(
                                                           xmNode.InnerText),
                                                       true, true), cliendId);
@@ -439,14 +404,14 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Playlist,
-                                                      _plugin.PlaylistGetTracks(_clientProtocolVersion, ServerProtocolVersion),
+                SocketServer.Instance.Send(PrepareXml(Constants.Playlist,
+                                                      _plugin.PlaylistGetTracks(_clientProtocolVersion),
                                                       true, true));
             }
             else
             {
                 SocketServer.Instance.Send(
-                    PrepareXml(Playlist, _plugin.PlaylistGetTracks(_clientProtocolVersion, ServerProtocolVersion), true, true),
+                    PrepareXml(Constants.Playlist, _plugin.PlaylistGetTracks(_clientProtocolVersion), true, true),
                     cliendId);
             }
         }
@@ -455,13 +420,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Repeat,
+                SocketServer.Instance.Send(PrepareXml(Constants.Repeat,
                                                       _plugin.PlayerRepeatState(xmNode.InnerText),
                                                       true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Repeat,
+                SocketServer.Instance.Send(PrepareXml(Constants.Repeat,
                                                       _plugin.PlayerRepeatState(xmNode.InnerText),
                                                       true, true), cliendId);
             }
@@ -471,13 +436,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Mute, _plugin.PlayerMuteState(xmNode.InnerText),
                                                       true,
                                                       true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Mute, _plugin.PlayerMuteState(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Mute, _plugin.PlayerMuteState(xmNode.InnerText),
                                                       true,
                                                       true), cliendId);
             }
@@ -487,13 +452,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Shuffle,
+                SocketServer.Instance.Send(PrepareXml(Constants.Shuffle,
                                                       _plugin.PlayerShuffleState(xmNode.InnerText),
                                                       true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Shuffle,
+                SocketServer.Instance.Send(PrepareXml(Constants.Shuffle,
                                                       _plugin.PlayerShuffleState(xmNode.InnerText),
                                                       true, true), cliendId);
             }
@@ -503,11 +468,11 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Stop, _plugin.PlayerStopPlayback(), true, true));
+                SocketServer.Instance.Send(PrepareXml(Constants.Stop, _plugin.PlayerStopPlayback(), true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Stop, _plugin.PlayerStopPlayback(), true, true), cliendId);
+                SocketServer.Instance.Send(PrepareXml(Constants.Stop, _plugin.PlayerStopPlayback(), true, true), cliendId);
             }
         }
 
@@ -517,7 +482,7 @@ namespace MusicBeePlugin
             {
                 new Thread(
                     () =>
-                    SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(),
+                    SocketServer.Instance.Send(PrepareXml(Constants.SongCover, _plugin.CurrentTrackCover,
                                                           true,
                                                           true)))
                     .Start();
@@ -526,7 +491,7 @@ namespace MusicBeePlugin
             {
                 new Thread(
                     () =>
-                    SocketServer.Instance.Send(PrepareXml(SongCover, _plugin.GetCurrentTrackCover(),
+                    SocketServer.Instance.Send(PrepareXml(Constants.SongCover, _plugin.CurrentTrackCover,
                                                           true,
                                                           true), cliendId))
                     .Start();
@@ -537,26 +502,25 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(_clientProtocolVersion), true, true));
+                SocketServer.Instance.Send(PrepareXml(Constants.SongInformation, GetSongInfo(_clientProtocolVersion), true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(SongInformation, GetSongInfo(_clientProtocolVersion), true, true), cliendId);
+                SocketServer.Instance.Send(PrepareXml(Constants.SongInformation, GetSongInfo(_clientProtocolVersion), true, true), cliendId);
             }
-            return;
         }
 
         private void HandleSongChangedStatusReceived(int cliendId)
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
+                SocketServer.Instance.Send(PrepareXml(Constants.SongChangedStatus,
                                                       _plugin.SongChanged.ToString(
                                                           CultureInfo.InvariantCulture), true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(SongChangedStatus,
+                SocketServer.Instance.Send(PrepareXml(Constants.SongChangedStatus,
                                                       _plugin.SongChanged.ToString(
                                                           CultureInfo.InvariantCulture), true, true), cliendId);
             }
@@ -566,13 +530,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Volume, _plugin.PlayerVolume(xmNode.InnerText),
                                                       true,
                                                       true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(Volume, _plugin.PlayerVolume(xmNode.InnerText),
+                SocketServer.Instance.Send(PrepareXml(Constants.Volume, _plugin.PlayerVolume(xmNode.InnerText),
                                                       true,
                                                       true), cliendId);
             }
@@ -582,11 +546,11 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true));
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), true, true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(PlayState, _plugin.PlayerPlayState(), true, true), cliendId);
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), true, true), cliendId);
             }
         }
 
@@ -594,13 +558,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(),
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayPause, _plugin.PlayerPlayPauseTrack(),
                                                       true,
                                                       true));
             }
             else
             {
-                SocketServer.Instance.Send(PrepareXml(PlayPause, _plugin.PlayerPlayPauseTrack(),
+                SocketServer.Instance.Send(PrepareXml(Constants.PlayPause, _plugin.PlayerPlayPauseTrack(),
                                                       true,
                                                       true), cliendId);
             }
@@ -610,14 +574,14 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(),
+                SocketServer.Instance.Send(PrepareXml(Constants.Previous, _plugin.PlayerPlayPreviousTrack(),
                                                       true,
                                                       true));
             }
             else
             {
                 SocketServer.Instance.Send(
-                    PrepareXml(Previous, _plugin.PlayerPlayPreviousTrack(), true,
+                    PrepareXml(Constants.Previous, _plugin.PlayerPlayPreviousTrack(), true,
                                true), cliendId);
             }
         }
@@ -626,13 +590,13 @@ namespace MusicBeePlugin
         {
             if (cliendId == -1)
             {
-                SocketServer.Instance.Send(PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true,
+                SocketServer.Instance.Send(PrepareXml(Constants.Next, _plugin.PlayerPlayNextTrack(), true,
                                                       true));
             }
             else
             {
                 SocketServer.Instance.Send(
-                    PrepareXml(Next, _plugin.PlayerPlayNextTrack(), true, true), cliendId);
+                    PrepareXml(Constants.Next, _plugin.PlayerPlayNextTrack(), true, true), cliendId);
             }
         }
     }

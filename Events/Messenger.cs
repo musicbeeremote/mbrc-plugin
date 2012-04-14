@@ -11,11 +11,6 @@ namespace MusicBeePlugin.Events
             
         }
 
-        static Messenger()
-        {
-        
-        }
-
         public static Messenger Instance { get { return ClassInstance; } }
         public event EventHandler VolumeLevelChanged;
 

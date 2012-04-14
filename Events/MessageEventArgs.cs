@@ -12,14 +12,8 @@ namespace MusicBeePlugin.Events
 
         public MessageEventArgs(string message)
         {
-            ClientId = 0;
+            ClientId = -1;
             Message = message;
-        }
-
-        public MessageEventArgs(string message, int clientId)
-        {
-            Message = message;
-            ClientId = clientId;
         }
 
         public string Message { get; private set; }

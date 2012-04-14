@@ -162,82 +162,84 @@ namespace MusicBeePlugin
         /// <summary>
         /// Returns the artist name for the track playing.
         /// </summary>
-        /// <returns>Track artist string</returns>
-        public string GetCurrentTrackArtist()
+        /// <value> Track artist string </value>
+        public string CurrentTrackArtist
         {
-            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist));
+            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist)); }
         }
 
         /// <summary>
         /// Returns the album for the track playing.
         /// </summary>
-        /// <returns>Track album string</returns>
-        public string GetCurrentTrackAlbum()
+        /// <value> Track album string </value>
+        public string CurrentTrackAlbum
         {
-            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album));
+            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)); }
         }
 
         /// <summary>
         /// Returns the title for the track playing.
         /// </summary>
-        /// <returns>Track title string</returns>
-        public string GetCurrentTrackTitle()
+        /// <value> Track title string </value>
+        public string CurrentTrackTitle
         {
-            return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle));
+            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle)); }
         }
 
         /// <summary>
         /// Returns the Year for the track playing.
         /// </summary>
-        /// <returns>Track year string</returns>
-        public string GetCurrentTrackYear()
+        /// <value> Track year string </value>
+        public string CurrentTrackYear
         {
-            return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year);
+            get { return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year); }
         }
 
         /// <summary>
         /// It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
         /// 300x300 and returns the resized image in a Base64 encoded string.
         /// </summary>
-        /// <returns></returns>
-        public string GetCurrentTrackCover()
+        /// <value> </value>
+        public string CurrentTrackCover
         {
-            try
+            get
             {
-                if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
-                    return "";
-                using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
-                    )
-                using (Image albumCover = Image.FromStream(ms, true))
+                try
                 {
-                    ms.Flush();
-                    int sourceWidth = albumCover.Width;
-                    int sourceHeight = albumCover.Height;
-
-                    float nPercentW = (300 / (float)sourceWidth);
-                    float nPercentH = (300 / (float)sourceHeight);
-
-                    var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                    int destWidth = (int)(sourceWidth * nPercent);
-                    int destHeight = (int)(sourceHeight * nPercent);
-                    using (var bmp = new Bitmap(destWidth, destHeight))
-                    using (MemoryStream ms2 = new MemoryStream())
+                    if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
+                        return "";
+                    using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
+                        )
+                    using (Image albumCover = Image.FromStream(ms, true))
                     {
-                        Graphics graph = Graphics.FromImage(bmp);
-                        graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
-                        graph.Dispose();
+                        ms.Flush();
+                        int sourceWidth = albumCover.Width;
+                        int sourceHeight = albumCover.Height;
 
-                        bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
-                        bmp.Dispose();
-                        return Convert.ToBase64String(ms2.ToArray());
+                        float nPercentW = (300/(float) sourceWidth);
+                        float nPercentH = (300/(float) sourceHeight);
+
+                        var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
+                        int destWidth = (int) (sourceWidth*nPercent);
+                        int destHeight = (int) (sourceHeight*nPercent);
+                        using (var bmp = new Bitmap(destWidth, destHeight))
+                        using (MemoryStream ms2 = new MemoryStream())
+                        {
+                            Graphics graph = Graphics.FromImage(bmp);
+                            graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                            graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
+                            graph.Dispose();
+
+                            bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
+                            return Convert.ToBase64String(ms2.ToArray());
+                        }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorHandler.LogError(ex);
-                return String.Empty;
+                catch (Exception ex)
+                {
+                    ErrorHandler.LogError(ex);
+                    return String.Empty;
+                }
             }
         }
 
@@ -333,7 +335,7 @@ namespace MusicBeePlugin
                 case PlayState.Stopped:
                     return "stopped";
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException("Undefined Playstate");
             }
         }
 
@@ -393,9 +395,8 @@ namespace MusicBeePlugin
         /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
         /// </summary>
         /// <param name="clientProtocolVersion"> </param>
-        /// <param name="serverProtocolVersion"> </param>
         /// <returns>XML formated string without root element</returns>
-        public string PlaylistGetTracks(double clientProtocolVersion, double serverProtocolVersion)
+        public string PlaylistGetTracks(double clientProtocolVersion)
         {
             if (clientProtocolVersion>=1)
             {
@@ -403,7 +404,7 @@ namespace MusicBeePlugin
 
                 string songlist = "";
                 int count = 0;
-                while (true && count <= 500)
+                while (count <= 500)
                 {
                     string playListTrack = _mbApiInterface.NowPlayingList_QueryGetNextFile();
                     if (String.IsNullOrEmpty(playListTrack))
@@ -435,14 +436,12 @@ namespace MusicBeePlugin
             string trackList = _mbApiInterface.NowPlayingList_QueryGetAllFiles();
             string[] tracks = trackList.Split("\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
-            for (int i = 0; i < tracks.Length; i++)
+            foreach (string t in tracks)
             {
-                if (_mbApiInterface.Library_GetFileTag(tracks[i], MetaDataType.TrackTitle) == trackInformation)
-                {
-                    _mbApiInterface.NowPlayingList_PlayNow(tracks[i]);
-                    result = true.ToString(CultureInfo.InvariantCulture);
-                    break;
-                }
+                if (_mbApiInterface.Library_GetFileTag(t, MetaDataType.TrackTitle) != trackInformation) continue;
+                _mbApiInterface.NowPlayingList_PlayNow(t);
+                result = true.ToString(CultureInfo.InvariantCulture);
+                break;
             }
             return result;
         }
