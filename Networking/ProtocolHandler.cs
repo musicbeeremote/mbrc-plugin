@@ -112,7 +112,8 @@ namespace MusicBeePlugin.Networking
 
         private void HandlePlayStateChanged(object sender, EventArgs e)
         {
-            SocketServer.Instance.Send(PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), true, true));
+            string packet = PrepareXml(Constants.PlayState, _plugin.PlayerPlayState(), true, true);
+            ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet));
         }
 
         public static ProtocolHandler Instance
@@ -275,11 +276,14 @@ namespace MusicBeePlugin.Networking
                                         _clientProtocolVersion = 1.0;
                                     }
                                 }
-                                SocketServer.Instance.Send(PrepareXml(Constants.Protocol, Constants.ProtocolVersion,
-                                                                      true, true));
+                                
+                                string packet_ = PrepareXml(Constants.Protocol, Constants.ProtocolVersion,
+                                                                      true, true);
+                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet_));
                                 break;
                             case Constants.Player:
-                                SocketServer.Instance.Send(PrepareXml(Constants.Player, Constants.PlayerName, true, true));
+                                string packet = PrepareXml(Constants.Player, Constants.PlayerName, true, true);
+                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet));
                                 break;
                         }
                     }
@@ -287,7 +291,8 @@ namespace MusicBeePlugin.Networking
                     {
                         try
                         {
-                            SocketServer.Instance.Send(PrepareXml(Constants.Error, xmNode.Name, true, true));
+                           string packet = PrepareXml(Constants.Error, xmNode.Name, true, true);
+                            ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet));
                         }
                         catch (Exception ex)
                         {
