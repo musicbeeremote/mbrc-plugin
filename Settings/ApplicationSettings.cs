@@ -8,9 +8,13 @@ namespace MusicBeePlugin.Settings
     {
         #region properties
         public int ListeningPort { get; set; }
+
         public FilteringSelection FilterSelection { get; set; }
+
         public string BaseIp { get; set; }
+
         public int LastOctetMax { get; set; }
+
         public List<string> IpAddressList { get; set; }
         #endregion
 
@@ -21,7 +25,10 @@ namespace MusicBeePlugin.Settings
             {
                 IpAddressList = new List<string>();
             }
-            return IpAddressList.Aggregate<string, string>(null, (current, s) => current + (s + ","));
+            return IpAddressList.Aggregate<string, string>(
+                null,
+                (current, s) => current + (s + ",")
+            );
         }
 
         public void UpdateFilteringSelection(string selection)
@@ -42,7 +49,10 @@ namespace MusicBeePlugin.Settings
 
         public void UnflattenAllowedAddressList(string allowedAddresses)
         {
-            IpAddressList = new List<string>(allowedAddresses.Trim().Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries));
+            IpAddressList = new List<string>(allowedAddresses.Trim().Split(
+                ",".ToCharArray(),
+                StringSplitOptions.RemoveEmptyEntries
+            ));
         }
         #endregion
     }

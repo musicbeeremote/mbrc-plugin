@@ -10,11 +10,8 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>MusicBeePlugin</RootNamespace>
     <AssemblyName>MB_REMOTE</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <ApplicationIcon>
-    </ApplicationIcon>
     <SccProjectName>Svn</SccProjectName>
     <SccLocalPath>Svn</SccLocalPath>
     <SccAuxPath>Svn</SccAuxPath>
@@ -71,6 +68,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Data.Linq" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Networking\Constants.cs" />
@@ -83,6 +81,7 @@
     <Compile Include="mb_remote.cs" />
     <Compile Include="Networking\SocketClient.cs" />
     <Compile Include="Networking\SocketPacket.cs" />
+    <Compile Include="Model\PlayerStateModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Networking\ProtocolHandler.cs" />
     <Compile Include="Properties\Resources.Designer.cs">

@@ -4,6 +4,27 @@
         <name>MB_REMOTE</name>
     </assembly>
     <members>
+        <member name="M:MusicBeePlugin.Networking.ProtocolHandler.ProcessIncomingMessage(System.String,System.Int32)">
+            <summary>
+            Processes the incoming message and answer's sending back the needed data.
+            </summary>
+            <param name="incomingMessage">The incoming message.</param>
+            <param name="cliendId"> </param>
+        </member>
+        <member name="M:MusicBeePlugin.Error.ErrorHandler.LogError(System.Exception)">
+            <summary>
+            Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
+            </summary>
+            <param name="ex"></param>
+            <returns></returns>
+        </member>
+        <member name="M:MusicBeePlugin.Error.ErrorHandler.SetLogFilePath(System.String)">
+            <summary>
+            Sets the path where the Errors will be logged
+            </summary>
+            <param name="path">Path to store the log file.</param>
+            <returns></returns>
+        </member>
         <member name="M:MusicBeePlugin.IPlugin.RetrieveCurrentTrackLyrics">
             <summary>
             Retrieves the lyrics for the track playing.
@@ -315,6 +336,23 @@
             </summary>
             <value> </value>
         </member>
+        <member name="M:MusicBeePlugin.Networking.SocketServer.Stop">
+            <summary>
+            It stops the SocketServer.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:MusicBeePlugin.Networking.SocketServer.Start">
+            <summary>
+            It starts the SocketServer.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:MusicBeePlugin.Networking.SocketServer.Instance">
+            <summary>
+            Gives access to the SocketServer single instance.
+            </summary>
+        </member>
         <member name="M:MusicBeePlugin.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
             <summary>
             Writes an XML node.
@@ -335,44 +373,6 @@
             Loads the settings.
             </summary>
             <remarks></remarks>
-        </member>
-        <member name="M:MusicBeePlugin.Networking.SocketServer.Stop">
-            <summary>
-            It stops the SocketServer.
-            </summary>
-            <returns></returns>
-        </member>
-        <member name="M:MusicBeePlugin.Networking.SocketServer.Start">
-            <summary>
-            It starts the SocketServer.
-            </summary>
-            <returns></returns>
-        </member>
-        <member name="P:MusicBeePlugin.Networking.SocketServer.Instance">
-            <summary>
-            Gives access to the SocketServer single instance.
-            </summary>
-        </member>
-        <member name="M:MusicBeePlugin.Networking.ProtocolHandler.ProcessIncomingMessage(System.String,System.Int32)">
-            <summary>
-            Processes the incoming message and answer's sending back the needed data.
-            </summary>
-            <param name="incomingMessage">The incoming message.</param>
-            <param name="cliendId"> </param>
-        </member>
-        <member name="M:MusicBeePlugin.Error.ErrorHandler.LogError(System.Exception)">
-            <summary>
-            Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
-            </summary>
-            <param name="ex"></param>
-            <returns></returns>
-        </member>
-        <member name="M:MusicBeePlugin.Error.ErrorHandler.SetLogFilePath(System.String)">
-            <summary>
-            Sets the path where the Errors will be logged
-            </summary>
-            <param name="path">Path to store the log file.</param>
-            <returns></returns>
         </member>
         <member name="T:MusicBeePlugin.Properties.Resources">
             <summary>

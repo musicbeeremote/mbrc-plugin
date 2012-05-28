@@ -178,11 +178,14 @@ namespace MusicBeePlugin.Networking
                     return;
                 try
                 {
+                    Debug.WriteLine(incomingMessage);
                     _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     ErrorHandler.LogError(ex);
+#endif
                     Debug.WriteLine("Error at: " + incomingMessage);
                 }
 
@@ -205,7 +208,7 @@ namespace MusicBeePlugin.Networking
                     {
                         StatusMessenger.Instance.OnDisconnectClient(new MessageEventArgs(cliendId));
                     }
-                    else if (_socketClients[clientIndex].PacketNumber == 2)
+                    else if (_socketClients[clientIndex].PacketNumber >= 1)
                     {
                         _socketClients[clientIndex].Authenticated = true;
                     }
@@ -276,14 +279,15 @@ namespace MusicBeePlugin.Networking
                                         _clientProtocolVersion = 1.0;
                                     }
                                 }
-                                
-                                string packet_ = PrepareXml(Constants.Protocol, Constants.ProtocolVersion,
-                                                                      true, true);
-                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet_));
+
+                                string message = PrepareXml(Constants.Protocol, Constants.ProtocolVersion,
+                                                            true, true);
+
+                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(message));
                                 break;
                             case Constants.Player:
                                 string packet = PrepareXml(Constants.Player, Constants.PlayerName, true, true);
-                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet));
+                                ServerMessenger.Instance.OnReplyAvailable(new MessageEventArgs(packet,cliendId));
                                 break;
                         }
                     }
@@ -296,7 +300,9 @@ namespace MusicBeePlugin.Networking
                         }
                         catch (Exception ex)
                         {
+#if DEBUG
                             ErrorHandler.LogError(ex);
+#endif
                         }
                     }
                     _socketClients[clientIndex].IncreasePacketNumber();
@@ -304,7 +310,9 @@ namespace MusicBeePlugin.Networking
             }
             catch (Exception ex)
             {
+#if DEBUG
                 ErrorHandler.LogError(ex);
+#endif
             }
         }
 
