@@ -32,7 +32,6 @@ namespace MusicBeePlugin.Controller
         private void HandleClientDisconnected(object sender, MessageEventArgs e)
         {
            Authenticator.RemoveClientOnDisconnect(e);
-           
         }
 
         private void HandleClientConnected(object sender, MessageEventArgs e)
@@ -55,11 +54,72 @@ namespace MusicBeePlugin.Controller
            _playerStateModel = new PlayerStateModel();
            _server = new SocketServer();
            _pHandler = new ProtocolHandler();
+
            _pHandler.ReplyAvailable += HandleReplyAvailable;
            _pHandler.DisconnectClient += HandleDisconnectClient;
+            _pHandler.RequestAvailable += HandleRequestAvailable;
            _server.ClientConnected += HandleClientConnected;
            _server.ClientDisconnected += HandleClientDisconnected;
+            _server.DataAvailable += HandleServerDataAvailable;
             _playerStateModel.ModelStateEvent += HandleModelStateChange;
+        }
+
+        private void HandleServerDataAvailable(object sender, MessageEventArgs e)
+        {
+            _pHandler.ProcessIncomingMessage(e.Message, e.ClientId);
+        }
+
+        private void HandleRequestAvailable(object sender, ClientRequestArgs e)
+        {
+            switch(e.Type)
+            {
+                case RequestType.PlayNext:
+                    _pHandler.NextTrackRequestHandled(_plugin.PlayerPlayNextTrack(), e.ClientId);
+                    break;
+                case RequestType.PlayPrevious:
+                    _pHandler.PreviousTrackRequestHandled(_plugin.PlayerPlayPreviousTrack(), e.ClientId);
+                    break;
+                case RequestType.PlayPause:
+                    _pHandler.PlayPauseRequestHandled(_plugin.PlayerPlayPauseTrack(), e.ClientId);
+                    break;
+                case RequestType.Stop:
+                    _pHandler.StopRequestHandled(_plugin.PlayerStopPlayback(),e.ClientId);
+                    break;
+                case RequestType.Volume:
+                    _plugin.PlayerVolume(e.RequestData);
+                    break;
+                case RequestType.PlayerStatus:
+                    break;
+                case RequestType.PlayState:
+                    _pHandler.PlayStateRequestHandled(_playerStateModel.PlayState, e.ClientId);
+                    break;
+                case RequestType.SongInformation:
+                    _pHandler.SongInfomationRequestHandled(_playerStateModel.Track, e.ClientId);
+                    break;
+                case RequestType.SongCover:
+                    _pHandler.SongCoverRequestHandled(_playerStateModel.Cover, e.ClientId);
+                    break;
+                case RequestType.Playlist:
+                    break;
+                case RequestType.Lyrics:
+                    _pHandler.LyricsRequestHandled(_playerStateModel.Lyrics, e.ClientId);
+                    break;
+                case RequestType.ScrobblerState:
+                    //_pHandler.ScrobbleStateChanged(_playerStateModel.ScrobblerState, e.ClientId);
+                    break;
+                case RequestType.ShuffleState:
+                    break;
+                case RequestType.RepeatState:
+                    break;
+                case RequestType.MuteState:
+                    break;
+                case RequestType.PlayNow:
+                    break;
+                case RequestType.Rating:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         public void Initialize(Plugin plugin)
@@ -79,8 +139,7 @@ namespace MusicBeePlugin.Controller
                     track.Album = _plugin.CurrentTrackAlbum;
                     track.Year = _plugin.CurrentTrackYear;
                     _playerStateModel.Track = track;
-                    new Thread(() => _playerStateModel.Cover = _plugin.CurrentTrackCover);
-                    new Thread(() => _playerStateModel.Lyrics = _plugin.CurrentTrackLyrics);
+                    _playerStateModel.Cover = _plugin.CurrentTrackCover;
                     break;
                 case DataType.PlayState:
                     _playerStateModel.setPlayState(_plugin.PlayerPlayState);
@@ -107,7 +166,7 @@ namespace MusicBeePlugin.Controller
             switch(e.Type)
             {
                 case DataType.Track:
-                    _pHandler.TrackChanged();
+                   _pHandler.TrackChanged(_playerStateModel.Track, _playerStateModel.Cover, -1);
                     break;
                 case DataType.Cover:
                     break;

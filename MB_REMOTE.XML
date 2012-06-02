@@ -9,7 +9,7 @@
             Processes the incoming message and answer's sending back the needed data.
             </summary>
             <param name="incomingMessage">The incoming message.</param>
-            <param name="cliendId"> </param>
+            <param name="clientId"> </param>
         </member>
         <member name="M:MusicBeePlugin.Error.ErrorHandler.LogError(System.Exception)">
             <summary>
@@ -25,146 +25,46 @@
             <param name="path">Path to store the log file.</param>
             <returns></returns>
         </member>
-        <member name="T:MusicBeePlugin.Plugin">
-            <summary>
-            The MusicBee Plugin class. Used to communicate with the MusicBee API.
-            </summary>
-        </member>
-        <member name="T:MusicBeePlugin.Interfaces.IPlugin">
+        <member name="T:MusicBeePlugin.Events.DataType">
             <summary>
             
             </summary>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerPlayNextTrack">
+        <member name="T:MusicBeePlugin.Networking.SocketClient">
             <summary>
-            When called plays the next track.
+            
             </summary>
-            <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerStopPlayback">
+        <member name="M:MusicBeePlugin.Networking.SocketClient.#ctor(System.Int32)">
             <summary>
-            When called stops the playback.
+            
             </summary>
-            <returns></returns>
+            <param name="clientId"></param>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerPlayPauseTrack">
+        <member name="M:MusicBeePlugin.Networking.SocketClient.IncreasePacketNumber">
             <summary>
-            When called changes the play/pause state or starts playing a track if the status is stopped.
+            
             </summary>
-            <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerPlayPreviousTrack">
+        <member name="P:MusicBeePlugin.Networking.SocketClient.ClientId">
             <summary>
-            When called plays the previous track.
+            
             </summary>
-            <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerVolume(System.String)">
+        <member name="P:MusicBeePlugin.Networking.SocketClient.PacketNumber">
             <summary>
-            When called if the volume string is an integer in the range [0,100] it 
-            changes the volume to the specific value and returns the new value.
-            In any other case it just returns the current value for the volume.
+            
             </summary>
-            <param name="vol">New volume String</param>
-            <returns>Volume int [0,100]</returns>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerShuffleState(System.String)">
+        <member name="P:MusicBeePlugin.Networking.SocketClient.Authenticated">
             <summary>
-            If the action equals toggle then it changes the shuffle state, in any other case
-            it just returns the current value of the shuffle.
+            
             </summary>
-            <param name="action">toggle or state</param>
-            <returns>Shuffle state: True or False</returns>
         </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerRepeatState(System.String)">
+        <member name="T:MusicBeePlugin.Plugin">
             <summary>
-            If the action equals toggle then it changes the repeat state, in any other case
-            it just returns the current value of the repeat.
+            The MusicBee Plugin class. Used to communicate with the MusicBee API.
             </summary>
-            <param name="action">toggle or state</param>
-            <returns>Repeat state: None, All, One</returns>
-        </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlayerMuteState(System.String)">
-            <summary>
-            If the action is toggle then the function changes the repeat state, in any other case
-            it just returns the current value of the Mute.
-            </summary>
-            <param name="action">toggle or state</param>
-            <returns>Mute state: True or False</returns>
-        </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlaylistGetTracks(System.Double)">
-            <summary>
-            It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
-            </summary>
-            <param name="clientProtocolVersion"> </param>
-            <returns>XML formated string without root element</returns>
-        </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.PlaylistGoToSpecifiedTrack(System.String)">
-            <summary>
-            Searches in the Now playing list for the track specified and plays it.
-            </summary>
-            <param name="trackInfo">The track to play</param>
-            <returns></returns>
-        </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.ScrobblerState(System.String)">
-            <summary>
-            If the action is toggle then the function changes the scrobbler state, in any other case
-            it just returns the current value of the Scrobbler.
-            </summary>
-            <param name="action">toggle or action</param>
-            <returns>Scrobbler state</returns>
-        </member>
-        <member name="M:MusicBeePlugin.Interfaces.IPlugin.TrackRating(System.String)">
-            <summary>
-            If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
-            the function will set the new rating as the current track's new track rating. In any other case it will
-            just return the rating for the current track.
-            </summary>
-            <param name="rating">New Track Rating</param>
-            <returns>Track Rating</returns>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackArtist">
-            <summary>
-            Returns the artist name for the track playing.
-            </summary>
-            <value> Track artist string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackAlbum">
-            <summary>
-            Returns the album for the track playing.
-            </summary>
-            <value> Track album string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackTitle">
-            <summary>
-            Returns the title for the track playing.
-            </summary>
-            <value> Track title string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackYear">
-            <summary>
-            Returns the Year for the track playing.
-            </summary>
-            <value> Track year string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackCover">
-            <summary>
-            It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
-            300x300 and returns the resized image in a Base64 encoded string.
-            </summary>
-            <value> </value>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.CurrentTrackLyrics">
-            <summary>
-            Retrieves the lyrics for the track playing.
-            </summary>
-            <returns>Lyrics String</returns>
-        </member>
-        <member name="P:MusicBeePlugin.Interfaces.IPlugin.PlayerPlayState">
-            <summary>
-            Returns the state of the player.
-            </summary>
-            <returns>possible values: undefined, loading, playing, paused, stopped</returns>
         </member>
         <member name="M:MusicBeePlugin.Plugin.Initialise(System.IntPtr)">
             <summary>
@@ -323,18 +223,36 @@
             </summary>
             <value> </value>
         </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackLyrics">
-            <summary>
-            Retrieves the lyrics for the track playing.
-            </summary>
-            <returns>Lyrics String</returns>
-        </member>
         <member name="P:MusicBeePlugin.Plugin.PlayerPlayState">
             <summary>
             Returns the state of the player.
             </summary>
             <exception cref="T:System.ArgumentOutOfRangeException"></exception>
             <returns>possible values: undefined, loading, playing, paused, stopped</returns>
+        </member>
+        <member name="T:MusicBeePlugin.Networking.SocketServer">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.Networking.SocketServer.#ctor">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.Networking.SocketServer.HandleReplyAvailable(System.Object,MusicBeePlugin.Events.MessageEventArgs)">
+            <summary>
+            
+            </summary>
+            <param name="sender"></param>
+            <param name="e"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Networking.SocketServer.HandleDisconnectClient(System.Object,MusicBeePlugin.Events.MessageEventArgs)">
+            <summary>
+            
+            </summary>
+            <param name="sender"></param>
+            <param name="e"></param>
         </member>
         <member name="M:MusicBeePlugin.Networking.SocketServer.Stop">
             <summary>
@@ -348,9 +266,19 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="P:MusicBeePlugin.Networking.SocketServer.Instance">
+        <member name="E:MusicBeePlugin.Networking.SocketServer.ClientConnected">
             <summary>
-            Gives access to the SocketServer single instance.
+            
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.Networking.SocketServer.ClientDisconnected">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Networking.SocketServer.IsRunning">
+            <summary>
+            
             </summary>
         </member>
         <member name="M:MusicBeePlugin.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
@@ -373,6 +301,47 @@
             Loads the settings.
             </summary>
             <remarks></remarks>
+        </member>
+        <member name="M:MusicBeePlugin.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="clientId"></param>
+            <returns></returns>
+        </member>
+        <member name="M:MusicBeePlugin.Utilities.Authenticator.Client(System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="T:MusicBeePlugin.Networking.SocketPacket">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.Networking.SocketPacket.#ctor(System.Net.Sockets.Socket,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="socket"></param>
+            <param name="clientNumber"></param>
+        </member>
+        <member name="P:MusicBeePlugin.Networking.SocketPacket.MCurrentSocket">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Networking.SocketPacket.MClientNumber">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Networking.SocketPacket.DataBuffer">
+            <summary>
+            
+            </summary>
         </member>
         <member name="T:MusicBeePlugin.Properties.Resources">
             <summary>
@@ -410,35 +379,30 @@
               Looks up a localized string similar to &quot;A valid port number is a number from 1 to 65535&quot;.
             </summary>
         </member>
-        <member name="T:MusicBeePlugin.Events.Args.DataEventArgs">
+        <member name="T:MusicBeePlugin.Events.DataEventArgs">
             <summary>
             
             </summary>
         </member>
-        <member name="M:MusicBeePlugin.Events.Args.DataEventArgs.#ctor(MusicBeePlugin.Events.Args.DataType,System.String)">
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.DataType,System.String)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="value"></param>
         </member>
-        <member name="M:MusicBeePlugin.Events.Args.DataEventArgs.#ctor(MusicBeePlugin.Events.Args.DataType)">
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.DataType)">
             <summary>
             
             </summary>
             <param name="type"></param>
         </member>
-        <member name="P:MusicBeePlugin.Events.Args.DataEventArgs.Type">
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.Type">
             <summary>
             
             </summary>
         </member>
-        <member name="P:MusicBeePlugin.Events.Args.DataEventArgs.Value">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="T:MusicBeePlugin.Events.Args.DataType">
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.Value">
             <summary>
             
             </summary>

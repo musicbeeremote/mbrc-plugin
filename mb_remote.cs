@@ -7,8 +7,6 @@ using System.Timers;
 using MusicBeePlugin.Controller;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
-using MusicBeePlugin.Interfaces;
-using MusicBeePlugin.Networking;
 using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin
@@ -16,7 +14,7 @@ namespace MusicBeePlugin
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
-    public partial class Plugin:IPlugin
+    public partial class Plugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
@@ -26,6 +24,13 @@ namespace MusicBeePlugin
         private bool _scrobble;
 
         public event EventHandler<DataEventArgs> PlayerStateChanged;
+        public event EventHandler<DataEventArgs> LyricsAvailable;
+
+        private void OnLyricsAvailable(DataEventArgs args)
+        {
+            EventHandler<DataEventArgs> handler = LyricsAvailable;
+            if (handler != null) handler(this, args);
+        }
 
         private void OnPlayerStateChanged(DataEventArgs e)
         {
@@ -66,11 +71,10 @@ namespace MusicBeePlugin
             _shuffle = _mbApiInterface.Player_GetShuffle();
 
             RemoteController.Instance.Initialize(this);
-            ProtocolHandler.Instance.Initialize(this);
+            RemoteController.Instance.StartSocket();
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
-            CommunicationController.Instance.StartSocket();
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
@@ -118,7 +122,7 @@ namespace MusicBeePlugin
         public void Close(PluginCloseReason reason)
         {
             /** When the plugin closes for whatever reason the SocketServer must stop **/
-          CommunicationController.Instance.StopSocket();
+          RemoteController.Instance.StopSocket();
         }
 
         /// <summary>
@@ -208,15 +212,6 @@ namespace MusicBeePlugin
         public string CurrentTrackCover
         {
             get { return _mbApiInterface.NowPlaying_GetArtwork();}
-        }
-
-        /// <summary>
-        /// Retrieves the lyrics for the track playing.
-        /// </summary>
-        /// <returns>Lyrics String</returns>
-        public string CurrentTrackLyrics
-        {
-            get { return _mbApiInterface.NowPlaying_GetLyrics(); }
         }
 
         /// <summary>
@@ -420,6 +415,18 @@ namespace MusicBeePlugin
                 _mbApiInterface.Library_CommitTagsToFile(_mbApiInterface.NowPlaying_GetFileUrl());
             }
             return _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating);
+        }
+
+        public void RequestCurrentTrackLyrics()
+        {
+            if(_mbApiInterface.NowPlaying_GetLyrics()!=null)
+            {
+                OnLyricsAvailable(new DataEventArgs(DataType.Lyrics, _mbApiInterface.NowPlaying_GetLyrics()));
+            }
+            else
+            {
+                //TODO: on new mbapiinterface check for downloaded etc.
+            }
         }
     }
 }

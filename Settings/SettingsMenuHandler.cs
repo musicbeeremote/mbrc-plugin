@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using MusicBeePlugin.Controller;
 using MusicBeePlugin.Networking;
 
 namespace MusicBeePlugin.Settings
@@ -216,8 +217,8 @@ namespace MusicBeePlugin.Settings
 
         private void HandleRestartButtonClick(object sender, EventArgs e)
         {
-            SocketServer.Instance.Stop();
-            SocketServer.Instance.Start();
+            RemoteController.Instance.StopSocket();
+            RemoteController.Instance.StartSocket();
         }
 
         private void HandleListeningPortTextKeyPressed(object sender, KeyPressEventArgs e)
