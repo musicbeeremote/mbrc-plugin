@@ -74,10 +74,12 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Controller\CommunicationController.cs" />
-    <Compile Include="Controller\PlayerStateController.cs" />
+    <Compile Include="Controller\RemoteController.cs" />
+    <Compile Include="Entities\TrackInfo.cs" />
+    <Compile Include="Events\ClientRequestArgs.cs" />
     <Compile Include="Events\DataEventArgs.cs" />
     <Compile Include="Events\DataType.cs" />
+    <Compile Include="Events\RequestType.cs" />
     <Compile Include="Networking\Constants.cs" />
     <Compile Include="Error\ErrorHandler.cs" />
     <Compile Include="Events\MessageEventArgs.cs" />
@@ -98,6 +100,7 @@
     <Compile Include="Settings\SettingsMenuHandler.cs" />
     <Compile Include="Settings\UserSettings.cs" />
     <Compile Include="Networking\SocketServer.cs" />
+    <Compile Include="Utilities\Authenticator.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

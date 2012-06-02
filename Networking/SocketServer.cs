@@ -7,6 +7,7 @@ using System.Diagnostics;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
 using MusicBeePlugin.Settings;
+using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin.Networking
 {
@@ -42,6 +43,14 @@ namespace MusicBeePlugin.Networking
             if (handler != null) handler(this, e);
         }
 
+        public event EventHandler<MessageEventArgs> DataAvailable;
+ 
+        private void OnDataAvailable(MessageEventArgs e)
+        {
+            EventHandler<MessageEventArgs> handler = DataAvailable;
+            if (handler != null) handler(this, e);
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -60,6 +69,11 @@ namespace MusicBeePlugin.Networking
             get { return _isRunning; }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         public void HandleReplyAvailable(object sender, MessageEventArgs e)
         {
             if (e.ClientId == -1)
@@ -72,6 +86,11 @@ namespace MusicBeePlugin.Networking
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         public void HandleDisconnectClient(object sender, MessageEventArgs e)
         {
             try
@@ -283,7 +302,8 @@ namespace MusicBeePlugin.Networking
 
                 if (String.IsNullOrEmpty(message))
                     return;
-                ProtocolHandler.Instance.ProcessIncomingMessage(message, socketData.MClientNumber);
+
+                OnDataAvailable(new MessageEventArgs(message, socketData.MClientNumber));
 
                 // Continue the waiting for data on the Socket.
                 WaitForData(socketData.MCurrentSocket, socketData.MClientNumber);
@@ -328,8 +348,7 @@ namespace MusicBeePlugin.Networking
                 for (int i = 0; i < _mWorkerSocketList.Count; i++)
                 {
                     Socket workerSocket = (Socket) _mWorkerSocketList[i];
-                    if (workerSocket != null && workerSocket.Connected &&
-                        ProtocolHandler.Instance.IsClientAuthenticated(i + 1))
+                    if (workerSocket != null && workerSocket.Connected && Authenticator.IsClientAuthenticated(i + 1))
                     {
                         workerSocket.Send(data);
                     }

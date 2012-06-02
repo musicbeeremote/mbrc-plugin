@@ -6,10 +6,6 @@ namespace MusicBeePlugin.Events
     public enum DataType
     {
         Track,
-        Artist,
-        Album,
-        Title,
-        Year,
         Cover,
         Lyrics,
         PlayState,

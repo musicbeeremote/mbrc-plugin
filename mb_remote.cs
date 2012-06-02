@@ -65,7 +65,7 @@ namespace MusicBeePlugin
             _repeat = _mbApiInterface.Player_GetRepeat();
             _shuffle = _mbApiInterface.Player_GetShuffle();
 
-            PlayerStateController.Instance.Initialize(this);
+            RemoteController.Instance.Initialize(this);
             ProtocolHandler.Instance.Initialize(this);
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());

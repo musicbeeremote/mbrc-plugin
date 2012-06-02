@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Security;
+using MusicBeePlugin.Entities;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
 
@@ -12,10 +13,7 @@ namespace MusicBeePlugin.Model
     {
         public event EventHandler<DataEventArgs> ModelStateEvent;
 
-        private string _artist;
-        private string _title;
-        private string _album;
-        private string _year;
+        private TrackInfo _track;
         private string _cover;
 
         private string _lyrics;
@@ -123,45 +121,16 @@ namespace MusicBeePlugin.Model
             }
         }
 
-        public string Artist
+        public TrackInfo Track
         {
-            get { return _artist; }
             set
             {
-                _artist = value;
-                OnModelStateChange(new DataEventArgs(DataType.Artist));
+                _track = value;
+                OnModelStateChange(new DataEventArgs(DataType.Track));
             }
+            get { return _track; }
         }
 
-        public string Title
-        {
-            get { return _title; }
-            set
-            {
-                _title = value;
-                OnModelStateChange(new DataEventArgs(DataType.Title));
-            }
-        }
-
-        public string Album
-        {
-            get { return _album; }
-            set
-            {
-                _album = value;
-                OnModelStateChange(new DataEventArgs(DataType.Album));
-            }
-        }
-
-        public string Year
-        {
-            get { return _year; }
-            set
-            {
-                _year = value;
-                OnModelStateChange(new DataEventArgs(DataType.Year));
-            }
-        }
 
         public string Cover
         {
