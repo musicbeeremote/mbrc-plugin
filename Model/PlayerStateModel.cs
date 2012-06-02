@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Security;
 using MusicBeePlugin.Error;
-using MusicBeePlugin.Events.Args;
+using MusicBeePlugin.Events;
 
 namespace MusicBeePlugin.Model
 {
@@ -95,14 +95,32 @@ namespace MusicBeePlugin.Model
             }
         }
 
-        public Plugin.PlayState PlayState
+        public void setPlayState(Plugin.PlayState state)
         {
-            set
+                _playState = state;
+                OnModelStateChange(new DataEventArgs(DataType.PlayState));   
+        }
+
+        public string PlayState
+        {
+            get
             {
-                _playState = value;
-                OnModelStateChange(new DataEventArgs(DataType.PlayState));
+                switch (_playState)
+                {
+                    case Plugin.PlayState.Undefined:
+                        return "undefined";
+                    case Plugin.PlayState.Loading:
+                        return "loading";
+                    case Plugin.PlayState.Playing:
+                        return "playing";
+                    case Plugin.PlayState.Paused:
+                        return "paused";
+                    case Plugin.PlayState.Stopped:
+                        return "stopped";
+                    default:
+                        return "undefined";
+                }
             }
-            get { return _playState; }
         }
 
         public string Artist

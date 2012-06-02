@@ -79,7 +79,7 @@ namespace MusicBeePlugin.Interfaces
         /// Returns the state of the player.
         /// </summary>
         /// <returns>possible values: undefined, loading, playing, paused, stopped</returns>
-        string PlayerPlayState();
+        Plugin.PlayState PlayerPlayState { get; }
 
         /// <summary>
         /// If the action equals toggle then it changes the shuffle state, in any other case

@@ -1,4 +1,4 @@
-namespace MusicBeePlugin.Events.Args
+namespace MusicBeePlugin.Events
 {
     /// <summary>
     /// 

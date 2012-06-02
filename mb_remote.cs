@@ -4,9 +4,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
+using MusicBeePlugin.Controller;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
-using MusicBeePlugin.Events.Args;
 using MusicBeePlugin.Interfaces;
 using MusicBeePlugin.Networking;
 using MusicBeePlugin.Settings;
@@ -24,7 +24,14 @@ namespace MusicBeePlugin
         private bool _shuffle;
         private RepeatMode _repeat;
         private bool _scrobble;
-        
+
+        public event EventHandler<DataEventArgs> PlayerStateChanged;
+
+        private void OnPlayerStateChanged(DataEventArgs e)
+        {
+            EventHandler<DataEventArgs> handler = PlayerStateChanged;
+            if (handler != null) handler(this, e);
+        }
 
         /// <summary>
         /// This function initialized the Plugin.
@@ -58,11 +65,12 @@ namespace MusicBeePlugin
             _repeat = _mbApiInterface.Player_GetRepeat();
             _shuffle = _mbApiInterface.Player_GetShuffle();
 
+            PlayerStateController.Instance.Initialize(this);
             ProtocolHandler.Instance.Initialize(this);
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
-            SocketServer.Instance.Start();
+            CommunicationController.Instance.StartSocket();
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
@@ -74,17 +82,17 @@ namespace MusicBeePlugin
         {
             if (_mbApiInterface.Player_GetShuffle() != _shuffle)
             {
-                StatusMessenger.Instance.OnShuffleStateChanged(null);
+                OnPlayerStateChanged(new DataEventArgs(DataType.ShuffleState));
                 _shuffle = _mbApiInterface.Player_GetShuffle();
             }
             if (_mbApiInterface.Player_GetScrobbleEnabled() != _scrobble)
             {
-                StatusMessenger.Instance.OnScrobbleStateChanged(null);
+                OnPlayerStateChanged(new DataEventArgs(DataType.ScrobblerState));
                 _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
             }
             if (_mbApiInterface.Player_GetRepeat() != _repeat)
             {
-                StatusMessenger.Instance.OnRepeatStateChanged(null);
+                OnPlayerStateChanged(new DataEventArgs(DataType.RepeatMode));
                 _repeat = _mbApiInterface.Player_GetRepeat();
             }
         }
@@ -98,14 +106,8 @@ namespace MusicBeePlugin
         {
             SettingsMenuHandler handler = new SettingsMenuHandler();
 
-            int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
-                                                                         ElementState.ElementStateDefault,
-                                                                         ElementComponent.
-                                                                             ComponentBackground);
-            int foreground = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl,
-                                                                          ElementState.ElementStateDefault,
-                                                                          ElementComponent.
-                                                                              ComponentForeground);
+            int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentBackground);
+            int foreground = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentForeground);
             return handler.ConfigureSettingsPanel(panelHandle, background, foreground);
         }
 
@@ -116,7 +118,7 @@ namespace MusicBeePlugin
         public void Close(PluginCloseReason reason)
         {
             /** When the plugin closes for whatever reason the SocketServer must stop **/
-            SocketServer.Instance.Stop();
+          CommunicationController.Instance.StopSocket();
         }
 
         /// <summary>
@@ -148,16 +150,16 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.TrackChanged:
-                    StatusMessenger.Instance.OnTrackChanged(null);
+                    OnPlayerStateChanged(new DataEventArgs(DataType.Track));
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    StatusMessenger.Instance.OnVolumeLevelChanged(null);
+                    OnPlayerStateChanged(new DataEventArgs(DataType.Volume));
                     break;
                 case NotificationType.VolumeMuteChanged:
-                    StatusMessenger.Instance.OnVolumeMuteChanged(null);
+                    OnPlayerStateChanged(new DataEventArgs(DataType.MuteState));
                     break;
                 case NotificationType.PlayStateChanged:
-                    StatusMessenger.Instance.OnPlayStateChanged(null);
+                    OnPlayerStateChanged(new DataEventArgs(DataType.PlayState));
                     break;
             }
         }
@@ -278,23 +280,9 @@ namespace MusicBeePlugin
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
         /// <returns>possible values: undefined, loading, playing, paused, stopped</returns>
-        public string PlayerPlayState()
+        public PlayState PlayerPlayState
         {
-            switch (_mbApiInterface.Player_GetPlayState())
-            {
-                case PlayState.Undefined:
-                    return "undefined";
-                case PlayState.Loading:
-                    return "loading";
-                case PlayState.Playing:
-                    return "playing";
-                case PlayState.Paused:
-                    return "paused";
-                case PlayState.Stopped:
-                    return "stopped";
-                default:
-                    throw new ArgumentOutOfRangeException("Undefined Playstate");
-            }
+            get { return _mbApiInterface.Player_GetPlayState(); }
         }
 
         /// <summary>

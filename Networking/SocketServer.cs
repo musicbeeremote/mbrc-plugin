@@ -10,24 +10,57 @@ using MusicBeePlugin.Settings;
 
 namespace MusicBeePlugin.Networking
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public sealed class SocketServer : IDisposable
     {
+        private bool _isRunning;
         private Socket _mMainSocket;
         private readonly ArrayList _mWorkerSocketList;
         private int _mClientCount;
         private AsyncCallback _pfnWorkerCallback;
 
-        private static readonly SocketServer ServerInstance = new SocketServer();
-
-        private SocketServer()
+        /// <summary>
+        /// 
+        /// </summary>
+        public event EventHandler<MessageEventArgs> ClientConnected;
+        /// <summary>
+        /// 
+        /// </summary>
+        public event EventHandler<MessageEventArgs> ClientDisconnected;
+ 
+        private void OnClientConnected(MessageEventArgs e)
         {
-            _mClientCount = 0;
-            _mWorkerSocketList = ArrayList.Synchronized(new ArrayList());
-            StatusMessenger.Instance.DisconnectClient += HandleDisconnectClient;
-            ServerMessenger.Instance.ReplyAvailable += HandleReplyAvailable;
+            EventHandler<MessageEventArgs> handler = ClientConnected;
+            if (handler != null) handler(this, e);
         }
 
-        private void HandleReplyAvailable(object sender, MessageEventArgs e)
+        private void OnClientDisconnected(MessageEventArgs e)
+        {
+            EventHandler<MessageEventArgs> handler = ClientDisconnected;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public SocketServer()
+        {
+            _isRunning = false;
+            _mClientCount = 0;
+            _mWorkerSocketList = ArrayList.Synchronized(new ArrayList());
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public bool IsRunning
+        {
+            get { return _isRunning; }
+        }
+
+        public void HandleReplyAvailable(object sender, MessageEventArgs e)
         {
             if (e.ClientId == -1)
             {
@@ -39,7 +72,7 @@ namespace MusicBeePlugin.Networking
             }
         }
 
-        private void HandleDisconnectClient(object sender, MessageEventArgs e)
+        public void HandleDisconnectClient(object sender, MessageEventArgs e)
         {
             try
             {
@@ -51,14 +84,6 @@ namespace MusicBeePlugin.Networking
             {
                 ErrorHandler.LogError(ex);
             }
-        }
-
-        /// <summary>
-        /// Gives access to the SocketServer single instance.
-        /// </summary>
-        public static SocketServer Instance
-        {
-            get { return ServerInstance; }
         }
 
         /// <summary>
@@ -87,6 +112,10 @@ namespace MusicBeePlugin.Networking
             {
                 ErrorHandler.LogError(ex);
             }
+            finally
+            {
+                _isRunning = false;
+            }
         }
 
         /// <summary>
@@ -106,6 +135,7 @@ namespace MusicBeePlugin.Networking
                 _mMainSocket.Listen(4);
                 // Create the call back for any client connections.
                 _mMainSocket.BeginAccept(OnClientConnect, null);
+                _isRunning = true;
             }
             catch (SocketException se)
             {
@@ -177,7 +207,7 @@ namespace MusicBeePlugin.Networking
                 _mWorkerSocketList.Add(workerSocket);
 
                 // Inform the the Protocol Handler that a new Client has been connected, prepare for handshake.
-                StatusMessenger.Instance.OnClientConnected(new MessageEventArgs(_mClientCount));
+                OnClientConnected(new MessageEventArgs(_mClientCount));
 
                 //Send msg to client
 
@@ -267,7 +297,7 @@ namespace MusicBeePlugin.Networking
                 if (se.ErrorCode == 10054) // Error code for Connection reset by peer
                 {
                     _mWorkerSocketList[clientNumber - 1] = null;
-                    StatusMessenger.Instance.OnClientDisconnected(new MessageEventArgs(clientNumber));
+                    OnClientDisconnected(new MessageEventArgs(clientNumber));
                 }
                 else
                 {

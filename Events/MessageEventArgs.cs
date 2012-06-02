@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.Events
 {
-    class MessageEventArgs:EventArgs
+    public class MessageEventArgs:EventArgs
     {
         public MessageEventArgs(int clientId)
         {
