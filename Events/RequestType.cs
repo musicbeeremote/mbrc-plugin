@@ -10,6 +10,14 @@ namespace MusicBeePlugin.Events
         PlayerStatus,
         PlayState,
         SongInformation,
-        SongCover
+        SongCover,
+        Playlist,
+        Lyrics,
+        ScrobblerState,
+        ShuffleState,
+        RepeatState,
+        MuteState,
+        PlayNow,
+        Rating
     }
 }
