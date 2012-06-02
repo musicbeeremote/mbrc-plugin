@@ -3,11 +3,11 @@ using System.Runtime.InteropServices;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin : IPlugin
+    public partial class Plugin
     {
         public const short PluginInfoVersion = 1;
-        public const short MinInterfaceVersion = 5;
-        public const short MinApiRevision = 8;
+        public const short MinInterfaceVersion = 6;
+        public const short MinApiRevision = 10;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MusicBeeApiInterface
@@ -80,6 +80,13 @@ namespace MusicBeePlugin
             public Library_QueryGetAllFilesDelegate Playlist_QueryGetAllFiles;
             public MB_CreateBackgroundTaskDelegate MB_CreateBackgroundTask;
             public MB_SetBackgroundTaskMessageDelegate MB_SetBackgroundTaskMessage;
+            public MB_RegisterCommandDelegate MB_RegisterCommand;
+            public Setting_GetDefaultFontDelegate Setting_GetDefaultFont;
+            public Player_GetShowTimeRemainingDelegate Player_GetShowTimeRemaining;
+            public NowPlayingList_GetCurrentIndexDelegate NowPlayingList_GetCurrentIndex;
+            public NowPlayingList_GetFileUrlDelegate NowPlayingList_GetListFileUrl;
+            public NowPlayingList_GetFilePropertyDelegate NowPlayingList_GetFileProperty;
+            public NowPlayingList_GetFileTagDelegate NowPlayingList_GetFileTag;
         }
 
         public enum PluginType
@@ -123,7 +130,7 @@ namespace MusicBeePlugin
 
         public enum NotificationType
         {
-            PluginStartup = 0, // notification sent after successful initialisation for an enabled plugin
+            PluginStartup = 0,          // notification sent after successful initialisation for an enabled plugin
             TrackChanged = 1,
             PlayStateChanged = 2,
             AutoDjStarted = 3,
@@ -136,7 +143,7 @@ namespace MusicBeePlugin
             TagsChanging = 10,
             TagsChanged = 11,
             RatingChanged = 12,
-            PlayCountersChanged = 13
+            PlayCountersChanged = 13,
         }
 
         public enum PluginCloseReason
@@ -170,6 +177,7 @@ namespace MusicBeePlugin
             PlayCount = 14,
             SkipCount = 15,
             Duration = 16,
+            NowPlayingListIndex = 78,  // only has meaning when called from NowPlayingList_* commands
             ReplayGainTrack = 94,
             ReplayGainAlbum = 95
         }
@@ -178,14 +186,14 @@ namespace MusicBeePlugin
         {
             TrackTitle = 65,
             Album = 30,
-            AlbumArtist = 31, // displayed album artist
-            AlbumArtistRaw = 34, // stored album artist
-            Artist = 32, // displayed artist
-            MultiArtist = 33, // individual artists, separated by a null char
+            AlbumArtist = 31,        // displayed album artist
+            AlbumArtistRaw = 34,     // stored album artist
+            Artist = 32,             // displayed artist
+            MultiArtist = 33,        // individual artists, separated by a null char
             Artwork = 40,
             BeatsPerMin = 41,
-            Composer = 43, // displayed composer
-            MultiComposer = 89, // individual composers, separated by a null char
+            Composer = 43,           // displayed composer
+            MultiComposer = 89,      // individual composers, separated by a null char
             Comment = 44,
             Conductor = 45,
             Custom1 = 46,
@@ -220,6 +228,12 @@ namespace MusicBeePlugin
             Virtual1 = 109,
             Virtual2 = 110,
             Virtual3 = 111,
+            Virtual4 = 112,
+            Virtual5 = 113,
+            Virtual6 = 122,
+            Virtual7 = 123,
+            Virtual8 = 124,
+            Virtual9 = 125,
             Year = 88
         }
 
@@ -279,107 +293,62 @@ namespace MusicBeePlugin
         }
 
         public delegate void MB_ReleaseStringDelegate(string p1);
-
         public delegate void MB_TraceDelegate(string p1);
-
         public delegate IntPtr MB_WindowHandleDelegate();
-
         public delegate void MB_RefreshPanelsDelegate();
-
         public delegate void MB_SendNotificationDelegate(CallbackType type);
-
-        public delegate void MB_AddMenuItemDelegate(string menuPath, string hotkeyDescription, EventHandler handler);
-
-        public delegate void MB_CreateBackgroundTaskDelegate(
-            System.Threading.ThreadStart taskCallback, System.Windows.Forms.Form owner);
-
+        public delegate System.Windows.Forms.ToolStripItem MB_AddMenuItemDelegate(string menuPath, string hotkeyDescription, EventHandler handler);
+        public delegate void MB_RegisterCommandDelegate(string command, EventHandler handler);
+        public delegate void MB_CreateBackgroundTaskDelegate(System.Threading.ThreadStart taskCallback, System.Windows.Forms.Form owner);
         public delegate void MB_SetBackgroundTaskMessageDelegate(string message);
-
         public delegate string Setting_GetFieldNameDelegate(MetaDataType type);
-
         public delegate string Setting_GetPersistentStoragePathDelegate();
-
         public delegate string Setting_GetSkinDelegate();
-
-        public delegate int Setting_GetSkinElementColourDelegate(
-            SkinElement element, ElementState state, ElementComponent component);
-
+        public delegate int Setting_GetSkinElementColourDelegate(SkinElement element, ElementState state, ElementComponent component);
         public delegate bool Setting_IsWindowBordersSkinnedDelegate();
-
+        public delegate System.Drawing.Font Setting_GetDefaultFontDelegate();
         public delegate string Library_GetFilePropertyDelegate(string sourceFileUrl, FilePropertyType type);
-
         public delegate string Library_GetFileTagDelegate(string sourceFileUrl, MetaDataType type);
-
         public delegate bool Library_SetFileTagDelegate(string sourceFileUrl, MetaDataType type, string value);
-
         public delegate bool Library_CommitTagsToFileDelegate(string sourceFileUrl);
-
         public delegate string Library_GetLyricsDelegate(string sourceFileUrl, int type);
-
         public delegate string Library_GetArtworkDelegate(string sourceFileUrl, int index);
-
         public delegate bool Library_QueryFilesDelegate(string query);
-
         public delegate string Library_QueryGetNextFileDelegate();
-
         public delegate string Library_QueryGetAllFilesDelegate();
-
         public delegate int Player_GetPositionDelegate();
-
         public delegate bool Player_SetPositionDelegate(int position);
-
         public delegate PlayState Player_GetPlayStateDelegate();
-
         public delegate bool Player_ActionDelegate();
-
         public delegate float Player_GetVolumeDelegate();
-
         public delegate bool Player_SetVolumeDelegate(float volume);
-
         public delegate bool Player_GetMuteDelegate();
-
         public delegate bool Player_SetMuteDelegate(bool mute);
-
         public delegate bool Player_GetShuffleDelegate();
-
         public delegate bool Player_SetShuffleDelegate(bool shuffle);
-
         public delegate RepeatMode Player_GetRepeatDelegate();
-
         public delegate bool Player_SetRepeatDelegate(RepeatMode repeat);
-
         public delegate bool Player_GetEqualiserEnabledDelegate();
-
         public delegate bool Player_SetEqualiserEnabledDelegate(bool shuffle);
-
         public delegate bool Player_GetDspEnabledDelegate();
-
         public delegate bool Player_SetDspEnabledDelegate(bool shuffle);
-
         public delegate bool Player_GetScrobbleEnabledDelegate();
-
         public delegate bool Player_SetScrobbleEnabledDelegate(bool shuffle);
-
+        public delegate bool Player_GetShowTimeRemainingDelegate();
         public delegate string NowPlaying_GetFileUrlDelegate();
-
         public delegate int NowPlaying_GetDurationDelegate();
-
         public delegate string NowPlaying_GetFilePropertyDelegate(FilePropertyType type);
-
         public delegate string NowPlaying_GetFileTagDelegate(MetaDataType type);
-
         public delegate string NowPlaying_GetLyricsDelegate();
-
         public delegate string NowPlaying_GetArtworkDelegate();
-
+        public delegate int NowPlayingList_GetCurrentIndexDelegate();
+        public delegate string NowPlayingList_GetFileUrlDelegate(int offset);
+        public delegate string NowPlayingList_GetFilePropertyDelegate(int offset, FilePropertyType type);
+        public delegate string NowPlayingList_GetFileTagDelegate(int offset, MetaDataType type);
         public delegate bool NowPlayingList_ActionDelegate();
-
         public delegate bool NowPlayingList_FileActionDelegate(string sourceFileUrl);
-
         public delegate bool Playlist_QueryPlaylistsDelegate();
-
         public delegate string Playlist_QueryGetNextPlaylistDelegate();
-
         public delegate PlaylistFormat Playlist_GetTypeDelegate(string playlistUrl);
     }
 }

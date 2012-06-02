@@ -7,6 +7,7 @@ using System.Threading;
 using System.Xml;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
+using MusicBeePlugin.Interfaces;
 
 namespace MusicBeePlugin.Networking
 {
@@ -348,6 +349,7 @@ namespace MusicBeePlugin.Networking
 
         private void HandleLyricsReceived(int cliendId)
         {
+            Debug.WriteLine(_plugin.RetrieveCurrentTrackLyrics());
             if (cliendId == -1)
             {
                 new Thread(

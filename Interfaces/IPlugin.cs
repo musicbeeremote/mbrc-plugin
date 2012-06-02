@@ -1,9 +1,10 @@
-namespace MusicBeePlugin
+namespace MusicBeePlugin.Interfaces
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public interface IPlugin
     {
-        bool SongChanged { get; set; }
-
         /// <summary>
         /// Returns the artist name for the track playing.
         /// </summary>
@@ -39,7 +40,7 @@ namespace MusicBeePlugin
         /// Retrieves the lyrics for the track playing.
         /// </summary>
         /// <returns>Lyrics String</returns>
-        string RetrieveCurrentTrackLyrics();
+        string CurrentTrackLyrics { get; }
 
         /// <summary>
         /// When called plays the next track.

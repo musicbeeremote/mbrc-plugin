@@ -1,14 +1,13 @@
 ﻿using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
+using MusicBeePlugin.Events.Args;
+using MusicBeePlugin.Interfaces;
 using MusicBeePlugin.Networking;
 using MusicBeePlugin.Settings;
 
@@ -17,7 +16,7 @@ namespace MusicBeePlugin
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
-    public partial class Plugin
+    public partial class Plugin:IPlugin
     {
         private MusicBeeApiInterface _mbApiInterface;
         private readonly PluginInfo _about = new PluginInfo();
@@ -25,26 +24,7 @@ namespace MusicBeePlugin
         private bool _shuffle;
         private RepeatMode _repeat;
         private bool _scrobble;
-
-        private bool _songChanged;
-
-        /// <summary>
-        /// Returns true if the song changed recently. If the song changed indeed then the Property returns true and changes the internal value to false.
-        /// </summary>
-        public bool SongChanged
-        {
-            get
-            {
-                if (_songChanged)
-                {
-                    bool songCh = _songChanged;
-                    _songChanged = !_songChanged;
-                    return songCh;
-                }
-                return _songChanged;
-            }
-            set { _songChanged = value; }
-        }
+        
 
         /// <summary>
         /// This function initialized the Plugin.
@@ -168,7 +148,6 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.TrackChanged:
-                    SongChanged = true;
                     StatusMessenger.Instance.OnTrackChanged(null);
                     break;
                 case NotificationType.VolumeLevelChanged:
@@ -226,62 +205,16 @@ namespace MusicBeePlugin
         /// <value> </value>
         public string CurrentTrackCover
         {
-            get
-            {
-                try
-                {
-                    if (String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
-                        return "";
-                    using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(_mbApiInterface.NowPlaying_GetArtwork()))
-                        )
-                    using (Image albumCover = Image.FromStream(ms, true))
-                    {
-                        ms.Flush();
-                        int sourceWidth = albumCover.Width;
-                        int sourceHeight = albumCover.Height;
-
-                        float nPercentW = (300/(float) sourceWidth);
-                        float nPercentH = (300/(float) sourceHeight);
-
-                        var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                        int destWidth = (int) (sourceWidth*nPercent);
-                        int destHeight = (int) (sourceHeight*nPercent);
-                        using (var bmp = new Bitmap(destWidth, destHeight))
-                        using (MemoryStream ms2 = new MemoryStream())
-                        {
-                            Graphics graph = Graphics.FromImage(bmp);
-                            graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                            graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
-                            graph.Dispose();
-
-                            bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
-                            return Convert.ToBase64String(ms2.ToArray());
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ErrorHandler.LogError(ex);
-                    return String.Empty;
-                }
-            }
+            get { return _mbApiInterface.NowPlaying_GetArtwork();}
         }
 
         /// <summary>
         /// Retrieves the lyrics for the track playing.
         /// </summary>
         /// <returns>Lyrics String</returns>
-        public string RetrieveCurrentTrackLyrics()
+        public string CurrentTrackLyrics
         {
-            string lyricsString = _mbApiInterface.NowPlaying_GetLyrics().Trim();
-            if (lyricsString.Contains("\r\r\n\r\r\n"))
-            {
-                lyricsString = lyricsString.Replace("\r\r\n\r\r\n", " &lt;p&gt; ").Replace("\r\r\n", " &lt;br&gt; ");
-            }
-
-            return
-                SecurityElement.Escape(lyricsString.Replace("\0", " ").Replace("\r\n", "&lt;p&gt;").Replace("\n",
-                                                                                                            "&lt;br&gt;"));
+            get { return _mbApiInterface.NowPlaying_GetLyrics(); }
         }
 
         /// <summary>
@@ -495,8 +428,7 @@ namespace MusicBeePlugin
         {
             if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
             {
-                _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating,
-                                                   rating);
+                _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, rating);
                 _mbApiInterface.Library_CommitTagsToFile(_mbApiInterface.NowPlaying_GetFileUrl());
             }
             return _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating);
