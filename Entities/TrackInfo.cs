@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.Entities
 {
-    class TrackInfo
+    public class TrackInfo
     {
 
         public TrackInfo(string artist,string title, string album, string year)

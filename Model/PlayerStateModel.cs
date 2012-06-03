@@ -39,7 +39,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _trackRating = value;
-                OnModelStateChange(new DataEventArgs(DataType.TrackRating));
+                OnModelStateChange(new DataEventArgs(EventDataType.TrackRating));
             }
         }
 
@@ -49,7 +49,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _scrobblerState = value;
-                OnModelStateChange(new DataEventArgs(DataType.ScrobblerState));
+                OnModelStateChange(new DataEventArgs(EventDataType.ScrobblerState));
             }
         }
 
@@ -59,7 +59,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _muteState = value;
-                OnModelStateChange(new DataEventArgs(DataType.MuteState));
+                OnModelStateChange(new DataEventArgs(EventDataType.MuteState));
             }
         }
 
@@ -69,7 +69,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _repeatMode = value;
-                OnModelStateChange(new DataEventArgs(DataType.RepeatMode));
+                OnModelStateChange(new DataEventArgs(EventDataType.RepeatMode));
             }
         }
 
@@ -79,7 +79,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _shuffleState = value;
-                OnModelStateChange(new DataEventArgs(DataType.ShuffleState));
+                OnModelStateChange(new DataEventArgs(EventDataType.ShuffleState));
             }
         }
 
@@ -89,14 +89,14 @@ namespace MusicBeePlugin.Model
             set
             {
                 _volume = value;
-                OnModelStateChange(new DataEventArgs(DataType.Volume));
+                OnModelStateChange(new DataEventArgs(EventDataType.Volume));
             }
         }
 
         public void setPlayState(Plugin.PlayState state)
         {
                 _playState = state;
-                OnModelStateChange(new DataEventArgs(DataType.PlayState));   
+                OnModelStateChange(new DataEventArgs(EventDataType.PlayState));   
         }
 
         public string PlayState
@@ -126,7 +126,7 @@ namespace MusicBeePlugin.Model
             set
             {
                 _track = value;
-                OnModelStateChange(new DataEventArgs(DataType.Track));
+                OnModelStateChange(new DataEventArgs(EventDataType.Track));
             }
             get { return _track; }
         }
@@ -177,7 +177,7 @@ namespace MusicBeePlugin.Model
                 }
                 finally
                 {
-                    OnModelStateChange(new DataEventArgs(DataType.Cover));
+                    OnModelStateChange(new DataEventArgs(EventDataType.Cover));
                 }
             }
             get { return _cover; }
@@ -210,7 +210,7 @@ namespace MusicBeePlugin.Model
                 }
                 finally
                 {
-                    OnModelStateChange(new DataEventArgs(DataType.Lyrics));
+                    OnModelStateChange(new DataEventArgs(EventDataType.Lyrics));
                 }
             }
             get { return _lyrics; }

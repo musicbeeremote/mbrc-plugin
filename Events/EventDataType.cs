@@ -3,7 +3,7 @@ namespace MusicBeePlugin.Events
     /// <summary>
     /// 
     /// </summary>
-    public enum DataType
+    public enum EventDataType
     {
         Track,
         Cover,
@@ -14,6 +14,10 @@ namespace MusicBeePlugin.Events
         RepeatMode,
         MuteState,
         ScrobblerState,
-        TrackRating
+        TrackRating,
+        NextTrackRequest,
+        PreviousTrackRequest,
+        PlayPauseRequest,
+        StopRequest
     }
 }

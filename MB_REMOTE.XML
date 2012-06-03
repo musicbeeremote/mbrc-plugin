@@ -25,11 +25,6 @@
             <param name="path">Path to store the log file.</param>
             <returns></returns>
         </member>
-        <member name="T:MusicBeePlugin.Events.DataType">
-            <summary>
-            
-            </summary>
-        </member>
         <member name="T:MusicBeePlugin.Networking.SocketClient">
             <summary>
             
@@ -137,13 +132,19 @@
             <param name="vol">New volume String</param>
             <returns>Volume int [0,100]</returns>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerShuffleState(System.String)">
+        <member name="M:MusicBeePlugin.Plugin.RequestShuffleState(MusicBeePlugin.Utilities.StateAction)">
             <summary>
-            If the action equals toggle then it changes the shuffle state, in any other case
-            it just returns the current value of the shuffle.
+            Changes the player shuffle state. If the StateAction is Toggle then the current state is switched with it's opposite,
+            if it is State the current state is dispatched with an Event.
             </summary>
-            <param name="action">toggle or state</param>
-            <returns>Shuffle state: True or False</returns>
+            <param name="action"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Plugin.RequestMuteState(MusicBeePlugin.Utilities.StateAction)">
+            <summary>
+            Changes the player mute state. If the StateAction is Toggle then the current state is switched with it's opposite,
+            if it is State the current state is dispatched with an Event.
+            </summary>
+            <param name="action"></param>
         </member>
         <member name="M:MusicBeePlugin.Plugin.PlayerRepeatState(System.String)">
             <summary>
@@ -152,14 +153,6 @@
             </summary>
             <param name="action">toggle or state</param>
             <returns>Repeat state: None, All, One</returns>
-        </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerMuteState(System.String)">
-            <summary>
-            If the action is toggle then the function changes the repeat state, in any other case
-            it just returns the current value of the Mute.
-            </summary>
-            <param name="action">toggle or state</param>
-            <returns>Mute state: True or False</returns>
         </member>
         <member name="M:MusicBeePlugin.Plugin.PlaylistGetTracks(System.Double)">
             <summary>
@@ -192,6 +185,25 @@
             <param name="rating">New Track Rating</param>
             <returns>Track Rating</returns>
         </member>
+        <member name="M:MusicBeePlugin.Plugin.RequestNowPlayingTrackLyrics">
+            <summary>
+            Requests the Now Playing track lyrics. If the lyrics are available then they are dispatched along with
+            and event. If not, and the ApiRevision is equal or greater than r17 a request for the downloaded lyrics
+            is initiated. The lyrics are dispatched along with and event when ready.
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.Plugin.RequestNowPlayingTrackCover">
+            <summary>
+            Requests the Now Playing Track Cover. If the cover is available it is dispatched along with an event.
+            If not, and the ApiRevision is equal or greater than r17 a request for the downloaded artwork is
+            initiated. The cover is dispatched along with an event when ready.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.Plugin.PlayerStateChanged">
+            <summary>
+            Represents a change in the state of the player.
+            </summary>
+        </member>
         <member name="P:MusicBeePlugin.Plugin.CurrentTrackArtist">
             <summary>
             Returns the artist name for the track playing.
@@ -215,13 +227,6 @@
             Returns the Year for the track playing.
             </summary>
             <value> Track year string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackCover">
-            <summary>
-            It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
-            300x300 and returns the resized image in a Base64 encoded string.
-            </summary>
-            <value> </value>
         </member>
         <member name="P:MusicBeePlugin.Plugin.PlayerPlayState">
             <summary>
@@ -302,19 +307,38 @@
             </summary>
             <remarks></remarks>
         </member>
+        <member name="T:MusicBeePlugin.Utilities.Authenticator">
+            <summary>
+            Responsible for the client authentication. Keeps a list of the connected clients.
+            </summary>
+        </member>
         <member name="M:MusicBeePlugin.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
             <summary>
-            
+            Returns if a clients has passed the authentication stage and thus can receive data.
             </summary>
-            <param name="clientId"></param>
-            <returns></returns>
+            <param name="clientId">Represents the id of client</param>
+            <returns>true or false depending on the authentication state of the client</returns>
+        </member>
+        <member name="M:MusicBeePlugin.Utilities.Authenticator.RemoveClientOnDisconnect(MusicBeePlugin.Events.MessageEventArgs)">
+            <summary>
+             Removes a client from the Client List when the client disconnects from the server.
+            </summary>
+            <param name="e"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Utilities.Authenticator.AddClientOnConnect(MusicBeePlugin.Events.MessageEventArgs)">
+            <summary>
+            Adds a client to the Client List when the client connects to the server. In case a client
+            already exists with the specified id then the old client entry is removed before the adding
+            the new one.
+            </summary>
+            <param name="e"></param>
         </member>
         <member name="M:MusicBeePlugin.Utilities.Authenticator.Client(System.Int32)">
             <summary>
-            
+            Given a client id the function returns a SocketClient object.
             </summary>
-            <param name="id"></param>
-            <returns></returns>
+            <param name="id">The client id.</param>
+            <returns>A SocketClient object.</returns>
         </member>
         <member name="T:MusicBeePlugin.Networking.SocketPacket">
             <summary>
@@ -384,14 +408,35 @@
             
             </summary>
         </member>
-        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.DataType,System.String)">
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.String)">
             <summary>
             
             </summary>
             <param name="type"></param>
-            <param name="value"></param>
+            <param name="stringData"></param>
         </member>
-        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.DataType)">
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="intData"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.Single)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="floatData"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.Boolean)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="boolData"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType)">
             <summary>
             
             </summary>
@@ -402,9 +447,45 @@
             
             </summary>
         </member>
-        <member name="P:MusicBeePlugin.Events.DataEventArgs.Value">
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.StringData">
             <summary>
             
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.IntData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.FloatData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.BoolData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:MusicBeePlugin.Events.EventDataType">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:MusicBeePlugin.Utilities.StateAction">
+            <summary>
+            Represents a state action that has to do with the state of player functionality such as repeat,shuffle
+            scrobble, mute etc.
+            </summary>
+        </member>
+        <member name="F:MusicBeePlugin.Utilities.StateAction.Toggle">
+            <summary>
+            Represents the change to the opposite of the current state.
+            </summary>
+        </member>
+        <member name="F:MusicBeePlugin.Utilities.StateAction.State">
+            <summary>
+            Represent a request for the current state.
             </summary>
         </member>
     </members>

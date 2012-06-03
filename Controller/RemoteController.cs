@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using MusicBeePlugin.Entities;
 using MusicBeePlugin.Events;
 using MusicBeePlugin.Model;
@@ -8,35 +7,34 @@ using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin.Controller
 {
-    class RemoteController
+    internal class RemoteController
     {
-        private PlayerStateModel _playerStateModel;
+        private readonly PlayerStateModel _playerStateModel;
         private Plugin _plugin;
 
         private static readonly RemoteController ClassInstance = new RemoteController();
-        public static RemoteController Instance { get { return ClassInstance; } }
 
-        private SocketServer _server;
-        private ProtocolHandler _pHandler;
-
-        private void HandleDisconnectClient(object sender, MessageEventArgs e)
+        public static RemoteController Instance
         {
-           _server.HandleDisconnectClient(sender,e);
+            get { return ClassInstance; }
         }
 
-        private void HandleReplyAvailable(object sender, MessageEventArgs e)
-        {
-           _server.HandleReplyAvailable(sender,e);
-        }
+        private readonly SocketServer _server;
+        private readonly ProtocolHandler _pHandler;
 
-        private void HandleClientDisconnected(object sender, MessageEventArgs e)
+        private RemoteController()
         {
-           Authenticator.RemoveClientOnDisconnect(e);
-        }
+            _playerStateModel = new PlayerStateModel();
+            _server = new SocketServer();
+            _pHandler = new ProtocolHandler();
 
-        private void HandleClientConnected(object sender, MessageEventArgs e)
-        {
-           Authenticator.AddClientOnConnect(e);
+            _pHandler.ReplyAvailable += HandleReplyAvailable;
+            _pHandler.DisconnectClient += HandleDisconnectClient;
+            _pHandler.RequestAvailable += HandleRequestAvailable;
+            _server.ClientConnected += HandleClientConnected;
+            _server.ClientDisconnected += HandleClientDisconnected;
+            _server.DataAvailable += HandleServerDataAvailable;
+            _playerStateModel.ModelStateEvent += HandleModelStateChange;
         }
 
         public void StartSocket()
@@ -49,19 +47,24 @@ namespace MusicBeePlugin.Controller
             _server.Stop();
         }
 
-        private RemoteController()
+        private void HandleDisconnectClient(object sender, MessageEventArgs e)
         {
-           _playerStateModel = new PlayerStateModel();
-           _server = new SocketServer();
-           _pHandler = new ProtocolHandler();
+            _server.HandleDisconnectClient(sender, e);
+        }
 
-           _pHandler.ReplyAvailable += HandleReplyAvailable;
-           _pHandler.DisconnectClient += HandleDisconnectClient;
-            _pHandler.RequestAvailable += HandleRequestAvailable;
-           _server.ClientConnected += HandleClientConnected;
-           _server.ClientDisconnected += HandleClientDisconnected;
-            _server.DataAvailable += HandleServerDataAvailable;
-            _playerStateModel.ModelStateEvent += HandleModelStateChange;
+        private void HandleReplyAvailable(object sender, MessageEventArgs e)
+        {
+            _server.HandleReplyAvailable(sender, e);
+        }
+
+        private void HandleClientDisconnected(object sender, MessageEventArgs e)
+        {
+            Authenticator.RemoveClientOnDisconnect(e);
+        }
+
+        private void HandleClientConnected(object sender, MessageEventArgs e)
+        {
+            Authenticator.AddClientOnConnect(e);
         }
 
         private void HandleServerDataAvailable(object sender, MessageEventArgs e)
@@ -71,19 +74,19 @@ namespace MusicBeePlugin.Controller
 
         private void HandleRequestAvailable(object sender, ClientRequestArgs e)
         {
-            switch(e.Type)
+            switch (e.Type)
             {
                 case RequestType.PlayNext:
-                    _pHandler.NextTrackRequestHandled(_plugin.PlayerPlayNextTrack(), e.ClientId);
+                    _plugin.RequestNextTrack(e.ClientId);
                     break;
                 case RequestType.PlayPrevious:
-                    _pHandler.PreviousTrackRequestHandled(_plugin.PlayerPlayPreviousTrack(), e.ClientId);
+                    _plugin.RequestPreviousTrack(e.ClientId);
                     break;
                 case RequestType.PlayPause:
-                    _pHandler.PlayPauseRequestHandled(_plugin.PlayerPlayPauseTrack(), e.ClientId);
+                    _plugin.RequestPlayPauseTrack(e.ClientId);
                     break;
                 case RequestType.Stop:
-                    _pHandler.StopRequestHandled(_plugin.PlayerStopPlayback(),e.ClientId);
+                    _plugin.RequestStopPlayback(e.ClientId);
                     break;
                 case RequestType.Volume:
                     _plugin.PlayerVolume(e.RequestData);
@@ -105,13 +108,15 @@ namespace MusicBeePlugin.Controller
                     _pHandler.LyricsRequestHandled(_playerStateModel.Lyrics, e.ClientId);
                     break;
                 case RequestType.ScrobblerState:
-                    //_pHandler.ScrobbleStateChanged(_playerStateModel.ScrobblerState, e.ClientId);
+                    _plugin.RequestScrobblerState(e.RequestData.Contains("toggle") ? StateAction.Toggle : StateAction.State);
                     break;
                 case RequestType.ShuffleState:
+                    _plugin.RequestShuffleState(e.RequestData.Contains("toggle") ? StateAction.Toggle : StateAction.State);
                     break;
                 case RequestType.RepeatState:
                     break;
                 case RequestType.MuteState:
+                    _plugin.RequestMuteState(e.RequestData.Contains("toggle") ? StateAction.Toggle : StateAction.State);
                     break;
                 case RequestType.PlayNow:
                     break;
@@ -132,30 +137,50 @@ namespace MusicBeePlugin.Controller
         {
             switch (e.Type)
             {
-                case DataType.Track:
-                    TrackInfo track = new TrackInfo();
-                    track.Artist = _plugin.CurrentTrackArtist;
-                    track.Title = _plugin.CurrentTrackTitle;
-                    track.Album = _plugin.CurrentTrackAlbum;
-                    track.Year = _plugin.CurrentTrackYear;
-                    _playerStateModel.Track = track;
-                    _playerStateModel.Cover = _plugin.CurrentTrackCover;
+                case EventDataType.Track:
+                    _playerStateModel.Track = e.TrackData;
+                    _plugin.RequestNowPlayingTrackCover();
+                    _plugin.RequestNowPlayingTrackLyrics();
                     break;
-                case DataType.PlayState:
-                    _playerStateModel.setPlayState(_plugin.PlayerPlayState);
+                case EventDataType.PlayState:
+                    _playerStateModel.setPlayState(e.PlayState);
                     break;
-                case DataType.Volume:
+                case EventDataType.Volume:
                     break;
-                case DataType.ShuffleState:
+                case EventDataType.ShuffleState:
+                    _playerStateModel.ShuffleState = e.BoolData;
                     break;
-                case DataType.RepeatMode:
+                case EventDataType.RepeatMode:
+                    _playerStateModel.RepeatMode = e.RepeatMode;
                     break;
-                case DataType.MuteState:
+                case EventDataType.MuteState:
+                    _playerStateModel.MuteState = e.BoolData;
                     break;
-                case DataType.ScrobblerState:
+                case EventDataType.ScrobblerState:
+                    _playerStateModel.ScrobblerState = e.BoolData;
                     break;
-                case DataType.TrackRating:
+                case EventDataType.TrackRating:
                     break;
+                case EventDataType.Lyrics:
+                    _playerStateModel.Lyrics = e.StringData;
+                    break;
+                case EventDataType.Cover:
+                    _playerStateModel.Cover = e.StringData;
+                    break;
+                case EventDataType.NextTrackRequest:
+                    _pHandler.NextTrackRequestHandled(e.StringData, e.ClientId);
+                    break;
+                case EventDataType.StopRequest:
+                    _pHandler.StopRequestHandled(e.StringData, e.ClientId);
+                    break;
+                case EventDataType.PlayPauseRequest:
+                    _pHandler.PlayPauseRequestHandled(e.StringData, e.ClientId);
+                    break;
+                 case EventDataType.PreviousTrackRequest:
+                    _pHandler.PreviousTrackRequestHandled(e.StringData, e.ClientId);
+                 break;
+                    
+
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -163,28 +188,29 @@ namespace MusicBeePlugin.Controller
 
         private void HandleModelStateChange(object sender, DataEventArgs e)
         {
-            switch(e.Type)
+            switch (e.Type)
             {
-                case DataType.Track:
-                   _pHandler.TrackChanged(_playerStateModel.Track, _playerStateModel.Cover, -1);
+                case EventDataType.Track:
+                    _pHandler.TrackChanged(_playerStateModel.Track, _playerStateModel.Cover, -1);
                     break;
-                case DataType.Cover:
+                case EventDataType.Cover:
+                    _pHandler.SongCoverRequestHandled(_playerStateModel.Cover, -1);
                     break;
-                case DataType.Lyrics:
+                case EventDataType.Lyrics:
                     break;
-                case DataType.PlayState:
+                case EventDataType.PlayState:
                     break;
-                case DataType.Volume:
+                case EventDataType.Volume:
                     break;
-                case DataType.ShuffleState:
+                case EventDataType.ShuffleState:
                     break;
-                case DataType.RepeatMode:
+                case EventDataType.RepeatMode:
                     break;
-                case DataType.MuteState:
+                case EventDataType.MuteState:
                     break;
-                case DataType.ScrobblerState:
+                case EventDataType.ScrobblerState:
                     break;
-                case DataType.TrackRating:
+                case EventDataType.TrackRating:
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();

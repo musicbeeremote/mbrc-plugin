@@ -61,7 +61,8 @@
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyOriginatorKeyFile>MB_KEY.pfx</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -79,7 +80,7 @@
     <Compile Include="Entities\TrackInfo.cs" />
     <Compile Include="Events\ClientRequestArgs.cs" />
     <Compile Include="Events\DataEventArgs.cs" />
-    <Compile Include="Events\DataType.cs" />
+    <Compile Include="Events\EventDataType.cs" />
     <Compile Include="Events\RequestType.cs" />
     <Compile Include="Networking\Constants.cs" />
     <Compile Include="Error\ErrorHandler.cs" />
@@ -101,10 +102,10 @@
     <Compile Include="Settings\UserSettings.cs" />
     <Compile Include="Networking\SocketServer.cs" />
     <Compile Include="Utilities\Authenticator.cs" />
+    <Compile Include="Utilities\StateAction.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="MB_KEY.pfx" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

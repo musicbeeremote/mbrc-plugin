@@ -5,9 +5,11 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
 using MusicBeePlugin.Controller;
+using MusicBeePlugin.Entities;
 using MusicBeePlugin.Error;
 using MusicBeePlugin.Events;
 using MusicBeePlugin.Settings;
+using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin
 {
@@ -23,14 +25,10 @@ namespace MusicBeePlugin
         private RepeatMode _repeat;
         private bool _scrobble;
 
+        /// <summary>
+        /// Represents a change in the state of the player.
+        /// </summary>
         public event EventHandler<DataEventArgs> PlayerStateChanged;
-        public event EventHandler<DataEventArgs> LyricsAvailable;
-
-        private void OnLyricsAvailable(DataEventArgs args)
-        {
-            EventHandler<DataEventArgs> handler = LyricsAvailable;
-            if (handler != null) handler(this, args);
-        }
 
         private void OnPlayerStateChanged(DataEventArgs e)
         {
@@ -66,38 +64,42 @@ namespace MusicBeePlugin
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
             _about.ConfigurationPanelHeight = 50;
 
-            _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
-            _repeat = _mbApiInterface.Player_GetRepeat();
-            _shuffle = _mbApiInterface.Player_GetShuffle();
-
             RemoteController.Instance.Initialize(this);
             RemoteController.Instance.StartSocket();
 
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
+            StartPlayerStatusMonitoring();
+
+            return _about;
+        }
+
+        private void StartPlayerStatusMonitoring()
+        {
+            _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
+            _repeat = _mbApiInterface.Player_GetRepeat();
+            _shuffle = _mbApiInterface.Player_GetShuffle();
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
-
-            return _about;
         }
 
         private void HandleTimerElapsed(object sender, ElapsedEventArgs e)
         {
             if (_mbApiInterface.Player_GetShuffle() != _shuffle)
             {
-                OnPlayerStateChanged(new DataEventArgs(DataType.ShuffleState));
                 _shuffle = _mbApiInterface.Player_GetShuffle();
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.ShuffleState, _shuffle));
             }
             if (_mbApiInterface.Player_GetScrobbleEnabled() != _scrobble)
             {
-                OnPlayerStateChanged(new DataEventArgs(DataType.ScrobblerState));
                 _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.ScrobblerState, _scrobble));   
             }
             if (_mbApiInterface.Player_GetRepeat() != _repeat)
             {
-                OnPlayerStateChanged(new DataEventArgs(DataType.RepeatMode));
                 _repeat = _mbApiInterface.Player_GetRepeat();
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.RepeatMode, _repeat));
             }
         }
 
@@ -122,7 +124,7 @@ namespace MusicBeePlugin
         public void Close(PluginCloseReason reason)
         {
             /** When the plugin closes for whatever reason the SocketServer must stop **/
-          RemoteController.Instance.StopSocket();
+            RemoteController.Instance.StopSocket();
         }
 
         /// <summary>
@@ -154,100 +156,79 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.TrackChanged:
-                    OnPlayerStateChanged(new DataEventArgs(DataType.Track));
+
+                    TrackInfo track = new TrackInfo
+                                          {
+                                              Artist = SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist)),
+                                              Album = SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)),
+                                              Title = SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle)),
+                                              Year = SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year))
+                                          };
+
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Track,track));
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    OnPlayerStateChanged(new DataEventArgs(DataType.Volume));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Volume));
                     break;
                 case NotificationType.VolumeMuteChanged:
-                    OnPlayerStateChanged(new DataEventArgs(DataType.MuteState));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.MuteState));
                     break;
                 case NotificationType.PlayStateChanged:
-                    OnPlayerStateChanged(new DataEventArgs(DataType.PlayState));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.PlayState, _mbApiInterface.Player_GetPlayState()));
+                    break;
+                case NotificationType.NowPlayingLyricsReady:
+                    if (_mbApiInterface.ApiRevision >= 17)
+                    {
+                        OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, _mbApiInterface.NowPlaying_GetDownloadedLyrics()));
+                    }
+                    break;
+                case NotificationType.NowPlayingArtworkReady:
+                    if(_mbApiInterface.ApiRevision >=17)
+                    {
+                        OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, _mbApiInterface.NowPlaying_GetDownloadedArtwork()));
+                    }
                     break;
             }
-        }
-
-        /// <summary>
-        /// Returns the artist name for the track playing.
-        /// </summary>
-        /// <value> Track artist string </value>
-        public string CurrentTrackArtist
-        {
-            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist)); }
-        }
-
-        /// <summary>
-        /// Returns the album for the track playing.
-        /// </summary>
-        /// <value> Track album string </value>
-        public string CurrentTrackAlbum
-        {
-            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)); }
-        }
-
-        /// <summary>
-        /// Returns the title for the track playing.
-        /// </summary>
-        /// <value> Track title string </value>
-        public string CurrentTrackTitle
-        {
-            get { return SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle)); }
-        }
-
-        /// <summary>
-        /// Returns the Year for the track playing.
-        /// </summary>
-        /// <value> Track year string </value>
-        public string CurrentTrackYear
-        {
-            get { return _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year); }
-        }
-
-        /// <summary>
-        /// It retrieves the album cover as a Base64 encoded string for the track playing it resizes it to
-        /// 300x300 and returns the resized image in a Base64 encoded string.
-        /// </summary>
-        /// <value> </value>
-        public string CurrentTrackCover
-        {
-            get { return _mbApiInterface.NowPlaying_GetArtwork();}
         }
 
         /// <summary>
         /// When called plays the next track.
         /// </summary>
         /// <returns></returns>
-        public string PlayerPlayNextTrack()
+        public void RequestNextTrack(int clientId)
         {
-            return _mbApiInterface.Player_PlayNextTrack().ToString(CultureInfo.InvariantCulture);
+           string reply = _mbApiInterface.Player_PlayNextTrack().ToString(CultureInfo.InvariantCulture);
+           OnPlayerStateChanged(new DataEventArgs(EventDataType.NextTrackRequest, reply, clientId));
         }
 
         /// <summary>
         /// When called stops the playback.
         /// </summary>
         /// <returns></returns>
-        public string PlayerStopPlayback()
+        public void RequestStopPlayback(int clientId)
         {
-            return _mbApiInterface.Player_Stop().ToString(CultureInfo.InvariantCulture);
+            string reply = _mbApiInterface.Player_Stop().ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.StopRequest, reply, clientId));
         }
 
         /// <summary>
         /// When called changes the play/pause state or starts playing a track if the status is stopped.
         /// </summary>
         /// <returns></returns>
-        public string PlayerPlayPauseTrack()
+        public void RequestPlayPauseTrack(int clientId)
         {
-            return _mbApiInterface.Player_PlayPause().ToString(CultureInfo.InvariantCulture);
+            string reply = _mbApiInterface.Player_PlayPause().ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.PlayPauseRequest, reply, clientId));
         }
 
         /// <summary>
         /// When called plays the previous track.
         /// </summary>
         /// <returns></returns>
-        public string PlayerPlayPreviousTrack()
+        public void RequestPreviousTrack(int clientId)
         {
-            return _mbApiInterface.Player_PlayPreviousTrack().ToString(CultureInfo.InvariantCulture);
+            string reply = _mbApiInterface.Player_PlayPreviousTrack().ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.PreviousTrackRequest, reply, clientId));
         }
 
         /// <summary>
@@ -271,26 +252,47 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// Returns the state of the player.
+        /// Changes the player shuffle state. If the StateAction is Toggle then the current state is switched with it's opposite,
+        /// if it is State the current state is dispatched with an Event.
         /// </summary>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
-        /// <returns>possible values: undefined, loading, playing, paused, stopped</returns>
-        public PlayState PlayerPlayState
+        /// <param name="action"></param>
+        public void RequestShuffleState(StateAction action)
         {
-            get { return _mbApiInterface.Player_GetPlayState(); }
+            if(action==StateAction.Toggle)
+            {
+                _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
+            }
+            bool shuffleState = _mbApiInterface.Player_GetShuffle();
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.ShuffleState, shuffleState));
         }
 
         /// <summary>
-        /// If the action equals toggle then it changes the shuffle state, in any other case
-        /// it just returns the current value of the shuffle.
+        /// Changes the player mute state. If the StateAction is Toggle then the current state is switched with it's opposite,
+        /// if it is State the current state is dispatched with an Event.
         /// </summary>
-        /// <param name="action">toggle or state</param>
-        /// <returns>Shuffle state: True or False</returns>
-        public string PlayerShuffleState(string action)
+        /// <param name="action"></param>
+        public void RequestMuteState(StateAction action)
         {
-            if (action == "toggle")
-                _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
-            return _mbApiInterface.Player_GetShuffle().ToString(CultureInfo.InvariantCulture);
+            if(action==StateAction.Toggle)
+            {
+                    _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
+            }
+            bool muteState = _mbApiInterface.Player_GetMute();
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.MuteState, muteState));
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="action"></param>
+        public void RequestScrobblerState(StateAction action)
+        {
+            if (action == StateAction.Toggle)
+            {
+                _mbApiInterface.Player_SetScrobbleEnabled(!_mbApiInterface.Player_GetScrobbleEnabled());
+            }
+            bool scrobblerState = _mbApiInterface.Player_GetScrobbleEnabled();
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.ScrobblerState, scrobblerState));
         }
 
         /// <summary>
@@ -299,9 +301,9 @@ namespace MusicBeePlugin
         /// </summary>
         /// <param name="action">toggle or state</param>
         /// <returns>Repeat state: None, All, One</returns>
-        public string PlayerRepeatState(string action)
+        public void RequestRepeatState(StateAction action)
         {
-            if (action == "toggle")
+            if (action == StateAction.Toggle)
             {
                 switch (_mbApiInterface.Player_GetRepeat())
                 {
@@ -316,20 +318,7 @@ namespace MusicBeePlugin
                         break;
                 }
             }
-            return _mbApiInterface.Player_GetRepeat().ToString();
-        }
-
-        /// <summary>
-        /// If the action is toggle then the function changes the repeat state, in any other case
-        /// it just returns the current value of the Mute.
-        /// </summary>
-        /// <param name="action">toggle or state</param>
-        /// <returns>Mute state: True or False</returns>
-        public string PlayerMuteState(string action)
-        {
-            if (action == "toggle")
-                _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
-            return _mbApiInterface.Player_GetMute().ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.RepeatMode,_mbApiInterface.Player_GetRepeat()));
         }
 
         /// <summary>
@@ -339,7 +328,7 @@ namespace MusicBeePlugin
         /// <returns>XML formated string without root element</returns>
         public string PlaylistGetTracks(double clientProtocolVersion)
         {
-            if (clientProtocolVersion>=1)
+            if (clientProtocolVersion >= 1)
             {
                 _mbApiInterface.NowPlayingList_QueryFiles(null);
 
@@ -351,13 +340,15 @@ namespace MusicBeePlugin
                     if (String.IsNullOrEmpty(playListTrack))
                         break;
                     songlist += "<playlistItem><artist>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack,
+                                                                                          MetaDataType.Artist)) +
                                 "</artist><title>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
+                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack,
+                                                                                          MetaDataType.TrackTitle)) +
                                 "</title></playlistItem>";
                     count++;
                 }
-                return songlist; 
+                return songlist;
             }
             return string.Empty;
         }
@@ -388,19 +379,6 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// If the action is toggle then the function changes the scrobbler state, in any other case
-        /// it just returns the current value of the Scrobbler.
-        /// </summary>
-        /// <param name="action">toggle or action</param>
-        /// <returns>Scrobbler state</returns>
-        public string ScrobblerState(string action)
-        {
-            if (action == "toggle")
-                _mbApiInterface.Player_SetScrobbleEnabled(!_mbApiInterface.Player_GetScrobbleEnabled());
-            return _mbApiInterface.Player_GetScrobbleEnabled().ToString(CultureInfo.InvariantCulture);
-        }
-
-        /// <summary>
         /// If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
         /// the function will set the new rating as the current track's new track rating. In any other case it will
         /// just return the rating for the current track.
@@ -417,16 +395,47 @@ namespace MusicBeePlugin
             return _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating);
         }
 
-        public void RequestCurrentTrackLyrics()
+        /// <summary>
+        /// Requests the Now Playing track lyrics. If the lyrics are available then they are dispatched along with
+        /// and event. If not, and the ApiRevision is equal or greater than r17 a request for the downloaded lyrics
+        /// is initiated. The lyrics are dispatched along with and event when ready.
+        /// </summary>
+        public void RequestNowPlayingTrackLyrics()
         {
-            if(_mbApiInterface.NowPlaying_GetLyrics()!=null)
+            if (!String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetLyrics()))
             {
-                OnLyricsAvailable(new DataEventArgs(DataType.Lyrics, _mbApiInterface.NowPlaying_GetLyrics()));
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, _mbApiInterface.NowPlaying_GetLyrics()));
+            }
+            else if (_mbApiInterface.ApiRevision >= 17)
+            {
+                _mbApiInterface.NowPlaying_GetDownloadedLyrics();
             }
             else
             {
-                //TODO: on new mbapiinterface check for downloaded etc.
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, String.Empty));
             }
+        }
+
+        /// <summary>
+        /// Requests the Now Playing Track Cover. If the cover is available it is dispatched along with an event.
+        /// If not, and the ApiRevision is equal or greater than r17 a request for the downloaded artwork is
+        /// initiated. The cover is dispatched along with an event when ready.
+        /// </summary>
+        public void RequestNowPlayingTrackCover()
+        {
+            if(!String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
+            {
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, _mbApiInterface.NowPlaying_GetArtwork()));
+            }
+            else if (_mbApiInterface.ApiRevision >=17)
+            {
+                _mbApiInterface.NowPlaying_GetDownloadedArtwork();
+            }
+            else
+            {
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, String.Empty));
+            }
+
         }
     }
 }
