@@ -5,7 +5,6 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using MusicBeePlugin.Controller;
-using MusicBeePlugin.Networking;
 
 namespace MusicBeePlugin.Settings
 {

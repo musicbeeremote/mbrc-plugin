@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Threading;
 using System.Xml;
 using MusicBeePlugin.Entities;
 using MusicBeePlugin.Error;
@@ -70,15 +69,6 @@ namespace MusicBeePlugin.Networking
         {
             string packet = PrepareXml(Constants.Volume, volumeLevel, true, true);
             OnReplyAvailable(new MessageEventArgs(packet, clientId));
-        }
-
-        public void TrackChanged(TrackInfo track, string cover, int clientId)
-        {
-            string message = PrepareXml(Constants.SongInformation, GetSongInfo(track,_clientProtocolVersion), true, true);
-            OnReplyAvailable(new MessageEventArgs(message, clientId));
-            string message2 = (PrepareXml(Constants.SongCover, cover, true, true));
-            OnReplyAvailable(new MessageEventArgs(message2, clientId));
-
         }
 
         public void PlayStateChanged(string playstate, int clientId)

@@ -94,7 +94,7 @@ namespace MusicBeePlugin
             if (_mbApiInterface.Player_GetScrobbleEnabled() != _scrobble)
             {
                 _scrobble = _mbApiInterface.Player_GetScrobbleEnabled();
-                OnPlayerStateChanged(new DataEventArgs(EventDataType.ScrobblerState, _scrobble));   
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.ScrobblerState, _scrobble));
             }
             if (_mbApiInterface.Player_GetRepeat() != _repeat)
             {
@@ -165,13 +165,13 @@ namespace MusicBeePlugin
                                               Year = SecurityElement.Escape(_mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year))
                                           };
 
-                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Track,track));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Track, track));
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Volume));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Volume, _mbApiInterface.Player_GetVolume()));
                     break;
                 case NotificationType.VolumeMuteChanged:
-                    OnPlayerStateChanged(new DataEventArgs(EventDataType.MuteState));
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.MuteState, _mbApiInterface.Player_GetMute()));
                     break;
                 case NotificationType.PlayStateChanged:
                     OnPlayerStateChanged(new DataEventArgs(EventDataType.PlayState, _mbApiInterface.Player_GetPlayState()));
@@ -183,7 +183,7 @@ namespace MusicBeePlugin
                     }
                     break;
                 case NotificationType.NowPlayingArtworkReady:
-                    if(_mbApiInterface.ApiRevision >=17)
+                    if (_mbApiInterface.ApiRevision >= 17)
                     {
                         OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, _mbApiInterface.NowPlaying_GetDownloadedArtwork()));
                     }
@@ -197,8 +197,8 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public void RequestNextTrack(int clientId)
         {
-           string reply = _mbApiInterface.Player_PlayNextTrack().ToString(CultureInfo.InvariantCulture);
-           OnPlayerStateChanged(new DataEventArgs(EventDataType.NextTrackRequest, reply, clientId));
+            string reply = _mbApiInterface.Player_PlayNextTrack().ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.NextTrackRequest, reply, clientId));
         }
 
         /// <summary>
@@ -236,19 +236,14 @@ namespace MusicBeePlugin
         /// changes the volume to the specific value and returns the new value.
         /// In any other case it just returns the current value for the volume.
         /// </summary>
-        /// <param name="vol">New volume String</param>
-        /// <returns>Volume int [0,100]</returns>
-        public string PlayerVolume(string vol)
+        /// <param name="volume"> </param>
+        public void RequestVolumeChange(int volume)
         {
-            int iVolume;
-            if (int.TryParse(vol, out iVolume))
+            if(volume>=0)
             {
-                if (iVolume >= 0 && iVolume <= 100)
-                {
-                    _mbApiInterface.Player_SetVolume((float) iVolume/100);
-                }
+                _mbApiInterface.Player_SetVolume((float) volume/100);
             }
-            return ((int) Math.Round(_mbApiInterface.Player_GetVolume()*100, 1)).ToString(CultureInfo.InvariantCulture);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.Volume, _mbApiInterface.Player_GetVolume()));
         }
 
         /// <summary>
@@ -258,7 +253,7 @@ namespace MusicBeePlugin
         /// <param name="action"></param>
         public void RequestShuffleState(StateAction action)
         {
-            if(action==StateAction.Toggle)
+            if (action == StateAction.Toggle)
             {
                 _mbApiInterface.Player_SetShuffle(!_mbApiInterface.Player_GetShuffle());
             }
@@ -273,9 +268,9 @@ namespace MusicBeePlugin
         /// <param name="action"></param>
         public void RequestMuteState(StateAction action)
         {
-            if(action==StateAction.Toggle)
+            if (action == StateAction.Toggle)
             {
-                    _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
+                _mbApiInterface.Player_SetMute(!_mbApiInterface.Player_GetMute());
             }
             bool muteState = _mbApiInterface.Player_GetMute();
             OnPlayerStateChanged(new DataEventArgs(EventDataType.MuteState, muteState));
@@ -318,15 +313,16 @@ namespace MusicBeePlugin
                         break;
                 }
             }
-            OnPlayerStateChanged(new DataEventArgs(EventDataType.RepeatMode,_mbApiInterface.Player_GetRepeat()));
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.RepeatMode, _mbApiInterface.Player_GetRepeat()));
         }
 
         /// <summary>
         /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
         /// </summary>
         /// <param name="clientProtocolVersion"> </param>
+        /// <param name="clientId"> </param>
         /// <returns>XML formated string without root element</returns>
-        public string PlaylistGetTracks(double clientProtocolVersion)
+        public void RequestNowPlayingList(double clientProtocolVersion, int clientId)
         {
             if (clientProtocolVersion >= 1)
             {
@@ -339,18 +335,17 @@ namespace MusicBeePlugin
                     string playListTrack = _mbApiInterface.NowPlayingList_QueryGetNextFile();
                     if (String.IsNullOrEmpty(playListTrack))
                         break;
-                    songlist += "<playlistItem><artist>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack,
-                                                                                          MetaDataType.Artist)) +
-                                "</artist><title>" +
-                                SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack,
-                                                                                          MetaDataType.TrackTitle)) +
+                    songlist += "<playlistItem><artist>" + SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist)) +
+                                "</artist><title>" + SecurityElement.Escape(_mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle)) +
                                 "</title></playlistItem>";
                     count++;
                 }
-                return songlist;
+
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Playlist, songlist, clientId));
             }
-            return string.Empty;
+
+
+
         }
 
         /// <summary>
@@ -384,15 +379,16 @@ namespace MusicBeePlugin
         /// just return the rating for the current track.
         /// </summary>
         /// <param name="rating">New Track Rating</param>
+        /// <param name="clientId"> </param>
         /// <returns>Track Rating</returns>
-        public string TrackRating(string rating)
+        public void RequestTrackRating(string rating, int clientId)
         {
             if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
             {
                 _mbApiInterface.Library_SetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, rating);
                 _mbApiInterface.Library_CommitTagsToFile(_mbApiInterface.NowPlaying_GetFileUrl());
             }
-            return _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating);
+            OnPlayerStateChanged(new DataEventArgs(EventDataType.TrackRating, _mbApiInterface.Library_GetFileTag(_mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating), clientId));
         }
 
         /// <summary>
@@ -423,11 +419,11 @@ namespace MusicBeePlugin
         /// </summary>
         public void RequestNowPlayingTrackCover()
         {
-            if(!String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
+            if (!String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetArtwork()))
             {
                 OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, _mbApiInterface.NowPlaying_GetArtwork()));
             }
-            else if (_mbApiInterface.ApiRevision >=17)
+            else if (_mbApiInterface.ApiRevision >= 17)
             {
                 _mbApiInterface.NowPlaying_GetDownloadedArtwork();
             }
@@ -435,7 +431,6 @@ namespace MusicBeePlugin
             {
                 OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, String.Empty));
             }
-
         }
     }
 }

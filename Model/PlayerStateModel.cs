@@ -25,7 +25,7 @@ namespace MusicBeePlugin.Model
         private Plugin.RepeatMode _repeatMode;
         private bool _muteState;
         private bool _scrobblerState;
-        private int _trackRating;
+        private string _trackRating;
 
         private void OnModelStateChange(DataEventArgs args)
         {
@@ -33,7 +33,7 @@ namespace MusicBeePlugin.Model
             if (handler != null) handler(this, args);
         }
 
-        public int TrackRating
+        public string TrackRating
         {
             get { return _trackRating; }
             set
@@ -86,14 +86,15 @@ namespace MusicBeePlugin.Model
         public int Volume
         {
             get { return _volume; }
-            set
-            {
-                _volume = value;
-                OnModelStateChange(new DataEventArgs(EventDataType.Volume));
-            }
         }
 
-        public void setPlayState(Plugin.PlayState state)
+        public void SetVolume(float volume)
+        {
+            _volume = ((int) Math.Round(volume*100, 1));
+            OnModelStateChange(new DataEventArgs(EventDataType.Volume));
+        }
+
+        public void SetPlayState(Plugin.PlayState state)
         {
                 _playState = state;
                 OnModelStateChange(new DataEventArgs(EventDataType.PlayState));   

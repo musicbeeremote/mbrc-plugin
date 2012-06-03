@@ -18,6 +18,7 @@ namespace MusicBeePlugin.Events
         NextTrackRequest,
         PreviousTrackRequest,
         PlayPauseRequest,
-        StopRequest
+        StopRequest,
+        Playlist
     }
 }

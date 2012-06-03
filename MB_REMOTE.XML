@@ -99,38 +99,37 @@
             <param name="sourceFileUrl"></param>
             <param name="type"></param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerPlayNextTrack">
+        <member name="M:MusicBeePlugin.Plugin.RequestNextTrack(System.Int32)">
             <summary>
             When called plays the next track.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerStopPlayback">
+        <member name="M:MusicBeePlugin.Plugin.RequestStopPlayback(System.Int32)">
             <summary>
             When called stops the playback.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerPlayPauseTrack">
+        <member name="M:MusicBeePlugin.Plugin.RequestPlayPauseTrack(System.Int32)">
             <summary>
             When called changes the play/pause state or starts playing a track if the status is stopped.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerPlayPreviousTrack">
+        <member name="M:MusicBeePlugin.Plugin.RequestPreviousTrack(System.Int32)">
             <summary>
             When called plays the previous track.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerVolume(System.String)">
+        <member name="M:MusicBeePlugin.Plugin.RequestVolumeChange(System.Int32)">
             <summary>
             When called if the volume string is an integer in the range [0,100] it 
             changes the volume to the specific value and returns the new value.
             In any other case it just returns the current value for the volume.
             </summary>
-            <param name="vol">New volume String</param>
-            <returns>Volume int [0,100]</returns>
+            <param name="volume"> </param>
         </member>
         <member name="M:MusicBeePlugin.Plugin.RequestShuffleState(MusicBeePlugin.Utilities.StateAction)">
             <summary>
@@ -146,7 +145,13 @@
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.PlayerRepeatState(System.String)">
+        <member name="M:MusicBeePlugin.Plugin.RequestScrobblerState(MusicBeePlugin.Utilities.StateAction)">
+            <summary>
+            
+            </summary>
+            <param name="action"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Plugin.RequestRepeatState(MusicBeePlugin.Utilities.StateAction)">
             <summary>
             If the action equals toggle then it changes the repeat state, in any other case
             it just returns the current value of the repeat.
@@ -167,14 +172,6 @@
             </summary>
             <param name="trackInfo">The track to play</param>
             <returns></returns>
-        </member>
-        <member name="M:MusicBeePlugin.Plugin.ScrobblerState(System.String)">
-            <summary>
-            If the action is toggle then the function changes the scrobbler state, in any other case
-            it just returns the current value of the Scrobbler.
-            </summary>
-            <param name="action">toggle or action</param>
-            <returns>Scrobbler state</returns>
         </member>
         <member name="M:MusicBeePlugin.Plugin.TrackRating(System.String)">
             <summary>
@@ -203,37 +200,6 @@
             <summary>
             Represents a change in the state of the player.
             </summary>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackArtist">
-            <summary>
-            Returns the artist name for the track playing.
-            </summary>
-            <value> Track artist string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackAlbum">
-            <summary>
-            Returns the album for the track playing.
-            </summary>
-            <value> Track album string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackTitle">
-            <summary>
-            Returns the title for the track playing.
-            </summary>
-            <value> Track title string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.CurrentTrackYear">
-            <summary>
-            Returns the Year for the track playing.
-            </summary>
-            <value> Track year string </value>
-        </member>
-        <member name="P:MusicBeePlugin.Plugin.PlayerPlayState">
-            <summary>
-            Returns the state of the player.
-            </summary>
-            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
-            <returns>possible values: undefined, loading, playing, paused, stopped</returns>
         </member>
         <member name="T:MusicBeePlugin.Networking.SocketServer">
             <summary>
@@ -408,6 +374,35 @@
             
             </summary>
         </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.String,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="stringData"></param>
+            <param name="clientId"> </param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,MusicBeePlugin.Plugin.PlayState)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="playState"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,MusicBeePlugin.Plugin.RepeatMode)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="repeatMode"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,MusicBeePlugin.Entities.TrackInfo)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="track"></param>
+        </member>
         <member name="M:MusicBeePlugin.Events.DataEventArgs.#ctor(MusicBeePlugin.Events.EventDataType,System.String)">
             <summary>
             
@@ -463,6 +458,11 @@
             </summary>
         </member>
         <member name="P:MusicBeePlugin.Events.DataEventArgs.BoolData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:MusicBeePlugin.Events.DataEventArgs.TrackData">
             <summary>
             
             </summary>
