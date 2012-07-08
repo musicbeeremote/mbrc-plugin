@@ -75,34 +75,38 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Controller\RemoteController.cs" />
-    <Compile Include="Entities\PlayerStatus.cs" />
-    <Compile Include="Entities\TrackInfo.cs" />
-    <Compile Include="Events\ClientRequestArgs.cs" />
-    <Compile Include="Events\DataEventArgs.cs" />
-    <Compile Include="Events\EventDataType.cs" />
-    <Compile Include="Events\RequestType.cs" />
-    <Compile Include="Networking\Constants.cs" />
-    <Compile Include="Error\ErrorHandler.cs" />
-    <Compile Include="Events\MessageEventArgs.cs" />
+    <Compile Include="AndroidRemote\Controller\RemoteController.cs" />
+    <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />
+    <Compile Include="AndroidRemote\Entities\TrackInfo.cs" />
+    <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
+    <Compile Include="AndroidRemote\Enumerations\Repeat.cs" />
+    <Compile Include="AndroidRemote\Enumerations\RequestType.cs" />
+    <Compile Include="AndroidRemote\Events\ClientRequestArgs.cs" />
+    <Compile Include="AndroidRemote\Events\DataEventArgs.cs" />
+    <Compile Include="AndroidRemote\Enumerations\EventDataType.cs" />
+    <Compile Include="AndroidRemote\Interfaces\IPlugin.cs" />
+    <Compile Include="AndroidRemote\Networking\Constants.cs" />
+    <Compile Include="AndroidRemote\Error\ErrorHandler.cs" />
+    <Compile Include="AndroidRemote\Events\MessageEventArgs.cs" />
+    <Compile Include="Mapper.cs" />
     <Compile Include="MusicBeeInterface.cs" />
-    <Compile Include="mb_remote.cs" />
-    <Compile Include="Networking\SocketClient.cs" />
-    <Compile Include="Networking\SocketPacket.cs" />
-    <Compile Include="Model\PlayerStateModel.cs" />
+    <Compile Include="Plugin.cs" />
+    <Compile Include="AndroidRemote\Networking\SocketClient.cs" />
+    <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
+    <Compile Include="AndroidRemote\Model\PlayerStateModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Networking\ProtocolHandler.cs" />
+    <Compile Include="AndroidRemote\Networking\ProtocolHandler.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="Settings\ApplicationSettings.cs" />
-    <Compile Include="Settings\SettingsMenuHandler.cs" />
-    <Compile Include="Settings\UserSettings.cs" />
-    <Compile Include="Networking\SocketServer.cs" />
-    <Compile Include="Utilities\Authenticator.cs" />
-    <Compile Include="Utilities\StateAction.cs" />
+    <Compile Include="AndroidRemote\Settings\ApplicationSettings.cs" />
+    <Compile Include="SettingsMenuHandler.cs" />
+    <Compile Include="AndroidRemote\Settings\UserSettings.cs" />
+    <Compile Include="AndroidRemote\Networking\SocketServer.cs" />
+    <Compile Include="AndroidRemote\Utilities\Authenticator.cs" />
+    <Compile Include="AndroidRemote\Utilities\StateAction.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -140,6 +144,7 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

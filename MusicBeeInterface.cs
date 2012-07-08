@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin
+    public partial class Plugin : IPlugin
     {
         public const short PluginInfoVersion = 1;
         public const short MinInterfaceVersion = 14;
