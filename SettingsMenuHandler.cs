@@ -16,7 +16,7 @@ namespace MusicBeePlugin
         Specific
     }
 
-    internal class SettingsMenuHandler:IDisposable
+    internal class SettingsMenuHandler : IDisposable
     {
         private readonly TextBox _listeningPort;
         private readonly ToolTip _listeningPortToolTip;
@@ -56,7 +56,7 @@ namespace MusicBeePlugin
             // Settings Loaded
             _applicationSettings = UserSettings.Settings;
 
-            
+
             Label textBoxLabel = new Label
                                      {
                                          Text = "Listening port:",
@@ -76,9 +76,10 @@ namespace MusicBeePlugin
             _restartButton.Click += HandleRestartButtonClick;
 
             _filterSelectionComboBox = new ComboBox {DropDownStyle = ComboBoxStyle.DropDownList};
-            _filterSelectionComboBox.Bounds = new Rectangle(0, _listeningPort.Bottom + 5, 120, _filterSelectionComboBox.Height);
-            _filterSelectionComboBox.Items.AddRange(new object[] {"All","Range", "Specific"});
-         
+            _filterSelectionComboBox.Bounds = new Rectangle(0, _listeningPort.Bottom + 5, 120,
+                                                            _filterSelectionComboBox.Height);
+            _filterSelectionComboBox.Items.AddRange(new object[] {"All", "Range", "Specific"});
+
             _filterSelectionComboBox.SelectedValueChanged += HandleSelectedValueChanged;
 
             switch (_applicationSettings.FilterSelection)
@@ -96,7 +97,8 @@ namespace MusicBeePlugin
                     throw new ArgumentOutOfRangeException(string.Format("{0}Undefined Filtering option", "ARG0"));
             }
 
-            _addressInputTextBox.Bounds = new Rectangle(_filterSelectionComboBox.Width + 10, _listeningPort.Bottom + 5, 100,
+            _addressInputTextBox.Bounds = new Rectangle(_filterSelectionComboBox.Width + 10, _listeningPort.Bottom + 5,
+                                                        100,
                                                         _addressInputTextBox.Height);
             _addressInputTextBox.MaxLength = 15;
             _addressInputTextBox.BorderStyle = BorderStyle.FixedSingle;
@@ -119,7 +121,7 @@ namespace MusicBeePlugin
             _allowedIpAddressedCb.DataSource = _applicationSettings.IpAddressList;
 
             _lastOctetMax.Bounds = new Rectangle(_addressInputTextBox.Right + 5, _listeningPort.Bottom + 5, 50,
-                                            _lastOctetMax.Height);
+                                                 _lastOctetMax.Height);
             _lastOctetMax.Minimum = 1;
             _lastOctetMax.Maximum = 254;
             _lastOctetMax.ValueChanged += HandleLastOctetMaxValueChanged;
@@ -136,7 +138,8 @@ namespace MusicBeePlugin
             panel.Controls.AddRange(new Control[]
                                         {
                                             textBoxLabel, _listeningPort, _restartButton, _filterSelectionComboBox,
-                                            _addressInputTextBox, _lastOctetMax, _addAddressButton, _removeAddressButton,
+                                            _addressInputTextBox, _lastOctetMax, _addAddressButton, _removeAddressButton
+                                            ,
                                             _allowedIpAddressedCb
                                         });
 
@@ -178,7 +181,7 @@ namespace MusicBeePlugin
                                                  ? Color.LightGreen
                                                  : Color.Red;
             _addAddressButton.Enabled = isValid;
-            if(isValid&&_applicationSettings.FilterSelection==FilteringSelection.Range)
+            if (isValid && _applicationSettings.FilterSelection == FilteringSelection.Range)
             {
                 _applicationSettings.BaseIp = _addressInputTextBox.Text;
             }
@@ -249,15 +252,15 @@ namespace MusicBeePlugin
 
         public void Dispose()
         {
-          _listeningPort.Dispose();
-          _listeningPortToolTip.Dispose();
-          _restartButton.Dispose();
-          _lastOctetMax.Dispose();
-          _allowedIpAddressedCb.Dispose();
-          _addAddressButton.Dispose();
-          _removeAddressButton.Dispose();
-          _filterSelectionComboBox.Dispose();
-          _addressInputTextBox.Dispose();
+            _listeningPort.Dispose();
+            _listeningPortToolTip.Dispose();
+            _restartButton.Dispose();
+            _lastOctetMax.Dispose();
+            _allowedIpAddressedCb.Dispose();
+            _addAddressButton.Dispose();
+            _removeAddressButton.Dispose();
+            _filterSelectionComboBox.Dispose();
+            _addressInputTextBox.Dispose();
         }
     }
 }

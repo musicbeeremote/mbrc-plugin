@@ -4,79 +4,219 @@
         <name>MB_REMOTE</name>
     </assembly>
     <members>
-        <member name="T:AndroidRemote.Utilities.Authenticator">
-            <summary>
-            Responsible for the client authentication. Keeps a list of the connected clients.
-            </summary>
-        </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
-            <summary>
-            Returns if a clients has passed the authentication stage and thus can receive data.
-            </summary>
-            <param name="clientId">Represents the id of client</param>
-            <returns>true or false depending on the authentication state of the client</returns>
-        </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.RemoveClientOnDisconnect(AndroidRemote.Events.MessageEventArgs)">
-            <summary>
-             Removes a client from the Client List when the client disconnects from the server.
-            </summary>
-            <param name="e"></param>
-        </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.AddClientOnConnect(AndroidRemote.Events.MessageEventArgs)">
-            <summary>
-            Adds a client to the Client List when the client connects to the server. In case a client
-            already exists with the specified id then the old client entry is removed before the adding
-            the new one.
-            </summary>
-            <param name="e"></param>
-        </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.Client(System.Int32)">
-            <summary>
-            Given a client id the function returns a SocketClient object.
-            </summary>
-            <param name="id">The client id.</param>
-            <returns>A SocketClient object.</returns>
-        </member>
-        <member name="T:AndroidRemote.Networking.SocketPacket">
+        <member name="T:AndroidRemote.Entities.TrackInfo">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketPacket.#ctor(System.Net.Sockets.Socket,System.Int32)">
+        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String,System.String,System.String)">
             <summary>
             
             </summary>
-            <param name="socket"></param>
-            <param name="clientNumber"></param>
+            <param name="artist"></param>
+            <param name="title"></param>
+            <param name="album"></param>
+            <param name="year"></param>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.MCurrentSocket">
+        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String)">
+            <summary>
+            
+            </summary>
+            <param name="artist"></param>
+            <param name="title"></param>
+        </member>
+        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.MClientNumber">
+        <member name="P:AndroidRemote.Entities.TrackInfo.Artist">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.DataBuffer">
+        <member name="P:AndroidRemote.Entities.TrackInfo.Title">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Error.ErrorHandler.LogError(System.Exception)">
+        <member name="P:AndroidRemote.Entities.TrackInfo.Album">
             <summary>
-            Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
+            
             </summary>
-            <param name="ex"></param>
-            <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Error.ErrorHandler.SetLogFilePath(System.String)">
+        <member name="P:AndroidRemote.Entities.TrackInfo.Year">
             <summary>
-            Sets the path where the Errors will be logged
+            
             </summary>
-            <param name="path">Path to store the log file.</param>
-            <returns></returns>
+        </member>
+        <member name="T:AndroidRemote.Enumerations.PlayerState">
+            <summary>
+            Represents the player's play state
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.PlayerState.Undefined">
+            <summary>
+            Represents an undefined state.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.PlayerState.Loading">
+            <summary>
+            Represents a new track loading state.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.PlayerState.Playing">
+            <summary>
+            Represents a track playing state.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.PlayerState.Paused">
+            <summary>
+            Represents a track being paused state.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.PlayerState.Stopped">
+            <summary>
+            Represents a track being stopped state.
+            </summary>
+        </member>
+        <member name="T:AndroidRemote.Enumerations.Repeat">
+            <summary>
+            Represents the repeat mode of the server
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.Repeat.None">
+            <summary>
+            Represents the deactivated repeat functionality
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.Repeat.One">
+            <summary>
+            Represents the on track repeat
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Enumerations.Repeat.All">
+            <summary>
+            Represents the repeat of the whole playlist
+            </summary>
+        </member>
+        <member name="T:AndroidRemote.Events.DataEventArgs">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="stringData"></param>
+            <param name="clientId"> </param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.PlayerState)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="playState"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.Repeat)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="repeatMode"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Entities.TrackInfo)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="track"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="stringData"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="intData"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Single)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="floatData"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Boolean)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+            <param name="boolData"></param>
+        </member>
+        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType)">
+            <summary>
+            
+            </summary>
+            <param name="type"></param>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.Type">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.StringData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.IntData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.FloatData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.BoolData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.TrackData">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.RepeatMode">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.PlayState">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Events.DataEventArgs.ClientId">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:AndroidRemote.Events.EventDataType">
+            <summary>
+            
+            </summary>
         </member>
         <member name="T:AndroidRemote.Interfaces.IPlugin">
             <summary>
@@ -193,139 +333,19 @@
             Represents a change in the state of the player.
             </summary>
         </member>
-        <member name="T:AndroidRemote.Events.DataEventArgs">
+        <member name="M:AndroidRemote.Error.ErrorHandler.LogError(System.Exception)">
             <summary>
-            
+            Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
             </summary>
+            <param name="ex"></param>
+            <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String,System.Int32)">
+        <member name="M:AndroidRemote.Error.ErrorHandler.SetLogFilePath(System.String)">
             <summary>
-            
+            Sets the path where the Errors will be logged
             </summary>
-            <param name="type"></param>
-            <param name="stringData"></param>
-            <param name="clientId"> </param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.PlayerState)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="playState"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.Repeat)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="repeatMode"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Entities.TrackInfo)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="track"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="stringData"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Int32)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="intData"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Single)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="floatData"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Boolean)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-            <param name="boolData"></param>
-        </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType)">
-            <summary>
-            
-            </summary>
-            <param name="type"></param>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.Type">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.StringData">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.IntData">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.FloatData">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.BoolData">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.TrackData">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.RepeatMode">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.PlayState">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.ClientId">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
-            <summary>
-            Writes an XML node.
-            </summary>
-            <param name="document">The XML document.</param>
-            <param name="name">Name of the node.</param>
-            <param name="value">The value.</param>
-            <remarks></remarks>
-        </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.SaveSettings(System.String)">
-            <summary>
-            Saves the settings.
-            </summary>
-            <remarks></remarks>
-        </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.LoadSettings">
-            <summary>
-            Loads the settings.
-            </summary>
-            <remarks></remarks>
+            <param name="path">Path to store the log file.</param>
+            <returns></returns>
         </member>
         <member name="T:MusicBeePlugin.Plugin">
             <summary>
@@ -480,118 +500,6 @@
             Represents a change in the state of the player.
             </summary>
         </member>
-        <member name="T:AndroidRemote.Enumerations.Repeat">
-            <summary>
-            Represents the repeat mode of the server
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.None">
-            <summary>
-            Represents the deactivated repeat functionality
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.One">
-            <summary>
-            Represents the on track repeat
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.All">
-            <summary>
-            Represents the repeat of the whole playlist
-            </summary>
-        </member>
-        <member name="T:AndroidRemote.Entities.TrackInfo">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String,System.String,System.String)">
-            <summary>
-            
-            </summary>
-            <param name="artist"></param>
-            <param name="title"></param>
-            <param name="album"></param>
-            <param name="year"></param>
-        </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String)">
-            <summary>
-            
-            </summary>
-            <param name="artist"></param>
-            <param name="title"></param>
-        </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Artist">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Title">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Album">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Year">
-            <summary>
-            
-            </summary>
-        </member>
-        <member name="T:AndroidRemote.Utilities.StateAction">
-            <summary>
-            Represents a state action that has to do with the state of player functionality such as repeat,shuffle
-            scrobble, mute etc.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Utilities.StateAction.Toggle">
-            <summary>
-            Represents the change to the opposite of the current state.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Utilities.StateAction.State">
-            <summary>
-            Represent a request for the current state.
-            </summary>
-        </member>
-        <member name="T:AndroidRemote.Enumerations.PlayerState">
-            <summary>
-            Represents the player's play state
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Undefined">
-            <summary>
-            Represents an undefined state.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Loading">
-            <summary>
-            Represents a new track loading state.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Playing">
-            <summary>
-            Represents a track playing state.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Paused">
-            <summary>
-            Represents a track being paused state.
-            </summary>
-        </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Stopped">
-            <summary>
-            Represents a track being stopped state.
-            </summary>
-        </member>
         <member name="T:AndroidRemote.Networking.SocketClient">
             <summary>
             
@@ -619,6 +527,33 @@
             </summary>
         </member>
         <member name="P:AndroidRemote.Networking.SocketClient.Authenticated">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:AndroidRemote.Networking.SocketPacket">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:AndroidRemote.Networking.SocketPacket.#ctor(System.Net.Sockets.Socket,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="socket"></param>
+            <param name="clientNumber"></param>
+        </member>
+        <member name="P:AndroidRemote.Networking.SocketPacket.MCurrentSocket">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Networking.SocketPacket.MClientNumber">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:AndroidRemote.Networking.SocketPacket.DataBuffer">
             <summary>
             
             </summary>
@@ -665,6 +600,27 @@
             <summary>
               Looks up a localized string similar to &quot;A valid port number is a number from 1 to 65535&quot;.
             </summary>
+        </member>
+        <member name="M:AndroidRemote.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
+            <summary>
+            Writes an XML node.
+            </summary>
+            <param name="document">The XML document.</param>
+            <param name="name">Name of the node.</param>
+            <param name="value">The value.</param>
+            <remarks></remarks>
+        </member>
+        <member name="M:AndroidRemote.Settings.UserSettings.SaveSettings(System.String)">
+            <summary>
+            Saves the settings.
+            </summary>
+            <remarks></remarks>
+        </member>
+        <member name="M:AndroidRemote.Settings.UserSettings.LoadSettings">
+            <summary>
+            Loads the settings.
+            </summary>
+            <remarks></remarks>
         </member>
         <member name="T:AndroidRemote.Networking.SocketServer">
             <summary>
@@ -717,9 +673,53 @@
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Events.EventDataType">
+        <member name="T:AndroidRemote.Utilities.Authenticator">
             <summary>
-            
+            Responsible for the client authentication. Keeps a list of the connected clients.
+            </summary>
+        </member>
+        <member name="M:AndroidRemote.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
+            <summary>
+            Returns if a clients has passed the authentication stage and thus can receive data.
+            </summary>
+            <param name="clientId">Represents the id of client</param>
+            <returns>true or false depending on the authentication state of the client</returns>
+        </member>
+        <member name="M:AndroidRemote.Utilities.Authenticator.RemoveClientOnDisconnect(AndroidRemote.Events.MessageEventArgs)">
+            <summary>
+             Removes a client from the Client List when the client disconnects from the server.
+            </summary>
+            <param name="e"></param>
+        </member>
+        <member name="M:AndroidRemote.Utilities.Authenticator.AddClientOnConnect(AndroidRemote.Events.MessageEventArgs)">
+            <summary>
+            Adds a client to the Client List when the client connects to the server. In case a client
+            already exists with the specified id then the old client entry is removed before the adding
+            the new one.
+            </summary>
+            <param name="e"></param>
+        </member>
+        <member name="M:AndroidRemote.Utilities.Authenticator.Client(System.Int32)">
+            <summary>
+            Given a client id the function returns a SocketClient object.
+            </summary>
+            <param name="id">The client id.</param>
+            <returns>A SocketClient object.</returns>
+        </member>
+        <member name="T:AndroidRemote.Utilities.StateAction">
+            <summary>
+            Represents a state action that has to do with the state of player functionality such as repeat,shuffle
+            scrobble, mute etc.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Utilities.StateAction.Toggle">
+            <summary>
+            Represents the change to the opposite of the current state.
+            </summary>
+        </member>
+        <member name="F:AndroidRemote.Utilities.StateAction.State">
+            <summary>
+            Represent a request for the current state.
             </summary>
         </member>
     </members>
