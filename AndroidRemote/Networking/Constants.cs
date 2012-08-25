@@ -1,4 +1,4 @@
-﻿namespace AndroidRemote.Networking
+﻿namespace MusicBeePlugin.AndroidRemote.Networking
 {
     internal static class Constants
     {
@@ -36,6 +36,7 @@
         #region Protocol 1.2
 
         public const string PlaybackPosition = "playbackPosition";
+        public const string PlayNowRemoveSelected = "playNowRemoveSelected";
 
         #endregion
     }

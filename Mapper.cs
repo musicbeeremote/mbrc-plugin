@@ -1,5 +1,5 @@
 ﻿using System;
-using AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Enumerations;
 
 namespace MusicBeePlugin
 {

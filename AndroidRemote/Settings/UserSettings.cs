@@ -1,24 +1,23 @@
 using System.Globalization;
 using System.IO;
 using System.Xml;
+using MusicBeePlugin.AndroidRemote.Model;
 
-namespace AndroidRemote.Settings
+namespace MusicBeePlugin.AndroidRemote.Settings
 {
     internal static class UserSettings
     {
         public static string SettingsFilePath { get; set; }
         public static string SettingsFileName { get; set; }
-        private static ApplicationSettings _applicationSettings;
-        private const string PortNumber = "portNumber";
-        private const string AllowedAddresses = "allowedAddresses";
-        private const string HostTypeSelection = "cbSelection";
-        private const string StartingIpAddress = "startingIp";
-        private const string MaxIpAddress = "maxIp";
-
-        public static ApplicationSettings Settings
+        private static SettingsModel _settingsModel;
+        private const string PortNumber = "port";
+        private const string Values = "values";
+        private const string Selection = "selection";
+        
+        public static SettingsModel SettingsModel
         {
-            get { return _applicationSettings; }
-            set { _applicationSettings = value; }
+            get { return _settingsModel; }
+            set { _settingsModel = value; }
         }
 
         /// <summary>
@@ -72,12 +71,10 @@ namespace AndroidRemote.Settings
 
         private static void WriteApplicationSetting(XmlDocument document)
         {
-            if (_applicationSettings.ListeningPort > 0 && _applicationSettings.ListeningPort < 65535)
-                WriteNodeValue(document, PortNumber, _applicationSettings.ListeningPort.ToString(CultureInfo.InvariantCulture));
-            WriteNodeValue(document, AllowedAddresses, _applicationSettings.FlattenAllowedAddressList());
-            WriteNodeValue(document, HostTypeSelection, _applicationSettings.FilterSelection.ToString());
-            WriteNodeValue(document,StartingIpAddress,_applicationSettings.BaseIp);
-            WriteNodeValue(document,MaxIpAddress,_applicationSettings.LastOctetMax.ToString(CultureInfo.InvariantCulture));
+            if (_settingsModel.ListeningPort > 0 && _settingsModel.ListeningPort < 65535)
+                WriteNodeValue(document, PortNumber, _settingsModel.ListeningPort.ToString(CultureInfo.InvariantCulture));
+            WriteNodeValue(document, Values, _settingsModel.FlattenAllowedAddressList());
+            WriteNodeValue(document, Selection, _settingsModel.FilterSelection.ToString());
         }
 
         private static string ReadNodeValue(XmlNode document, string name)
@@ -92,24 +89,22 @@ namespace AndroidRemote.Settings
         /// <remarks></remarks>
         public static void LoadSettings()
         {
-            if(_applicationSettings==null)
+            if(_settingsModel==null)
             {
-                _applicationSettings = new ApplicationSettings();
+                _settingsModel = new SettingsModel();
             }
             if (!File.Exists(SettingsFilePath + SettingsFileName))
             {
-                _applicationSettings.ListeningPort = 3000;
+                _settingsModel.ListeningPort = 3000;
             }
             else
             {
                 XmlDocument document = new XmlDocument();
                 document.Load(SettingsFilePath + SettingsFileName);
                 int listeningPort, lastOctetMax;
-                _applicationSettings.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
-                _applicationSettings.LastOctetMax = int.TryParse(ReadNodeValue(document, MaxIpAddress), out lastOctetMax)? lastOctetMax:0;
-                _applicationSettings.BaseIp = ReadNodeValue(document, StartingIpAddress);
-                _applicationSettings.UpdateFilteringSelection(ReadNodeValue(document, HostTypeSelection));
-                _applicationSettings.UnflattenAllowedAddressList(ReadNodeValue(document,AllowedAddresses));
+                _settingsModel.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
+                _settingsModel.UpdateFilteringSelection(ReadNodeValue(document, Selection));
+                _settingsModel.UnflattenAllowedAddressList(ReadNodeValue(document,Values));
             }
         }
 

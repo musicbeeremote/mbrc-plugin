@@ -1,6 +1,6 @@
 ﻿using System.Net.Sockets;
 
-namespace AndroidRemote.Networking
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     /// <summary>
     /// 

@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using AndroidRemote.Events;
-using AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Networking;
 
-namespace AndroidRemote.Utilities
+namespace MusicBeePlugin.AndroidRemote.Utilities
 {
     /// <summary>
     /// Responsible for the client authentication. Keeps a list of the connected clients.

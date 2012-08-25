@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin : IPlugin
+    public partial class Plugin
     {
         public const short PluginInfoVersion = 1;
-        public const short MinInterfaceVersion = 14;
-        public const short MinApiRevision = 18;
+        public const short MinInterfaceVersion = 17;
+        public const short MinApiRevision = 21;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MusicBeeApiInterface
@@ -69,7 +68,7 @@ namespace MusicBeePlugin
             public Playlist_QueryPlaylistsDelegate Playlist_QueryPlaylists;
             public Playlist_QueryGetNextPlaylistDelegate Playlist_QueryGetNextPlaylist;
             public Playlist_GetTypeDelegate Playlist_GetType;
-            public Library_QueryFilesDelegate Playlist_QueryFiles;
+            public Playlist_QueryFilesDelegate Playlist_QueryFiles;
             public Library_QueryGetNextFileDelegate Playlist_QueryGetNextFile;
             public MB_WindowHandleDelegate MB_GetWindowHandle;
             public MB_RefreshPanelsDelegate MB_RefreshPanels;
@@ -115,6 +114,21 @@ namespace MusicBeePlugin
             // api version 18
             public Player_GetShowRatingTrackDelegate Player_GetShowRatingTrack;
             public Player_GetShowRatingLoveDelegate Player_GetShowRatingLove;
+            // api version 19
+            public MB_CreateParameterisedBackgroundTaskDelegate MB_CreateParameterisedBackgroundTask;
+            public Setting_GetLastFmUserIdDelegate Setting_GetLastFmUserId;
+            public Playlist_GetNameDelegate Playlist_GetName;
+            public Playlist_CreatePlaylistDelegate Playlist_CreatePlaylist;
+            public Playlist_SetFilesDelegate Playlist_SetFiles;
+            public Library_QuerySimilarArtistsDelegate Library_QuerySimilarArtists;
+            public Library_QueryLookupTableDelegate Library_QueryLookupTable;
+            public Library_QueryGetLookupTableValueDelegate Library_QueryGetLookupTableValue;
+            public NowPlayingList_FilesActionDelegate NowPlayingList_QueueFilesNext;
+            public NowPlayingList_FilesActionDelegate NowPlayingList_QueueFilesLast;
+            // api version 20
+            public Setting_GetWebProxyDelegate Setting_GetWebProxy;
+            // api version 21
+            public NowPlayingList_RemoveAtDelegate NowPlayingList_RemoveAt;
         }
 
         public enum PluginType
@@ -308,7 +322,11 @@ namespace MusicBeePlugin
             Wpl = 4,
             Pls = 5,
             Auto = 7,
-            M3uAscii = 8
+            M3uAscii = 8,
+            AsxFile = 9,
+            Radio = 10,
+            M3uExtended = 11,
+            Mbp = 12
         }
 
         public enum SkinElement
@@ -353,6 +371,7 @@ namespace MusicBeePlugin
         public delegate System.Windows.Forms.ToolStripItem MB_AddMenuItemDelegate(string menuPath, string hotkeyDescription, EventHandler handler);
         public delegate void MB_RegisterCommandDelegate(string command, EventHandler handler);
         public delegate void MB_CreateBackgroundTaskDelegate(System.Threading.ThreadStart taskCallback, System.Windows.Forms.Form owner);
+        public delegate void MB_CreateParameterisedBackgroundTaskDelegate(System.Threading.ParameterizedThreadStart taskCallback, object parameters, System.Windows.Forms.Form owner);
         public delegate void MB_SetBackgroundTaskMessageDelegate(string message);
         public delegate System.Drawing.Rectangle MB_GetPanelBoundsDelegate(PluginPanelDock dock);
         public delegate void MB_AddPanelDelegate(System.Windows.Forms.Control panel, PluginPanelDock dock);
@@ -366,6 +385,8 @@ namespace MusicBeePlugin
         public delegate bool Setting_IsWindowBordersSkinnedDelegate();
         public delegate System.Drawing.Font Setting_GetDefaultFontDelegate();
         public delegate DataType Setting_GetDataTypeDelegate(MetaDataType field);
+        public delegate string Setting_GetLastFmUserIdDelegate();
+        public delegate string Setting_GetWebProxyDelegate();
         public delegate string Library_GetFilePropertyDelegate(string sourceFileUrl, FilePropertyType type);
         public delegate string Library_GetFileTagDelegate(string sourceFileUrl, MetaDataType field);
         public delegate bool Library_SetFileTagDelegate(string sourceFileUrl, MetaDataType field, string value);
@@ -375,6 +396,9 @@ namespace MusicBeePlugin
         public delegate bool Library_QueryFilesDelegate(string query);
         public delegate string Library_QueryGetNextFileDelegate();
         public delegate string Library_QueryGetAllFilesDelegate();
+        public delegate string Library_QuerySimilarArtistsDelegate(string artistName, double minimumArtistSimilarityRating);
+        public delegate bool Library_QueryLookupTableDelegate(string keyTags, string valueTags, string query);
+        public delegate string Library_QueryGetLookupTableValueDelegate(string key);
         public delegate int Player_GetPositionDelegate();
         public delegate bool Player_SetPositionDelegate(int position);
         public delegate PlayState Player_GetPlayStateDelegate();
@@ -422,8 +446,14 @@ namespace MusicBeePlugin
         public delegate string NowPlayingList_GetFileTagDelegate(int index, MetaDataType field);
         public delegate bool NowPlayingList_ActionDelegate();
         public delegate bool NowPlayingList_FileActionDelegate(string sourceFileUrl);
+        public delegate bool NowPlayingList_FilesActionDelegate(string[] sourceFileUrl);
+        public delegate bool NowPlayingList_RemoveAtDelegate(int index);
+        public delegate string Playlist_GetNameDelegate(string playlistUrl);
+        public delegate PlaylistFormat Playlist_GetTypeDelegate(string playlistUrl);
         public delegate bool Playlist_QueryPlaylistsDelegate();
         public delegate string Playlist_QueryGetNextPlaylistDelegate();
-        public delegate PlaylistFormat Playlist_GetTypeDelegate(string playlistUrl);
-    }
+        public delegate bool Playlist_QueryFilesDelegate(string playlistUrl);
+        public delegate string Playlist_CreatePlaylistDelegate(string folderName, string playlistName, string[] filenames);
+        public delegate bool Playlist_SetFilesDelegate(string playlistUrl, string[] filenames);
+   }
 }

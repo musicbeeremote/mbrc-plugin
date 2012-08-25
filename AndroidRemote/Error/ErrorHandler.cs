@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace AndroidRemote.Error
+namespace MusicBeePlugin.AndroidRemote.Error
 {
     internal static class ErrorHandler
     {

@@ -4,13 +4,12 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using System.Diagnostics;
-using AndroidRemote.Error;
-using AndroidRemote.Events;
-using AndroidRemote.Settings;
-using AndroidRemote.Utilities;
-using MusicBeePlugin;
+using MusicBeePlugin.AndroidRemote.Error;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
-namespace AndroidRemote.Networking
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     /// <summary>
     /// 
@@ -44,6 +43,9 @@ namespace AndroidRemote.Networking
             if (handler != null) handler(this, e);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         public event EventHandler<MessageEventArgs> DataAvailable;
  
         private void OnDataAvailable(MessageEventArgs e)
@@ -148,7 +150,7 @@ namespace AndroidRemote.Networking
             {
                 _mMainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 // Create the listening socket.    
-                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.Settings.ListeningPort);
+                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.SettingsModel.ListeningPort);
                 // Bind to local IP address.
                 _mMainSocket.Bind(ipLocal);
                 // Start Listening.
@@ -177,10 +179,10 @@ namespace AndroidRemote.Networking
                 string address = ((IPEndPoint) workerSocket.RemoteEndPoint).Address.ToString();
                 Debug.WriteLine(address);
                 bool isAllowed = false;
-                switch (UserSettings.Settings.FilterSelection)
+                switch (UserSettings.SettingsModel.FilterSelection)
                 {
                     case FilteringSelection.Specific:
-                        foreach (string source in UserSettings.Settings.IpAddressList)
+                        foreach (string source in UserSettings.SettingsModel.IpAddressList)
                         {
                             if (string.Compare(address, source, StringComparison.Ordinal) == 0)
                             {
@@ -191,7 +193,7 @@ namespace AndroidRemote.Networking
                     case FilteringSelection.Range:
                         string[] connectingAddress = address.Split(".".ToCharArray(),
                                                                    StringSplitOptions.RemoveEmptyEntries);
-                        string[] baseIp = UserSettings.Settings.BaseIp.Split(".".ToCharArray(),
+                        string[] baseIp = UserSettings.SettingsModel.BaseIp.Split(".".ToCharArray(),
                                                                              StringSplitOptions.RemoveEmptyEntries);
                         if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
                             connectingAddress[2] == baseIp[2])
@@ -201,7 +203,7 @@ namespace AndroidRemote.Networking
                             int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
                             int.TryParse(baseIp[3], out baseIpAddressLowOctet);
                             if (connectingAddressLowOctet >= baseIpAddressLowOctet &&
-                                baseIpAddressLowOctet <= UserSettings.Settings.LastOctetMax)
+                                baseIpAddressLowOctet <= UserSettings.SettingsModel.LastOctetMax)
                             {
                                 isAllowed = true;
                             }
@@ -327,6 +329,11 @@ namespace AndroidRemote.Networking
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="clientNumber"></param>
         public void Send(string message, int clientNumber)
         {
             try
@@ -341,6 +348,10 @@ namespace AndroidRemote.Networking
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="message"></param>
         public void Send(string message)
         {
             try

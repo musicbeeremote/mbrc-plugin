@@ -1,4 +1,4 @@
-﻿namespace AndroidRemote.Utilities
+﻿namespace MusicBeePlugin.AndroidRemote.Utilities
 {
     /// <summary>
     /// Represents a state action that has to do with the state of player functionality such as repeat,shuffle

@@ -1,9 +1,7 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MB_MWREMOTE", "MB_MWREMOTE.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C2B77CDE-3BC5-4D04-99BB-19EEDBDE2046}"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-server", "mbrc-server.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -30,11 +28,11 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		BuildVersion_ConfigurationName = Release
-		BuildVersion_BuildVersioningStyle = None.None.Increment.Increment
 		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
-		BuildVersion_UpdateFileVersion = True
+		BuildVersion_BuildVersioningStyle = None.None.Increment.Increment
+		BuildVersion_ConfigurationName = Release
 		BuildVersion_UpdateAssemblyVersion = True
+		BuildVersion_UpdateFileVersion = True
 		BuildVersion_UseGlobalSettings = False
 	EndGlobalSection
 EndGlobal

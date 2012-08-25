@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace AndroidRemote.Events
+namespace MusicBeePlugin.AndroidRemote.Events
 {
     public class MessageEventArgs:EventArgs
     {

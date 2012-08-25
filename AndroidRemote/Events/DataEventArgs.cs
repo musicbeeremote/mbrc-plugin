@@ -1,9 +1,8 @@
 ﻿using System;
-using AndroidRemote.Entities;
-using MusicBeePlugin;
-using AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
 
-namespace AndroidRemote.Events
+namespace MusicBeePlugin.AndroidRemote.Events
 {
     /// <summary>
     /// 

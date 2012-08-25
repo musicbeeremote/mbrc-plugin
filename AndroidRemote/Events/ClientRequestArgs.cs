@@ -1,7 +1,7 @@
 ﻿using System;
-using AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Enumerations;
 
-namespace AndroidRemote.Events
+namespace MusicBeePlugin.AndroidRemote.Events
 {
     class ClientRequestArgs:EventArgs
     {

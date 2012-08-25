@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Xml;
-using AndroidRemote.Entities;
-using AndroidRemote.Error;
-using AndroidRemote.Events;
-using AndroidRemote.Utilities;
-using AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Error;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
-namespace AndroidRemote.Networking
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     internal class ProtocolHandler
     {
@@ -230,6 +230,9 @@ namespace AndroidRemote.Networking
                                 break;
                             case Constants.PlaybackPosition:
                                 OnRequestAvailable(new ClientRequestArgs(RequestType.PlaybackPosition, clientId, xmNode.InnerText));
+                                break;
+                            case Constants.PlayNowRemoveSelected:
+                                OnRequestAvailable(new ClientRequestArgs(RequestType.NowPlaying_RemoveSelected, clientId, xmNode.InnerText));
                                 break;
 
                         }

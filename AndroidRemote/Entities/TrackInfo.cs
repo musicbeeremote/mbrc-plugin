@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Entities
 {
     /// <summary>
     /// 

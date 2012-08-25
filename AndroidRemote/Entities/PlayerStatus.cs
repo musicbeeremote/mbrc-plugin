@@ -1,4 +1,4 @@
-﻿namespace AndroidRemote.Entities
+﻿namespace MusicBeePlugin.AndroidRemote.Entities
 {
     class PlayerStatus
     {

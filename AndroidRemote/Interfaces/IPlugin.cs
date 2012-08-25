@@ -1,8 +1,8 @@
 ﻿using System;
-using AndroidRemote.Events;
-using AndroidRemote.Utilities;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
-namespace AndroidRemote.Interfaces
+namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
     /// <summary>
     /// Represents the basic functionality of the plugin
@@ -118,5 +118,11 @@ namespace AndroidRemote.Interfaces
         /// </summary>
         /// <param name="request"></param>
         void RequestPlayPosition(string request);
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="track"></param>
+        void RemoveTrackFromNowPlayingList(int index);
     }
 }

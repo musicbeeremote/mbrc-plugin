@@ -4,13 +4,14 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
-using AndroidRemote.Controller;
-using AndroidRemote.Entities;
-using AndroidRemote.Error;
-using AndroidRemote.Events;
-using AndroidRemote.Interfaces;
-using AndroidRemote.Settings;
-using AndroidRemote.Utilities;
+using MusicBeePlugin.AndroidRemote.Controller;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Error;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
 namespace MusicBeePlugin
 {
@@ -50,9 +51,9 @@ namespace MusicBeePlugin
             UserSettings.SettingsFileName = "mb_remote\\settings.xml";
             UserSettings.LoadSettings();
             _about.PluginInfoVersion = PluginInfoVersion;
-            _about.Name = "Remote Control: Server";
-            _about.Description = "Used to manage MusicBee remotely though network.";
-            _about.Author = "Kelsos";
+            _about.Name = "mbrc: server";
+            _about.Description = "remote control plugin";
+            _about.Author = "Konstantinos Paparas (aka Kelsos)";
             _about.TargetApplication = "MusicBee Remote";
             Version v = Assembly.GetExecutingAssembly().GetName().Version;
             // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
@@ -63,7 +64,7 @@ namespace MusicBeePlugin
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
-            _about.ConfigurationPanelHeight = 50;
+            _about.ConfigurationPanelHeight = 170;
 
             RemoteController.Instance.Initialize(this);
             RemoteController.Instance.StartSocket();
@@ -138,11 +139,11 @@ namespace MusicBeePlugin
 
         /// <summary>
         /// Called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
-        /// Used to save the temporary Plugin Settings if the have changed.
+        /// Used to save the temporary Plugin SettingsModel if the have changed.
         /// </summary>
         public void SaveSettings()
         {
-            UserSettings.Settings = SettingsMenuHandler.Settings;
+            UserSettings.SettingsModel = SettingsMenuHandler.SettingsModel;
             UserSettings.SaveSettings("mbremote");
         }
 
@@ -451,5 +452,10 @@ namespace MusicBeePlugin
             string data = string.Format("<current>{0}</current>" + "<duration>{1}</duration>", currentPosition, totalDuration);
             OnPlayerStateChanged(new DataEventArgs(EventDataType.PlaybackPosition,data));
         }
+
+         public void RemoveTrackFromNowPlayingList(int index)
+         {
+             _mbApiInterface.NowPlayingList_RemoveAt(index);
+         }
     }
 }

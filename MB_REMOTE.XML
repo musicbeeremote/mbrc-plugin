@@ -4,12 +4,12 @@
         <name>MB_REMOTE</name>
     </assembly>
     <members>
-        <member name="T:AndroidRemote.Entities.TrackInfo">
+        <member name="T:MusicBeePlugin.AndroidRemote.Entities.TrackInfo">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String,System.String,System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String,System.String,System.String)">
             <summary>
             
             </summary>
@@ -18,94 +18,94 @@
             <param name="album"></param>
             <param name="year"></param>
         </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.#ctor(System.String,System.String)">
             <summary>
             
             </summary>
             <param name="artist"></param>
             <param name="title"></param>
         </member>
-        <member name="M:AndroidRemote.Entities.TrackInfo.#ctor">
+        <member name="M:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.#ctor">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Artist">
+        <member name="P:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.Artist">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Title">
+        <member name="P:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.Title">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Album">
+        <member name="P:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.Album">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Entities.TrackInfo.Year">
+        <member name="P:MusicBeePlugin.AndroidRemote.Entities.TrackInfo.Year">
             <summary>
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Enumerations.PlayerState">
+        <member name="T:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState">
             <summary>
             Represents the player's play state
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Undefined">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState.Undefined">
             <summary>
             Represents an undefined state.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Loading">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState.Loading">
             <summary>
             Represents a new track loading state.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Playing">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState.Playing">
             <summary>
             Represents a track playing state.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Paused">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState.Paused">
             <summary>
             Represents a track being paused state.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.PlayerState.Stopped">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.PlayerState.Stopped">
             <summary>
             Represents a track being stopped state.
             </summary>
         </member>
-        <member name="T:AndroidRemote.Enumerations.Repeat">
+        <member name="T:MusicBeePlugin.AndroidRemote.Enumerations.Repeat">
             <summary>
             Represents the repeat mode of the server
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.None">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.Repeat.None">
             <summary>
             Represents the deactivated repeat functionality
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.One">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.Repeat.One">
             <summary>
             Represents the on track repeat
             </summary>
         </member>
-        <member name="F:AndroidRemote.Enumerations.Repeat.All">
+        <member name="F:MusicBeePlugin.AndroidRemote.Enumerations.Repeat.All">
             <summary>
             Represents the repeat of the whole playlist
             </summary>
         </member>
-        <member name="T:AndroidRemote.Events.DataEventArgs">
+        <member name="T:MusicBeePlugin.AndroidRemote.Events.DataEventArgs">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,System.String,System.Int32)">
             <summary>
             
             </summary>
@@ -113,141 +113,141 @@
             <param name="stringData"></param>
             <param name="clientId"> </param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.PlayerState)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,MusicBeePlugin.AndroidRemote.Enumerations.PlayerState)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="playState"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Enumerations.Repeat)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,MusicBeePlugin.AndroidRemote.Enumerations.Repeat)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="repeatMode"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,AndroidRemote.Entities.TrackInfo)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,MusicBeePlugin.AndroidRemote.Entities.TrackInfo)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="track"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,System.String)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="stringData"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,System.Int32)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="intData"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Single)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,System.Single)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="floatData"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType,System.Boolean)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType,System.Boolean)">
             <summary>
             
             </summary>
             <param name="type"></param>
             <param name="boolData"></param>
         </member>
-        <member name="M:AndroidRemote.Events.DataEventArgs.#ctor(AndroidRemote.Events.EventDataType)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.#ctor(MusicBeePlugin.AndroidRemote.Enumerations.EventDataType)">
             <summary>
             
             </summary>
             <param name="type"></param>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.Type">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.Type">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.StringData">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.StringData">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.IntData">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.IntData">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.FloatData">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.FloatData">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.BoolData">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.BoolData">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.TrackData">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.TrackData">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.RepeatMode">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.RepeatMode">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.PlayState">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.PlayState">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Events.DataEventArgs.ClientId">
+        <member name="P:MusicBeePlugin.AndroidRemote.Events.DataEventArgs.ClientId">
             <summary>
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Events.EventDataType">
+        <member name="T:MusicBeePlugin.AndroidRemote.Enumerations.EventDataType">
             <summary>
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Interfaces.IPlugin">
+        <member name="T:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin">
             <summary>
             Represents the basic functionality of the plugin
             </summary>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestNextTrack(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestNextTrack(System.Int32)">
             <summary>
             When called plays the next track.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestStopPlayback(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestStopPlayback(System.Int32)">
             <summary>
             When called stops the playback.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestPlayPauseTrack(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestPlayPauseTrack(System.Int32)">
             <summary>
             When called changes the play/pause state or starts playing a track if the status is stopped.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestPreviousTrack(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestPreviousTrack(System.Int32)">
             <summary>
             When called plays the previous track.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestVolumeChange(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestVolumeChange(System.Int32)">
             <summary>
             When called if the volume string is an integer in the range [0,100] it 
             changes the volume to the specific value and returns the new value.
@@ -255,27 +255,27 @@
             </summary>
             <param name="volume"> </param>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestShuffleState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestShuffleState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             Changes the player shuffle state. If the StateAction is Toggle then the current state is switched with it's opposite,
             if it is State the current state is dispatched with an Event.
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestMuteState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestMuteState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             Changes the player mute state. If the StateAction is Toggle then the current state is switched with it's opposite,
             if it is State the current state is dispatched with an Event.
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestScrobblerState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestScrobblerState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestRepeatState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestRepeatState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             If the action equals toggle then it changes the repeat state, in any other case
             it just returns the current value of the repeat.
@@ -283,7 +283,7 @@
             <param name="action">toggle or state</param>
             <returns>Repeat state: None, All, One</returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestNowPlayingList(System.Double,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestNowPlayingList(System.Double,System.Int32)">
             <summary>
             It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
             </summary>
@@ -291,14 +291,14 @@
             <param name="clientId"> </param>
             <returns>XML formated string without root element</returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.PlaylistGoToSpecifiedTrack(System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.PlaylistGoToSpecifiedTrack(System.String)">
             <summary>
             Searches in the Now playing list for the track specified and plays it.
             </summary>
             <param name="trackInfo">The track to play</param>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestTrackRating(System.String,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestTrackRating(System.String,System.Int32)">
             <summary>
             If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
             the function will set the new rating as the current track's new track rating. In any other case it will
@@ -308,44 +308,70 @@
             <param name="clientId"> </param>
             <returns>Track Rating</returns>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestNowPlayingTrackLyrics">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestNowPlayingTrackLyrics">
             <summary>
             Requests the Now Playing track lyrics. If the lyrics are available then they are dispatched along with
             and event. If not, and the ApiRevision is equal or greater than r17 a request for the downloaded lyrics
             is initiated. The lyrics are dispatched along with and event when ready.
             </summary>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestNowPlayingTrackCover">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestNowPlayingTrackCover">
             <summary>
             Requests the Now Playing Track Cover. If the cover is available it is dispatched along with an event.
             If not, and the ApiRevision is equal or greater than r17 a request for the downloaded artwork is
             initiated. The cover is dispatched along with an event when ready.
             </summary>
         </member>
-        <member name="M:AndroidRemote.Interfaces.IPlugin.RequestPlayPosition(System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RequestPlayPosition(System.String)">
             <summary>
             
             </summary>
             <param name="request"></param>
         </member>
-        <member name="E:AndroidRemote.Interfaces.IPlugin.PlayerStateChanged">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RemoveTrackFromNowPlayingList(System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="track"></param>
+        </member>
+        <member name="E:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.PlayerStateChanged">
             <summary>
             Represents a change in the state of the player.
             </summary>
         </member>
-        <member name="M:AndroidRemote.Error.ErrorHandler.LogError(System.Exception)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Error.ErrorHandler.LogError(System.Exception)">
             <summary>
             Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
             </summary>
             <param name="ex"></param>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Error.ErrorHandler.SetLogFilePath(System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Error.ErrorHandler.SetLogFilePath(System.String)">
             <summary>
             Sets the path where the Errors will be logged
             </summary>
             <param name="path">Path to store the log file.</param>
             <returns></returns>
+        </member>
+        <member name="T:MusicBeePlugin.FilteringSelection">
+            <summary>
+            Represents the available IP address filterin options.
+            </summary>
+        </member>
+        <member name="F:MusicBeePlugin.FilteringSelection.All">
+            <summary>
+            When selected every single IP address while be allowed to connect.
+            </summary>
+        </member>
+        <member name="F:MusicBeePlugin.FilteringSelection.Range">
+            <summary>
+            When selected only the IP addresses inside a specific range will be allowed to connect.
+            </summary>
+        </member>
+        <member name="F:MusicBeePlugin.FilteringSelection.Specific">
+            <summary>
+            When selected only the specified IP addresses will be allowed to connect.
+            </summary>
         </member>
         <member name="T:MusicBeePlugin.Plugin">
             <summary>
@@ -380,7 +406,7 @@
         <member name="M:MusicBeePlugin.Plugin.SaveSettings">
             <summary>
             Called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
-            Used to save the temporary Plugin Settings if the have changed.
+            Used to save the temporary Plugin SettingsModel if the have changed.
             </summary>
         </member>
         <member name="M:MusicBeePlugin.Plugin.ReceiveNotification(System.String,MusicBeePlugin.Plugin.NotificationType)">
@@ -422,27 +448,27 @@
             </summary>
             <param name="volume"> </param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.RequestShuffleState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.Plugin.RequestShuffleState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             Changes the player shuffle state. If the StateAction is Toggle then the current state is switched with it's opposite,
             if it is State the current state is dispatched with an Event.
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.RequestMuteState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.Plugin.RequestMuteState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             Changes the player mute state. If the StateAction is Toggle then the current state is switched with it's opposite,
             if it is State the current state is dispatched with an Event.
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.RequestScrobblerState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.Plugin.RequestScrobblerState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             
             </summary>
             <param name="action"></param>
         </member>
-        <member name="M:MusicBeePlugin.Plugin.RequestRepeatState(AndroidRemote.Utilities.StateAction)">
+        <member name="M:MusicBeePlugin.Plugin.RequestRepeatState(MusicBeePlugin.AndroidRemote.Utilities.StateAction)">
             <summary>
             If the action equals toggle then it changes the repeat state, in any other case
             it just returns the current value of the repeat.
@@ -500,65 +526,65 @@
             Represents a change in the state of the player.
             </summary>
         </member>
-        <member name="T:AndroidRemote.Networking.SocketClient">
+        <member name="T:MusicBeePlugin.AndroidRemote.Networking.SocketClient">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketClient.#ctor(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketClient.#ctor(System.Int32)">
             <summary>
             
             </summary>
             <param name="clientId"></param>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketClient.IncreasePacketNumber">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketClient.IncreasePacketNumber">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketClient.ClientId">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketClient.ClientId">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketClient.PacketNumber">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketClient.PacketNumber">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketClient.Authenticated">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketClient.Authenticated">
             <summary>
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Networking.SocketPacket">
+        <member name="T:MusicBeePlugin.AndroidRemote.Networking.SocketPacket">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketPacket.#ctor(System.Net.Sockets.Socket,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketPacket.#ctor(System.Net.Sockets.Socket,System.Int32)">
             <summary>
             
             </summary>
             <param name="socket"></param>
             <param name="clientNumber"></param>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.MCurrentSocket">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketPacket.MCurrentSocket">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.MClientNumber">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketPacket.MClientNumber">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketPacket.DataBuffer">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketPacket.DataBuffer">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.ProtocolHandler.ProcessIncomingMessage(System.String,System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.ProtocolHandler.ProcessIncomingMessage(System.String,System.Int32)">
             <summary>
             Processes the incoming message and answer's sending back the needed data.
             </summary>
@@ -601,7 +627,7 @@
               Looks up a localized string similar to &quot;A valid port number is a number from 1 to 65535&quot;.
             </summary>
         </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Settings.UserSettings.WriteNodeValue(System.Xml.XmlDocument,System.String,System.String)">
             <summary>
             Writes an XML node.
             </summary>
@@ -610,88 +636,106 @@
             <param name="value">The value.</param>
             <remarks></remarks>
         </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.SaveSettings(System.String)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Settings.UserSettings.SaveSettings(System.String)">
             <summary>
             Saves the settings.
             </summary>
             <remarks></remarks>
         </member>
-        <member name="M:AndroidRemote.Settings.UserSettings.LoadSettings">
+        <member name="M:MusicBeePlugin.AndroidRemote.Settings.UserSettings.LoadSettings">
             <summary>
             Loads the settings.
             </summary>
             <remarks></remarks>
         </member>
-        <member name="T:AndroidRemote.Networking.SocketServer">
+        <member name="T:MusicBeePlugin.AndroidRemote.Networking.SocketServer">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketServer.#ctor">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.#ctor">
             <summary>
             
             </summary>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketServer.HandleReplyAvailable(System.Object,AndroidRemote.Events.MessageEventArgs)">
-            <summary>
-            
-            </summary>
-            <param name="sender"></param>
-            <param name="e"></param>
-        </member>
-        <member name="M:AndroidRemote.Networking.SocketServer.HandleDisconnectClient(System.Object,AndroidRemote.Events.MessageEventArgs)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.HandleReplyAvailable(System.Object,MusicBeePlugin.AndroidRemote.Events.MessageEventArgs)">
             <summary>
             
             </summary>
             <param name="sender"></param>
             <param name="e"></param>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketServer.Stop">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.HandleDisconnectClient(System.Object,MusicBeePlugin.AndroidRemote.Events.MessageEventArgs)">
+            <summary>
+            
+            </summary>
+            <param name="sender"></param>
+            <param name="e"></param>
+        </member>
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.Stop">
             <summary>
             It stops the SocketServer.
             </summary>
             <returns></returns>
         </member>
-        <member name="M:AndroidRemote.Networking.SocketServer.Start">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.Start">
             <summary>
             It starts the SocketServer.
             </summary>
             <returns></returns>
         </member>
-        <member name="E:AndroidRemote.Networking.SocketServer.ClientConnected">
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.Send(System.String,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="message"></param>
+            <param name="clientNumber"></param>
+        </member>
+        <member name="M:MusicBeePlugin.AndroidRemote.Networking.SocketServer.Send(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="message"></param>
+        </member>
+        <member name="E:MusicBeePlugin.AndroidRemote.Networking.SocketServer.ClientConnected">
             <summary>
             
             </summary>
         </member>
-        <member name="E:AndroidRemote.Networking.SocketServer.ClientDisconnected">
+        <member name="E:MusicBeePlugin.AndroidRemote.Networking.SocketServer.ClientDisconnected">
             <summary>
             
             </summary>
         </member>
-        <member name="P:AndroidRemote.Networking.SocketServer.IsRunning">
+        <member name="E:MusicBeePlugin.AndroidRemote.Networking.SocketServer.DataAvailable">
             <summary>
             
             </summary>
         </member>
-        <member name="T:AndroidRemote.Utilities.Authenticator">
+        <member name="P:MusicBeePlugin.AndroidRemote.Networking.SocketServer.IsRunning">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:MusicBeePlugin.AndroidRemote.Utilities.Authenticator">
             <summary>
             Responsible for the client authentication. Keeps a list of the connected clients.
             </summary>
         </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Utilities.Authenticator.IsClientAuthenticated(System.Int32)">
             <summary>
             Returns if a clients has passed the authentication stage and thus can receive data.
             </summary>
             <param name="clientId">Represents the id of client</param>
             <returns>true or false depending on the authentication state of the client</returns>
         </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.RemoveClientOnDisconnect(AndroidRemote.Events.MessageEventArgs)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Utilities.Authenticator.RemoveClientOnDisconnect(MusicBeePlugin.AndroidRemote.Events.MessageEventArgs)">
             <summary>
              Removes a client from the Client List when the client disconnects from the server.
             </summary>
             <param name="e"></param>
         </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.AddClientOnConnect(AndroidRemote.Events.MessageEventArgs)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Utilities.Authenticator.AddClientOnConnect(MusicBeePlugin.AndroidRemote.Events.MessageEventArgs)">
             <summary>
             Adds a client to the Client List when the client connects to the server. In case a client
             already exists with the specified id then the old client entry is removed before the adding
@@ -699,27 +743,61 @@
             </summary>
             <param name="e"></param>
         </member>
-        <member name="M:AndroidRemote.Utilities.Authenticator.Client(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Utilities.Authenticator.Client(System.Int32)">
             <summary>
             Given a client id the function returns a SocketClient object.
             </summary>
             <param name="id">The client id.</param>
             <returns>A SocketClient object.</returns>
         </member>
-        <member name="T:AndroidRemote.Utilities.StateAction">
+        <member name="T:MusicBeePlugin.AndroidRemote.Utilities.StateAction">
             <summary>
             Represents a state action that has to do with the state of player functionality such as repeat,shuffle
             scrobble, mute etc.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Utilities.StateAction.Toggle">
+        <member name="F:MusicBeePlugin.AndroidRemote.Utilities.StateAction.Toggle">
             <summary>
             Represents the change to the opposite of the current state.
             </summary>
         </member>
-        <member name="F:AndroidRemote.Utilities.StateAction.State">
+        <member name="F:MusicBeePlugin.AndroidRemote.Utilities.StateAction.State">
             <summary>
             Represent a request for the current state.
+            </summary>
+        </member>
+        <member name="T:MusicBeePlugin.SettingsPanel">
+            <summary>
+            Represents the plugins Settings Panel
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.#ctor">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.UpdateFilteringSelection(MusicBeePlugin.FilteringSelection)">
+            <summary>
+            
+            </summary>
+            <param name="selection"></param>
+            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="F:MusicBeePlugin.SettingsPanel.components">
+            <summary> 
+            Required designer variable.
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.Dispose(System.Boolean)">
+            <summary> 
+            Clean up any resources being used.
+            </summary>
+            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.InitializeComponent">
+            <summary> 
+            Required method for Designer support - do not modify 
+            the contents of this method with the code editor.
             </summary>
         </member>
     </members>

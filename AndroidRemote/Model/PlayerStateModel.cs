@@ -3,12 +3,12 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Security;
-using AndroidRemote.Entities;
-using AndroidRemote.Enumerations;
-using AndroidRemote.Error;
-using AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Error;
+using MusicBeePlugin.AndroidRemote.Events;
 
-namespace AndroidRemote.Model
+namespace MusicBeePlugin.AndroidRemote.Model
 {
     internal class PlayerStateModel
     {

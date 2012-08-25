@@ -1,4 +1,4 @@
-﻿namespace AndroidRemote.Enumerations
+﻿namespace MusicBeePlugin.AndroidRemote.Enumerations
 {
     /// <summary>
     /// Represents the repeat mode of the server

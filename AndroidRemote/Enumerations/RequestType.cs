@@ -1,4 +1,4 @@
-namespace AndroidRemote.Enumerations
+namespace MusicBeePlugin.AndroidRemote.Enumerations
 {
     public enum RequestType
     {
@@ -19,7 +19,8 @@ namespace AndroidRemote.Enumerations
         MuteState,
         PlayNow,
         Rating,
-        PlaybackPosition
+        PlaybackPosition,
+        NowPlaying_RemoveSelected
 
     }
 }

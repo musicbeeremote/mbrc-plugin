@@ -1,9 +1,9 @@
-namespace AndroidRemote.Events
+namespace MusicBeePlugin.AndroidRemote.Enumerations
 {
     /// <summary>
     /// 
     /// </summary>
-    public enum EventDataType
+    public enum EventDataType 
     {
         Track,
         Cover,

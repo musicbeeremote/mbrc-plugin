@@ -1,19 +1,22 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
-using AndroidRemote.Entities;
-using AndroidRemote.Events;
-using AndroidRemote.Interfaces;
-using AndroidRemote.Model;
-using AndroidRemote.Networking;
-using AndroidRemote.Utilities;
-using AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Model;
+using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
-namespace AndroidRemote.Controller
+namespace MusicBeePlugin.AndroidRemote.Controller
 {
     internal class RemoteController
     {
         private readonly PlayerStateModel _playerStateModel;
         private IPlugin _plugin;
+
+        private readonly Dictionary<IEventType, Type> _commandMap; 
 
         private static readonly RemoteController ClassInstance = new RemoteController();
 
@@ -25,8 +28,32 @@ namespace AndroidRemote.Controller
         private readonly SocketServer _server;
         private readonly ProtocolHandler _pHandler;
 
+        public void AddCommand(IEventType eventType,Type command)
+        {
+            if (_commandMap.ContainsKey(eventType)) return;
+            _commandMap.Add(eventType,command);
+        }
+
+        public void RemoveCommand(IEventType eventType)
+        {
+            if (_commandMap.ContainsKey(eventType))
+                _commandMap.Remove(eventType);    
+        }
+
+        public void CommandExecute(IEvent e)
+        {
+            if(!_commandMap.ContainsKey(e.GetEventType())) return;
+            Type commandType = _commandMap[e.GetEventType()];
+            using(ICommand command = (ICommand)Activator.CreateInstance(commandType))
+            {
+                command.Execute(e);
+            }
+        }
+
         private RemoteController()
         {
+            _commandMap = new Dictionary<IEventType, Type>();
+
             _playerStateModel = new PlayerStateModel();
             _server = new SocketServer();
             _pHandler = new ProtocolHandler();
@@ -177,6 +204,9 @@ namespace AndroidRemote.Controller
                     break;
                 case RequestType.PlaybackPosition:
                     _plugin.RequestPlayPosition(e.RequestData);
+                    break;
+                    case RequestType.NowPlaying_RemoveSelected:
+                        _plugin.RemoveTrackFromNowPlayingList(int.Parse(e.RequestData));
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();

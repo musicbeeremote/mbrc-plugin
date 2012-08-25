@@ -1,4 +1,4 @@
-﻿namespace AndroidRemote.Networking
+﻿namespace MusicBeePlugin.AndroidRemote.Networking
 {
     /// <summary>
     /// 

@@ -1,13 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using MusicBeePlugin;
 
-namespace AndroidRemote.Settings
+namespace MusicBeePlugin.AndroidRemote.Model
 {
-    class ApplicationSettings
+    class SettingsModel
     {
         #region properties
+        
         public int ListeningPort { get; set; }
 
         public FilteringSelection FilterSelection { get; set; }
@@ -20,6 +20,16 @@ namespace AndroidRemote.Settings
         #endregion
 
         #region methods
+
+        public string FlattenAllowedRange()
+        {
+            if(!String.IsNullOrEmpty(BaseIp) && (LastOctetMax>1||LastOctetMax<255))
+            {
+                return BaseIp + "," + LastOctetMax;
+            }
+            return String.Empty;
+        }
+
         public string FlattenAllowedAddressList()
         {
             if (IpAddressList == null)
