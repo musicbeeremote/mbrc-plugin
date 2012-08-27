@@ -73,7 +73,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         {
             if (_settingsModel.ListeningPort > 0 && _settingsModel.ListeningPort < 65535)
                 WriteNodeValue(document, PortNumber, _settingsModel.ListeningPort.ToString(CultureInfo.InvariantCulture));
-            WriteNodeValue(document, Values, _settingsModel.FlattenAllowedAddressList());
+            WriteNodeValue(document, Values, _settingsModel.GetValues());
             WriteNodeValue(document, Selection, _settingsModel.FilterSelection.ToString());
         }
 
@@ -101,10 +101,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             {
                 XmlDocument document = new XmlDocument();
                 document.Load(SettingsFilePath + SettingsFileName);
-                int listeningPort, lastOctetMax;
+                int listeningPort;
                 _settingsModel.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
                 _settingsModel.UpdateFilteringSelection(ReadNodeValue(document, Selection));
-                _settingsModel.UnflattenAllowedAddressList(ReadNodeValue(document,Values));
+                _settingsModel.SetValues(ReadNodeValue(document,Values));
             }
         }
 

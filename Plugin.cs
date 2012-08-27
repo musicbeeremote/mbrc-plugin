@@ -112,7 +112,7 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Configure(IntPtr panelHandle)
         {
-            SettingsMenuHandler handler = new SettingsMenuHandler();
+            SettingsController handler = new SettingsController();
 
             int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentBackground);
             int foreground = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentForeground);
@@ -143,7 +143,7 @@ namespace MusicBeePlugin
         /// </summary>
         public void SaveSettings()
         {
-            UserSettings.SettingsModel = SettingsMenuHandler.SettingsModel;
+            UserSettings.SettingsModel = SettingsController.SettingsModel;
             UserSettings.SaveSettings("mbremote");
         }
 

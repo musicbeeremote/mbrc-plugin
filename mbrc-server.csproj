@@ -106,7 +106,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="SettingsMenuHandler.cs" />
+    <Compile Include="SettingsController.cs" />
     <Compile Include="AndroidRemote\Settings\UserSettings.cs" />
     <Compile Include="AndroidRemote\Networking\SocketServer.cs" />
     <Compile Include="AndroidRemote\Utilities\Authenticator.cs" />

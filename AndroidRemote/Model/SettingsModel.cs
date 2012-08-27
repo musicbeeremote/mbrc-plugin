@@ -6,6 +6,10 @@ namespace MusicBeePlugin.AndroidRemote.Model
 {
     class SettingsModel
     {
+        public SettingsModel()
+        {
+            IpAddressList = new List<string>();
+        }
         #region properties
         
         public int ListeningPort { get; set; }
@@ -21,6 +25,38 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         #region methods
 
+        public string GetValues()
+        {
+            switch (FilterSelection)
+            {
+                case FilteringSelection.All:
+                    return String.Empty;
+                case FilteringSelection.Range:
+                    return FlattenAllowedRange();
+                case FilteringSelection.Specific:
+                    return FlattenAllowedAddressList();
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        public void SetValues(string values)
+        {
+            switch (FilterSelection)
+            {
+                case FilteringSelection.All:
+                    break;
+                case FilteringSelection.Range:
+                    UnFlattenAllowedRange(values);
+                    break;
+                case FilteringSelection.Specific:
+                    UnflattenAllowedAddressList(values);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
         public string FlattenAllowedRange()
         {
             if(!String.IsNullOrEmpty(BaseIp) && (LastOctetMax>1||LastOctetMax<255))
@@ -28,6 +64,14 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 return BaseIp + "," + LastOctetMax;
             }
             return String.Empty;
+        }
+
+        public void UnFlattenAllowedRange(string range)
+        {
+            if (String.IsNullOrEmpty(range)) return;
+            string[] splitRange = range.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            BaseIp = splitRange[0];
+            LastOctetMax = int.Parse(splitRange[1]);
         }
 
         public string FlattenAllowedAddressList()
@@ -60,8 +104,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         public void UnflattenAllowedAddressList(string allowedAddresses)
         {
-            IpAddressList = new List<string>(allowedAddresses.Trim().Split(
-                ",".ToCharArray(),
+            IpAddressList = new List<string>(allowedAddresses.Trim().Split(",".ToCharArray(),
                 StringSplitOptions.RemoveEmptyEntries
             ));
         }

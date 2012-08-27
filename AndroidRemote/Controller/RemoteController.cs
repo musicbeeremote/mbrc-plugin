@@ -220,6 +220,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                 case EventDataType.Track:
                     _playerStateModel.Track = e.TrackData;
                     _plugin.RequestNowPlayingTrackCover();
+                    _playerStateModel.Lyrics = String.Empty;
                     _plugin.RequestNowPlayingTrackLyrics();
                     break;
                 case EventDataType.PlayState:

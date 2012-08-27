@@ -773,7 +773,7 @@
         </member>
         <member name="M:MusicBeePlugin.SettingsPanel.#ctor">
             <summary>
-            
+            Default Constructor
             </summary>
         </member>
         <member name="M:MusicBeePlugin.SettingsPanel.UpdateFilteringSelection(MusicBeePlugin.FilteringSelection)">
@@ -782,6 +782,18 @@
             </summary>
             <param name="selection"></param>
             <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.UpdateValues(System.String)">
+            <summary>
+            Given a comma seperated string of values it puts the right values in the right controls depending on the selection.
+            </summary>
+            <param name="values"></param>
+        </member>
+        <member name="M:MusicBeePlugin.SettingsPanel.UpdatePortNumber(System.Int32)">
+            <summary>
+            Given a port number it sets the selected port number on the NumericUpDown.
+            </summary>
+            <param name="port"></param>
         </member>
         <member name="F:MusicBeePlugin.SettingsPanel.components">
             <summary> 
@@ -798,6 +810,31 @@
             <summary> 
             Required method for Designer support - do not modify 
             the contents of this method with the code editor.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.SettingsPanel.SelectionChanged">
+            <summary>
+            This event gets fired when the filtering selection changes.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.SettingsPanel.AddressAdded">
+            <summary>
+            This event gets fired when a new address is added to the allowed addresses specified.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.SettingsPanel.AddressRemoved">
+            <summary>
+            This event gets fired when an address is removed from the allowed addresses specified.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.SettingsPanel.RangeChanged">
+            <summary>
+            This event gets fired when the range of allowed addresses changes.
+            </summary>
+        </member>
+        <member name="E:MusicBeePlugin.SettingsPanel.PortChanged">
+            <summary>
+            This event gets fired when the default port is changed. 
             </summary>
         </member>
     </members>
