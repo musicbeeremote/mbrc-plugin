@@ -284,6 +284,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                     _pHandler.SongCoverRequestHandled(_playerStateModel.Cover, -1);
                     break;
                 case EventDataType.Lyrics:
+                    _pHandler.LyricsRequestHandled(_playerStateModel.Lyrics, -1);
                     break;
                 case EventDataType.PlayState:
                     _pHandler.PlayStateChanged(_playerStateModel.PlayerState.ToString(CultureInfo.InvariantCulture), -1);

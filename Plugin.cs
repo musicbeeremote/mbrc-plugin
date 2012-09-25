@@ -51,8 +51,8 @@ namespace MusicBeePlugin
             UserSettings.SettingsFileName = "mb_remote\\settings.xml";
             UserSettings.LoadSettings();
             _about.PluginInfoVersion = PluginInfoVersion;
-            _about.Name = "mbrc: server";
-            _about.Description = "remote control plugin";
+            _about.Name = "MusicBee Remote:Server";
+            _about.Description = "Remote Control for server to be used with android application.";
             _about.Author = "Konstantinos Paparas (aka Kelsos)";
             _about.TargetApplication = "MusicBee Remote";
             Version v = Assembly.GetExecutingAssembly().GetName().Version;
@@ -64,7 +64,7 @@ namespace MusicBeePlugin
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
-            _about.ConfigurationPanelHeight = 170;
+            _about.ConfigurationPanelHeight = 200;
 
             RemoteController.Instance.Initialize(this);
             RemoteController.Instance.StartSocket();
@@ -145,6 +145,8 @@ namespace MusicBeePlugin
         {
             UserSettings.SettingsModel = SettingsController.SettingsModel;
             UserSettings.SaveSettings("mbremote");
+            RemoteController.Instance.StopSocket();
+            RemoteController.Instance.StartSocket();
         }
 
         /// <summary>
@@ -181,7 +183,7 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingLyricsReady:
                     if (_mbApiInterface.ApiRevision >= 17)
                     {
-                        OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, _mbApiInterface.NowPlaying_GetDownloadedLyrics()));
+                        OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, !String.IsNullOrEmpty(_mbApiInterface.NowPlaying_GetDownloadedLyrics()) ? _mbApiInterface.NowPlaying_GetDownloadedLyrics() : "Lyrics Not Found"));
                     }
                     break;
                 case NotificationType.NowPlayingArtworkReady:
@@ -404,11 +406,12 @@ namespace MusicBeePlugin
             }
             else if (_mbApiInterface.ApiRevision >= 17)
             {
-                _mbApiInterface.NowPlaying_GetDownloadedLyrics();
+                string lyrics = _mbApiInterface.NowPlaying_GetDownloadedLyrics();
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, !String.IsNullOrEmpty(lyrics)?lyrics:"Retrieving Lyrics"));
             }
             else
             {
-                OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, String.Empty));
+                OnPlayerStateChanged(new DataEventArgs(EventDataType.Lyrics, "Lyrics Not Found"));
             }
         }
 

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <doc>
     <assembly>
-        <name>MB_REMOTE</name>
+        <name>mb_remote</name>
     </assembly>
     <members>
         <member name="T:MusicBeePlugin.AndroidRemote.Entities.TrackInfo">

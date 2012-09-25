@@ -6,8 +6,8 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 
-[assembly: AssemblyTitle("MusicBee Remote Control")]
-[assembly: AssemblyDescription("A plugin to allow music bee remote control through mobile applications and network.")]
+[assembly: AssemblyTitle("MusicBee Remote: Server")]
+[assembly: AssemblyDescription("The server side plugin that enables MusicBee Remote to function")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Kelsos")]
 [assembly: AssemblyProduct("MusicBee Remote Control")]
@@ -36,5 +36,5 @@ using System.Runtime.InteropServices;
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
 
-[assembly: AssemblyVersion("1.0.0.423")]
-[assembly: AssemblyFileVersion("1.0.0.423")]
+[assembly: AssemblyVersion("0.2.3.608")]
+[assembly: AssemblyFileVersion("0.2.3.608")]

@@ -106,8 +106,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 _settingsModel.UpdateFilteringSelection(ReadNodeValue(document, Selection));
                 _settingsModel.SetValues(ReadNodeValue(document,Values));
             }
+            if (File.Exists(SettingsFilePath + "mb_remote\\" + "error.log"))
+            {
+                File.Delete(SettingsFilePath + "mb_remote\\" + "error.log");
+            }        
         }
-
-
     }
 }

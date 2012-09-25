@@ -212,7 +212,8 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 }
                 finally
                 {
-                    OnModelStateChange(new DataEventArgs(EventDataType.Lyrics));
+                    if(!String.IsNullOrEmpty(_lyrics))
+                        OnModelStateChange(new DataEventArgs(EventDataType.Lyrics));
                 }
             }
             get { return _lyrics; }
