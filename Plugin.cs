@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -134,7 +135,11 @@ namespace MusicBeePlugin
         /// </summary>
         public void Uninstall()
         {
-            //TODO: add cleanup code bit to remove the plugin settings and log directory.
+            string settingsFolder = _mbApiInterface.Setting_GetPersistentStoragePath + "\\mb_remote";
+            if(Directory.Exists(settingsFolder))
+            {
+                Directory.Delete(settingsFolder);
+            }
         }
 
         /// <summary>
@@ -249,6 +254,10 @@ namespace MusicBeePlugin
                 _mbApiInterface.Player_SetVolume((float) volume/100);
             }
             OnPlayerStateChanged(new DataEventArgs(EventDataType.Volume, _mbApiInterface.Player_GetVolume()));
+            if(_mbApiInterface.Player_GetMute())
+            {
+                _mbApiInterface.Player_SetMute(false);
+            }
         }
 
         /// <summary>

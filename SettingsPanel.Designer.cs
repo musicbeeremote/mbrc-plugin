@@ -239,7 +239,7 @@ namespace MusicBeePlugin
             this.Controls.Add(this.seperator1);
             this.Controls.Add(this.connectionSettingsCategoryLabel);
             this.Name = "SettingsPanel";
-            this.Size = new System.Drawing.Size(377, 163);
+            this.Size = new System.Drawing.Size(377, 200);
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).EndInit();
             this.ResumeLayout(false);
