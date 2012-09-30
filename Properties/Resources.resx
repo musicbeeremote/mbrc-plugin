@@ -129,4 +129,7 @@
   <data name="ValidRange" xml:space="preserve">
     <value>"A valid port number is a number from 1 to 65535"</value>
   </data>
+  <data name="new_version">
+    <value xml:space="preserve">There is a new Version of MusicBee Remote plugin</value>
+  </data>
 </root>

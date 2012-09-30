@@ -37,6 +37,30 @@ namespace MusicBeePlugin.AndroidRemote.Error
             }
         }
 
+        public static void LogValue(String value)
+        {
+            try
+            {
+                if (String.IsNullOrEmpty(_logFilePath))
+                    return;
+                if (!Directory.Exists(_logFilePath + "mb_remote"))
+                    Directory.CreateDirectory(_logFilePath + "mb_remote");
+                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log", FileMode.Append);
+                using (StreamWriter fWriter = new StreamWriter(stream))
+                {
+                    fWriter.WriteLine(DateTime.Now + "\n");
+                    fWriter.WriteLine();
+                    fWriter.Write(value);
+                    fWriter.WriteLine(Environment.NewLine);
+                }
+                stream.Close();
+            }
+            catch (IOException iException)
+            {
+                Debug.WriteLine(iException);
+            }
+        }
+
         /// <summary>
         /// Sets the path where the Errors will be logged
         /// </summary>

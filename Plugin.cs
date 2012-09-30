@@ -13,6 +13,7 @@ using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using Timer = System.Timers.Timer;
 
 namespace MusicBeePlugin
 {
@@ -73,6 +74,11 @@ namespace MusicBeePlugin
             ErrorHandler.SetLogFilePath(_mbApiInterface.Setting_GetPersistentStoragePath());
 
             StartPlayerStatusMonitoring();
+
+            //if (UpdateChecker.IsThereAnUpdate(v.ToString(3), _mbApiInterface.Setting_GetPersistentStoragePath()))
+            //{
+            //    MessageBox.Show(Resources.new_version);
+            //}
 
             return _about;
         }

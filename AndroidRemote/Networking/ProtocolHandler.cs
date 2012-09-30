@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Xml;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
@@ -127,19 +128,28 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             try
             {
-                if (String.IsNullOrEmpty(incomingMessage))
+                if (String.IsNullOrEmpty(incomingMessage) || incomingMessage == "\0\r\n")
+                {
+#if DEBUG
+                    ErrorHandler.LogValue("Caught");
+#endif
                     return;
+                }
                 try
                 {
-                    Debug.WriteLine(incomingMessage);
+#if DEBUG
+                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Proccessing : " + incomingMessage + "\n");
+#endif
                     _xmlDoc.LoadXml(PrepareXml("serverData", incomingMessage.Replace("\0", ""), false, false));
                 }
                 catch (Exception ex)
                 {
 #if DEBUG
                     ErrorHandler.LogError(ex);
+                    ErrorHandler.LogValue(incomingMessage);
+                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Exception at : " + incomingMessage + "\n");
 #endif
-                    Debug.WriteLine("Error at: " + incomingMessage);
+                    
                 }
 
                 foreach (XmlNode xmNode in _xmlDoc.FirstChild.ChildNodes)
@@ -248,6 +258,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         {
 #if DEBUG
                             ErrorHandler.LogError(ex);
+                            ErrorHandler.LogValue(incomingMessage);
+                            ErrorHandler.LogValue(xmNode.ToString());
 #endif
                         }
                     }

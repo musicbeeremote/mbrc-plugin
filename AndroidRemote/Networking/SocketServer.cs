@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Globalization;
 using System.Threading;
 using System.Net;
 using System.Net.Sockets;
@@ -104,7 +105,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
+#if DEBUG
                 ErrorHandler.LogError(ex);
+#endif
             }
         }
 
@@ -132,7 +135,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
+#if DEBUG
                 ErrorHandler.LogError(ex);
+#endif
             }
             finally
             {
@@ -161,7 +166,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (SocketException se)
             {
+#if DEBUG
                 ErrorHandler.LogError(se);
+#endif
             }
         }
 
@@ -176,22 +183,23 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 Socket workerSocket = _mMainSocket.EndAccept(ar);
 
                 // Validate If client should connect.
-                string address = ((IPEndPoint) workerSocket.RemoteEndPoint).Address.ToString();
-                Debug.WriteLine(address);
+                IPAddress ipAddress = ((IPEndPoint) workerSocket.RemoteEndPoint).Address;
+                string ipString = ipAddress.ToString();
+                Debug.WriteLine(ipString);
                 bool isAllowed = false;
                 switch (UserSettings.SettingsModel.FilterSelection)
                 {
                     case FilteringSelection.Specific:
                         foreach (string source in UserSettings.SettingsModel.IpAddressList)
                         {
-                            if (string.Compare(address, source, StringComparison.Ordinal) == 0)
+                            if (string.Compare(ipString, source, StringComparison.Ordinal) == 0)
                             {
                                 isAllowed = true;
                             }
                         }
                         break;
                     case FilteringSelection.Range:
-                        string[] connectingAddress = address.Split(".".ToCharArray(),
+                        string[] connectingAddress = ipString.Split(".".ToCharArray(),
                                                                    StringSplitOptions.RemoveEmptyEntries);
                         string[] baseIp = UserSettings.SettingsModel.BaseIp.Split(".".ToCharArray(),
                                                                              StringSplitOptions.RemoveEmptyEntries);
@@ -216,7 +224,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 if (!isAllowed)
                 {
                     workerSocket.Close();
-                    Debug.WriteLine("Force Disconnected not valid range");
+#if DEBUG
+                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Force Disconnected not valid range\n");
+#endif
                     _mMainSocket.BeginAccept(OnClientConnect, null);
                     return;
                 }
@@ -243,16 +253,22 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
-                Debug.WriteLine("OnClientConnection: Socket has been closed\n");
+#if DEBUG
+                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnClientConnection: Socket has been closed\n");
+#endif
             }
             catch (SocketException se)
             {
+#if DEBUG
                 ErrorHandler.LogError(se);
+#endif
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Exception: \r\n" + ex.Message + "\r\n");
+#if DEBUG
+                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnClientConnect Exception : " + ex.Message + "\n");
                 ErrorHandler.LogError(ex);
+#endif
             }
         }
 
@@ -277,7 +293,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             catch (SocketException se)
             {
                 if (se.ErrorCode != 10053)
+#if DEBUG
                     ErrorHandler.LogError(se);
+#endif
             }
         }
 
@@ -300,11 +318,20 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 System.Text.Decoder decoder = System.Text.Encoding.UTF8.GetDecoder();
 
                 decoder.GetChars(socketData.DataBuffer, 0, iRx, chars, 0);
-
+                if(chars.Length==1&&(int)chars[0]==0)
+                {
+                    socketData.MCurrentSocket.Close();
+                    socketData.MCurrentSocket.Dispose();
+                    return;
+                }
                 String message = new string(chars);
 
                 if (String.IsNullOrEmpty(message))
                     return;
+
+#if DEBUG
+                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Message Received : " + message);
+#endif
 
                 OnDataAvailable(new MessageEventArgs(message, socketData.MClientNumber));
 
@@ -313,7 +340,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
-                Debug.WriteLine("OnDataReceived: Socket has been closed\n");
+#if DEBUG
+                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnDataReceived: Socket has been closed\n");
+#endif
             }
             catch (SocketException se)
             {
@@ -324,7 +353,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 else
                 {
+#if DEBUG
                     ErrorHandler.LogError(se);
+#endif
                 }
             }
         }
@@ -344,7 +375,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
+#if DEBUG
                 ErrorHandler.LogError(ex);
+#endif
             }
         }
 
@@ -368,7 +401,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
+#if DEBUG
                 ErrorHandler.LogError(ex);
+#endif
             }
         }
 

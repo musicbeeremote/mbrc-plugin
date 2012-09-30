@@ -617,6 +617,11 @@
               Looks up a localized string similar to -.
             </summary>
         </member>
+        <member name="P:MusicBeePlugin.Properties.Resources.new_version">
+            <summary>
+              Looks up a localized string similar to There is a new Version of MusicBee Remote plugin.
+            </summary>
+        </member>
         <member name="P:MusicBeePlugin.Properties.Resources.plus">
             <summary>
               Looks up a localized string similar to +.
