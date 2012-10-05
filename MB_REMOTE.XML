@@ -842,5 +842,22 @@
             This event gets fired when the default port is changed. 
             </summary>
         </member>
+        <member name="F:MusicBeePlugin.UnsupportedPanel.components">
+            <summary> 
+            Required designer variable.
+            </summary>
+        </member>
+        <member name="M:MusicBeePlugin.UnsupportedPanel.Dispose(System.Boolean)">
+            <summary> 
+            Clean up any resources being used.
+            </summary>
+            <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        </member>
+        <member name="M:MusicBeePlugin.UnsupportedPanel.InitializeComponent">
+            <summary> 
+            Required method for Designer support - do not modify 
+            the contents of this method with the code editor.
+            </summary>
+        </member>
     </members>
 </doc>

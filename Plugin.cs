@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Timers;
+using System.Windows.Forms;
 using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
@@ -68,6 +69,8 @@ namespace MusicBeePlugin
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
             _about.ConfigurationPanelHeight = 200;
 
+            if (_mbApiInterface.ApiRevision < MinApiRevision) return _about;
+            
             RemoteController.Instance.Initialize(this);
             RemoteController.Instance.StartSocket();
 
@@ -119,10 +122,20 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public bool Configure(IntPtr panelHandle)
         {
-            SettingsController handler = new SettingsController();
-
             int background = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentBackground);
             int foreground = _mbApiInterface.Setting_GetSkinElementColour(SkinElement.SkinInputControl, ElementState.ElementStateDefault, ElementComponent.ComponentForeground);
+             if (_mbApiInterface.ApiRevision < MinApiRevision)
+             {
+                 if (panelHandle == IntPtr.Zero)
+                     return false;
+
+                 Panel panel = (Panel)Control.FromHandle(panelHandle);
+                 panel.Controls.Add(new UnsupportedPanel());
+                 return false;
+             }
+
+            SettingsController handler = new SettingsController();
+
             return handler.ConfigureSettingsPanel(panelHandle, background, foreground);
         }
 

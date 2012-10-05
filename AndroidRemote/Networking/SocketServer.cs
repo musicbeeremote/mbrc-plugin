@@ -223,6 +223,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 if (!isAllowed)
                 {
+                    workerSocket.Send(System.Text.Encoding.UTF8.GetBytes("<notAllowed/>\0\r\n"));
                     workerSocket.Close();
 #if DEBUG
                     Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Force Disconnected not valid range\n");
@@ -292,10 +293,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (SocketException se)
             {
-                if (se.ErrorCode != 10053)
+                if (se.ErrorCode != 10053){
 #if DEBUG
                     ErrorHandler.LogError(se);
 #endif
+                }
             }
         }
 
