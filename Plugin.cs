@@ -216,7 +216,10 @@ namespace MusicBeePlugin
                         OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover, _mbApiInterface.NowPlaying_GetDownloadedArtwork()));
                     }
                     break;
-              
+                case NotificationType.NowPlayingListChanged:
+                    
+                    break;
+
             }
         }
 

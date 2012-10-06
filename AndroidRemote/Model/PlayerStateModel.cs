@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Security;
+using System.Text.RegularExpressions;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Error;
@@ -201,7 +202,9 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     lyricsString = lyricsString.Replace("\0", " ");
                     lyricsString = lyricsString.Replace("\r\n", "&lt;p&gt;");
                     lyricsString = lyricsString.Replace("\n", "&lt;br&gt;");
-                    _lyrics = SecurityElement.Escape(lyricsString);
+                    const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] "; 
+                    Regex regEx = new Regex(pattern);
+                    _lyrics = SecurityElement.Escape(regEx.Replace(lyricsString,String.Empty));
                 }
                 catch (Exception ex)
                 {
