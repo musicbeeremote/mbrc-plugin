@@ -15,7 +15,6 @@ namespace MusicBeePlugin
                     return Repeat.All;
                 case Plugin.RepeatMode.One:
                     return Repeat.One;
-                    break;
                 default:
                     throw new ArgumentOutOfRangeException("mode");
             }

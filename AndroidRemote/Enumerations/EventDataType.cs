@@ -20,6 +20,7 @@ namespace MusicBeePlugin.AndroidRemote.Enumerations
         PlayPauseRequest,
         StopRequest,
         Playlist,
-        PlaybackPosition
+        PlaybackPosition,
+        TrackRemovedFromPlaylist
     }
 }

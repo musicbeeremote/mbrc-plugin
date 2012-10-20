@@ -459,7 +459,9 @@ namespace MusicBeePlugin
             }
             else if (_mbApiInterface.ApiRevision >= 17)
             {
-                _mbApiInterface.NowPlaying_GetDownloadedArtwork();
+                string cover = _mbApiInterface.NowPlaying_GetDownloadedArtwork();
+                if(!String.IsNullOrEmpty(cover))
+                    OnPlayerStateChanged(new DataEventArgs(EventDataType.Cover,cover));
             }
             else
             {
@@ -487,9 +489,16 @@ namespace MusicBeePlugin
             OnPlayerStateChanged(new DataEventArgs(EventDataType.PlaybackPosition,data));
         }
 
-         public void RemoveTrackFromNowPlayingList(int index)
+         /// <summary>
+         /// 
+         /// </summary>
+         /// <param name="index"></param>
+         /// <param name="clientId"></param>
+         public void RemoveTrackFromNowPlayingList(int index, int clientId)
          {
-             _mbApiInterface.NowPlayingList_RemoveAt(index);
+             bool trackRemoved = _mbApiInterface.NowPlayingList_RemoveAt(index);
+             string result = (trackRemoved ? index : -1).ToString(CultureInfo.InvariantCulture);
+             OnPlayerStateChanged(new DataEventArgs(EventDataType.TrackRemovedFromPlaylist,result,clientId));
          }
     }
 }

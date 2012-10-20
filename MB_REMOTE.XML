@@ -328,11 +328,10 @@
             </summary>
             <param name="request"></param>
         </member>
-        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RemoveTrackFromNowPlayingList(System.Int32)">
+        <member name="M:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.RemoveTrackFromNowPlayingList(System.Int32,System.Int32)">
             <summary>
             
             </summary>
-            <param name="track"></param>
         </member>
         <member name="E:MusicBeePlugin.AndroidRemote.Interfaces.IPlugin.PlayerStateChanged">
             <summary>
@@ -520,6 +519,13 @@
             
             </summary>
             <param name="request"></param>
+        </member>
+        <member name="M:MusicBeePlugin.Plugin.RemoveTrackFromNowPlayingList(System.Int32,System.Int32)">
+            <summary>
+            
+            </summary>
+            <param name="index"></param>
+            <param name="clientId"></param>
         </member>
         <member name="E:MusicBeePlugin.Plugin.PlayerStateChanged">
             <summary>

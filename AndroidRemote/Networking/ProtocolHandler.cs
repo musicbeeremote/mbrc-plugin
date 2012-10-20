@@ -352,5 +352,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             string message = PrepareXml(Constants.PlaybackPosition, status, true, true);
             OnReplyAvailable(new MessageEventArgs(message,clientId));
         }
+
+        public void RemoveTrackFromPlaylistHandled(string status, int clientId)
+        {
+            string message = PrepareXml(Constants.PlayNowRemoveSelected, status, true, true);
+            OnReplyAvailable(new MessageEventArgs(message, clientId));
+        }
     }
 }

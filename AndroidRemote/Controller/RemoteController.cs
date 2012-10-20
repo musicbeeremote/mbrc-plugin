@@ -206,7 +206,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                     _plugin.RequestPlayPosition(e.RequestData);
                     break;
                     case RequestType.NowPlaying_RemoveSelected:
-                        _plugin.RemoveTrackFromNowPlayingList(int.Parse(e.RequestData));
+                        _plugin.RemoveTrackFromNowPlayingList(int.Parse(e.RequestData),e.ClientId);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -267,6 +267,9 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                     break;    
                 case EventDataType.PlaybackPosition:
                     _pHandler.PlayerPositionRequestHandled(e.StringData, e.ClientId);
+                    break;
+                    case EventDataType.TrackRemovedFromPlaylist:
+                    _pHandler.RemoveTrackFromPlaylistHandled(e.StringData,e.ClientId);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();

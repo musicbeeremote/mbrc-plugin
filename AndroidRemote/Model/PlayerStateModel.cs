@@ -16,6 +16,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
         public event EventHandler<DataEventArgs> ModelStateEvent;
 
         private TrackInfo _track;
+        private string _previousAlbum;
         private string _cover;
 
         private string _lyrics;
@@ -29,7 +30,8 @@ namespace MusicBeePlugin.AndroidRemote.Model
         private bool _scrobblerState;
         private string _trackRating;
 
-        private void OnModelStateChange(DataEventArgs args)
+
+    private void OnModelStateChange(DataEventArgs args)
         {
             EventHandler<DataEventArgs> handler = ModelStateEvent;
             if (handler != null) handler(this, args);
@@ -128,7 +130,8 @@ namespace MusicBeePlugin.AndroidRemote.Model
         {
             set
             {
-                _track = value;
+                _previousAlbum = _previousAlbum==null ? value.Album : _track.Album;
+                _track = value;    
                 OnModelStateChange(new DataEventArgs(EventDataType.Track));
             }
             get { return _track; }
@@ -139,6 +142,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
         {
             set
             {
+                if (!String.IsNullOrEmpty(_previousAlbum) && _previousAlbum.Equals(_track.Album)) return;
                 try
                 {
                     if (String.IsNullOrEmpty(value))

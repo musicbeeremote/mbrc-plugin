@@ -122,7 +122,6 @@ namespace MusicBeePlugin.AndroidRemote.Interfaces
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="track"></param>
-        void RemoveTrackFromNowPlayingList(int index);
+        void RemoveTrackFromNowPlayingList(int index,int clientId);
     }
 }
