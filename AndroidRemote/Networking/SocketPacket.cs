@@ -1,7 +1,7 @@
-﻿using System.Net.Sockets;
-
-namespace MusicBeePlugin.AndroidRemote.Networking
+﻿namespace MusicBeePlugin.AndroidRemote.Networking
 {
+    using System.Net.Sockets;
+
     /// <summary>
     /// 
     /// </summary>
@@ -12,11 +12,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// 
         /// </summary>
         /// <param name="socket"></param>
-        /// <param name="clientNumber"></param>
-        public SocketPacket(Socket socket, int clientNumber)
+        /// <param name="clientId"> </param>
+        public SocketPacket(Socket socket, string clientId)
         {
             MCurrentSocket = socket;
-            MClientNumber = clientNumber;
+            ClientId = clientId;
         }
 
         /// <summary>
@@ -27,13 +27,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <summary>
         /// 
         /// </summary>
-        public int MClientNumber { get; private set; }
+        public string ClientId { get; private set; }
 
         // Buffer to store the data sent by the client
-        private byte[] _dataBuffer = new byte[1024];
+        private byte[] dataBuffer = new byte[1024];
         /// <summary>
         /// 
         /// </summary>
-        public byte[] DataBuffer { get { return _dataBuffer; } set { _dataBuffer = value; } }
+        public byte[] DataBuffer { get { return dataBuffer; } set { dataBuffer = value; } }
     }
 }

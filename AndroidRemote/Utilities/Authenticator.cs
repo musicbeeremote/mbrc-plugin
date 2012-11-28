@@ -1,70 +1,72 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using MusicBeePlugin.AndroidRemote.Events;
-using MusicBeePlugin.AndroidRemote.Networking;
+﻿using System.Collections.Concurrent;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
+    using System.Collections.Generic;
+    using System.Linq;
+    using Networking;
     /// <summary>
     /// Responsible for the client authentication. Keeps a list of the connected clients.
     /// </summary>
     public static class Authenticator
     {
-        private static readonly List<SocketClient> SocketClients = new List<SocketClient>();
+        private static readonly ConcurrentDictionary<string, SocketClient> ConnectedClients = new ConcurrentDictionary<string, SocketClient>(); 
         /// <summary>
         /// Returns if a clients has passed the authentication stage and thus can receive data.
         /// </summary>
-        /// <param name="clientId">Represents the id of client</param>
+        /// <param name="clientId">Represents the clientId of client</param>
         /// <returns>true or false depending on the authentication state of the client</returns>
-        public static bool IsClientAuthenticated(int clientId)
+        public static bool IsClientAuthenticated(string clientId)
         {
-            return
-                (from socketClient in SocketClients
-                 where socketClient.ClientId == clientId
-                 select socketClient.Authenticated).FirstOrDefault();
+            bool authenticated = false;
+            SocketClient client;
+            if(ConnectedClients.TryGetValue(clientId, out client))
+            {
+                authenticated = client.Authenticated;
+            }
+            return authenticated;
         }
 
         /// <summary>
         ///  Removes a client from the Client List when the client disconnects from the server.
         /// </summary>
-        /// <param name="e"></param>
-        public static void RemoveClientOnDisconnect(MessageEventArgs e)
+        /// <param name="clientId"> </param>
+        public static void RemoveClientOnDisconnect(string clientId)
         {
-            foreach (SocketClient client in SocketClients)
+            SocketClient client;
+            if (ConnectedClients.TryRemove(clientId, out client))
             {
-                if (client.ClientId != e.ClientId) continue;
-                SocketClients.Remove(client);
-                break;
+                //?
             }
         }
 
         /// <summary>
         /// Adds a client to the Client List when the client connects to the server. In case a client
-        /// already exists with the specified id then the old client entry is removed before the adding
+        /// already exists with the specified clientId then the old client entry is removed before the adding
         /// the new one.
         /// </summary>
-        /// <param name="e"></param>
-        public static void AddClientOnConnect(MessageEventArgs e)
+        /// <param name="clientId"> </param>
+        public static void AddClientOnConnect(string clientId)
         {
-            foreach (SocketClient client in SocketClients)
+            SocketClient client;
+            if(ConnectedClients.ContainsKey(clientId))
             {
-                if (client.ClientId != e.ClientId) continue;
-                SocketClients.Remove(client);
-                break;
+                ConnectedClients.TryRemove(clientId, out client);
             }
-
-            SocketClient newClient = new SocketClient(e.ClientId);
-            SocketClients.Add(newClient);
+            client = new SocketClient(clientId);
+            ConnectedClients.TryAdd(clientId, client);
         }
 
         /// <summary>
-        /// Given a client id the function returns a SocketClient object.
+        /// Given a client clientId the function returns a SocketClient object.
         /// </summary>
-        /// <param name="id">The client id.</param>
-        /// <returns>A SocketClient object.</returns>
-        public static SocketClient Client(int id)
+        /// <param name="clientId">The client clientId.</param>
+        /// <returns>A SocketClient object. or null</returns>
+        public static SocketClient Client(string clientId)
         {
-            return SocketClients.FirstOrDefault(socketClient => socketClient.ClientId == id);
+            SocketClient client;
+            ConnectedClients.TryGetValue(clientId, out client);
+            return client;
         }
     }
 }

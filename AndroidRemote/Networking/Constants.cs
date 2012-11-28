@@ -28,15 +28,26 @@
         public const string Year = "year";
         public const string Protocol = "protocol";
         public const string Player = "player";
-        public const string ProtocolVersion = "1.2";
+        public const string ProtocolVersion = "1.3";
         public const string PlayerName = "MusicBee";
+        public const string PlaylistItem = "playlistItem";
 
         #endregion
 
         #region Protocol 1.2
 
         public const string PlaybackPosition = "playbackPosition";
-        public const string PlayNowRemoveSelected = "playNowRemoveSelected";
+        public const string NowPlayingTrackRemoval = "playNowRemoveSelected";
+
+        #endregion
+
+        #region Protocol 1.3
+
+        public const string AutoDj = "autodj";
+        public const string NowPlayingListChanged = "nowplayingchanged";
+        public const string PluginVersion = "pluginversion";
+        public const string LfmLoveRating = "lfmloverating";
+        public const string PlaylistList = "playlistList";
 
         #endregion
     }

@@ -6,7 +6,7 @@ namespace MusicBeePlugin.AndroidRemote.Error
 {
     internal static class ErrorHandler
     {
-        private static string _logFilePath;
+        private static string logFilePath;
 
         /// <summary>
         /// Given an Exception it logs the time and the exception message to the log file stored in the _logFilePath
@@ -17,11 +17,11 @@ namespace MusicBeePlugin.AndroidRemote.Error
         {
             try
             {
-                if (String.IsNullOrEmpty(_logFilePath))
+                if (String.IsNullOrEmpty(logFilePath))
                     return;
-                if (!Directory.Exists(_logFilePath + "mb_remote"))
-                    Directory.CreateDirectory(_logFilePath + "mb_remote");
-                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log", FileMode.Append);
+                if (!Directory.Exists(logFilePath + "mb_remote"))
+                    Directory.CreateDirectory(logFilePath + "mb_remote");
+                Stream stream = new FileStream(logFilePath + "mb_remote\\error.log", FileMode.Append);
                 using (StreamWriter fWriter = new StreamWriter(stream))
                 {
                     fWriter.WriteLine(DateTime.Now + "\n");
@@ -41,11 +41,11 @@ namespace MusicBeePlugin.AndroidRemote.Error
         {
             try
             {
-                if (String.IsNullOrEmpty(_logFilePath))
+                if (String.IsNullOrEmpty(logFilePath))
                     return;
-                if (!Directory.Exists(_logFilePath + "mb_remote"))
-                    Directory.CreateDirectory(_logFilePath + "mb_remote");
-                Stream stream = new FileStream(_logFilePath + "mb_remote\\error.log", FileMode.Append);
+                if (!Directory.Exists(logFilePath + "mb_remote"))
+                    Directory.CreateDirectory(logFilePath + "mb_remote");
+                Stream stream = new FileStream(logFilePath + "mb_remote\\error.log", FileMode.Append);
                 using (StreamWriter fWriter = new StreamWriter(stream))
                 {
                     fWriter.WriteLine(DateTime.Now + "\n");
@@ -68,7 +68,7 @@ namespace MusicBeePlugin.AndroidRemote.Error
         /// <returns></returns>
         public static void SetLogFilePath(String path)
         {
-            _logFilePath = path;
+            logFilePath = path;
         }
     }
 }

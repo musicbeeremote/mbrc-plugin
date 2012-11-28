@@ -2,7 +2,9 @@
 {
     interface IEvent
     {
-        string GetEventData();
-        IEventType GetEventType();
+        string Data { get; }
+        string Type { get; }
+        string ClientId { get; }
+        string ExtraData { get; }
     }
 }

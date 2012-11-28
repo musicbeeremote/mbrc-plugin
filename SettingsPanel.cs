@@ -14,61 +14,6 @@ namespace MusicBeePlugin
     public partial class SettingsPanel : UserControl
     {
         /// <summary>
-        /// This event gets fired when the filtering selection changes.
-        /// </summary>
-        public event EventHandler<MessageEventArgs> SelectionChanged;
-
-        /// <summary>
-        /// This event gets fired when a new address is added to the allowed addresses specified.
-        /// </summary>
-        public event EventHandler<MessageEventArgs> AddressAdded;
-
-        /// <summary>
-        /// This event gets fired when an address is removed from the allowed addresses specified.
-        /// </summary>
-        public event EventHandler<MessageEventArgs> AddressRemoved;
-
-        /// <summary>
-        /// This event gets fired when the range of allowed addresses changes.
-        /// </summary>
-        public event EventHandler<MessageEventArgs> RangeChanged;
-
-        /// <summary>
-        /// This event gets fired when the default port is changed. 
-        /// </summary>
-        public event EventHandler<MessageEventArgs> PortChanged;
-
-        private void OnSelectionChanged(MessageEventArgs args)
-        {
-            EventHandler<MessageEventArgs> handler = SelectionChanged;
-            if (handler != null) handler(this, args);
-        }
-
-        private void OnAddressAdded(MessageEventArgs args)
-        {
-            EventHandler<MessageEventArgs> handler = AddressAdded;
-            if (handler != null) handler(this, args);
-        }
-
-        private void OnAddressRemoved(MessageEventArgs args)
-        {
-            EventHandler<MessageEventArgs> handler = AddressRemoved;
-            if (handler != null) handler(this, args);
-        }
-
-        private void OnRangeChanged(MessageEventArgs args)
-        {
-            EventHandler<MessageEventArgs> handler = RangeChanged;
-            if (handler != null) handler(this, args);
-        }
-
-        private void OnPortChanged(MessageEventArgs args)
-        {
-            EventHandler<MessageEventArgs> handler = PortChanged;
-            if (handler != null) handler(this, args);
-        }
-
-        /// <summary>
         /// Default Constructor
         /// </summary>
         public SettingsPanel()
@@ -85,14 +30,14 @@ namespace MusicBeePlugin
 
         private void HandlePortNumericUpDownValueChange(object sender, EventArgs e)
         {
-            OnPortChanged(new MessageEventArgs(portNumericUpDown.Text));
+            //OnPortChanged(new MessageEventArgs(portNumericUpDown.Text));
         }
 
         private void HandleRangeNumericUpDownValueChanged(object sender, EventArgs e)
         {
             if (IsAddressValid())
             {
-                OnRangeChanged(new MessageEventArgs(ipAddressInputTextBox.Text + "," + rangeNumericUpDown.Text));
+               // OnRangeChanged(new MessageEventArgs(ipAddressInputTextBox.Text + "," + rangeNumericUpDown.Text));
             }
         }
 
@@ -105,7 +50,7 @@ namespace MusicBeePlugin
                 string[] addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(),
                                                                          StringSplitOptions.RemoveEmptyEntries);
                 rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
-                OnRangeChanged(new MessageEventArgs(ipAddressInputTextBox.Text + "," + rangeNumericUpDown.Text));
+               // OnRangeChanged(new MessageEventArgs(ipAddressInputTextBox.Text + "," + rangeNumericUpDown.Text));
             }
         }
 
@@ -119,13 +64,13 @@ namespace MusicBeePlugin
         private void HandleRemoveAddressButtonClick(object sender, EventArgs e)
         {
             if (!String.IsNullOrEmpty(allowedAddressesComboBox.Text)){}
-                OnAddressRemoved(new MessageEventArgs(allowedAddressesComboBox.Text));
+               // OnAddressRemoved(new MessageEventArgs(allowedAddressesComboBox.Text));
         }
 
         private void HandleAddAddressButtonClick(object sender, EventArgs e)
         {
             if (!IsAddressValid()) return;
-            OnAddressAdded(new MessageEventArgs(ipAddressInputTextBox.Text));
+            //OnAddressAdded(new MessageEventArgs(ipAddressInputTextBox.Text));
             ipAddressInputTextBox.Text = String.Empty;
         }
 
@@ -164,8 +109,8 @@ namespace MusicBeePlugin
                     allowedLabel.Visible = true;
                     break;
             }
-            OnSelectionChanged(
-                new MessageEventArgs(selectionFilteringComboBox.SelectedIndex.ToString(CultureInfo.InvariantCulture)));
+           // OnSelectionChanged(
+             //   new MessageEventArgs(selectionFilteringComboBox.SelectedIndex.ToString(CultureInfo.InvariantCulture)));
         }
 
         /// <summary>

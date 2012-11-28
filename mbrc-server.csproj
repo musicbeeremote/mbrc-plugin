@@ -47,6 +47,7 @@
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
     <PlatformTarget>x86</PlatformTarget>
     <DocumentationFile>MB_REMOTE.XML</DocumentationFile>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -75,30 +76,81 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AndroidRemote\Controller\RemoteController.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\MCoverChange.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\MLyricsChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PAutoDjChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PMuteChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PNowPlayingChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PPlaybackPositionChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PRepeatChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PScrobbleChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PShuffleChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
+    <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
+    <Compile Include="AndroidRemote\Commands\InstaReplies\RequestLyrics.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestRating.cs" />
+    <Compile Include="AndroidRemote\Commands\State\PCoverChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\State\PLyricsChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\State\PTrackChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingList.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PPlaylistReady.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PPlayerStatus.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PStateChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestVolume.cs" />
+    <Compile Include="AndroidRemote\Commands\State\PVolumeChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestStop.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayPause.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrack.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\ForceClientDisconnect.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestProtocol.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\ClientDisconnected.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\ClientConnected.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\PNowPlayingRemoved.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\StopSocketServer.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\StartSocketServer.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayer.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestSongInfo.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerStatus.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayPauseTrackCommand.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrackCommand.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\InitializeModelStateCommand.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs" />
+    <Compile Include="AndroidRemote\configuration.cs" />
+    <Compile Include="AndroidRemote\Controller\Controller.cs" />
     <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />
     <Compile Include="AndroidRemote\Entities\TrackInfo.cs" />
     <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
     <Compile Include="AndroidRemote\Enumerations\Repeat.cs" />
-    <Compile Include="AndroidRemote\Enumerations\RequestType.cs" />
-    <Compile Include="AndroidRemote\Events\ClientRequestArgs.cs" />
-    <Compile Include="AndroidRemote\Events\DataEventArgs.cs" />
-    <Compile Include="AndroidRemote\Enumerations\EventDataType.cs" />
+    <Compile Include="AndroidRemote\Events\EventBus.cs" />
+    <Compile Include="AndroidRemote\Events\EventType.cs" />
+    <Compile Include="AndroidRemote\Events\MessageEvent.cs" />
     <Compile Include="AndroidRemote\Interfaces\ICommand.cs" />
     <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
-    <Compile Include="AndroidRemote\Interfaces\IEventType.cs" />
-    <Compile Include="AndroidRemote\Interfaces\IPlugin.cs" />
     <Compile Include="AndroidRemote\Model\SettingsModel.cs" />
+    <Compile Include="AndroidRemote\Networking\HttpHandler.cs" />
     <Compile Include="AndroidRemote\Networking\Constants.cs" />
     <Compile Include="AndroidRemote\Error\ErrorHandler.cs" />
-    <Compile Include="AndroidRemote\Events\MessageEventArgs.cs" />
+    <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
+    <Compile Include="AndroidRemote\Utilities\IdGenerator.cs" />
+    <Compile Include="AndroidRemote\Utilities\XmlCreator.cs" />
     <Compile Include="FilteringSelection.cs" />
-    <Compile Include="Mapper.cs" />
+    <Compile Include="Mbrc\Views\InfoWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Mbrc\Views\InfoWindow.Designer.cs">
+      <DependentUpon>InfoWindow.cs</DependentUpon>
+    </Compile>
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="AndroidRemote\Networking\SocketClient.cs" />
     <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
-    <Compile Include="AndroidRemote\Model\PlayerStateModel.cs" />
+    <Compile Include="AndroidRemote\Model\LyricCoverModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="AndroidRemote\Networking\ProtocolHandler.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -117,13 +169,14 @@
     <Compile Include="SettingsPanel.Designer.cs">
       <DependentUpon>SettingsPanel.cs</DependentUpon>
     </Compile>
+    <Compile Include="Tools\NetworkTools.cs" />
+    <Compile Include="Tools\UpdateChecker.cs" />
     <Compile Include="UnsupportedPanel.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UnsupportedPanel.Designer.cs">
       <DependentUpon>UnsupportedPanel.cs</DependentUpon>
     </Compile>
-    <Compile Include="UpdateChecker.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -156,6 +209,9 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Mbrc\Views\InfoWindow.resx">
+      <DependentUpon>InfoWindow.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -167,10 +223,11 @@
       <DependentUpon>UnsupportedPanel.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_ConfigurationName="Debug" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_BuildVersioningStyle="None.None.None.Increment" />
+      <UserProperties BuildVersion_BuildVersioningStyle="None.None.None.Increment" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_ConfigurationName="Debug" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
     </VisualStudio>
   </ProjectExtensions>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
