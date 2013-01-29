@@ -76,6 +76,7 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AndroidRemote\Commands\Replies\LArtistListReady.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\MCoverChange.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\MLyricsChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\PAutoDjChanged.cs" />
@@ -87,6 +88,7 @@
     <Compile Include="AndroidRemote\Commands\Replies\PRepeatChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\PScrobbleChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\PShuffleChanged.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestAllArtists.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
@@ -215,7 +217,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_ConfigurationName="Debug" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_BuildVersioningStyle="None.None.None.Increment" />
+      <UserProperties BuildVersion_BuildVersioningStyle="None.None.None.Increment" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_ConfigurationName="Debug" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
     </VisualStudio>
   </ProjectExtensions>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

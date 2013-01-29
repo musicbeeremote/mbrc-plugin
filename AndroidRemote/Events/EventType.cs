@@ -31,5 +31,6 @@
         public const string PlayerStateNowPlayingTrackRemoved = "PlayerStateNowPlayingTrackRemoved";
         public const string PlayerStateLfmLoveRatingChanged = "PlayerStateLfmLoveRatingChanged";
         public const string PlayerStateRatingChanged = "PlayerStateRatingChanged";
+        public const string LibraryArtistListReady = "LibraryArtistListReady";
     }
 }

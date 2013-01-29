@@ -49,10 +49,10 @@
         public const string LfmLoveRating = "lfmloverating";
         public const string PlaylistList = "playlistList";
         public const string NowPlayingMoveTrack = "nowplayingmove";
-        
+        public const string LibraryAllArtists = "liballartists";
+
         #endregion
 
-        
 
     }
 }

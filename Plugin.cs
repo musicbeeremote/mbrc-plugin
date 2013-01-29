@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Networking;
@@ -18,6 +20,7 @@ namespace MusicBeePlugin
     using AndroidRemote.Error;
     using AndroidRemote.Settings;
     using AndroidRemote.Utilities;
+
     using MusicBeePlugin.AndroidRemote.Enumerations;
 
     using Timer = System.Timers.Timer;
@@ -77,16 +80,19 @@ namespace MusicBeePlugin
         {
             selfInstance = this;
             Configuration.Register(Controller.Instance);
+
             mbApiInterface = new MusicBeeApiInterface();
             mbApiInterface.Initialise(apiInterfacePtr);
             
             UserSettings.Instance.SetStoragePath(mbApiInterface.Setting_GetPersistentStoragePath());
             UserSettings.Instance.LoadSettings();
+            
             about.PluginInfoVersion = PluginInfoVersion;
             about.Name = "MusicBee Remote:Server";
             about.Description = "Remote Control for server to be used with android application.";
             about.Author = "Konstantinos Paparas (aka Kelsos)";
             about.TargetApplication = "MusicBee Remote";
+
             Version v = Assembly.GetExecutingAssembly().GetName().Version;
             UserSettings.Instance.CurrentVersion = v.ToString();
 
@@ -190,8 +196,7 @@ namespace MusicBeePlugin
         /// </returns>
         public bool Configure(IntPtr panelHandle)
         {
-                     return false;
-
+            return false;
         }
 
         /// <summary>
@@ -513,6 +518,8 @@ namespace MusicBeePlugin
             {
                 EventBus.FireEvent(new MessageEvent(EventType.PlayerStateRatingChanged, this.mbApiInterface.Library_GetFileTag(this.mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)));    
             }
+            
+            
         }
 
         /// <summary>
@@ -708,7 +715,6 @@ namespace MusicBeePlugin
             from[0] = int.Parse(values[0]);
             int to = int.Parse(values[1]);
             result = mbApiInterface.NowPlayingList_MoveFiles(from, to);
-            RequestLibraryData("a","Absence");
         }
 
         public void RequestLibraryData(string clientId, string searchParam)
@@ -724,6 +730,55 @@ namespace MusicBeePlugin
                 }
                 Debug.WriteLine(track);
 
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="client"></param>
+        public void RequestLibraryAllArtists(string client)
+        {
+            List<string> artistList = new List<string>();
+            mbApiInterface.Library_QueryFiles(null);
+
+            while (true)
+            {
+                string file = mbApiInterface.Library_QueryGetNextFile();
+                if(file == null) break;
+                string artist = mbApiInterface.Library_GetFileTag(file, MetaDataType.Artist);
+                if(!artistList.Contains(artist))
+                {
+                    artistList.Add(artist);
+                }
+            }
+
+            string xml = artistList.Aggregate(string.Empty, (current, artist) => current + ("<artist><name>" + artist + "</name></artist>"));
+
+            EventBus.FireEvent(new MessageEvent(EventType.LibraryArtistListReady, xml, client));
+
+            RequestLibraryAllAlbums("d","Shinedown");
+        }
+
+        public void RequestLibraryAllAlbums(string client, string artist)
+        {
+            List<string> albumList = new List<string>();
+            mbApiInterface.Library_QueryFiles("artist=" + artist);
+
+            while (true)
+            {
+                string file = mbApiInterface.Library_QueryGetNextFile();
+                if (String.IsNullOrEmpty(file)) break;
+                string album = mbApiInterface.Library_GetFileTag(file, MetaDataType.Album);
+                if(!albumList.Contains(album))
+                {
+                    albumList.Add(album);
+                }
+            }
+
+            foreach (var al in albumList)
+            {
+                Debug.WriteLine(al);
             }
         }
     }
