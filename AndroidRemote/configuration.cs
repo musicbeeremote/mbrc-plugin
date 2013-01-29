@@ -40,6 +40,11 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(Constants.PluginVersion, typeof (RequestPluginVersion));
             controller.AddCommand(Constants.LfmLoveRating, typeof (RequestLfmLoveRating));
             controller.AddCommand(Constants.PlaylistList, typeof (RequestPlaylistList));
+            controller.AddCommand(Constants.Shuffle, typeof(RequestShuffle));
+            controller.AddCommand(Constants.Scrobble, typeof(RequestScrobble));
+            controller.AddCommand(Constants.Repeat, typeof(RequestRepeat));
+            controller.AddCommand(Constants.Mute, typeof(RequestMute));
+            controller.AddCommand(Constants.NowPlayingMoveTrack, typeof(RequestNowPlayingMoveTrack));
             controller.AddCommand(EventType.ModelDataCoverChanged, typeof(MCoverChange));
             controller.AddCommand(EventType.ModelDataLyricsChanged, typeof (MLyricsChanged));
             controller.AddCommand(EventType.PlayerStateShuffleChanged, typeof (PShuffleChanged));
@@ -57,6 +62,8 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(EventType.PlayerStateNowPlayingListData, typeof(PPlaylistReady));
             controller.AddCommand(EventType.PlayerStateStatus, typeof(PPlayerStatus));
             controller.AddCommand(EventType.PlayerStateNowPlayingTrackRemoved, typeof(PNowPlayingRemoved));
+            controller.AddCommand(EventType.PlayerStateLfmLoveRatingChanged, typeof(PLfmLoveRating));
+            controller.AddCommand(EventType.PlayerStateRatingChanged, typeof(PRatingChanged));
         }
     }
 }

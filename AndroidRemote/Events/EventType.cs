@@ -2,7 +2,6 @@
 {
     class EventType
     {
-        
         // These event types represent the model data changes
         public const string ModelDataCoverChanged = "ModelDataCoverChanged";
         public const string ModelDataLyricsChanged = "ModelDataLyricsChanged";
@@ -30,6 +29,7 @@
         public const string PlayerStateStatus = "PlayerStateStatus";
         public const string PlayerStateNowPlayingListData = "PlayerStateNowPlayingListData";
         public const string PlayerStateNowPlayingTrackRemoved = "PlayerStateNowPlayingTrackRemoved";
-
+        public const string PlayerStateLfmLoveRatingChanged = "PlayerStateLfmLoveRatingChanged";
+        public const string PlayerStateRatingChanged = "PlayerStateRatingChanged";
     }
 }

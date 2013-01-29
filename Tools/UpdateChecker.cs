@@ -7,7 +7,11 @@ namespace MusicBeePlugin.Tools
 {
     internal class UpdateChecker
     {
-        private const string FilePath = "\\mb_remote\\lastupdate.xml";
+        private const string FileName = "\\lastupdate.xml";
+
+        public static string LatestVersion;
+
+        public static string LastUpdateCheck;
 
         public static bool IsThereAnUpdate(string version, string storagePath)
         {
@@ -26,18 +30,15 @@ namespace MusicBeePlugin.Tools
             if (versionNode != null)
             {
                 SetUpdateCheckTime(storagePath);
-                return
-                    !version.Equals(versionNode.InnerText.Substring(0,
-                                                                    versionNode.InnerText.LastIndexOf(".",
-                                                                                                      StringComparison.
-                                                                                                          Ordinal)));
+                LatestVersion = versionNode.InnerText;
+                return !version.Equals(LatestVersion.Substring(0, LatestVersion.LastIndexOf(".", StringComparison.Ordinal)));
             }
             return false;
         }
 
         private static void SetUpdateCheckTime(string storagePath)
         {
-            string settingsFile = storagePath + FilePath;
+            string settingsFile = storagePath + FileName;
             XmlDocument document = new XmlDocument();
             document.Load(settingsFile);
             XmlNode node = document.SelectSingleNode("//date");
@@ -57,7 +58,7 @@ namespace MusicBeePlugin.Tools
 
         private static bool ShouldICheckForUpdates(string storagePath)
         {
-            string settingsFile = storagePath + FilePath;
+            string settingsFile = storagePath + FileName;
             if (!File.Exists(settingsFile))
             {
                 XmlDocument document = new XmlDocument();
@@ -75,6 +76,7 @@ namespace MusicBeePlugin.Tools
                 XmlNode lastUpdateTime = document.SelectSingleNode("//date");
                 if (lastUpdateTime != null)
                 {
+                    LastUpdateCheck = lastUpdateTime.InnerText;
                     TimeSpan difference = DateTime.Now.Subtract(DateTime.Parse(lastUpdateTime.InnerText));
                     if (difference.Days > 2)
                     {

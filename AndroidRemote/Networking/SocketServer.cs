@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
@@ -123,7 +123,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             {
                 mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 // Create the listening socket.    
-                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, UserSettings.SettingsModel.ListeningPort);
+                IPEndPoint ipLocal = new IPEndPoint(IPAddress.Any, Convert.ToInt32(UserSettings.Instance.ListeningPort));
                 // Bind to local IP address.
                 mainSocket.Bind(ipLocal);
                 // Start Listening.
@@ -155,10 +155,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 string ipString = ipAddress.ToString();
                 
                 bool isAllowed = false;
-                switch (UserSettings.SettingsModel.FilterSelection)
+                switch (UserSettings.Instance.FilterSelection)
                 {
                     case FilteringSelection.Specific:
-                        foreach (string source in UserSettings.SettingsModel.IpAddressList)
+                        foreach (string source in UserSettings.Instance.IpAddressList)
                         {
                             if (string.Compare(ipString, source, StringComparison.Ordinal) == 0)
                             {
@@ -169,7 +169,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     case FilteringSelection.Range:
                         string[] connectingAddress = ipString.Split(".".ToCharArray(),
                                                                    StringSplitOptions.RemoveEmptyEntries);
-                        string[] baseIp = UserSettings.SettingsModel.BaseIp.Split(".".ToCharArray(),
+                        string[] baseIp = UserSettings.Instance.BaseIp.Split(".".ToCharArray(),
                                                                              StringSplitOptions.RemoveEmptyEntries);
                         if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
                             connectingAddress[2] == baseIp[2])
@@ -179,7 +179,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                             int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
                             int.TryParse(baseIp[3], out baseIpAddressLowOctet);
                             if (connectingAddressLowOctet >= baseIpAddressLowOctet &&
-                                baseIpAddressLowOctet <= UserSettings.SettingsModel.LastOctetMax)
+                                baseIpAddressLowOctet <= UserSettings.Instance.LastOctetMax)
                             {
                                 isAllowed = true;
                             }
@@ -257,10 +257,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (SocketException se)
             {
-                if (se.ErrorCode != 10053){
+                if (se.ErrorCode != 10053)
+                {
 #if DEBUG
                     ErrorHandler.LogError(se);
 #endif
+                }
+                else
+                {
+                    EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, clientId));
                 }
             }
         }
@@ -306,6 +311,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
+                EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, clientId));
 #if DEBUG
                 Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnDataReceived: Socket has been closed\n");
 #endif

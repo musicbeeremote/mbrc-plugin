@@ -1,6 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
-    interface IEvent
+    public interface IEvent
     {
         string Data { get; }
         string Type { get; }

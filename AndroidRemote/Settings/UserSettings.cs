@@ -1,23 +1,195 @@
 using System.Globalization;
 using System.IO;
 using System.Xml;
-using MusicBeePlugin.AndroidRemote.Model;
 
 namespace MusicBeePlugin.AndroidRemote.Settings
 {
-    internal static class UserSettings
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+
+    /// <summary>
+    /// Represents the settings along with all the settings related functionality
+    /// </summary>
+    public class UserSettings
     {
-        public static string SettingsFilePath { get; set; }
-        public static string SettingsFileName { get; set; }
-        private static SettingsModel _settingsModel;
+        private const string Application = "mbremote";
+
         private const string PortNumber = "port";
+
         private const string Values = "values";
+
         private const string Selection = "selection";
-        
-        public static SettingsModel SettingsModel
+
+        private const string NowPlayingLimit = "nplimit";
+
+        private const string SFilename = "settings.xml";
+
+        private const string SFolder = "mb_remote\\";
+
+        private static readonly UserSettings Settings = new UserSettings();
+
+        private string storagePath;
+
+        private string currentVersion;
+
+        private uint listeningPort;
+
+        private uint nowPlayingListLimit;
+
+        private FilteringSelection filteringSelection;
+
+        private string baseIp;
+
+        private uint lastOctetMax;
+
+        private List<String> ipAddressList;
+
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public string StoragePath 
         {
-            get { return _settingsModel; }
-            set { _settingsModel = value; }
+            get
+            {
+                return storagePath;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public uint ListeningPort
+        {
+            get
+            {
+                return listeningPort;
+            }
+            set
+            {
+                listeningPort = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public uint NowPlayingListLimit
+        {
+            get
+            {
+                return nowPlayingListLimit;
+            }
+            set
+            {
+                nowPlayingListLimit = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public FilteringSelection FilterSelection
+        {
+            get
+            {
+                return filteringSelection;
+            }
+            set
+            {
+                filteringSelection = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public string BaseIp
+        {
+            get
+            {
+                return baseIp;
+            }
+            set
+            {
+                baseIp = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public uint LastOctetMax
+        {
+            get
+            {
+                return lastOctetMax;
+            }
+            set
+            {
+                lastOctetMax = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public List<string> IpAddressList
+        {
+            get
+            {
+                return ipAddressList;
+            }
+            set
+            {
+                ipAddressList = value;
+            }
+        }
+
+        private UserSettings()
+        {
+            // Private constructor to enforce singleton
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public static UserSettings Instance
+        {
+            get
+            {
+                return Settings;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public string CurrentVersion
+        {
+            get
+            {
+                return currentVersion;
+            }
+            set
+            {
+                currentVersion = value;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="path"></param>
+        public void SetStoragePath(string path)
+        {
+            this.storagePath = path + SFolder;
+        }
+
+        private string GetSettingsFile()
+        {
+            return storagePath + SFilename;
         }
 
         /// <summary>
@@ -35,7 +207,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 XmlElement pattern = document.CreateElement(name);
                 XmlNode root = document.DocumentElement;
                 pattern.InnerText = value;
-                if (root != null) root.AppendChild(pattern);
+                if (root != null)
+                {
+                    root.AppendChild(pattern);
+                }
             }
             else
             {
@@ -47,37 +222,44 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// Saves the settings.
         /// </summary>
         /// <remarks></remarks>
-        public static void SaveSettings(string application)
+        public void SaveSettings()
         {
-            if (!Directory.Exists(SettingsFileName + "mb_remote"))
-                Directory.CreateDirectory(SettingsFilePath + "mb_remote");
-            if (!File.Exists(SettingsFilePath + SettingsFileName))
-                CreateEmptySettingsFile(application);
+            if (!Directory.Exists(storagePath))
+            {
+                Directory.CreateDirectory(storagePath);
+            }
+            if (!File.Exists(GetSettingsFile()))
+            {
+                CreateEmptySettingsFile(Application);
+            }
             XmlDocument document = new XmlDocument();
-            document.Load(SettingsFilePath + SettingsFileName);
+            document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
-            document.Save(SettingsFilePath + SettingsFileName);
+            document.Save(GetSettingsFile());
         }
 
-        private static void CreateEmptySettingsFile(string application)
+        private void CreateEmptySettingsFile(string application)
         {
             XmlDocument document = new XmlDocument();
             XmlDeclaration declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
             XmlElement root = document.CreateElement(application);
             document.InsertBefore(declaration, document.DocumentElement);
             document.AppendChild(root);
-            document.Save(SettingsFilePath + SettingsFileName);
+            document.Save(GetSettingsFile());
         }
 
-        private static void WriteApplicationSetting(XmlDocument document)
+        private void WriteApplicationSetting(XmlDocument document)
         {
-            if (_settingsModel.ListeningPort > 0 && _settingsModel.ListeningPort < 65535)
-                WriteNodeValue(document, PortNumber, _settingsModel.ListeningPort.ToString(CultureInfo.InvariantCulture));
-            WriteNodeValue(document, Values, _settingsModel.GetValues());
-            WriteNodeValue(document, Selection, _settingsModel.FilterSelection.ToString());
+            if (listeningPort < 65535)
+            {
+                WriteNodeValue(document, PortNumber, listeningPort.ToString(CultureInfo.InvariantCulture));
+            }
+            WriteNodeValue(document, Values, GetValues());
+            WriteNodeValue(document, Selection, filteringSelection.ToString());
+            WriteNodeValue(document, NowPlayingLimit, nowPlayingListLimit.ToString(CultureInfo.InvariantCulture));
         }
 
-        private static string ReadNodeValue(XmlNode document, string name)
+        private string ReadNodeValue(XmlNode document, string name)
         {
             XmlNode node = document.SelectSingleNode("//" + name);
             return node != null ? node.InnerText : string.Empty;
@@ -87,29 +269,135 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// Loads the settings.
         /// </summary>
         /// <remarks></remarks>
-        public static void LoadSettings()
+        public void LoadSettings()
         {
-            if(_settingsModel==null)
+            if (!File.Exists(GetSettingsFile()))
             {
-                _settingsModel = new SettingsModel();
-            }
-            if (!File.Exists(SettingsFilePath + SettingsFileName))
-            {
-                _settingsModel.ListeningPort = 3000;
+                ListeningPort = 3000;
             }
             else
             {
                 XmlDocument document = new XmlDocument();
-                document.Load(SettingsFilePath + SettingsFileName);
-                int listeningPort;
-                _settingsModel.ListeningPort = int.TryParse(ReadNodeValue(document, PortNumber), out listeningPort) ? listeningPort : 3000;
-                _settingsModel.UpdateFilteringSelection(ReadNodeValue(document, Selection));
-                _settingsModel.SetValues(ReadNodeValue(document,Values));
+                document.Load(GetSettingsFile());
+                listeningPort = uint.TryParse(ReadNodeValue(document, PortNumber), out listeningPort)
+                                                  ? listeningPort
+                                                  : 3000;
+                UpdateFilteringSelection(ReadNodeValue(document, Selection));
+                SetValues(ReadNodeValue(document, Values));
+                nowPlayingListLimit = uint.TryParse(ReadNodeValue(document, NowPlayingLimit), out nowPlayingListLimit)
+                                          ? nowPlayingListLimit
+                                          : 2000;
             }
-            if (File.Exists(SettingsFilePath + "mb_remote\\" + "error.log"))
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string GetValues()
+        {
+            switch (FilterSelection)
             {
-                File.Delete(SettingsFilePath + "mb_remote\\" + "error.log");
-            }        
+                case FilteringSelection.All:
+                    return String.Empty;
+                case FilteringSelection.Range:
+                    return FlattenAllowedRange();
+                case FilteringSelection.Specific:
+                    return FlattenAllowedAddressList();
+                default:
+                    return String.Empty;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="values"></param>
+        public void SetValues(string values)
+        {
+            switch (filteringSelection)
+            {
+                case FilteringSelection.All:
+                    break;
+                case FilteringSelection.Range:
+                    UnFlattenAllowedRange(values);
+                    break;
+                case FilteringSelection.Specific:
+                    UnflattenAllowedAddressList(values);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string FlattenAllowedRange()
+        {
+            if (!String.IsNullOrEmpty(baseIp) && (lastOctetMax > 1 || lastOctetMax < 255))
+            {
+                return baseIp + "," + LastOctetMax;
+            }
+            return String.Empty;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="range"></param>
+        public void UnFlattenAllowedRange(string range)
+        {
+            if (String.IsNullOrEmpty(range))
+            {
+                return;
+            }
+            string[] splitRange = range.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            BaseIp = splitRange[0];
+            LastOctetMax = uint.Parse(splitRange[1]);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string FlattenAllowedAddressList()
+        {
+            if (ipAddressList == null)
+            {
+                ipAddressList = new List<string>();
+            }
+            return ipAddressList.Aggregate<string, string>(null, (current, s) => current + (s + ","));
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="selection"></param>
+        public void UpdateFilteringSelection(string selection)
+        {
+            switch (selection)
+            {
+                case "All":
+                    filteringSelection = FilteringSelection.All;
+                    break;
+                case "Range":
+                    filteringSelection = FilteringSelection.Range;
+                    break;
+                case "Specific":
+                    filteringSelection = FilteringSelection.Specific;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="allowedAddresses"></param>
+        public void UnflattenAllowedAddressList(string allowedAddresses)
+        {
+            ipAddressList =
+                new List<string>(
+                    allowedAddresses.Trim().Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries));
         }
     }
 }

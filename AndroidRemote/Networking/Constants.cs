@@ -48,7 +48,11 @@
         public const string PluginVersion = "pluginversion";
         public const string LfmLoveRating = "lfmloverating";
         public const string PlaylistList = "playlistList";
-
+        public const string NowPlayingMoveTrack = "nowplayingmove";
+        
         #endregion
+
+        
+
     }
 }
