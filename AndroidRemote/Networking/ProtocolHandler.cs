@@ -75,7 +75,8 @@
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty, clientId));
                         return;
                     }
-                    EventBus.FireEvent(new MessageEvent(xmNode.Name, xmNode.InnerText, clientId));
+                    
+                    EventBus.FireEvent(new MessageEvent(xmNode.Name, xmNode.InnerXml, clientId));
                     
                 }
                 Authenticator.Client(clientId).IncreasePacketNumber();

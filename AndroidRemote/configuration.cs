@@ -44,8 +44,10 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(Constants.Scrobble, typeof(RequestScrobble));
             controller.AddCommand(Constants.Repeat, typeof(RequestRepeat));
             controller.AddCommand(Constants.Mute, typeof(RequestMute));
-            controller.AddCommand(Constants.LibraryAllArtists, typeof(RequestAllArtists));
+            controller.AddCommand(Constants.NowPlayingSearch, typeof(RequestNowPlayingSearch));
+            controller.AddCommand(Constants.LibrarySearch, typeof(RequestLibrarySearch));
             controller.AddCommand(Constants.NowPlayingMoveTrack, typeof(RequestNowPlayingMoveTrack));
+            controller.AddCommand(EventType.ReplyAvailable, typeof(ReplayAvailable));
             controller.AddCommand(EventType.ModelDataCoverChanged, typeof(MCoverChange));
             controller.AddCommand(EventType.ModelDataLyricsChanged, typeof (MLyricsChanged));
             controller.AddCommand(EventType.PlayerStateShuffleChanged, typeof (PShuffleChanged));

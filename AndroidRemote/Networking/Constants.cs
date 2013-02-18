@@ -49,7 +49,8 @@
         public const string LfmLoveRating = "lfmloverating";
         public const string PlaylistList = "playlistList";
         public const string NowPlayingMoveTrack = "nowplayingmove";
-        public const string LibraryAllArtists = "liballartists";
+        public const string NowPlayingSearch = "nowplayingsearch";
+        public const string LibrarySearch = "libsearch";
 
         #endregion
 

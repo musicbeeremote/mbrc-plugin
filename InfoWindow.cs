@@ -1,3 +1,5 @@
+using MusicBeePlugin.AndroidRemote.Enumerations;
+
 namespace MusicBeePlugin
 {
     using System;
@@ -164,5 +166,6 @@ namespace MusicBeePlugin
                 rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
             }
         }
+
     }
 }

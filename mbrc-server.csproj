@@ -88,7 +88,8 @@
     <Compile Include="AndroidRemote\Commands\Replies\PRepeatChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\PScrobbleChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Replies\PShuffleChanged.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestAllArtists.cs" />
+    <Compile Include="AndroidRemote\Commands\Replies\ReplayAvailable.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibrarySearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
@@ -96,6 +97,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingMoveTrack.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestMute.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
@@ -134,6 +136,7 @@
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
     <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />
     <Compile Include="AndroidRemote\Entities\TrackInfo.cs" />
+    <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />
     <Compile Include="AndroidRemote\Enumerations\LastfmStatus.cs" />
     <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
     <Compile Include="AndroidRemote\Enumerations\Repeat.cs" />

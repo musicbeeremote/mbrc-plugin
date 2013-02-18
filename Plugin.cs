@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Networking;
@@ -717,69 +718,90 @@ namespace MusicBeePlugin
             result = mbApiInterface.NowPlayingList_MoveFiles(from, to);
         }
 
-        public void RequestLibraryData(string clientId, string searchParam)
-        {
-            mbApiInterface.Library_QueryFiles(searchParam);
-            while (true)
-            {
                 
-                string track = mbApiInterface.Library_QueryGetNextFile();
-                if (track==null)
-                {
-                    break;
-                }
-                Debug.WriteLine(track);
-
-            }
-        }
 
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="client"></param>
-        public void RequestLibraryAllArtists(string client)
+        /// <param name="clientId"></param>
+        /// <param name="tag"></param>
+        /// <param name="filter"></param>
+        /// <param name="query"></param>
+        public void SearchMusicBeeLibrary(string clientId, MetaTag tag, MetaTag filter, string query)
         {
-            List<string> artistList = new List<string>();
-            mbApiInterface.Library_QueryFiles(null);
+            XElement reply = new XElement(Constants.LibrarySearch);
+            string table = tag.ToString();
+            string iQuery = filter == MetaTag.none ? null : filter.ToString() + "=" + query;
+
+            mbApiInterface.Library_QueryLookupTable(table, "count", iQuery);
+
+            string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
+           
+            foreach (string str in result.Split("\0\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries))
+            {
+                int count = 0;
+                foreach (string c in str.Split('\0'))
+                {
+                    XElement current = null;
+                    count++;
+                    if (count%2 != 0)
+                    {
+                        if (c.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            current = new XElement("entry", c);
+                }
+            }
+                    else
+                    {
+                        Debug.WriteLine("count:\t" + c);
+                    }
+
+                    if (current != null) reply.Add(current);
+                }
+
+            }
+
+            mbApiInterface.Library_QueryLookupTable(null, null, null);
+
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,reply.ToString(),clientId));
+        }
+
+        /// <summary>
+        /// Takes a given query string and searches the Now Playing list for any track with a matching title or artist.
+        /// The title is checked first.
+        /// </summary>
+        /// <param name="query">The string representing the query</param>
+        public void NowPlayingSearch(string query)
+        {
+            XElement xQuery = new XElement("Source", 
+                new XAttribute("Type", 1),
+                new XElement("Conditions",
+                    new XAttribute("CombineMethod", "Any"),
+                    new XElement("Condition", 
+                        new XAttribute("Field","ArtistPeople"),
+                        new XAttribute("Comparison", "Contains"),
+                        new XAttribute("Value", query)),
+                    new XElement("Condition",
+                        new XAttribute("Field", "Title"),
+                        new XAttribute("Comparison", "Contains"),
+                        new XAttribute("Value", query))));
+
+            mbApiInterface.NowPlayingList_QueryFiles(xQuery.ToString());
 
             while (true)
             {
-                string file = mbApiInterface.Library_QueryGetNextFile();
-                if(file == null) break;
-                string artist = mbApiInterface.Library_GetFileTag(file, MetaDataType.Artist);
-                if(!artistList.Contains(artist))
+                string currentTrack = mbApiInterface.NowPlayingList_QueryGetNextFile();
+                if (String.IsNullOrEmpty(currentTrack)) break;
+                string artist = mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist);
+                string title = mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle);
+
+                if (title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || artist.IndexOf(query,StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    artistList.Add(artist);
+                    mbApiInterface.NowPlayingList_PlayNow(currentTrack);
+                    break;
                 }
             }
+		}
 
-            string xml = artistList.Aggregate(string.Empty, (current, artist) => current + ("<artist><name>" + artist + "</name></artist>"));
-
-            EventBus.FireEvent(new MessageEvent(EventType.LibraryArtistListReady, xml, client));
-
-            RequestLibraryAllAlbums("d","Shinedown");
-        }
-
-        public void RequestLibraryAllAlbums(string client, string artist)
-        {
-            List<string> albumList = new List<string>();
-            mbApiInterface.Library_QueryFiles("artist=" + artist);
-
-            while (true)
-            {
-                string file = mbApiInterface.Library_QueryGetNextFile();
-                if (String.IsNullOrEmpty(file)) break;
-                string album = mbApiInterface.Library_GetFileTag(file, MetaDataType.Album);
-                if(!albumList.Contains(album))
-                {
-                    albumList.Add(album);
-                }
-            }
-
-            foreach (var al in albumList)
-            {
-                Debug.WriteLine(al);
-            }
-        }
     }
 }

@@ -374,7 +374,7 @@ namespace MusicBeePlugin
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(455, 415);
+            this.ClientSize = new System.Drawing.Size(457, 415);
             this.Controls.Add(this.latestVersionLabel);
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.nowPlayingListLimit);

@@ -17,7 +17,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Replies
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(XmlCreator.Create(Constants.LibraryAllArtists, eEvent.Data, true, true), eEvent.ClientId);
+            SocketServer.Instance.Send(XmlCreator.Create(Constants.LibrarySearch, eEvent.Data, true, true), eEvent.ClientId);
         }
     }
 }

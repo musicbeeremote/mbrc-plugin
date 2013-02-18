@@ -13,6 +13,7 @@
         public const string ActionSocketStart = "ActionSocketStart";
         public const string ActionSocketStop = "ActionSocketStop";
         public const string InitializeModel = "InitializeModel";
+        public const string ReplyAvailable = "ReplyAvailable";
         // PlayerState thingies
         public const string PlayerStateShuffleChanged = "PlayerStateShuffleChanged";
         public const string PlayerStateScrobbleChanged = "PlayerStateScrobbleChanged";
