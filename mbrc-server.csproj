@@ -134,6 +134,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs" />
     <Compile Include="AndroidRemote\configuration.cs" />
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
+    <Compile Include="AndroidRemote\Entities\Album.cs" />
     <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />
     <Compile Include="AndroidRemote\Entities\TrackInfo.cs" />
     <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />
@@ -220,7 +221,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties BuildVersion_BuildVersioningStyle="None.None.None.Increment" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_ConfigurationName="Debug" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
+      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_ConfigurationName="Debug" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_BuildVersioningStyle="None.None.None.Increment" />
     </VisualStudio>
   </ProjectExtensions>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

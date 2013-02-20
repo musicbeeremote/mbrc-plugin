@@ -718,7 +718,7 @@ namespace MusicBeePlugin
             result = mbApiInterface.NowPlayingList_MoveFiles(from, to);
         }
 
-                
+
 
         /// <summary>
         /// 
@@ -729,41 +729,60 @@ namespace MusicBeePlugin
         /// <param name="query"></param>
         public void SearchMusicBeeLibrary(string clientId, MetaTag tag, MetaTag filter, string query)
         {
-            XElement reply = new XElement(Constants.LibrarySearch);
-            string table = tag.ToString();
-            string iQuery = filter == MetaTag.none ? null : filter.ToString() + "=" + query;
+            using(XElement reply = new XElement(Constants.LibrarySearch)){;
 
-            mbApiInterface.Library_QueryLookupTable(table, "count", iQuery);
+            if (tag == MetaTag.album)
+            {
+                List<Album> albumList = new List<Album>();
 
+                mbApiInterface.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null);
             string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
            
-            foreach (string str in result.Split("\0\0".ToCharArray(), StringSplitOptions.RemoveEmptyEntries))
+                List<string> sList = new List<string>(result.Split(new string[] { "\0\0" }, StringSplitOptions.None));
+
+                try
             {
-                int count = 0;
-                foreach (string c in str.Split('\0'))
+                    foreach (string entry in sList)
                 {
-                    XElement current = null;
-                    count++;
-                    if (count%2 != 0)
+                        if (String.IsNullOrEmpty(entry)) continue;
+                       
+                        string[] albumInfo = entry.Split('\0');
+
+                        if (albumInfo.Length < 2) continue;
+
+                        Album current = albumInfo.Length == 3 ? new Album(albumInfo[1], albumInfo[2]) : new Album(albumInfo[0], albumInfo[1]);
+
+                        if (current.AlbumName.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                        if (!albumList.Contains(current))
                     {
-                        if (c.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                            albumList.Add(current);
+                        }
+                        else
                         {
-                            current = new XElement("entry", c);
-                }
-            }
-                    else
-                    {
-                        Debug.WriteLine("count:\t" + c);
+                            int location = albumList.IndexOf(current);
+                            albumList.ElementAt(location).IncreaseCount();
+                        }
                     }
+                }
+                catch (IndexOutOfRangeException)
+                    {
+                    }
+                XElement albums = new XElement("albums");
 
-                    if (current != null) reply.Add(current);
+                foreach (Album album in albumList)
+                {
+                    albums.Add(album.toXElement());
                 }
 
+                reply.Add(albums);
             }
 
+            Debug.WriteLine(reply.ToString());
             mbApiInterface.Library_QueryLookupTable(null, null, null);
 
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,reply.ToString(),clientId));
+            }
         }
 
         /// <summary>
@@ -789,7 +808,7 @@ namespace MusicBeePlugin
             mbApiInterface.NowPlayingList_QueryFiles(xQuery.ToString());
 
             while (true)
-            {
+            {            
                 string currentTrack = mbApiInterface.NowPlayingList_QueryGetNextFile();
                 if (String.IsNullOrEmpty(currentTrack)) break;
                 string artist = mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist);
@@ -801,7 +820,7 @@ namespace MusicBeePlugin
                     break;
                 }
             }
-		}
+        }
 
     }
 }
