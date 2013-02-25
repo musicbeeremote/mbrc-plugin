@@ -727,23 +727,70 @@ namespace MusicBeePlugin
         /// <param name="tag"></param>
         /// <param name="filter"></param>
         /// <param name="query"></param>
-        public void SearchMusicBeeLibrary(string clientId, MetaTag tag, MetaTag filter, string query)
+        public void SearchMusicBeeLibrary(string clientId, MetaTag tag, bool filter, string query)
         {
-            using(XElement reply = new XElement(Constants.LibrarySearch)){;
-
+            string reply = string.Empty;
+            
             if (tag == MetaTag.album)
             {
+                reply = filter ? LibraryFindAlbumsByArtist(query) : LibraryFindMatchingAlbums(query);
+            } 
+            else if (tag == MetaTag.artist)
+            {
+                reply = filter ? LibraryFindArtistsByGenre(query):
+                LibraryFindMatchingArtists(query);
+            }
+            else if (tag == MetaTag.genre)
+            {
+                reply = LibraryFindGenres(query);
+            }
+            else if (tag == MetaTag.title)
+            {
+                reply = LibraryFindMatchingTracks(query);
+            }
+
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, reply, clientId));
+
+            GC.Collect();
+        }
+
+        private string XmlFilter(string[] tags, string query)
+        {
+            XElement filter = new XElement("Source",
+                new XAttribute("Type", 1));
+
+            XElement conditions = new XElement("Conditions",
+                                               new XAttribute("CombineMethod", "Any"));
+            foreach (string tag in tags)
+            {
+                XElement condition = new XElement("Condition",
+                             new XAttribute("Field", tag),
+                             new XAttribute("Comparison", "Contains"),
+                             new XAttribute("Value", query));
+                conditions.Add(condition);
+            }
+            filter.Add(conditions);
+
+            return filter.ToString();
+        }
+
+        private string LibraryFindMatchingAlbums(string albumName)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
                 List<Album> albumList = new List<Album>();
 
-                mbApiInterface.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null);
-            string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
-           
+            if (mbApiInterface.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", XmlFilter(new[] {"Album"}, albumName))) 
+            
+            {
+                string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
+
                 List<string> sList = new List<string>(result.Split(new string[] { "\0\0" }, StringSplitOptions.None));
+                result = null;
 
                 try
-            {
-                    foreach (string entry in sList)
                 {
+                    foreach (string entry in sList)
+                    {
                         if (String.IsNullOrEmpty(entry)) continue;
                        
                         string[] albumInfo = entry.Split('\0');
@@ -752,10 +799,10 @@ namespace MusicBeePlugin
 
                         Album current = albumInfo.Length == 3 ? new Album(albumInfo[1], albumInfo[2]) : new Album(albumInfo[0], albumInfo[1]);
 
-                        if (current.AlbumName.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (current.AlbumName.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                         if (!albumList.Contains(current))
-                    {
+                        {
                             albumList.Add(current);
                         }
                         else
@@ -764,10 +811,13 @@ namespace MusicBeePlugin
                             albumList.ElementAt(location).IncreaseCount();
                         }
                     }
+
+                    sList = null;
                 }
                 catch (IndexOutOfRangeException)
-                    {
-                    }
+                {
+                }
+                    
                 XElement albums = new XElement("albums");
 
                 foreach (Album album in albumList)
@@ -778,11 +828,140 @@ namespace MusicBeePlugin
                 reply.Add(albums);
             }
 
-            Debug.WriteLine(reply.ToString());
+            mbApiInterface.Library_QueryLookupTable(null, null, null);
+            albumList = null;
+          
+            return reply.ToString();
+        }
+
+        private string LibraryFindAlbumsByArtist(string artist)
+        {
+
+            XElement reply = new XElement(Constants.LibrarySearch);
+            if (mbApiInterface.Library_QueryFiles(XmlFilter(new string[] {"ArtistPeople"}, artist)))
+            {
+                List<Album> albumList = new List<Album>();
+                while (true)
+                {
+                    string currentFile = mbApiInterface.Library_QueryGetNextFile();
+                    if (String.IsNullOrEmpty(currentFile)) break;
+                    Album current = new Album(mbApiInterface.Library_GetFileTag(currentFile,MetaDataType.AlbumArtist),
+                        mbApiInterface.Library_GetFileTag(currentFile, MetaDataType.Album));
+                    if (!albumList.Contains(current))
+                    {
+                        albumList.Add(current);
+                    }
+                    else
+                    {
+                        int location = albumList.IndexOf(current);
+                        albumList.ElementAt(location).IncreaseCount();
+                    }
+                    
+                }
+                XElement albums = new XElement("albums");
+                foreach (Album album in albumList)
+                {
+                    albums.Add(album.toXElement());
+                }
+
+                albumList = null;
+                reply.Add(albums);
+
+            }
+
+            return reply.ToString();
+        }
+
+        private string LibraryFindMatchingArtists(string artist)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
+
+            if (mbApiInterface.Library_QueryLookupTable("artist", "count", XmlFilter(new string[] {"ArtistPeople"}, artist)))
+            {
+                XElement artists = new XElement("artists");
+                string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
+                foreach (string entry in result.Split(new string[] {"\0\0"}, StringSplitOptions.None))
+                {
+                    string[] artistInfo = entry.Split(new char[] {'\0'});
+                    XElement artistE = new XElement("artist",
+                        new XElement("name", artistInfo[0]),
+                        new XElement("count", artistInfo[1]));
+                    artists.Add(artistE);
+                }
+                reply.Add(artists);
+                result = null;
+            }
+
             mbApiInterface.Library_QueryLookupTable(null, null, null);
 
-            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,reply.ToString(),clientId));
+            return reply.ToString();
+
+        }
+
+        private string LibraryFindArtistsByGenre(string genre)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
+
+            if (mbApiInterface.Library_QueryLookupTable("artist", "count", XmlFilter(new string[] { "Genre" }, genre)))
+            {
+                XElement artists = new XElement("artists");
+                string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
+                foreach (string entry in result.Split(new string[] { "\0\0" }, StringSplitOptions.None))
+                {
+                    string[] artistInfo = entry.Split(new char[] { '\0' });
+                    XElement artistE = new XElement("artist",
+                        new XElement("name", artistInfo[0]),
+                        new XElement("count", artistInfo[1]));
+                    artists.Add(artistE);
+                }
+                reply.Add(artists);
+                result = null;
             }
+            
+            mbApiInterface.Library_QueryLookupTable(null, null, null);
+
+            return reply.ToString();
+
+        }
+
+        private string LibraryFindGenres(string genre)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
+
+            if (mbApiInterface.Library_QueryLookupTable("genre", "count", XmlFilter(new string[] {"Genre"}, genre)))
+            {
+                XElement genres = new XElement("genres");
+                foreach (string entry in mbApiInterface.Library_QueryGetLookupTableValue(null).Split(new string[] { "\0\0" }, StringSplitOptions.None))
+                {
+                    string[] genreInfo = entry.Split(new char[] {'\0'}, StringSplitOptions.None);
+                    XElement xGenre = new XElement("genre",
+                        new XElement("name", genreInfo[0]),
+                        new XElement("count", genreInfo[1]));
+
+                    genres.Add(xGenre);
+                }
+                reply.Add(genres);
+            }
+            mbApiInterface.Library_QueryLookupTable(null, null, null);
+            return reply.ToString();
+        }
+
+        private string LibraryFindMatchingTracks(string title)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
+
+            if (mbApiInterface.Library_QueryLookupTable("title", "artist" + '\0' + "title", XmlFilter(new string[] {"Title"}, title)))
+            {
+                foreach (string entry in mbApiInterface.Library_QueryGetLookupTableValue(null).Split(new string[] {"\0\0"}, StringSplitOptions.None))
+                {
+                    Debug.WriteLine("line::"+entry+"::");
+                }
+            }
+
+            
+
+            mbApiInterface.Library_QueryLookupTable(null, null, null);
+            return reply.ToString();
         }
 
         /// <summary>

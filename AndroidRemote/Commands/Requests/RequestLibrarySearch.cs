@@ -28,13 +28,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             XElement node = XElement.Parse("<libsearch>"+eEvent.Data+"</libsearch>");
 
             MetaTag tag;
-            MetaTag filter;
+            
             string query = (string) node.Element("query"); 
 
             map.TryGetValue((string)node.Element("tag"), out tag);
-            map.TryGetValue((string)node.Element("filter"), out filter);
-            
-            Plugin.Instance.SearchMusicBeeLibrary(eEvent.ClientId, tag, filter, query);
+
+
+            Plugin.Instance.SearchMusicBeeLibrary(eEvent.ClientId, tag, (bool)node.Element("filter"), query);
         }
     }
 }
