@@ -730,7 +730,6 @@ namespace MusicBeePlugin
         public void SearchMusicBeeLibrary(string clientId, MetaTag tag, bool filter, string query)
         {
             string reply = string.Empty;
-            
             if (tag == MetaTag.album)
             {
                 reply = filter ? LibraryFindAlbumsByArtist(query) : LibraryFindMatchingAlbums(query);
@@ -746,7 +745,7 @@ namespace MusicBeePlugin
             }
             else if (tag == MetaTag.title)
             {
-                reply = LibraryFindMatchingTracks(query);
+                reply = filter ? LibraryFindTracksByAlbum(query) : LibraryFindMatchingTracks(query);
             }
 
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, reply, clientId));
@@ -777,13 +776,12 @@ namespace MusicBeePlugin
         private string LibraryFindMatchingAlbums(string albumName)
         {
             XElement reply = new XElement(Constants.LibrarySearch);
-                List<Album> albumList = new List<Album>();
+            List<Album> albumList = new List<Album>();
 
             if (mbApiInterface.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", XmlFilter(new[] {"Album"}, albumName))) 
             
             {
                 string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
-
                 List<string> sList = new List<string>(result.Split(new string[] { "\0\0" }, StringSplitOptions.None));
                 result = null;
 
@@ -792,13 +790,10 @@ namespace MusicBeePlugin
                     foreach (string entry in sList)
                     {
                         if (String.IsNullOrEmpty(entry)) continue;
-                       
                         string[] albumInfo = entry.Split('\0');
-
                         if (albumInfo.Length < 2) continue;
 
                         Album current = albumInfo.Length == 3 ? new Album(albumInfo[1], albumInfo[2]) : new Album(albumInfo[0], albumInfo[1]);
-
                         if (current.AlbumName.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                         if (!albumList.Contains(current))
@@ -813,18 +808,19 @@ namespace MusicBeePlugin
                     }
 
                     sList = null;
+
                 }
                 catch (IndexOutOfRangeException)
                 {
                 }
-                    
+
                 XElement albums = new XElement("albums");
 
                 foreach (Album album in albumList)
                 {
                     albums.Add(album.toXElement());
                 }
-
+                
                 reply.Add(albums);
             }
 
@@ -946,23 +942,59 @@ namespace MusicBeePlugin
             return reply.ToString();
         }
 
-        private string LibraryFindMatchingTracks(string title)
+        private string LibraryFindMatchingTracks(string query)
         {
             XElement reply = new XElement(Constants.LibrarySearch);
 
-            if (mbApiInterface.Library_QueryLookupTable("title", "artist" + '\0' + "title", XmlFilter(new string[] {"Title"}, title)))
+            if (mbApiInterface.Library_QueryLookupTable("title", "artist" + '\0' + "title", XmlFilter(new string[] {"Title"}, query)))
             {
+                XElement tracks = new XElement("tracks");
                 foreach (string entry in mbApiInterface.Library_QueryGetLookupTableValue(null).Split(new string[] {"\0\0"}, StringSplitOptions.None))
                 {
-                    Debug.WriteLine("line::"+entry+"::");
-                }
-            }
+                    string[] trackInfo = entry.Split(new char[] {'\0'}, StringSplitOptions.None);
 
-            
+                    tracks.Add(trackInfo.Length == 3
+                                      ? new Track(trackInfo[1], trackInfo[2]).toXElement()
+                                      : new Track(trackInfo[0], trackInfo[1]).toXElement());
+                }
+                reply.Add(tracks);
+            }
 
             mbApiInterface.Library_QueryLookupTable(null, null, null);
             return reply.ToString();
         }
+            
+        private string LibraryFindTracksByAlbum(string album)
+        {
+            XElement reply = new XElement(Constants.LibrarySearch);
+
+            if (mbApiInterface.Library_QueryFiles(XmlFilter(new string[] {"Album"}, album)))
+            {
+                List<Track> trackList = new List<Track>();
+                while (true)
+                {
+                    string currentTrack = mbApiInterface.Library_QueryGetNextFile();
+                    if (string.IsNullOrEmpty(currentTrack)) break;
+
+                    Track current = new Track(mbApiInterface.Library_GetFileTag(currentTrack,MetaDataType.Artist),
+                        mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
+                        int.Parse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo)));
+
+                    trackList.Add(current);
+                }
+
+                trackList.Sort();
+                XElement tracks = new XElement("tracks");
+                foreach (Track track in trackList)
+                {
+                    tracks.Add(track.toXElement());
+                }
+                reply.Add(tracks);
+            }
+            return reply.ToString();
+        }
+
+        public void RequestQueueFiles()
 
         /// <summary>
         /// Takes a given query string and searches the Now Playing list for any track with a matching title or artist.
@@ -971,20 +1003,7 @@ namespace MusicBeePlugin
         /// <param name="query">The string representing the query</param>
         public void NowPlayingSearch(string query)
         {
-            XElement xQuery = new XElement("Source", 
-                new XAttribute("Type", 1),
-                new XElement("Conditions",
-                    new XAttribute("CombineMethod", "Any"),
-                    new XElement("Condition", 
-                        new XAttribute("Field","ArtistPeople"),
-                        new XAttribute("Comparison", "Contains"),
-                        new XAttribute("Value", query)),
-                    new XElement("Condition",
-                        new XAttribute("Field", "Title"),
-                        new XAttribute("Comparison", "Contains"),
-                        new XAttribute("Value", query))));
-
-            mbApiInterface.NowPlayingList_QueryFiles(xQuery.ToString());
+            mbApiInterface.NowPlayingList_QueryFiles(XmlFilter(new string[] { "ArtistPeople", "Title"}, query));
 
             while (true)
             {            
