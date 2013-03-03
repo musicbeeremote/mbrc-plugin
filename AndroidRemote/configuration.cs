@@ -47,6 +47,7 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(Constants.NowPlayingSearch, typeof(RequestNowPlayingSearch));
             controller.AddCommand(Constants.LibrarySearch, typeof(RequestLibrarySearch));
             controller.AddCommand(Constants.NowPlayingMoveTrack, typeof(RequestNowPlayingMoveTrack));
+            controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowPlayingQueue));
             controller.AddCommand(EventType.ReplyAvailable, typeof(ReplayAvailable));
             controller.AddCommand(EventType.ModelDataCoverChanged, typeof(MCoverChange));
             controller.AddCommand(EventType.ModelDataLyricsChanged, typeof (MLyricsChanged));

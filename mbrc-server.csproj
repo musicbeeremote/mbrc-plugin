@@ -97,6 +97,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingMoveTrack.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestMute.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingQueue.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
@@ -141,6 +142,7 @@
     <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />
     <Compile Include="AndroidRemote\Enumerations\LastfmStatus.cs" />
     <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
+    <Compile Include="AndroidRemote\Enumerations\QueueType.cs" />
     <Compile Include="AndroidRemote\Enumerations\Repeat.cs" />
     <Compile Include="AndroidRemote\Events\EventBus.cs" />
     <Compile Include="AndroidRemote\Events\EventType.cs" />
@@ -222,7 +224,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties BuildVersion_BuildVersioningStyle="None.None.None.Increment" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_ConfigurationName="Debug" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
+      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_ConfigurationName="Debug" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_BuildVersioningStyle="None.None.None.Increment" />
     </VisualStudio>
   </ProjectExtensions>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

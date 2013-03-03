@@ -51,6 +51,10 @@
         public const string NowPlayingMoveTrack = "nowplayingmove";
         public const string NowPlayingSearch = "nowplayingsearch";
         public const string LibrarySearch = "libsearch";
+        public const string NowPlayingQueue = "npqueue";
+        public const string Position = "position"; //Under npqueue
+        public const string Info = "info"; //under npqueue
+        public const string Tag = "tag"; 
 
         #endregion
 
