@@ -60,7 +60,8 @@
 
         #region Protocol 2. JSON based
 
-        public const string NowPlayingList = "NowPlayingList";
+        public const string NowPlayingList = "nowplayinglist";
+        public const string NowPlayingTrack = "nowplayingtrack";
 
         #endregion
 
