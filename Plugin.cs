@@ -18,9 +18,7 @@ namespace MusicBeePlugin
     using AndroidRemote.Error;
     using AndroidRemote.Settings;
     using AndroidRemote.Utilities;
-
     using AndroidRemote.Enumerations;
-
     using Timer = System.Timers.Timer;
 
     /// <summary>
@@ -76,17 +74,16 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            
             selfInstance = this;
             JsConfig.ExcludeTypeInfo = true;
             Configuration.Register(Controller.Instance);
 
             mbApiInterface = new MusicBeeApiInterface();
             mbApiInterface.Initialise(apiInterfacePtr);
-            
+
             UserSettings.Instance.SetStoragePath(mbApiInterface.Setting_GetPersistentStoragePath());
             UserSettings.Instance.LoadSettings();
-            
+
             about.PluginInfoVersion = PluginInfoVersion;
             about.Name = "MusicBee Remote:Server";
             about.Description = "Remote Control for server to be used with android application.";
@@ -148,7 +145,7 @@ namespace MusicBeePlugin
             scrobble = mbApiInterface.Player_GetScrobbleEnabled();
             repeat = mbApiInterface.Player_GetRepeat();
             shuffle = mbApiInterface.Player_GetShuffle();
-            timer = new Timer { Interval = 1000 };
+            timer = new Timer {Interval = 1000};
             timer.Elapsed += HandleTimerElapsed;
             timer.Enabled = true;
         }
@@ -189,7 +186,7 @@ namespace MusicBeePlugin
                 repeat = mbApiInterface.Player_GetRepeat();
                 EventBus.FireEvent(new MessageEvent(
                                        EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Repeat,
+                                       new SocketMessage(Constants.Repeat,
                                                          Constants.Message, repeat).toJsonString()));
             }
         }
@@ -226,7 +223,7 @@ namespace MusicBeePlugin
         public void Uninstall()
         {
             string settingsFolder = mbApiInterface.Setting_GetPersistentStoragePath + "\\mb_remote";
-            if(Directory.Exists(settingsFolder))
+            if (Directory.Exists(settingsFolder))
             {
                 Directory.Delete(settingsFolder);
             }
@@ -254,7 +251,7 @@ namespace MusicBeePlugin
             {
                 case NotificationType.TrackChanged:
                     RequestNowPlayingTrackCover();
-                    RequestTrackRating(String.Empty,String.Empty);
+                    RequestTrackRating(String.Empty, String.Empty);
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                                                         new SocketMessage(Constants.NowPlayingTrack,
                                                                           Constants.Message, GetTrackInfo())
@@ -315,11 +312,11 @@ namespace MusicBeePlugin
         private NowPlayingTrack GetTrackInfo()
         {
             NowPlayingTrack nowPlayingTrack = new NowPlayingTrack
-                                  {
-                                      Artist = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist),
-                                      Album = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album),
-                                      Year = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year)
-                                  };
+                {
+                    Artist = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Artist),
+                    Album = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album),
+                    Year = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Year)
+                };
             nowPlayingTrack.SetTitle(mbApiInterface.NowPlaying_GetFileTag(MetaDataType.TrackTitle),
                                      mbApiInterface.NowPlaying_GetFileUrl());
             return nowPlayingTrack;
@@ -391,7 +388,7 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.Volume, Constants.Reply,
                         ((int)Math.Round(mbApiInterface.Player_GetVolume() * 100, 1))).toJsonString()));
 
-            if(mbApiInterface.Player_GetMute())
+            if (mbApiInterface.Player_GetMute())
             {
                 mbApiInterface.Player_SetMute(false);
             }
@@ -408,6 +405,7 @@ namespace MusicBeePlugin
             {
                 mbApiInterface.Player_SetShuffle(!mbApiInterface.Player_GetShuffle());
             }
+            
             EventBus.FireEvent(
                 new MessageEvent(
                     EventType.ReplyAvailable,
@@ -426,6 +424,7 @@ namespace MusicBeePlugin
             {
                 mbApiInterface.Player_SetMute(!mbApiInterface.Player_GetMute());
             }
+            
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.Mute, Constants.Reply,
@@ -442,8 +441,11 @@ namespace MusicBeePlugin
             {
                 mbApiInterface.Player_SetScrobbleEnabled(!mbApiInterface.Player_GetScrobbleEnabled());
             }
-            string scrobblerState = mbApiInterface.Player_GetScrobbleEnabled().ToString();
-            EventBus.FireEvent(new MessageEvent(EventType.PlayerStateScrobbleChanged,scrobblerState));            
+            EventBus.FireEvent(
+                new MessageEvent(
+                    EventType.ReplyAvailable,
+                    new SocketMessage(Constants.Scrobble, Constants.Reply,
+                        mbApiInterface.Player_GetScrobbleEnabled()).toJsonString()));
         }
 
         /// <summary>
@@ -469,8 +471,10 @@ namespace MusicBeePlugin
                         break;
                 }
             }
-            EventBus.FireEvent(new MessageEvent(EventType.PlayerStateRepeatChanged,
-                                                mbApiInterface.Player_GetRepeat().ToString()));
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
+                    new SocketMessage(Constants.Repeat, Constants.Reply,
+                        mbApiInterface.Player_GetRepeat()).toJsonString()));
         }
 
         /// <summary>
@@ -494,53 +498,27 @@ namespace MusicBeePlugin
                 string artist = mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.Artist);
                 string title = mbApiInterface.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle);
 
-                if(String.IsNullOrEmpty(artist))
+                if (String.IsNullOrEmpty(artist))
                 {
                     artist = "Unknown Artist";
                 }
 
-                if(String.IsNullOrEmpty(title))
+                if (String.IsNullOrEmpty(title))
                 {
                     int index = playListTrack.LastIndexOf('\\');
-                    title = playListTrack.Substring(index+1);
+                    title = playListTrack.Substring(index + 1);
                 }
 
-                trackList.Add(new NowPlayingListTrack(SecurityElement.Escape(artist), SecurityElement.Escape(title),
-                                                      position));
+                trackList.Add(
+                    new NowPlayingListTrack(SecurityElement.Escape(artist),
+                        SecurityElement.Escape(title), position));
                 position++;
             }
 
-            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                                                JsonSerializer.SerializeToString(
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
                                                     new SocketMessage(Constants.NowPlayingList, Constants.Reply,
-                                                                      trackList)),
-                clientId));
-            
-        }
-
-        /// <summary>
-        /// Searches in the Now playing list for the track specified and plays it.
-        /// </summary>
-        /// <param name="index">The track to play</param>
-        /// <returns></returns>
-        public string NowPlayingPlay(string index)
-        {
-            bool result = false;
-            int trackIndex;
-            if (int.TryParse(index, out trackIndex))
-            {
-                mbApiInterface.NowPlayingList_QueryFiles(null);
-                string trackToPlay = String.Empty;
-                int lTrackIndex = 0;
-                while (trackIndex != lTrackIndex)
-                {
-                    trackToPlay = mbApiInterface.NowPlayingList_QueryGetNextFile();
-                    lTrackIndex++;
-                }
-                if (!String.IsNullOrEmpty(trackToPlay))
-                    result = mbApiInterface.NowPlayingList_PlayNow(trackToPlay);
-            }
-            return result.ToString();
+                        trackList).toJsonString(),clientId));
         }
 
         /// <summary>
@@ -563,20 +541,19 @@ namespace MusicBeePlugin
             if (!String.IsNullOrEmpty(clientId))
             {
                 EventBus.FireEvent(
-                    new MessageEvent(
-                        EventType.PlayerStateRatingChanged,
-                        this.mbApiInterface.Library_GetFileTag(
-                            this.mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating),
-                        clientId));
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.Rating, Constants.Reply,
+                            mbApiInterface.Library_GetFileTag(
+                            mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString(), clientId));
             }
             else
             {
-                EventBus.FireEvent(new MessageEvent(EventType.PlayerStateRatingChanged,
-                                                    this.mbApiInterface.Library_GetFileTag(
-                                                        this.mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)));
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.Rating,Constants.Reply,
+                            mbApiInterface.Library_GetFileTag(
+                                mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString()));
             }
-            
-            
         }
 
         /// <summary>
@@ -588,18 +565,25 @@ namespace MusicBeePlugin
         {
             if (!String.IsNullOrEmpty(mbApiInterface.NowPlaying_GetLyrics()))
             {
-                EventBus.FireEvent(new MessageEvent(EventType.PlayerStateLyricsChanged,
-                                                    mbApiInterface.NowPlaying_GetLyrics()));
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                            mbApiInterface.NowPlaying_GetLyrics()).toJsonString()));
             }
             else if (mbApiInterface.ApiRevision >= 17)
             {
                 string lyrics = mbApiInterface.NowPlaying_GetDownloadedLyrics();
-                EventBus.FireEvent(new MessageEvent(EventType.PlayerStateLyricsChanged,
-                                                    !String.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics"));
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                            !String.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics").toJsonString()));
             }
             else
             {
-                EventBus.FireEvent(new MessageEvent(EventType.PlayerStateLyricsChanged, "Lyrics Not Found"));
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                            "Lyrics Not Found").toJsonString()));
             }
         }
 
@@ -619,7 +603,7 @@ namespace MusicBeePlugin
             else if (mbApiInterface.ApiRevision >= 17)
             {
                 string cover = mbApiInterface.NowPlaying_GetDownloadedArtwork();
-                if(!String.IsNullOrEmpty(cover))
+                if (!String.IsNullOrEmpty(cover))
                 {
                     EventBus.FireEvent(new MessageEvent(EventType.PlayerStateCoverChanged, cover, "",
                                                         mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
@@ -650,20 +634,52 @@ namespace MusicBeePlugin
             int totalDuration = mbApiInterface.NowPlaying_GetDuration();
             string position = string.Format("<current>{0}</current>" + "<duration>{1}</duration>", currentPosition,
                                             totalDuration);
-            EventBus.FireEvent(new MessageEvent(EventType.PlayerStatePlaybackPositionChanged, position));
+//            EventBus.FireEvent(
+//                new MessageEvent(EventType.ReplyAvailable,
+//                    new SocketMessage().toJsonString()));
         }
 
-         /// <summary>
-         /// 
-         /// </summary>
-         /// <param name="index"></param>
-         /// <param name="clientId"></param>
-         public void NowPlayingListRemoveTrack(int index, string clientId)
-         {
-             bool trackRemoved = mbApiInterface.NowPlayingList_RemoveAt(index);
-             string result = (trackRemoved ? index : -1).ToString(CultureInfo.InvariantCulture);
-             EventBus.FireEvent(new MessageEvent(EventType.PlayerStateNowPlayingTrackRemoved,result,clientId));
-         }
+        /// <summary>
+        /// Searches in the Now playing list for the track specified and plays it.
+        /// </summary>
+        /// <param name="index">The track to play</param>
+        /// <returns></returns>
+        public void NowPlayingPlay(string index)
+        {
+            bool result = false;
+            int trackIndex;
+            if (int.TryParse(index, out trackIndex))
+            {
+                mbApiInterface.NowPlayingList_QueryFiles(null);
+                string trackToPlay = String.Empty;
+                int lTrackIndex = 0;
+                while (trackIndex != lTrackIndex)
+                {
+                    trackToPlay = mbApiInterface.NowPlayingList_QueryGetNextFile();
+                    lTrackIndex++;
+                }
+                if (!String.IsNullOrEmpty(trackToPlay))
+                    result = mbApiInterface.NowPlayingList_PlayNow(trackToPlay);
+            }
+            
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
+                    new SocketMessage(Constants.NowPlayingPlay, Constants.Reply,
+                        result).toJsonString()));
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="clientId"></param>
+        public void NowPlayingListRemoveTrack(int index, string clientId)
+        {
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
+                    new SocketMessage(Constants.NowPlayingTrackRemove, Constants.Reply,
+                        mbApiInterface.NowPlayingList_RemoveAt(index)).toJsonString(), clientId));
+        }
 
         /// <summary>
         /// This function requests or changes the AutoDJ functionality's state.
@@ -672,21 +688,21 @@ namespace MusicBeePlugin
         /// The action can be either toggle or state.
         /// </param>
         public void RequestAutoDjState(StateAction action)
-         {
-             if (action == StateAction.Toggle)
-             {
-                 if (!mbApiInterface.Player_GetAutoDjEnabled())
-                 {
-                     mbApiInterface.Player_StartAutoDj();
-                 }
-                 else
-                 {
-                     mbApiInterface.Player_EndAutoDj();
-                 }
-             }
+        {
+            if (action == StateAction.Toggle)
+            {
+                if (!mbApiInterface.Player_GetAutoDjEnabled())
+                {
+                    mbApiInterface.Player_StartAutoDj();
+                }
+                else
+                {
+                    mbApiInterface.Player_EndAutoDj();
+                }
+            }
             EventBus.FireEvent(new MessageEvent(EventType.PlayerStateAutoDjChanged,
                                                 mbApiInterface.Player_GetAutoDjEnabled().ToString()));
-         }
+        }
 
         /// <summary>
         /// This function is used to change the playing track's last.fm love rating.
@@ -712,7 +728,7 @@ namespace MusicBeePlugin
             if (apiReply.Equals("L") || apiReply.Equals("lfm") || apiReply.Equals("Llfm"))
             {
                 lastfmStatus = LastfmStatus.Love;
-            } 
+            }
             else if (apiReply.Equals("B") || apiReply.Equals("Blfm"))
             {
                 lastfmStatus = LastfmStatus.Ban;
@@ -735,7 +751,6 @@ namespace MusicBeePlugin
             {
                 playlistUrl = mbApiInterface.Playlist_QueryGetNextPlaylist();
                 if (string.IsNullOrEmpty(playlistUrl)) break;
-
             }
         }
 
@@ -746,22 +761,22 @@ namespace MusicBeePlugin
         public void RequestPlayerStatus(string clientId)
         {
             PlayerStatus status = new PlayerStatus
-                                       {
-                                           MuteState = mbApiInterface.Player_GetMute().ToString(),
-                                           RepeatState = mbApiInterface.Player_GetRepeat().ToString(),
+                {
+                    MuteState = mbApiInterface.Player_GetMute().ToString(),
+                    RepeatState = mbApiInterface.Player_GetRepeat().ToString(),
                     Volume =
                         ((int) Math.Round(mbApiInterface.Player_GetVolume()*100, 1)).ToString(
                             CultureInfo.InvariantCulture),
-                                           PlayState = mbApiInterface.Player_GetPlayState().ToString(),
-                                           ScrobblerState = mbApiInterface.Player_GetScrobbleEnabled().ToString(),
-                                           ShuffleState = mbApiInterface.Player_GetShuffle().ToString()
-                                       };
+                    PlayState = mbApiInterface.Player_GetPlayState().ToString(),
+                    ScrobblerState = mbApiInterface.Player_GetScrobbleEnabled().ToString(),
+                    ShuffleState = mbApiInterface.Player_GetShuffle().ToString()
+                };
 
-            
+
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                                                 JsonSerializer.SerializeToString(
                                                     new SocketMessage(Constants.PlayerStatus,
-                Constants.Reply, status)),clientId));
+                                                                      Constants.Reply, status)), clientId));
         }
 
         /// <summary>
@@ -771,9 +786,9 @@ namespace MusicBeePlugin
         public void RequestTrackInfo(string clientId)
         {
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                JsonSerializer.SerializeToString(
-                new SocketMessage(Constants.SongInformation,
-                    Constants.Reply, GetTrackInfo())), clientId));
+                                                JsonSerializer.SerializeToString(
+                                                    new SocketMessage(Constants.SongInformation,
+                                                                      Constants.Reply, GetTrackInfo())), clientId));
         }
 
         /// <summary>
@@ -792,7 +807,6 @@ namespace MusicBeePlugin
         }
 
 
-
         /// <summary>
         /// 
         /// </summary>
@@ -806,7 +820,7 @@ namespace MusicBeePlugin
             if (tag == MetaTag.album)
             {
                 reply = filter ? LibraryFindAlbumsByArtist(query) : LibraryFindMatchingAlbums(query);
-            } 
+            }
             else if (tag == MetaTag.artist)
             {
                 reply = filter
@@ -831,18 +845,17 @@ namespace MusicBeePlugin
 
         private string XmlFilter(string[] tags, string query, bool isStrict)
         {
-
             XElement filter = new XElement("Source",
-                new XAttribute("Type", 1));
+                                           new XAttribute("Type", 1));
 
             XElement conditions = new XElement("Conditions",
                                                new XAttribute("CombineMethod", "Any"));
             foreach (string tag in tags)
             {
                 XElement condition = new XElement("Condition",
-                             new XAttribute("Field", tag),
-                             new XAttribute("Comparison", isStrict ? "Is" : "Contains"),
-                             new XAttribute("Value", query));
+                                                  new XAttribute("Field", tag),
+                                                  new XAttribute("Comparison", isStrict ? "Is" : "Contains"),
+                                                  new XAttribute("Value", query));
                 conditions.Add(condition);
             }
             filter.Add(conditions);
@@ -857,10 +870,10 @@ namespace MusicBeePlugin
 
             if (mbApiInterface.Library_QueryLookupTable("album", "albumartist" + '\0' + "album",
                                                         XmlFilter(new[] {"Album"}, albumName, false)))
-            
+
             {
                 string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
-                List<string> sList = new List<string>(result.Split(new string[] { "\0\0" }, StringSplitOptions.None));
+                List<string> sList = new List<string>(result.Split(new string[] {"\0\0"}, StringSplitOptions.None));
                 result = null;
 
                 try
@@ -888,7 +901,6 @@ namespace MusicBeePlugin
                     }
 
                     sList = null;
-
                 }
                 catch (IndexOutOfRangeException)
                 {
@@ -900,19 +912,18 @@ namespace MusicBeePlugin
                 {
                     albums.Add(album.toXElement());
                 }
-                
+
                 reply.Add(albums);
             }
 
             mbApiInterface.Library_QueryLookupTable(null, null, null);
             albumList = null;
-          
+
             return reply.ToString();
         }
 
         private string LibraryFindAlbumsByArtist(string artist)
         {
-
             XElement reply = new XElement(Constants.LibrarySearch);
             if (mbApiInterface.Library_QueryFiles(XmlFilter(new string[] {"ArtistPeople"}, artist, false)))
             {
@@ -921,8 +932,8 @@ namespace MusicBeePlugin
                 {
                     string currentFile = mbApiInterface.Library_QueryGetNextFile();
                     if (String.IsNullOrEmpty(currentFile)) break;
-                    Album current = new Album(mbApiInterface.Library_GetFileTag(currentFile,MetaDataType.AlbumArtist),
-                        mbApiInterface.Library_GetFileTag(currentFile, MetaDataType.Album));
+                    Album current = new Album(mbApiInterface.Library_GetFileTag(currentFile, MetaDataType.AlbumArtist),
+                                              mbApiInterface.Library_GetFileTag(currentFile, MetaDataType.Album));
                     if (!albumList.Contains(current))
                     {
                         albumList.Add(current);
@@ -932,7 +943,6 @@ namespace MusicBeePlugin
                         int location = albumList.IndexOf(current);
                         albumList.ElementAt(location).IncreaseCount();
                     }
-                    
                 }
                 XElement albums = new XElement("albums");
                 foreach (Album album in albumList)
@@ -942,7 +952,6 @@ namespace MusicBeePlugin
 
                 albumList = null;
                 reply.Add(albums);
-
             }
 
             return reply.ToString();
@@ -961,8 +970,8 @@ namespace MusicBeePlugin
                 {
                     string[] artistInfo = entry.Split(new char[] {'\0'});
                     XElement artistE = new XElement("artist",
-                        new XElement("name", artistInfo[0]),
-                        new XElement("count", artistInfo[1]));
+                                                    new XElement("name", artistInfo[0]),
+                                                    new XElement("count", artistInfo[1]));
                     artists.Add(artistE);
                 }
                 reply.Add(artists);
@@ -972,7 +981,6 @@ namespace MusicBeePlugin
             mbApiInterface.Library_QueryLookupTable(null, null, null);
 
             return reply.ToString();
-
         }
 
         private string LibraryFindArtistsByGenre(string genre)
@@ -984,22 +992,21 @@ namespace MusicBeePlugin
             {
                 XElement artists = new XElement("artists");
                 string result = mbApiInterface.Library_QueryGetLookupTableValue(null);
-                foreach (string entry in result.Split(new string[] { "\0\0" }, StringSplitOptions.None))
+                foreach (string entry in result.Split(new string[] {"\0\0"}, StringSplitOptions.None))
                 {
-                    string[] artistInfo = entry.Split(new char[] { '\0' });
+                    string[] artistInfo = entry.Split(new char[] {'\0'});
                     XElement artistE = new XElement("artist",
-                        new XElement("name", artistInfo[0]),
-                        new XElement("count", artistInfo[1]));
+                                                    new XElement("name", artistInfo[0]),
+                                                    new XElement("count", artistInfo[1]));
                     artists.Add(artistE);
                 }
                 reply.Add(artists);
                 result = null;
             }
-            
+
             mbApiInterface.Library_QueryLookupTable(null, null, null);
 
             return reply.ToString();
-
         }
 
         private string LibraryFindGenres(string genre)
@@ -1017,8 +1024,8 @@ namespace MusicBeePlugin
                 {
                     string[] genreInfo = entry.Split(new char[] {'\0'}, StringSplitOptions.None);
                     XElement xGenre = new XElement("genre",
-                        new XElement("name", genreInfo[0]),
-                        new XElement("count", genreInfo[1]));
+                                                   new XElement("name", genreInfo[0]),
+                                                   new XElement("count", genreInfo[1]));
 
                     genres.Add(xGenre);
                 }
@@ -1030,12 +1037,10 @@ namespace MusicBeePlugin
 
         private string LibraryFindMatchingTracks(string query)
         {
-
             List<Track> tracks = new List<Track>();
             if (mbApiInterface.Library_QueryLookupTable("title", "artist" + '\0' + "title",
                                                         XmlFilter(new string[] {"Title"}, query, false)))
             {
-                
                 foreach (
                     string entry in
                         mbApiInterface.Library_QueryGetLookupTableValue(null)
@@ -1044,10 +1049,9 @@ namespace MusicBeePlugin
                     string[] trackInfo = entry.Split(new char[] {'\0'}, StringSplitOptions.None);
 
                     tracks.Add(trackInfo.Length == 3
-                                      ? new Track(trackInfo[1], trackInfo[2])
-                                      : new Track(trackInfo[0], trackInfo[1]));
+                                   ? new Track(trackInfo[1], trackInfo[2])
+                                   : new Track(trackInfo[0], trackInfo[1]));
                 }
-                
             }
 
             mbApiInterface.Library_QueryLookupTable(null, null, null);
@@ -1056,8 +1060,6 @@ namespace MusicBeePlugin
 
         private string LibraryFindTracksByAlbum(string album)
         {
-            
-
             if (mbApiInterface.Library_QueryFiles(XmlFilter(new string[] {"Album"}, album, false)))
             {
                 List<Track> trackList = new List<Track>();
@@ -1070,15 +1072,13 @@ namespace MusicBeePlugin
                                               mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
                                               int.Parse(mbApiInterface.Library_GetFileTag(currentTrack,
                                                                                           MetaDataType.TrackNo)));
-   
+
                     trackList.Add(current);
                 }
 
                 trackList.Sort();
 
 //                JsonSerializer.SerializeToString(new SocketMessage("trackList", trackList));
-                
-                
             }
             return "e";
         }
@@ -1089,9 +1089,8 @@ namespace MusicBeePlugin
         /// <param name="queue"></param>
         /// <param name="tag"></param>
         /// <param name="query"></param>
-        public void RequestQueueFiles(QueueType queue,MetaTag tag, string query)
+        public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
-
             string filter = String.Empty;
             switch (tag)
             {
@@ -1120,7 +1119,6 @@ namespace MusicBeePlugin
                     string current = mbApiInterface.Library_QueryGetNextFile();
                     if (String.IsNullOrEmpty(current)) break;
                     trackList.Add(current);
-                    
                 }
 
                 if (queue == QueueType.Next)
@@ -1141,10 +1139,10 @@ namespace MusicBeePlugin
         /// <param name="query">The string representing the query</param>
         public void NowPlayingSearch(string query)
         {
-            mbApiInterface.NowPlayingList_QueryFiles(XmlFilter(new string[] { "ArtistPeople", "Title"}, query, false));
+            mbApiInterface.NowPlayingList_QueryFiles(XmlFilter(new string[] {"ArtistPeople", "Title"}, query, false));
 
             while (true)
-            {            
+            {
                 string currentTrack = mbApiInterface.NowPlayingList_QueryGetNextFile();
                 if (String.IsNullOrEmpty(currentTrack)) break;
                 string artist = mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist);
@@ -1158,6 +1156,5 @@ namespace MusicBeePlugin
                 }
             }
         }
-
     }
 }

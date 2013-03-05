@@ -37,7 +37,7 @@
         #region Protocol 1.2
 
         public const string PlaybackPosition = "playbackPosition";
-        public const string NowPlayingTrackRemoval = "playNowRemoveSelected";
+        public const string NowPlayingTrackRemove = "playNowRemoveSelected";
 
         #endregion
 
@@ -62,6 +62,9 @@
 
         public const string NowPlayingList = "nowplayinglist";
         public const string NowPlayingTrack = "nowplayingtrack";
+        public const string NowPlayingPlay = "nowplayingplay";
+        public const string NowPlayingPosition = "nowplayingposition";
+        public const string NowPlayingRemove = "nowplayingremove";
 
         #endregion
 

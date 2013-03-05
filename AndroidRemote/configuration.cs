@@ -35,7 +35,7 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(Constants.Rating, typeof (RequestRating));
             controller.AddCommand(Constants.PlayerStatus, typeof (RequestPlayerStatus));
             controller.AddCommand(Constants.PlaybackPosition, typeof (RequestPlaybackPosition));
-            controller.AddCommand(Constants.NowPlayingTrackRemoval, typeof (RequestNowPlayingTrackRemoval));
+            controller.AddCommand(Constants.NowPlayingTrackRemove, typeof (RequestNowPlayingTrackRemoval));
             controller.AddCommand(Constants.AutoDj, typeof (RequestAutoDj));
             controller.AddCommand(Constants.PluginVersion, typeof (RequestPluginVersion));
             controller.AddCommand(Constants.LfmLoveRating, typeof (RequestLfmLoveRating));
