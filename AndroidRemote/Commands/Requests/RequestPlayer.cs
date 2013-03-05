@@ -13,7 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(XmlCreator.Create(Constants.Player,Constants.PlayerName,true,true), eEvent.ClientId);
+            //SocketServer.Instance.Send(XmlCreator.Create(Constants.Player,Constants.PlayerName,true,true), eEvent.ClientId);
         }
     }
 }

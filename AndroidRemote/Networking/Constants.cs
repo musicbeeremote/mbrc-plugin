@@ -58,6 +58,20 @@
 
         #endregion
 
+        #region Protocol 2. JSON based
+
+        public const string NowPlayingList = "NowPlayingList";
+
+        #endregion
+
+        #region SocketMessage Types
+
+        public const string Request = "req";
+        public const string Reply = "rep";
+        public const string Message = "msg";
+
+        #endregion
+
 
     }
 }

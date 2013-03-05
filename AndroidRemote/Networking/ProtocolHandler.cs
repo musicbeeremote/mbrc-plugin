@@ -1,4 +1,8 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Networking
+﻿using System.Collections.Generic;
+using MusicBeePlugin.AndroidRemote.Entities;
+using ServiceStack.Text;
+
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     using Events;
     using System;
@@ -10,11 +14,11 @@
 
     internal class ProtocolHandler
     {
-        private readonly XmlDocument xmlDoc;
+
 
         public ProtocolHandler()
         {
-            xmlDoc = new XmlDocument();
+         
         }
 
         /// <summary>
@@ -26,6 +30,7 @@
         {
             try
             {
+                List<SocketMessage> msgList = new List<SocketMessage>();
                 if (String.IsNullOrEmpty(incomingMessage) || incomingMessage == "\0\r\n")
                 {
                     return;
@@ -42,14 +47,13 @@
                     }
 
 #endif
-                    xmlDoc.LoadXml(XmlCreator.Create("incoming", incomingMessage.Replace("\0", ""), false, false));
-                }
-                catch(XmlException xmex)
-                {
-#if DEBUG
-                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Xmlexception : " + xmex + " : while processing : " + incomingMessage + "\n");
-#endif               
-                    return;
+                    
+                    foreach (
+                        string msg in
+                            incomingMessage.Replace("\0","").Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        msgList.Add(JsonSerializer.DeserializeFromString<SocketMessage>(incomingMessage));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -59,25 +63,25 @@
                     Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Exception at : " +
                                     incomingMessage + "\n");
 #endif               
-                    // Xml load has probably failed and so there is no reason 
+                    
                 }
-                XmlNodeList nodeList = xmlDoc.FirstChild.ChildNodes;
 
-                foreach (XmlNode xmNode in nodeList)
+
+                foreach (SocketMessage msg in msgList)
                 {
-                    if (Authenticator.Client(clientId).PacketNumber == 0 && xmNode.Name != Constants.Player)
+                    if (Authenticator.Client(clientId).PacketNumber == 0 && msg.context != Constants.Player)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty, clientId));
                         return;
                     }
-                    if (Authenticator.Client(clientId).PacketNumber == 1 && xmNode.Name != Constants.Protocol)
+                    if (Authenticator.Client(clientId).PacketNumber == 1 && msg.context != Constants.Protocol)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty, clientId));
                         return;
                     }
-                    
-                    EventBus.FireEvent(new MessageEvent(xmNode.Name, xmNode.InnerXml, clientId));
-                    
+
+                    //EventBus.FireEvent(new MessageEvent(xmNode.Name, xmNode.InnerXml, clientId));
+
                 }
                 Authenticator.Client(clientId).IncreasePacketNumber();
             }

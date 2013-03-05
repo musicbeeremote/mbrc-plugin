@@ -14,7 +14,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(XmlCreator.Create(Constants.SongCover, LyricCoverModel.Instance.Cover, true, true), eEvent.ClientId);
+           // SocketServer.Instance.Send(XmlCreator.Create(Constants.SongCover, LyricCoverModel.Instance.Cover, true, true), eEvent.ClientId);
         }
     }
 }

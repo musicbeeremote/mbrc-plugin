@@ -38,21 +38,6 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             get { return trackNo; }
         }
 
-
-        public XElement toXElement()
-        {
-            XElement track = new XElement("track");
-            track.Add(new XElement("artist", artist));
-            track.Add(new XElement("title", title));
-            if (trackNo > 0)
-            {
-                track.Add(new XElement("trackNo", trackNo));
-            }
-
-            return track;
-
-        }
-
         public bool Equals(Track other)
         {
             return (other.Artist.Equals(artist) && other.Title.Equals(title));

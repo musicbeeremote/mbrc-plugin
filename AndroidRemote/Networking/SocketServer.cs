@@ -302,7 +302,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     return;
 
 #if DEBUG
-                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Message Received : " + message);
+                Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : message Received : " + message);
 #endif
                 handler.ProcessIncomingMessage(message,socketData.ClientId);
                 
