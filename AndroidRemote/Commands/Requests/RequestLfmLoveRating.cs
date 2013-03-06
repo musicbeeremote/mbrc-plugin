@@ -1,7 +1,6 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
-
+    using Interfaces;
     class RequestLfmLoveRating : ICommand
     {
         public void Dispose()
@@ -11,7 +10,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.RequestLoveStatusChange(eEvent.Data);
+            Plugin.Instance.RequestLoveStatusChange(eEvent.DataToString());
         }
     }
 }

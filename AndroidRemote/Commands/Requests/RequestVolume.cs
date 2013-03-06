@@ -11,7 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         public void Execute(IEvent eEvent)
         {
             int iVolume;
-            if (!int.TryParse(eEvent.Data, out iVolume)) return;
+            if (!int.TryParse(eEvent.DataToString(), out iVolume)) return;
 
             Plugin.Instance.RequestVolumeChange(iVolume);
         }

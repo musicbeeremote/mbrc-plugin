@@ -33,12 +33,12 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             MetaTag tag;
             QueueType type;
 
-            string info = (string)enqueue.Element(Constants.Info);
+//            string info = (string)enqueue.Element(Constants.Info);
+//
+//            map.TryGetValue((string) enqueue.Element(Constants.Tag), out tag);
+//            queueMap.TryGetValue((string) enqueue.Element(Constants.Position), out type);
 
-            map.TryGetValue((string) enqueue.Element(Constants.Tag), out tag);
-            queueMap.TryGetValue((string) enqueue.Element(Constants.Position), out type);
-
-            Plugin.Instance.RequestQueueFiles(type,tag,info);
+//            Plugin.Instance.RequestQueueFiles(type,tag,info);
         }
     }
 }

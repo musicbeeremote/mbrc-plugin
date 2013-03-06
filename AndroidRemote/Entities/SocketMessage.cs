@@ -4,7 +4,7 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Entities
 {
-    class SocketMessage
+    public class SocketMessage
     {
         public SocketMessage(string context, string type, Object data)
         {

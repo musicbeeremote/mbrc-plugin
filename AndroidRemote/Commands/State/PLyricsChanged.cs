@@ -18,7 +18,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.State
         /// <param name="eEvent"></param>
         public void Execute(IEvent eEvent)
         {
-            LyricCoverModel.Instance.Lyrics = eEvent.Data;
+            LyricCoverModel.Instance.Lyrics = eEvent.DataToString();
         }
     }
 }

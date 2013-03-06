@@ -6,11 +6,11 @@
     class MessageEvent:IEvent
     {
         private readonly string type;
-        private readonly string data;
+        private readonly object data;
         private readonly string clientId;
         private readonly string extraData;
 
-        public MessageEvent(string type, string data)
+        public MessageEvent(string type, object data)
         {
             this.data = data;
             this.type = type;
@@ -18,7 +18,7 @@
             extraData = String.Empty;
         }
 
-        public MessageEvent(string type, string data, string clientId)
+        public MessageEvent(string type, object data, string clientId)
         {
             this.type = type;
             this.data = data;
@@ -33,15 +33,20 @@
             clientId = string.Empty;
         }
 
-        public MessageEvent(string type, string data, string clientId, string extraData)
+        public MessageEvent(string type, object data, string clientId, string extraData)
         {
             this.type = type;
             this.data = data;
             this.clientId = clientId;
             this.extraData = extraData;
         }
+        
+        public string DataToString()
+        {
+            return (string) ((data is string) ? data : String.Empty);
+        }
 
-        public string Data
+        public object Data
         {
             get { return data; }
         }
@@ -56,6 +61,10 @@
             get { return clientId; }
         }
 
-        public string ExtraData { get { return extraData; } }
+        public string ExtraData
+        {
+            get { return extraData; }
+        }
+
     }
 }

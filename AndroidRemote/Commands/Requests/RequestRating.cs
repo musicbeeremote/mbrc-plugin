@@ -10,7 +10,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.RequestTrackRating(eEvent.Data,eEvent.ClientId);
+            Plugin.Instance.RequestTrackRating(eEvent.DataToString(),eEvent.ClientId);
         }
     }
 }

@@ -80,8 +80,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         return;
                     }
 
-                    //EventBus.FireEvent(new MessageEvent(xmNode.Name, xmNode.InnerXml, clientId));
-
+                    EventBus.FireEvent(new MessageEvent(msg.context, msg.data, clientId));
                 }
                 Authenticator.Client(clientId).IncreasePacketNumber();
             }

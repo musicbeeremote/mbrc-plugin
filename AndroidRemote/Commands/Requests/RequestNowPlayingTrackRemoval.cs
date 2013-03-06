@@ -11,7 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         public void Execute(IEvent eEvent)
         {
             int index;
-            if (int.TryParse(eEvent.Data, out index))
+            if (int.TryParse(eEvent.DataToString(), out index))
             {
                 Plugin.Instance.NowPlayingListRemoveTrack(index, eEvent.ClientId);    
             }

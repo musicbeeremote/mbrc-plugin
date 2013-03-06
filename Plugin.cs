@@ -168,7 +168,7 @@ namespace MusicBeePlugin
             {
                 shuffle = mbApiInterface.Player_GetShuffle();
                 EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(
-                                                                                  Constants.Shuffle,
+                                                                                  Constants.PlayerShuffle,
                                                                                   Constants.Message, shuffle)
                                                                                   .toJsonString()));
             }
@@ -177,7 +177,7 @@ namespace MusicBeePlugin
             {
                 scrobble = mbApiInterface.Player_GetScrobbleEnabled();
                 EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                                                    new SocketMessage(Constants.Scrobble, Constants.Message, scrobble)
+                                                    new SocketMessage(Constants.PlayerScrobble, Constants.Message, scrobble)
                                                         .toJsonString()));
             }
 
@@ -186,7 +186,7 @@ namespace MusicBeePlugin
                 repeat = mbApiInterface.Player_GetRepeat();
                 EventBus.FireEvent(new MessageEvent(
                                        EventType.ReplyAvailable,
-                                       new SocketMessage(Constants.Repeat,
+                                       new SocketMessage(Constants.PlayerRepeat,
                                                          Constants.Message, repeat).toJsonString()));
             }
         }
@@ -259,7 +259,7 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.VolumeLevelChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                                                        new SocketMessage(Constants.Volume, Constants.Message,
+                                                        new SocketMessage(Constants.PlayerVolume, Constants.Message,
                                                                           ((int)
                                                                            Math.Round(
                                                                                mbApiInterface.Player_GetVolume()*100,
@@ -267,12 +267,12 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.VolumeMuteChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                                                        new SocketMessage(Constants.Mute, Constants.Message,
+                                                        new SocketMessage(Constants.PlayerMute, Constants.Message,
                                                                           mbApiInterface.Player_GetMute()).toJsonString()
                                            ));
                     break;
                 case NotificationType.PlayStateChanged:
-                    EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(Constants.PlayState,
+                    EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(Constants.PlayerState,
                                                                                                     Constants.Message,
                                                                                                     mbApiInterface
                                                                                                         .Player_GetPlayState
@@ -324,7 +324,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Next, Constants.Reply,
+                    new SocketMessage(Constants.PlayerNext, Constants.Reply,
                         mbApiInterface.Player_PlayNextTrack()).toJsonString()));
         }
 
@@ -336,7 +336,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Stop, Constants.Reply,
+                    new SocketMessage(Constants.PlayerStop, Constants.Reply,
                         mbApiInterface.Player_Stop()).toJsonString()));
         }
 
@@ -348,7 +348,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.PlayPause, Constants.Reply,
+                    new SocketMessage(Constants.PlayerPlayPause, Constants.Reply,
                         mbApiInterface.Player_PlayPause()).toJsonString()));
         }
 
@@ -360,7 +360,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Previous, Constants.Reply,
+                    new SocketMessage(Constants.PlayerPrevious, Constants.Reply,
                         mbApiInterface.Player_PlayPreviousTrack()).toJsonString()));
         }
 
@@ -379,7 +379,7 @@ namespace MusicBeePlugin
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Volume, Constants.Reply,
+                    new SocketMessage(Constants.PlayerVolume, Constants.Reply,
                         ((int)Math.Round(mbApiInterface.Player_GetVolume() * 100, 1))).toJsonString()));
 
             if (mbApiInterface.Player_GetMute())
@@ -403,7 +403,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(
                     EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Shuffle, Constants.Reply,
+                    new SocketMessage(Constants.PlayerShuffle, Constants.Reply,
                         mbApiInterface.Player_GetShuffle()).toJsonString()));
         }
 
@@ -421,7 +421,7 @@ namespace MusicBeePlugin
             
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Mute, Constants.Reply,
+                    new SocketMessage(Constants.PlayerMute, Constants.Reply,
                         mbApiInterface.Player_GetMute()).toJsonString()));
         }
 
@@ -439,7 +439,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(
                     EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Scrobble, Constants.Reply,
+                    new SocketMessage(Constants.PlayerScrobble, Constants.Reply,
                         mbApiInterface.Player_GetScrobbleEnabled()).toJsonString()));
         }
 
@@ -468,7 +468,7 @@ namespace MusicBeePlugin
             }
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Repeat, Constants.Reply,
+                    new SocketMessage(Constants.PlayerRepeat, Constants.Reply,
                         mbApiInterface.Player_GetRepeat()).toJsonString()));
         }
 
@@ -539,7 +539,7 @@ namespace MusicBeePlugin
             {
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.Rating, Constants.Reply,
+                        new SocketMessage(Constants.NowPlayingRating, Constants.Reply,
                             mbApiInterface.Library_GetFileTag(
                             mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString(), clientId));
             }
@@ -547,7 +547,7 @@ namespace MusicBeePlugin
             {
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.Rating,Constants.Reply,
+                        new SocketMessage(Constants.NowPlayingRating,Constants.Reply,
                             mbApiInterface.Library_GetFileTag(
                                 mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString()));
             }
@@ -564,7 +564,7 @@ namespace MusicBeePlugin
             {
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                        new SocketMessage(Constants.NowPlayingLyrics, Constants.Reply,
                             mbApiInterface.NowPlaying_GetLyrics()).toJsonString()));
             }
             else if (mbApiInterface.ApiRevision >= 17)
@@ -572,14 +572,14 @@ namespace MusicBeePlugin
                 string lyrics = mbApiInterface.NowPlaying_GetDownloadedLyrics();
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                        new SocketMessage(Constants.NowPlayingLyrics, Constants.Reply,
                             !String.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics").toJsonString()));
             }
             else
             {
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.Lyrics, Constants.Reply,
+                        new SocketMessage(Constants.NowPlayingLyrics, Constants.Reply,
                             "Lyrics Not Found").toJsonString()));
             }
         }
@@ -638,7 +638,7 @@ namespace MusicBeePlugin
             
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.Position, Constants.Reply, position).toJsonString()));
+                    new SocketMessage(Constants.NowPlayingPosition, Constants.Reply, position).toJsonString()));
         }
 
         /// <summary>
@@ -666,7 +666,7 @@ namespace MusicBeePlugin
             
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingPlay, Constants.Reply,
+                    new SocketMessage(Constants.NowPlayingListPlay, Constants.Reply,
                         result).toJsonString()));
          }
 
@@ -679,7 +679,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingTrackRemove, Constants.Reply,
+                    new SocketMessage(Constants.NowPlayingListRemove, Constants.Reply,
                         mbApiInterface.NowPlayingList_RemoveAt(index)).toJsonString(), clientId));
         }
 
@@ -704,7 +704,7 @@ namespace MusicBeePlugin
             }
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.AutoDj, Constants.Reply,
+                    new SocketMessage(Constants.PlayerAutoDj, Constants.Reply,
                         mbApiInterface.Player_GetAutoDjEnabled()).toJsonString()));
         }
 
@@ -743,7 +743,7 @@ namespace MusicBeePlugin
             }
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.LfmLoveRating, Constants.Reply, lastfmStatus).toJsonString()));
+                    new SocketMessage(Constants.NowPlayingLfmRating, Constants.Reply, lastfmStatus).toJsonString()));
         }
 
         /// <summary>
@@ -792,7 +792,7 @@ namespace MusicBeePlugin
         {
             EventBus.FireEvent(new MessageEvent(
                 EventType.ReplyAvailable,
-                    new SocketMessage(Constants.SongInformation, Constants.Reply, GetTrackInfo()).toJsonString(), clientId));
+                    new SocketMessage(Constants.NowPlayingTrack, Constants.Reply, GetTrackInfo()).toJsonString(), clientId));
         }
 
         /// <summary>
@@ -810,7 +810,7 @@ namespace MusicBeePlugin
             result = mbApiInterface.NowPlayingList_MoveFiles(from, to);
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingMoveTrack, Constants.Reply,result).toJsonString(), clientId));
+                    new SocketMessage(Constants.NowPlayingListMove, Constants.Reply,result).toJsonString(), clientId));
         }
 
         private string XmlFilter(string[] tags, string query, bool isStrict)
@@ -1133,7 +1133,7 @@ namespace MusicBeePlugin
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingSearch, Constants.Reply,result).toJsonString(), clientId));
+                    new SocketMessage(Constants.NowPlayingListSearch, Constants.Reply,result).toJsonString(), clientId));
         }
     }
 }
