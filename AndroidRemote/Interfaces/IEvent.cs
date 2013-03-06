@@ -6,6 +6,5 @@
         string Type { get; }
         string ClientId { get; }
         string ExtraData { get; }
-        string NullTerminatedXmlString { get; }
     }
 }

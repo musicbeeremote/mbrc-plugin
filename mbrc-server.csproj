@@ -103,7 +103,6 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestShuffle.cs" />
     <Compile Include="AndroidRemote\Commands\State\PCoverChanged.cs" />
     <Compile Include="AndroidRemote\Commands\State\PLyricsChanged.cs" />
-    <Compile Include="AndroidRemote\Commands\State\PTrackChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingList.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestVolume.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestStop.cs" />
@@ -125,6 +124,8 @@
     <Compile Include="AndroidRemote\configuration.cs" />
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
     <Compile Include="AndroidRemote\Entities\Album.cs" />
+    <Compile Include="AndroidRemote\Entities\Artist.cs" />
+    <Compile Include="AndroidRemote\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingListTrack.cs" />
     <Compile Include="AndroidRemote\Entities\SocketMessage.cs" />
     <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />

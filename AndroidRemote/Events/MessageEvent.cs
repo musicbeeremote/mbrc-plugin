@@ -1,6 +1,4 @@
-﻿using System.Text.RegularExpressions;
-
-namespace MusicBeePlugin.AndroidRemote.Events
+﻿namespace MusicBeePlugin.AndroidRemote.Events
 {
     using System;
     using Interfaces;
@@ -58,21 +56,6 @@ namespace MusicBeePlugin.AndroidRemote.Events
             get { return clientId; }
         }
 
-        public string NullTerminatedXmlString
-        {
-            get
-            {
-                string processed = Regex.Replace(data, @"\t|\n|\r", "");
-                return Regex.Replace(processed, @"\s{2,}","") + "\0\r\n";
-            }
-        }
-
-        public string ExtraData
-        {
-            get
-            {
-                return extraData;
-            }
-        }
+        public string ExtraData { get { return extraData; } }
     }
 }

@@ -1,4 +1,7 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Model
+﻿using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Networking;
+
+namespace MusicBeePlugin.AndroidRemote.Model
 {
     using System;
     using System.Drawing;
@@ -79,7 +82,9 @@
             }
             finally
             {
-                EventBus.FireEvent(new MessageEvent(EventType.ModelDataCoverChanged, cover));
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.SongCover, Constants.Message, cover).toJsonString()));
             }
         }
 
@@ -118,7 +123,9 @@
                 finally
                 {
                     if (!String.IsNullOrEmpty(lyrics))
-                        EventBus.FireEvent(new MessageEvent(EventType.ModelDataLyricsChanged, lyrics));
+                        EventBus.FireEvent(
+                            new MessageEvent(EventType.ReplyAvailable,
+                                new SocketMessage(Constants.Lyrics, Constants.Message, lyrics).toJsonString()));
                 }
             }
             get { return lyrics; }

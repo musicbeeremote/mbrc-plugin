@@ -34,7 +34,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             map.TryGetValue((string)node.Element("tag"), out tag);
 
 
-            Plugin.Instance.SearchMusicBeeLibrary(eEvent.ClientId, tag, (bool)node.Element("filter"), query);
+            //Plugin.Instance.SearchMusicBeeLibrary(eEvent.ClientId, tag, (bool)node.Element("filter"), query);
         }
     }
 }

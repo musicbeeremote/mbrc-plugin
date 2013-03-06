@@ -66,6 +66,20 @@
         public const string NowPlayingPosition = "nowplayingposition";
         public const string NowPlayingRemove = "nowplayingremove";
 
+        public const string LibrarySearchArtist = "librarysearchartist";
+        public const string LibrarySearchAlbum = "librarysearchalbum";
+        public const string LibrarySearchGenre = "librarysearchgenre";
+        public const string LibrarySearchTitle = "librarysearchtitle";
+
+        public const string LibraryArtistAlbums = "libraryartistalbums";
+        public const string LibraryGenreArtists = "librarygenreartists";
+        public const string LibraryAlbumTracks = "libraryalbumtracks";
+        
+        public const string LibraryQueueGenre = "libraryqueuegenre";
+        public const string LibraryQueueArtist = "libraryqueueartist";
+        public const string LibraryQueueAlbum = "libraryqueuealbum";
+        public const string LibraryQueueTrack = "libraryqueuetrack";
+
         #endregion
 
         #region SocketMessage Types

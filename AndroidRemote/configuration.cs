@@ -19,6 +19,8 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(EventType.ActionClientDisconnected, typeof (ClientDisconnected));
             controller.AddCommand(EventType.ActionForceClientDisconnect, typeof (ForceClientDisconnect));
             controller.AddCommand(EventType.InitializeModel, typeof(InitializeModelStateCommand));
+            controller.AddCommand(EventType.NowPlayingCoverChange, typeof(PCoverChanged));
+            controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(PLyricsChanged));
             /** Protocol Related commands **/
             controller.AddCommand(Constants.Player, typeof (RequestPlayer));
             controller.AddCommand(Constants.Protocol, typeof (RequestProtocol));
@@ -49,9 +51,6 @@ namespace MusicBeePlugin.AndroidRemote
             controller.AddCommand(Constants.NowPlayingMoveTrack, typeof(RequestNowPlayingMoveTrack));
             controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowPlayingQueue));
             controller.AddCommand(EventType.ReplyAvailable, typeof(ReplayAvailable));
-            controller.AddCommand(EventType.PlayerStateTrackChanged, typeof(PTrackChanged));
-            controller.AddCommand(EventType.PlayerStateLyricsChanged, typeof (PLyricsChanged));
-            controller.AddCommand(EventType.PlayerStateCoverChanged, typeof (PCoverChanged));
         }
     }
 }
