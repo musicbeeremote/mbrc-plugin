@@ -348,7 +348,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             try
             {
-                byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+                byte[] data = System.Text.Encoding.UTF8.GetBytes(message + "\r\n");
                 Socket wSocket;
                 if(availableWorkerSockets.TryGetValue(clientId,out wSocket))
                 {

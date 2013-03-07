@@ -52,7 +52,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         string msg in
                             incomingMessage.Replace("\0","").Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
                     {
-                        msgList.Add(JsonSerializer.DeserializeFromString<SocketMessage>(incomingMessage));
+                        msgList.Add(JsonSerializer.DeserializeFromString<SocketMessage>(msg));
                     }
                 }
                 catch (Exception ex)

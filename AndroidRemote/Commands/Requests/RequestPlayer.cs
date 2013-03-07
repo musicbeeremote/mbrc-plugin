@@ -1,9 +1,9 @@
-﻿using MusicBeePlugin.AndroidRemote.Interfaces;
-using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Utilities;
-
-namespace MusicBeePlugin.AndroidRemote.Commands.Requests
+﻿namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
+    using Entities;
+    using Interfaces;
+    using Networking;
+
     class RequestPlayer:ICommand
     {
         public void Dispose()
@@ -13,7 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            //SocketServer.Instance.Send(XmlCreator.Create(Constants.Player,Constants.PlayerName,true,true), eEvent.ClientId);
+            SocketServer.Instance.Send(new SocketMessage(Constants.Player, Constants.Reply, "MusicBee").toJsonString(), eEvent.ClientId);
         }
     }
 }

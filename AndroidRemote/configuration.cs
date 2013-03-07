@@ -1,11 +1,10 @@
-﻿using MusicBeePlugin.AndroidRemote.Commands;
-using MusicBeePlugin.AndroidRemote.Commands.InstaReplies;
-using MusicBeePlugin.AndroidRemote.Commands.Internal;
-using MusicBeePlugin.AndroidRemote.Commands.Requests;
-using MusicBeePlugin.AndroidRemote.Commands.State;
-
-namespace MusicBeePlugin.AndroidRemote
+﻿namespace MusicBeePlugin.AndroidRemote
 {
+    using Commands;
+    using Commands.InstaReplies;
+    using Commands.Internal;
+    using Commands.Requests;
+    using Commands.State;
     using Networking;
     using Events;
 
