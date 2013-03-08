@@ -2,12 +2,11 @@
 {
     internal class PlayerStatus
     {
-        public string RepeatState { get; set; }
-        public string MuteState { get; set; }
-        public string ShuffleState { get; set; }
-        public string ScrobblerState { get; set; }
-        public string PlayState { get; set; }
-        public string Volume { get; set; }
-
+        public string playerrepeat { get; set; }
+        public string playermute { get; set; }
+        public string playershuffle { get; set; }
+        public string scrobbler { get; set; }
+        public string playerstate { get; set; }
+        public string playervolume { get; set; }
     }
 }
