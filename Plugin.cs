@@ -505,8 +505,7 @@ namespace MusicBeePlugin
                 }
 
                 trackList.Add(
-                    new NowPlayingListTrack(SecurityElement.Escape(artist),
-                        SecurityElement.Escape(title), position));
+                    new NowPlayingListTrack(artist, title, position));
                 position++;
             }
 

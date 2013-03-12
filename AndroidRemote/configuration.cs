@@ -35,6 +35,8 @@
             controller.AddCommand(Constants.PlayerStatus, typeof (RequestPlayerStatus));
             controller.AddCommand(Constants.NowPlayingPosition, typeof (RequestPlaybackPosition));
             controller.AddCommand(Constants.NowPlayingListRemove, typeof (RequestNowPlayingTrackRemoval));
+            controller.AddCommand(Constants.NowPlayingListPlay, typeof(RequestNowPlayingPlay));
+            controller.AddCommand(Constants.NowPlayingList, typeof(RequestNowPlayingList));
             controller.AddCommand(Constants.PlayerAutoDj, typeof (RequestAutoDj));
             controller.AddCommand(Constants.PluginVersion, typeof (RequestPluginVersion));
             controller.AddCommand(Constants.NowPlayingLfmRating, typeof (RequestLfmLoveRating));
