@@ -1,8 +1,7 @@
-using MusicBeePlugin.AndroidRemote.Model;
-using MusicBeePlugin.AndroidRemote.Utilities;
-
 namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 {
+    using Entities;
+    using Model;
     using Interfaces;
     using Networking;
 
@@ -15,8 +14,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-            //SocketServer.Instance.Send(XmlCreator.Create(Constants.Lyrics, LyricCoverModel.Instance.Lyrics, true, true), eEvent.ClientId);
-            
+            SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics,Constants.Reply, LyricCoverModel.Instance.Lyrics).toJsonString(), eEvent.ClientId);
         }
     }
 }

@@ -11,7 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            throw new NotImplementedException();
+            Plugin.Instance.NowPlayingSearch(eEvent.DataToString(), eEvent.ClientId);
         }
     }
 }

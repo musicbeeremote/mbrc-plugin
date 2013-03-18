@@ -1,4 +1,4 @@
-namespace MusicBeePlugin
+﻿namespace MusicBeePlugin
 {
     using System.Collections.Generic;
     using System.Linq;
@@ -252,6 +252,7 @@ namespace MusicBeePlugin
                 case NotificationType.TrackChanged:
                     RequestNowPlayingTrackCover();
                     RequestTrackRating(String.Empty, String.Empty);
+                    RequestNowPlayingTrackLyrics();
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                                                         new SocketMessage(Constants.NowPlayingTrack,
                                                                           Constants.Message, GetTrackInfo())

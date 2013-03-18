@@ -8,7 +8,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
     using System;
     using System.Diagnostics;
     using System.Globalization;
-    using System.Xml;
     using Error;
     using Utilities;
 
@@ -31,7 +30,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             try
             {
                 List<SocketMessage> msgList = new List<SocketMessage>();
-                if (String.IsNullOrEmpty(incomingMessage) || incomingMessage == "\0\r\n")
+                if (String.IsNullOrEmpty(incomingMessage))
                 {
                     return;
                 }
@@ -65,7 +64,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 #endif               
                     
                 }
-
 
                 foreach (SocketMessage msg in msgList)
                 {

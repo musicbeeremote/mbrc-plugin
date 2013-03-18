@@ -1,10 +1,11 @@
-﻿using MusicBeePlugin.AndroidRemote.Interfaces;
-using MusicBeePlugin.AndroidRemote.Model;
-using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Utilities;
-
+﻿
 namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 {
+    using Entities;
+    using Interfaces;
+    using Model;
+    using Networking;
+
     class RequestCover : ICommand
     {
         public void Dispose()
@@ -14,7 +15,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-           // SocketServer.Instance.Send(XmlCreator.Create(Constants.SongCover, LyricCoverModel.Instance.Cover, true, true), eEvent.ClientId);
+            SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingCover, Constants.Reply, LyricCoverModel.Instance.Cover).toJsonString());
         }
     }
 }
