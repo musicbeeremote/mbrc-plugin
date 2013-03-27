@@ -103,12 +103,12 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     if (lStr.Contains("\r\r\n\r\r\n"))
                     {
                         /* Convert new line & empty line to xml safe format */
-                        lStr = lStr.Replace("\r\r\n\r\r\n", " &lt;p&gt; ");
-                        lStr = lStr.Replace("\r\r\n", " &lt;br&gt; ");
+                        lStr = lStr.Replace("\r\r\n\r\r\n", " \r\n ");
+                        lStr = lStr.Replace("\r\r\n", " \n ");
                     }
                     lStr = lStr.Replace("\0", " ");
-                    lStr = lStr.Replace("\r\n", "&lt;p&gt;");
-                    lStr = lStr.Replace("\n", "&lt;br&gt;");
+                    //lStr = lStr.Replace("\r\n", "&lt;p&gt;");
+                    //lStr = lStr.Replace("\n", "&lt;br&gt;");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
                     Regex regEx = new Regex(pattern);
                     lyrics = SecurityElement.Escape(regEx.Replace(lStr, String.Empty));
