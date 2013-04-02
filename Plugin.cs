@@ -1,4 +1,6 @@
-﻿namespace MusicBeePlugin
+using System.Diagnostics;
+
+namespace MusicBeePlugin
 {
     using System.Collections.Generic;
     using System.Linq;

@@ -83,11 +83,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AndroidRemote\Commands\ReplayAvailable.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibrarySearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestLyrics.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchAlbum.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchArtist.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchGenre.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchTitle.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingMoveTrack.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestMute.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
