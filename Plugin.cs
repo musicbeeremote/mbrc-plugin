@@ -857,7 +857,7 @@ namespace MusicBeePlugin
                         Album current = albumInfo.Length == 3
                                             ? new Album(albumInfo[1], albumInfo[2])
                                             : new Album(albumInfo[0], albumInfo[1]);
-                        if (current.AlbumName.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (current.album.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                         if (!albumList.Contains(current))
                         {

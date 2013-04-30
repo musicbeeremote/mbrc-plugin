@@ -52,6 +52,10 @@
             controller.AddCommand(Constants.LibrarySearchAlbum, typeof(RequestLibSearchAlbum));
             controller.AddCommand(Constants.LibrarySearchGenre, typeof(RequestLibSearchGenre));
             controller.AddCommand(Constants.LibrarySearchTitle, typeof(RequestLibSearchTitle));
+            controller.AddCommand(Constants.LibraryQueueAlbum, typeof(RequestLibQueueAlbum));
+            controller.AddCommand(Constants.LibraryQueueArtist, typeof(RequestLibQueueArtist));
+            controller.AddCommand(Constants.LibraryQueueGenre, typeof(RequestLibQueueGenre));
+            controller.AddCommand(Constants.LibraryQueueTrack, typeof(RequestLibQueueTrack));
             controller.AddCommand(EventType.ReplyAvailable, typeof(ReplayAvailable));
         }
     }

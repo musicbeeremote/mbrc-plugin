@@ -5,47 +5,34 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 {
     class Track :IEquatable<Track>, IComparable<Track>
     {
-        private readonly string title;
-        private readonly string artist;
-        private readonly int trackNo;
-
         public Track(string artist, string title)
         {
             this.title = title;
             this.artist = artist;
-            this.trackNo = 0;
+            this.trackno = 0;
         }
 
         public Track(string artist, string title, int trackNo)
         {
             this.artist = artist;
             this.title = title;
-            this.trackNo = trackNo;
+            this.trackno = trackNo;
         }
 
-        public string Artist
-        {
-            get { return artist; }
-        }
+        public string artist { get; private set; }
 
-        public string Title
-        {
-            get { return title; }
-        }
+        public string title { get; private set; }
 
-        public int TrackNo
-        {
-            get { return trackNo; }
-        }
+        public int trackno { get; private set; }
 
         public bool Equals(Track other)
         {
-            return (other.Artist.Equals(artist) && other.Title.Equals(title));
+            return (other.artist.Equals(artist) && other.title.Equals(title));
         }
 
         public int CompareTo(Track other)
         {
-            return other == null ? 1 : trackNo.CompareTo(other.TrackNo);
+            return other == null ? 1 : trackno.CompareTo(other.trackno);
         }
     }
 }

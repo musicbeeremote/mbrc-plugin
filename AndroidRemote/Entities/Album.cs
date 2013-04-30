@@ -5,48 +5,35 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 {
     class Album : IEquatable<Album>
     {
-        private readonly string album;
-        private readonly string artist;
-        private int count;
-
         public Album(string artist, string album)
         {
             this.album = album;
             this.artist = artist;
-            count = 1;
+            TrackCount = 1;
         }
 
-        public string AlbumName
-        {
-            get { return album; }
-        }
+        public string album { get; private set; }
 
-        public string AlbumArtist
-        {
-            get { return artist; }
-        }
+        public string artist { get; private set; }
 
         public void IncreaseCount()
         {
-            count++;
+            TrackCount++;
         }
 
-        public int TrackCount
-        {
-            get { return count; }
-        }
+        public int TrackCount { get; private set; }
 
         public XElement toXElement()
         {
             return new XElement("album", 
                 new XElement("albumartist", artist),
                 new XElement("albumname", album),
-                new XElement("count", count));
+                new XElement("count", TrackCount));
         }
 
         public bool Equals(Album other)
         {
-            return other.AlbumArtist.Equals(artist) && other.AlbumName.Equals(album);
+            return other.artist.Equals(artist) && other.album.Equals(album);
         }
     }
 }
