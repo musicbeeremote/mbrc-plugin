@@ -3,6 +3,7 @@
     public enum QueueType
     {
         Last,
-        Next
+        Next,
+        PlayNow
     }
 }

@@ -18,7 +18,24 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
             ((Dictionary<string, string>)eEvent.Data).TryGetValue("type", out type);
             ((Dictionary<string, string>)eEvent.Data).TryGetValue("query", out query);
-            QueueType qType = type == "next" ? QueueType.Next : QueueType.Last;
+
+            QueueType qType;
+            switch (type)
+            {
+                case "next":
+                    qType = QueueType.Next;
+                    break;
+                case "last":
+                    qType = QueueType.Last;
+                    break;
+                case "now":
+                    qType = QueueType.PlayNow;
+                    break;
+                default:
+                    qType = QueueType.Next;
+                    break;
+            }
+           
             Plugin.Instance.RequestQueueFiles(qType, MetaTag.artist, query);
         }
     }

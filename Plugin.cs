@@ -1103,9 +1103,15 @@ namespace MusicBeePlugin
             {
                 mbApiInterface.NowPlayingList_QueueFilesNext(trackList.ToArray());
             }
-            else
+            else if (queue == QueueType.Last)
             {
                 mbApiInterface.NowPlayingList_QueueFilesLast(trackList.ToArray());
+            }
+            else if (queue == QueueType.PlayNow)
+            {
+                mbApiInterface.NowPlayingList_Clear();
+                mbApiInterface.NowPlayingList_QueueFilesNext(trackList.ToArray());
+                mbApiInterface.NowPlayingList_PlayNow(trackList[0]);
             }
         }
 
