@@ -51,6 +51,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         string msg in
                             incomingMessage.Replace("\0","").Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
                     {
+                        if (msg.Equals("\n")) continue;
                         msgList.Add(new SocketMessage(JsonObject.Parse(msg)));
                     }
                 }

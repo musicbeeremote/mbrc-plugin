@@ -90,6 +90,9 @@
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestLyrics.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibAlbumTracks.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibArtistAlbums.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibGenreArtists.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueAlbum.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueArtist.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueGenre.cs" />
@@ -184,7 +187,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config" />
+    <None Include="packages.config">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">

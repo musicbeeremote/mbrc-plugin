@@ -341,6 +341,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <param name="clientId"></param>
         public void Send(string message, string clientId)
         {
+#if DEBUG
+            Debug.WriteLine("Send: " + message + " to client: " + clientId);
+#endif
             if(clientId.Equals("all"))
             {
                 Send(message);

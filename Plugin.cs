@@ -965,7 +965,7 @@ namespace MusicBeePlugin
 
             mbApiInterface.Library_QueryLookupTable(null, null, null);
             EventBus.FireEvent(
-                new MessageEvent(
+                new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibraryGenreArtists, Constants.Reply,
                         artistList).toJsonString(), clientId));
 
@@ -1046,10 +1046,11 @@ namespace MusicBeePlugin
                     string currentTrack = mbApiInterface.Library_QueryGetNextFile();
                     if (string.IsNullOrEmpty(currentTrack)) break;
 
+                    int trackNumber = 0;
+                    int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
+
                     trackList.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
-                                              mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
-                                              int.Parse(mbApiInterface.Library_GetFileTag(currentTrack,
-                                                                                          MetaDataType.TrackNo))));
+                                              mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber));
                 }
                 trackList.Sort();
             }
