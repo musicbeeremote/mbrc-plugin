@@ -7,7 +7,7 @@
         public const string Player = "player";
         public const string Protocol = "protocol";
         public const string PlayerName = "MusicBee";
-        public const string ProtocolVersion = "2";
+        public const float ProtocolVersion = 2;
         public const string PluginVersion = "pluginversion";
         #endregion
 

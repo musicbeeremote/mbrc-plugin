@@ -1,7 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Entities
 {
     using System;
-    using System.Security;
 
     /// <summary>
     /// 
@@ -56,7 +55,7 @@
             get { return artist; }
             set
             {                
-                artist = SecurityElement.Escape(String.IsNullOrEmpty(value) ? "Unknown Artist" : value);
+                artist = String.IsNullOrEmpty(value) ? "Unknown Artist" : value;
             }
         }
 
@@ -86,7 +85,7 @@
             get { return album; }
             set
             {
-                album = SecurityElement.Escape(String.IsNullOrEmpty(value) ? "Unknown Album" : value);
+                album = String.IsNullOrEmpty(value) ? "Unknown Album" : value;
             }
         }
 
@@ -96,7 +95,7 @@
         public string Year
         {
             get { return year; }
-            set { year = SecurityElement.Escape(value); }
+            set { year = value; }
         }
     }   
 }

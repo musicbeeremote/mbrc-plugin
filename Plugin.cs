@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace MusicBeePlugin
 {
     using System.Collections.Generic;
@@ -13,7 +11,6 @@ namespace MusicBeePlugin
     using System.Globalization;
     using System.IO;
     using System.Reflection;
-    using System.Security;
     using System.Timers;
     using AndroidRemote.Controller;
     using AndroidRemote.Entities;
@@ -1007,19 +1004,20 @@ namespace MusicBeePlugin
         public void LibrarySearchTitle(string title, string clientId)
         {
             List<Track> tracks = new List<Track>();
-            if (mbApiInterface.Library_QueryLookupTable("title", "artist" + '\0' + "title",
-                                                        XmlFilter(new[] {"Title"}, title, false)))
+            if (mbApiInterface.Library_QueryFiles(XmlFilter(new[] {"Title"}, title, false)))
             {
-                foreach (
-                    string entry in
-                        mbApiInterface.Library_QueryGetLookupTableValue(null)
-                                      .Split(new[] {"\0\0"}, StringSplitOptions.None))
+                while (true)
                 {
-                    string[] trackInfo = entry.Split(new[] {'\0'}, StringSplitOptions.None);
+                    string currentTrack = mbApiInterface.Library_QueryGetNextFile();
+                    if (string.IsNullOrEmpty(currentTrack)) break;
 
-                    tracks.Add(trackInfo.Length == 3
-                                   ? new Track(trackInfo[1], trackInfo[2])
-                                   : new Track(trackInfo[0], trackInfo[1]));
+                    int trackNumber = 0;
+                    int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
+                    string src = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(currentTrack));
+
+                    tracks.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
+                                         mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
+                                         trackNumber, src));
                 }
             }
 
@@ -1048,9 +1046,10 @@ namespace MusicBeePlugin
 
                     int trackNumber = 0;
                     int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
+                    string src = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(currentTrack));
 
                     trackList.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
-                                              mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber));
+                                              mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber, src));
                 }
                 trackList.Sort();
             }
@@ -1071,6 +1070,8 @@ namespace MusicBeePlugin
         public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
             string filter = String.Empty;
+            List<string> trackList = new List<string>();
+            bool loop = true;
             switch (tag)
             {
                 case MetaTag.artist:
@@ -1083,17 +1084,17 @@ namespace MusicBeePlugin
                     filter = XmlFilter(new[] {"Genre"}, query, true);
                     break;
                 case MetaTag.title:
-                    filter = XmlFilter(new[] {"Title"}, query, true);
+                    trackList.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(query)));
+                    loop = false;
                     break;
                 case MetaTag.none:
                     return;
                 default:
                     return;
             }
-            if (!mbApiInterface.Library_QueryFiles(filter)) return;
+            if (!mbApiInterface.Library_QueryFiles(filter) || trackList.Count == 0) return;
 
-            List<string> trackList = new List<string>();
-            while (true)
+            while (loop)
             {
                 string current = mbApiInterface.Library_QueryGetNextFile();
                 if (String.IsNullOrEmpty(current)) break;

@@ -17,17 +17,16 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         {
             this.context = jObj.Get("context");
 
-            var data = jObj.Object("data");
-
+            var data = jObj.Get("data");
             if (data == null)
             {
                 this.data = "";
             }
             else
             {
-                if (data.Count <= 1)
+                if (data.Contains("{")&&data.Contains("}"))
                 {
-                    this.data = jObj.Get("data");
+                    this.data = jObj.Object("data");
                 }
                 else
                 {
