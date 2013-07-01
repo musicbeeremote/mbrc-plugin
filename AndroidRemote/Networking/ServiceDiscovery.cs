@@ -44,17 +44,18 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             if (incoming.Get("context").Contains("discovery"))
             {
                 List<string> addresses = NetworkTools.GetPrivateAddressList();
-                string clientAddress = incoming.Get("address");
+                IPAddress clientAddress = IPAddress.Parse(incoming.Get("address"));
                 string interfaceAddress = String.Empty;
-                int minDistance = 9001; // It's over nine thousand... 
                 foreach (string address in addresses)
                 {
-                    int distance = LevenshteinDistance.CalculateDistances(clientAddress, interfaceAddress);
-                    if (minDistance > distance)
-                    {
-                        minDistance = distance;
-                        interfaceAddress = address;
-                    }
+                    IPAddress ifAddress = IPAddress.Parse(address);
+                    IPAddress subnetMask = NetworkTools.GetSubnetMask(address);
+
+                    IPAddress firstNetwork = NetworkTools.GetNetworkAddress(ifAddress, subnetMask);
+                    IPAddress secondNetwork = NetworkTools.GetNetworkAddress(clientAddress, subnetMask);
+                    if (!firstNetwork.Equals(secondNetwork)) continue;
+                    interfaceAddress = ifAddress.ToString();
+                    break;
                 }
 
                 Dictionary<string, object> notify = new Dictionary<string, object>();
