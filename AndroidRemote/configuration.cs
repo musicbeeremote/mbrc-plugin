@@ -20,6 +20,7 @@
             controller.AddCommand(EventType.InitializeModel, typeof(InitializeModelStateCommand));
             controller.AddCommand(EventType.NowPlayingCoverChange, typeof(PCoverChanged));
             controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(PLyricsChanged));
+            controller.AddCommand(EventType.StartServiceBroadcast, typeof(StartServiceBroadcast));
             /** Protocol Related commands **/
             controller.AddCommand(Constants.Player, typeof (RequestPlayer));
             controller.AddCommand(Constants.Protocol, typeof (RequestProtocol));            

@@ -85,6 +85,7 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AndroidRemote\Commands\Internal\StartServiceBroadcast.cs" />
     <Compile Include="AndroidRemote\Commands\ReplayAvailable.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />

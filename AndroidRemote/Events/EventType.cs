@@ -10,6 +10,7 @@
         public const string ActionSocketStop = "ActionSocketStop";
         public const string InitializeModel = "InitializeModel";
         public const string ReplyAvailable = "ReplyAvailable";
+        public const string StartServiceBroadcast = "StartServiceBroadcast";
 
         public const string NowPlayingCoverChange = "NowPlayingCoverChange";
         public const string NowPlayingLyricsChange = "NowPlayingLyricsChange";

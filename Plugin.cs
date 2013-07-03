@@ -115,7 +115,7 @@ namespace MusicBeePlugin
 
             EventBus.FireEvent(new MessageEvent(EventType.ActionSocketStart));
             EventBus.FireEvent(new MessageEvent(EventType.InitializeModel));
-
+            EventBus.FireEvent(new MessageEvent(EventType.StartServiceBroadcast));
             return about;
         }
 
@@ -1092,13 +1092,16 @@ namespace MusicBeePlugin
                 default:
                     return;
             }
-            if (!mbApiInterface.Library_QueryFiles(filter) || trackList.Count == 0) return;
 
-            while (loop)
+            if (trackList.Count == 0)
             {
-                string current = mbApiInterface.Library_QueryGetNextFile();
-                if (String.IsNullOrEmpty(current)) break;
-                trackList.Add(current);
+                mbApiInterface.Library_QueryFiles(filter);
+                while (loop)
+                {
+                    string current = mbApiInterface.Library_QueryGetNextFile();
+                    if (String.IsNullOrEmpty(current)) break;
+                    trackList.Add(current);
+                }
             }
 
             if (queue == QueueType.Next)
