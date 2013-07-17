@@ -252,6 +252,7 @@ namespace MusicBeePlugin
                     RequestNowPlayingTrackCover();
                     RequestTrackRating(String.Empty, String.Empty);
                     RequestNowPlayingTrackLyrics();
+                    RequestPlayPosition("status");
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                                                         new SocketMessage(Constants.NowPlayingTrack,
                                                                           Constants.Message, GetTrackInfo())
@@ -715,17 +716,7 @@ namespace MusicBeePlugin
         /// </param>
         public void RequestLoveStatusChange(string action)
         {
-            switch (action)
-            {
-                case "love":
-                    mbApiInterface.Library_SetFileTag(
-                        mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Llfm");
-                    break;
-                case "ban":
-                    mbApiInterface.Library_SetFileTag(
-                        mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Blfm");
-                    break;
-            }
+
             LastfmStatus lastfmStatus;
             string apiReply = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.RatingLove);
             if (apiReply.Equals("L") || apiReply.Equals("lfm") || apiReply.Equals("Llfm"))
@@ -740,6 +731,18 @@ namespace MusicBeePlugin
             {
                 lastfmStatus = LastfmStatus.Normal;
             }
+
+            if (action.Equals("toggle", StringComparison.OrdinalIgnoreCase) || action.Equals("love", StringComparison.OrdinalIgnoreCase))
+            {
+                mbApiInterface.Library_SetFileTag(
+                        mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Llfm");
+            } 
+            else if (action.Equals("ban", StringComparison.OrdinalIgnoreCase))
+            {
+                mbApiInterface.Library_SetFileTag(
+                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Blfm");
+            }
+            
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.NowPlayingLfmRating, Constants.Reply, lastfmStatus).toJsonString()));
