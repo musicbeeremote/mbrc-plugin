@@ -48,7 +48,6 @@
             controller.AddCommand(Constants.NowPlayingRating, typeof(RequestRating));
             controller.AddCommand(Constants.NowPlayingListSearch, typeof(RequestNowPlayingSearch));
             controller.AddCommand(Constants.NowPlayingListMove, typeof(RequestNowPlayingMoveTrack));
-            controller.AddCommand(Constants.NowPlayingListQueue, typeof(RequestNowPlayingQueue));
             controller.AddCommand(Constants.LibrarySearchArtist, typeof(RequestLibSearchArtist));
             controller.AddCommand(Constants.LibrarySearchAlbum, typeof(RequestLibSearchAlbum));
             controller.AddCommand(Constants.LibrarySearchGenre, typeof(RequestLibSearchGenre));

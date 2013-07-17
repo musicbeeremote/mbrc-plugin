@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using MusicBeePlugin.AndroidRemote.Settings;
-using MusicBeePlugin.AndroidRemote.Utilities;
 using MusicBeePlugin.Tools;
 using ServiceStack.Text;
 
@@ -61,7 +59,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 Dictionary<string, object> notify = new Dictionary<string, object>();
                 notify.Add("context","notify");
                 notify.Add("address", interfaceAddress);
-                notify.Add("computer", Environment.GetEnvironmentVariable("COMPUTERNAME"));
+                notify.Add("name", Environment.GetEnvironmentVariable("COMPUTERNAME"));
                 notify.Add("port", UserSettings.Instance.ListeningPort);
                 byte[] response = Encoding.UTF8.GetBytes(JsonSerializer.SerializeToString(notify));
                 mListener.Send(response, response.Length, mEndPoint);                      
