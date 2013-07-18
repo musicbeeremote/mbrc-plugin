@@ -1,3 +1,5 @@
+using System.Windows.Forms;
+
 namespace MusicBeePlugin
 {
     using System.Collections.Generic;
@@ -251,6 +253,7 @@ namespace MusicBeePlugin
                 case NotificationType.TrackChanged:
                     RequestNowPlayingTrackCover();
                     RequestTrackRating(String.Empty, String.Empty);
+                    RequestLoveStatus("status");
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
@@ -714,9 +717,56 @@ namespace MusicBeePlugin
         /// <param name="action">
         /// The action can be either love, or ban.
         /// </param>
-        public void RequestLoveStatusChange(string action)
+        public void RequestLoveStatus(string action)
         {
+            IntPtr hwnd = mbApiInterface.MB_GetWindowHandle();
+            Form MB = (Form) Form.FromHandle(hwnd);
 
+            if (action.Equals("toggle", StringComparison.OrdinalIgnoreCase))
+            {
+                if (GetLfmStatus() == LastfmStatus.Love || GetLfmStatus() == LastfmStatus.Ban)
+                {
+                    MB.Invoke(new MethodInvoker(SetLfmNormalStatus));
+                }
+                else
+                {
+                    MB.Invoke(new MethodInvoker(SetLfmLoveStatus));    
+                }
+            } 
+            else if (action.Equals("love", StringComparison.OrdinalIgnoreCase))
+            {
+                MB.Invoke(new MethodInvoker(SetLfmLoveStatus));
+            }
+            else if (action.Equals("ban", StringComparison.OrdinalIgnoreCase))
+            {
+                MB.Invoke(new MethodInvoker(SetLfmLoveBan));
+            }
+            
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
+                    new SocketMessage(Constants.NowPlayingLfmRating, Constants.Reply, GetLfmStatus()).toJsonString()));
+        }
+
+        private void SetLfmNormalStatus()
+        {
+            mbApiInterface.Library_SetFileTag(
+                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "lfm");
+        }
+
+        private void SetLfmLoveStatus()
+        {
+            mbApiInterface.Library_SetFileTag(
+                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Llfm");
+        }
+
+        private void SetLfmLoveBan()
+        {
+            mbApiInterface.Library_SetFileTag(
+                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Blfm");
+        }
+
+        private LastfmStatus GetLfmStatus()
+        {
             LastfmStatus lastfmStatus;
             string apiReply = mbApiInterface.NowPlaying_GetFileTag(MetaDataType.RatingLove);
             if (apiReply.Equals("L") || apiReply.Equals("lfm") || apiReply.Equals("Llfm"))
@@ -731,21 +781,7 @@ namespace MusicBeePlugin
             {
                 lastfmStatus = LastfmStatus.Normal;
             }
-
-            if (action.Equals("toggle", StringComparison.OrdinalIgnoreCase) || action.Equals("love", StringComparison.OrdinalIgnoreCase))
-            {
-                mbApiInterface.Library_SetFileTag(
-                        mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Llfm");
-            } 
-            else if (action.Equals("ban", StringComparison.OrdinalIgnoreCase))
-            {
-                mbApiInterface.Library_SetFileTag(
-                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.RatingLove, "Blfm");
-            }
-            
-            EventBus.FireEvent(
-                new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingLfmRating, Constants.Reply, lastfmStatus).toJsonString()));
+            return lastfmStatus;
         }
 
         /// <summary>

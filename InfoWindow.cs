@@ -54,7 +54,7 @@ namespace MusicBeePlugin
             {
                 latestVersionLabel.Text = "Your plugin is up to date";
             }
-            Plugin.Instance.RequestLoveStatusChange("");
+            Plugin.Instance.RequestLoveStatus("");
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
