@@ -680,10 +680,15 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void NowPlayingListRemoveTrack(int index, string clientId)
         {
+            var reply = new
+            {
+                success = mbApiInterface.NowPlayingList_RemoveAt(index),
+                index
+            };
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.NowPlayingListRemove, Constants.Reply,
-                        mbApiInterface.NowPlayingList_RemoveAt(index)).toJsonString(), clientId));
+                        reply).toJsonString(), clientId));
         }
 
         /// <summary>
@@ -833,22 +838,26 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.NowPlayingTrack, Constants.Reply, GetTrackInfo()).toJsonString(), clientId));
         }
 
+
         /// <summary>
-        /// 
+        /// Moves a track of the now playing list to a new position.
         /// </summary>
-        /// <param name="clientId"></param>
-        /// <param name="data"></param>
-        public void RequestNowPlayingMove(string clientId, string data)
+        /// <param name="clientId">The Id of the client that initiated the request</param>
+        /// <param name="from">The initial position</param>
+        /// <param name="to">The final position</param>
+        public void RequestNowPlayingMove(string clientId, int from, int to)
         {
             bool result = false;
-            string[] values = data.Split('#');
-            int[] from = new int[1];
-            from[0] = int.Parse(values[0]);
-            int to = int.Parse(values[1]);
-            result = mbApiInterface.NowPlayingList_MoveFiles(from, to);
+            int[] aFrom = {from};
+            result = mbApiInterface.NowPlayingList_MoveFiles(aFrom, to);
+
+            var reply = new
+            {
+                success = result, from, to
+            };
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingListMove, Constants.Reply,result).toJsonString(), clientId));
+                    new SocketMessage(Constants.NowPlayingListMove, Constants.Reply,reply).toJsonString(), clientId));
         }
 
         private string XmlFilter(string[] tags, string query, bool isStrict)
