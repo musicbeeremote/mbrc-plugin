@@ -849,7 +849,16 @@ namespace MusicBeePlugin
         {
             bool result = false;
             int[] aFrom = {from};
-            result = mbApiInterface.NowPlayingList_MoveFiles(aFrom, to);
+            int dIn;
+            if (from > to)
+            {
+                dIn = to - 1;
+            }
+            else
+            {
+                dIn = to;
+            }
+            result = mbApiInterface.NowPlayingList_MoveFiles(aFrom, dIn);
 
             var reply = new
             {
