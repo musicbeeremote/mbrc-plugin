@@ -1,5 +1,3 @@
-using MusicBeePlugin.AndroidRemote.Enumerations;
-
 namespace MusicBeePlugin
 {
     using System;
@@ -10,8 +8,8 @@ namespace MusicBeePlugin
     using System.Text.RegularExpressions;
     using System.Windows.Forms;
 
-    using MusicBeePlugin.AndroidRemote.Settings;
-    using MusicBeePlugin.Tools;
+    using AndroidRemote.Settings;
+    using Tools;
 
     /// <summary>
     /// 
@@ -27,6 +25,24 @@ namespace MusicBeePlugin
         {
             this.InitializeComponent();
             this.ipAddressBinding = new BindingList<string>();
+        }
+
+        /// <summary>
+        /// Updates the visual indicator with the current Socket server status.
+        /// </summary>
+        /// <param name="isRunning"></param>
+        public void UpdateSocketStatus(bool isRunning)
+        {
+            if (isRunning)
+            {
+                statusLabel.Text = @"Running";
+                statusLabel.ForeColor = Color.Green;
+            }
+            else
+            {
+                statusLabel.Text = @"Stopped";
+                statusLabel.ForeColor = Color.Red;
+            }
         }
 
         private void HelpButtonClick(object sender, EventArgs e)
@@ -46,15 +62,9 @@ namespace MusicBeePlugin
 
         private void HandleCheckForUpdateButtonClick(object sender, EventArgs e)
         {
-            if (UpdateChecker.IsThereAnUpdate(UserSettings.Instance.CurrentVersion, UserSettings.Instance.StoragePath))
-            {
-                latestVersionLabel.Text = "There is a newer version out (v" + UpdateChecker.LatestVersion + ")";
-            }
-            else
-            {
-                latestVersionLabel.Text = "Your plugin is up to date";
-            }
-            Plugin.Instance.RequestLoveStatus("");
+            latestVersionLabel.Text = UpdateChecker.IsThereAnUpdate(UserSettings.Instance.CurrentVersion, UserSettings.Instance.StoragePath) ?
+                string.Format(@"There is a newer version out (v{0})", UpdateChecker.LatestVersion) :
+                @"Your plugin is up to date";
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)

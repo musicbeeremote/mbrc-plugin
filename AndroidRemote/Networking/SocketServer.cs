@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MusicBeePlugin.AndroidRemote.Entities;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
@@ -33,6 +34,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// </summary>
         private AsyncCallback workerCallback;
 
+        private bool _isRunning;
+
 
         /// <summary>
         /// Returns the Instance of the signleton socketserver
@@ -55,7 +58,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <summary>
         /// 
         /// </summary>
-        public bool IsRunning { get; private set; }
+        public bool IsRunning
+        {
+            get { return _isRunning; }
+            private set
+            {
+                _isRunning = value;
+                EventBus.FireEvent(new MessageEvent(EventType.SocketStatusChange, _isRunning));
+            }
+        }
 
 
         /// <summary>
@@ -191,7 +202,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 if (!isAllowed)
                 {
-                    workerSocket.Send(System.Text.Encoding.UTF8.GetBytes("<notAllowed/>\0\r\n"));
+                    workerSocket.Send(System.Text.Encoding.UTF8.GetBytes(new SocketMessage(Constants.NotAllowed,Constants.Reply,String.Empty).toJsonString()));
                     workerSocket.Close();
 #if DEBUG
                     Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Force Disconnected not valid range\n");

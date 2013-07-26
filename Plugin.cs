@@ -66,6 +66,8 @@ namespace MusicBeePlugin
         }
 
         private static Plugin selfInstance;
+        private InfoWindow mWindow;
+
 
 
         /// <summary>
@@ -130,10 +132,10 @@ namespace MusicBeePlugin
         /// <param name="args">
         /// The args.
         /// </param>
-        private static void MenuItemClicked(object sender, EventArgs args)
+        private void MenuItemClicked(object sender, EventArgs args)
         {
-            InfoWindow window = new InfoWindow();
-            window.Show();
+            mWindow = new InfoWindow();
+            mWindow.Show();
         }
 
         /// <summary>

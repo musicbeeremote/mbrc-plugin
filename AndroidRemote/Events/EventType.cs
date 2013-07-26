@@ -14,5 +14,6 @@
 
         public const string NowPlayingCoverChange = "NowPlayingCoverChange";
         public const string NowPlayingLyricsChange = "NowPlayingLyricsChange";
+        public const string SocketStatusChange = "SocketStatusChange";
     }
 }

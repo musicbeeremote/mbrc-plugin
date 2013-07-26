@@ -9,6 +9,7 @@
         public const string PlayerName = "MusicBee";
         public const float ProtocolVersion = 2;
         public const string PluginVersion = "pluginversion";
+        public const string NotAllowed = "notallowed";
         #endregion
 
         #region Protocol 2. API calls
