@@ -65,16 +65,16 @@ namespace MusicBeePlugin
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(3, 393);
+            this.label1.Location = new System.Drawing.Point(13, 323);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(45, 13);
+            this.label1.Size = new System.Drawing.Size(77, 13);
             this.label1.TabIndex = 0;
-            this.label1.Text = "Version:";
+            this.label1.Text = "Plugin Version:";
             // 
             // versionLabel
             // 
             this.versionLabel.AutoSize = true;
-            this.versionLabel.Location = new System.Drawing.Point(59, 393);
+            this.versionLabel.Location = new System.Drawing.Point(108, 323);
             this.versionLabel.Name = "versionLabel";
             this.versionLabel.Size = new System.Drawing.Size(40, 13);
             this.versionLabel.TabIndex = 1;
@@ -96,14 +96,14 @@ namespace MusicBeePlugin
             this.internalIPList.FormattingEnabled = true;
             this.internalIPList.Location = new System.Drawing.Point(324, 133);
             this.internalIPList.Name = "internalIPList";
-            this.internalIPList.Size = new System.Drawing.Size(119, 145);
+            this.internalIPList.Size = new System.Drawing.Size(119, 184);
             this.internalIPList.TabIndex = 5;
             // 
             // label2
             // 
             this.label2.AutoSize = true;
             this.label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label2.Location = new System.Drawing.Point(13, 13);
+            this.label2.Location = new System.Drawing.Point(20, 17);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(40, 13);
             this.label2.TabIndex = 6;
@@ -113,11 +113,11 @@ namespace MusicBeePlugin
             // 
             this.statusLabel.AutoSize = true;
             this.statusLabel.ForeColor = System.Drawing.Color.Green;
-            this.statusLabel.Location = new System.Drawing.Point(59, 13);
+            this.statusLabel.Location = new System.Drawing.Point(66, 17);
             this.statusLabel.Name = "statusLabel";
-            this.statusLabel.Size = new System.Drawing.Size(47, 13);
+            this.statusLabel.Size = new System.Drawing.Size(37, 13);
             this.statusLabel.TabIndex = 7;
-            this.statusLabel.Text = "Running";
+            this.statusLabel.Text = "Status";
             // 
             // label3
             // 
@@ -140,7 +140,7 @@ namespace MusicBeePlugin
             // 
             // rangeNumericUpDown
             // 
-            this.rangeNumericUpDown.Location = new System.Drawing.Point(234, 208);
+            this.rangeNumericUpDown.Location = new System.Drawing.Point(240, 170);
             this.rangeNumericUpDown.Maximum = new decimal(new int[] {
             254,
             0,
@@ -162,7 +162,7 @@ namespace MusicBeePlugin
             // 
             // addAddressButton
             // 
-            this.addAddressButton.Location = new System.Drawing.Point(234, 233);
+            this.addAddressButton.Location = new System.Drawing.Point(240, 201);
             this.addAddressButton.Name = "addAddressButton";
             this.addAddressButton.Size = new System.Drawing.Size(21, 21);
             this.addAddressButton.TabIndex = 15;
@@ -173,7 +173,7 @@ namespace MusicBeePlugin
             // allowedLabel
             // 
             this.allowedLabel.AutoSize = true;
-            this.allowedLabel.Location = new System.Drawing.Point(19, 236);
+            this.allowedLabel.Location = new System.Drawing.Point(20, 204);
             this.allowedLabel.Name = "allowedLabel";
             this.allowedLabel.Size = new System.Drawing.Size(47, 13);
             this.allowedLabel.TabIndex = 30;
@@ -183,14 +183,14 @@ namespace MusicBeePlugin
             // 
             this.allowedAddressesComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.allowedAddressesComboBox.FormattingEnabled = true;
-            this.allowedAddressesComboBox.Location = new System.Drawing.Point(118, 233);
+            this.allowedAddressesComboBox.Location = new System.Drawing.Point(124, 201);
             this.allowedAddressesComboBox.Name = "allowedAddressesComboBox";
             this.allowedAddressesComboBox.Size = new System.Drawing.Size(110, 21);
             this.allowedAddressesComboBox.TabIndex = 19;
             // 
             // removeAddressButton
             // 
-            this.removeAddressButton.Location = new System.Drawing.Point(256, 233);
+            this.removeAddressButton.Location = new System.Drawing.Point(262, 201);
             this.removeAddressButton.Name = "removeAddressButton";
             this.removeAddressButton.Size = new System.Drawing.Size(21, 21);
             this.removeAddressButton.TabIndex = 17;
@@ -201,7 +201,7 @@ namespace MusicBeePlugin
             // addressLabel
             // 
             this.addressLabel.AutoSize = true;
-            this.addressLabel.Location = new System.Drawing.Point(19, 210);
+            this.addressLabel.Location = new System.Drawing.Point(19, 173);
             this.addressLabel.Name = "addressLabel";
             this.addressLabel.Size = new System.Drawing.Size(48, 13);
             this.addressLabel.TabIndex = 27;
@@ -209,7 +209,7 @@ namespace MusicBeePlugin
             // 
             // ipAddressInputTextBox
             // 
-            this.ipAddressInputTextBox.Location = new System.Drawing.Point(118, 208);
+            this.ipAddressInputTextBox.Location = new System.Drawing.Point(124, 170);
             this.ipAddressInputTextBox.Name = "ipAddressInputTextBox";
             this.ipAddressInputTextBox.Size = new System.Drawing.Size(110, 20);
             this.ipAddressInputTextBox.TabIndex = 26;
@@ -218,7 +218,7 @@ namespace MusicBeePlugin
             // allowLabel
             // 
             this.allowLabel.AutoSize = true;
-            this.allowLabel.Location = new System.Drawing.Point(19, 183);
+            this.allowLabel.Location = new System.Drawing.Point(19, 143);
             this.allowLabel.Name = "allowLabel";
             this.allowLabel.Size = new System.Drawing.Size(35, 13);
             this.allowLabel.TabIndex = 25;
@@ -232,7 +232,7 @@ namespace MusicBeePlugin
             "All",
             "Range",
             "Specified"});
-            this.selectionFilteringComboBox.Location = new System.Drawing.Point(118, 180);
+            this.selectionFilteringComboBox.Location = new System.Drawing.Point(124, 140);
             this.selectionFilteringComboBox.Name = "selectionFilteringComboBox";
             this.selectionFilteringComboBox.Size = new System.Drawing.Size(159, 21);
             this.selectionFilteringComboBox.TabIndex = 24;
@@ -241,7 +241,7 @@ namespace MusicBeePlugin
             // seperator2
             // 
             this.seperator2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.seperator2.Location = new System.Drawing.Point(12, 172);
+            this.seperator2.Location = new System.Drawing.Point(18, 126);
             this.seperator2.Name = "seperator2";
             this.seperator2.Size = new System.Drawing.Size(265, 1);
             this.seperator2.TabIndex = 23;
@@ -249,7 +249,7 @@ namespace MusicBeePlugin
             // addressFilteringCategoryLabel
             // 
             this.addressFilteringCategoryLabel.AutoSize = true;
-            this.addressFilteringCategoryLabel.Location = new System.Drawing.Point(13, 158);
+            this.addressFilteringCategoryLabel.Location = new System.Drawing.Point(19, 112);
             this.addressFilteringCategoryLabel.Name = "addressFilteringCategoryLabel";
             this.addressFilteringCategoryLabel.Size = new System.Drawing.Size(84, 13);
             this.addressFilteringCategoryLabel.TabIndex = 22;
@@ -257,7 +257,7 @@ namespace MusicBeePlugin
             // 
             // portNumericUpDown
             // 
-            this.portNumericUpDown.Location = new System.Drawing.Point(118, 130);
+            this.portNumericUpDown.Location = new System.Drawing.Point(124, 75);
             this.portNumericUpDown.Maximum = new decimal(new int[] {
             65535,
             0,
@@ -280,7 +280,7 @@ namespace MusicBeePlugin
             // portLabel
             // 
             this.portLabel.AutoSize = true;
-            this.portLabel.Location = new System.Drawing.Point(19, 135);
+            this.portLabel.Location = new System.Drawing.Point(19, 77);
             this.portLabel.Name = "portLabel";
             this.portLabel.Size = new System.Drawing.Size(29, 13);
             this.portLabel.TabIndex = 20;
@@ -289,7 +289,7 @@ namespace MusicBeePlugin
             // seperator1
             // 
             this.seperator1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.seperator1.Location = new System.Drawing.Point(12, 126);
+            this.seperator1.Location = new System.Drawing.Point(18, 65);
             this.seperator1.Name = "seperator1";
             this.seperator1.Size = new System.Drawing.Size(265, 1);
             this.seperator1.TabIndex = 18;
@@ -297,7 +297,7 @@ namespace MusicBeePlugin
             // connectionSettingsCategoryLabel
             // 
             this.connectionSettingsCategoryLabel.AutoSize = true;
-            this.connectionSettingsCategoryLabel.Location = new System.Drawing.Point(13, 112);
+            this.connectionSettingsCategoryLabel.Location = new System.Drawing.Point(19, 51);
             this.connectionSettingsCategoryLabel.Name = "connectionSettingsCategoryLabel";
             this.connectionSettingsCategoryLabel.Size = new System.Drawing.Size(102, 13);
             this.connectionSettingsCategoryLabel.TabIndex = 16;
@@ -306,7 +306,7 @@ namespace MusicBeePlugin
             // label4
             // 
             this.label4.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.label4.Location = new System.Drawing.Point(12, 277);
+            this.label4.Location = new System.Drawing.Point(18, 250);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(265, 1);
             this.label4.TabIndex = 31;
@@ -314,7 +314,7 @@ namespace MusicBeePlugin
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(13, 262);
+            this.label5.Location = new System.Drawing.Point(19, 235);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(29, 13);
             this.label5.TabIndex = 32;
@@ -323,7 +323,7 @@ namespace MusicBeePlugin
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(19, 283);
+            this.label6.Location = new System.Drawing.Point(20, 265);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(93, 13);
             this.label6.TabIndex = 33;
@@ -331,7 +331,7 @@ namespace MusicBeePlugin
             // 
             // nowPlayingListLimit
             // 
-            this.nowPlayingListLimit.Location = new System.Drawing.Point(118, 281);
+            this.nowPlayingListLimit.Location = new System.Drawing.Point(124, 263);
             this.nowPlayingListLimit.Maximum = new decimal(new int[] {
             100000,
             0,
@@ -346,14 +346,14 @@ namespace MusicBeePlugin
             this.nowPlayingListLimit.Size = new System.Drawing.Size(159, 20);
             this.nowPlayingListLimit.TabIndex = 34;
             this.nowPlayingListLimit.Value = new decimal(new int[] {
-            2000,
+            5000,
             0,
             0,
             0});
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(202, 307);
+            this.saveButton.Location = new System.Drawing.Point(208, 289);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(75, 23);
             this.saveButton.TabIndex = 35;
@@ -364,17 +364,16 @@ namespace MusicBeePlugin
             // latestVersionLabel
             // 
             this.latestVersionLabel.AutoSize = true;
-            this.latestVersionLabel.Location = new System.Drawing.Point(106, 393);
+            this.latestVersionLabel.Location = new System.Drawing.Point(154, 323);
             this.latestVersionLabel.Name = "latestVersionLabel";
-            this.latestVersionLabel.Size = new System.Drawing.Size(71, 13);
+            this.latestVersionLabel.Size = new System.Drawing.Size(0, 13);
             this.latestVersionLabel.TabIndex = 36;
-            this.latestVersionLabel.Text = "LatestVersion";
             // 
             // InfoWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(457, 415);
+            this.ClientSize = new System.Drawing.Size(457, 351);
             this.Controls.Add(this.latestVersionLabel);
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.nowPlayingListLimit);
@@ -409,7 +408,7 @@ namespace MusicBeePlugin
             this.MinimizeBox = false;
             this.Name = "InfoWindow";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "MusicBee Remote:server";
+            this.Text = "MusicBee Remote: plugin";
             this.Load += new System.EventHandler(this.InfoWindowLoad);
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).EndInit();

@@ -286,7 +286,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 SetValues(ReadNodeValue(document, Values));
                 nowPlayingListLimit = uint.TryParse(ReadNodeValue(document, NowPlayingLimit), out nowPlayingListLimit)
                                           ? nowPlayingListLimit
-                                          : 2000;
+                                          : 5000;
             }
         }
 

@@ -138,6 +138,14 @@ namespace MusicBeePlugin
             mWindow.Show();
         }
 
+        public void UpdateWindowStatus(bool status)
+        {
+            if (mWindow != null && mWindow.Visible)
+            {
+                mWindow.UpdateSocketStatus(status);
+            }
+        }
+
         /// <summary>
         /// The function populates the local player status variables and then
         /// starts the Monitoring of the player status every 1000 ms to retrieve

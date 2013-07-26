@@ -1,3 +1,5 @@
+using MusicBeePlugin.AndroidRemote.Networking;
+
 namespace MusicBeePlugin
 {
     using System;
@@ -12,7 +14,7 @@ namespace MusicBeePlugin
     using Tools;
 
     /// <summary>
-    /// 
+    /// Represents the Settings and monitoring dialog of the plugin.
     /// </summary>
     public partial class InfoWindow : Form
     {
@@ -47,7 +49,7 @@ namespace MusicBeePlugin
 
         private void HelpButtonClick(object sender, EventArgs e)
         {
-            Process.Start("http://kelsos.net/musicbeeremote/#help");
+            Process.Start("http://kelsos.net/musicbeeremote/help/");
         }
 
         private void InfoWindowLoad(object sender, EventArgs e)
@@ -57,6 +59,7 @@ namespace MusicBeePlugin
             this.portNumericUpDown.Value = UserSettings.Instance.ListeningPort;
             this.UpdateFilteringSelection(UserSettings.Instance.FilterSelection);
             this.nowPlayingListLimit.Value = UserSettings.Instance.NowPlayingListLimit;
+            UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = ipAddressBinding;
         }
 
@@ -176,6 +179,5 @@ namespace MusicBeePlugin
                 rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
             }
         }
-
     }
 }
