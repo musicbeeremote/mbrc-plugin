@@ -268,6 +268,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (SocketException se)
             {
+
+#if DEBUG
+                Debug.WriteLine("mbrc-log [SocketServer] 273: \t" + se);
+#endif 
                 if (se.ErrorCode != 10053)
                 {
 #if DEBUG

@@ -42,6 +42,8 @@ namespace MusicBeePlugin
         /// </summary>
         private Timer timer;
 
+        private Timer positionUpdateTimer;
+
         /// <summary>
         /// The shuffle.
         /// </summary>
@@ -88,7 +90,7 @@ namespace MusicBeePlugin
             UserSettings.Instance.LoadSettings();
 
             about.PluginInfoVersion = PluginInfoVersion;
-            about.Name = "MusicBee Remote:Server";
+            about.Name = "MusicBee Remote: Plugin";
             about.Description = "Remote Control for server to be used with android application.";
             about.Author = "Konstantinos Paparas (aka Kelsos)";
             about.TargetApplication = "MusicBee Remote";
@@ -120,7 +122,19 @@ namespace MusicBeePlugin
             EventBus.FireEvent(new MessageEvent(EventType.ActionSocketStart));
             EventBus.FireEvent(new MessageEvent(EventType.InitializeModel));
             EventBus.FireEvent(new MessageEvent(EventType.StartServiceBroadcast));
+
+            positionUpdateTimer = new Timer(20000);
+            positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
+            positionUpdateTimer.Enabled = true;
             return about;
+        }
+
+        private void PositionUpdateTimerOnElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
+        {
+            if (mbApiInterface.Player_GetPlayState() == PlayState.Playing)
+            {
+                RequestPlayPosition("status");    
+            }
         }
 
         /// <summary>

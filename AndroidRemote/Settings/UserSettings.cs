@@ -79,7 +79,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         {
             get
             {
-                return nowPlayingListLimit > 0 ? nowPlayingListLimit : 2000;
+                return nowPlayingListLimit > 0 ? nowPlayingListLimit : 5000;
             }
             set
             {
