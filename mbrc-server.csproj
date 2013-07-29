@@ -142,7 +142,6 @@
     <Compile Include="AndroidRemote\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingListTrack.cs" />
     <Compile Include="AndroidRemote\Entities\SocketMessage.cs" />
-    <Compile Include="AndroidRemote\Entities\PlayerStatus.cs" />
     <Compile Include="AndroidRemote\Entities\Track.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingTrack.cs" />
     <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />

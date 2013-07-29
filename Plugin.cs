@@ -833,17 +833,17 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void RequestPlayerStatus(string clientId)
         {
-            PlayerStatus status = new PlayerStatus
-                {
-                    playerrepeat = mbApiInterface.Player_GetRepeat().ToString(),
-                    playermute = mbApiInterface.Player_GetMute().ToString(),
-                    playershuffle = mbApiInterface.Player_GetShuffle().ToString(),
-                    scrobbler = mbApiInterface.Player_GetScrobbleEnabled().ToString(),
-                    playerstate = mbApiInterface.Player_GetPlayState().ToString(),
-                    playervolume =
-                        ((int) Math.Round(mbApiInterface.Player_GetVolume()*100, 1)).ToString(
-                            CultureInfo.InvariantCulture)
-                };
+            var status = new
+            {
+                playerrepeat = mbApiInterface.Player_GetRepeat().ToString(),
+                playermute = mbApiInterface.Player_GetMute(),
+                playershuffle = mbApiInterface.Player_GetShuffle(),
+                scrobbler = mbApiInterface.Player_GetScrobbleEnabled(),
+                playerstate = mbApiInterface.Player_GetPlayState().ToString(),
+                playervolume =
+                    ((int) Math.Round(mbApiInterface.Player_GetVolume()*100, 1)).ToString(
+                        CultureInfo.InvariantCulture)
+            };
 
 
             EventBus.FireEvent(
