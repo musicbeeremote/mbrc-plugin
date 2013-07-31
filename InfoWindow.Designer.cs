@@ -30,7 +30,6 @@ namespace MusicBeePlugin
         {
             this.label1 = new System.Windows.Forms.Label();
             this.versionLabel = new System.Windows.Forms.Label();
-            this.checkForUpdateButton = new System.Windows.Forms.Button();
             this.internalIPList = new System.Windows.Forms.ListBox();
             this.label2 = new System.Windows.Forms.Label();
             this.statusLabel = new System.Windows.Forms.Label();
@@ -56,7 +55,6 @@ namespace MusicBeePlugin
             this.label6 = new System.Windows.Forms.Label();
             this.nowPlayingListLimit = new System.Windows.Forms.NumericUpDown();
             this.saveButton = new System.Windows.Forms.Button();
-            this.latestVersionLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nowPlayingListLimit)).BeginInit();
@@ -65,7 +63,7 @@ namespace MusicBeePlugin
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(13, 323);
+            this.label1.Location = new System.Drawing.Point(20, 304);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(77, 13);
             this.label1.TabIndex = 0;
@@ -74,27 +72,17 @@ namespace MusicBeePlugin
             // versionLabel
             // 
             this.versionLabel.AutoSize = true;
-            this.versionLabel.Location = new System.Drawing.Point(108, 323);
+            this.versionLabel.Location = new System.Drawing.Point(115, 304);
             this.versionLabel.Name = "versionLabel";
             this.versionLabel.Size = new System.Drawing.Size(40, 13);
             this.versionLabel.TabIndex = 1;
             this.versionLabel.Text = "0.0.0.0";
             // 
-            // checkForUpdateButton
-            // 
-            this.checkForUpdateButton.Location = new System.Drawing.Point(320, 41);
-            this.checkForUpdateButton.Name = "checkForUpdateButton";
-            this.checkForUpdateButton.Size = new System.Drawing.Size(119, 23);
-            this.checkForUpdateButton.TabIndex = 2;
-            this.checkForUpdateButton.Text = "Check for update";
-            this.checkForUpdateButton.UseVisualStyleBackColor = true;
-            this.checkForUpdateButton.Click += new System.EventHandler(this.HandleCheckForUpdateButtonClick);
-            // 
             // internalIPList
             // 
             this.internalIPList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.internalIPList.FormattingEnabled = true;
-            this.internalIPList.Location = new System.Drawing.Point(324, 133);
+            this.internalIPList.Location = new System.Drawing.Point(324, 75);
             this.internalIPList.Name = "internalIPList";
             this.internalIPList.Size = new System.Drawing.Size(119, 184);
             this.internalIPList.TabIndex = 5;
@@ -103,7 +91,7 @@ namespace MusicBeePlugin
             // 
             this.label2.AutoSize = true;
             this.label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label2.Location = new System.Drawing.Point(20, 17);
+            this.label2.Location = new System.Drawing.Point(20, 21);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(40, 13);
             this.label2.TabIndex = 6;
@@ -113,7 +101,7 @@ namespace MusicBeePlugin
             // 
             this.statusLabel.AutoSize = true;
             this.statusLabel.ForeColor = System.Drawing.Color.Green;
-            this.statusLabel.Location = new System.Drawing.Point(66, 17);
+            this.statusLabel.Location = new System.Drawing.Point(66, 21);
             this.statusLabel.Name = "statusLabel";
             this.statusLabel.Size = new System.Drawing.Size(37, 13);
             this.statusLabel.TabIndex = 7;
@@ -122,7 +110,7 @@ namespace MusicBeePlugin
             // label3
             // 
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(321, 112);
+            this.label3.Location = new System.Drawing.Point(321, 54);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(95, 13);
             this.label3.TabIndex = 8;
@@ -130,7 +118,7 @@ namespace MusicBeePlugin
             // 
             // helpButton
             // 
-            this.helpButton.Location = new System.Drawing.Point(320, 12);
+            this.helpButton.Location = new System.Drawing.Point(324, 299);
             this.helpButton.Name = "helpButton";
             this.helpButton.Size = new System.Drawing.Size(119, 23);
             this.helpButton.TabIndex = 9;
@@ -353,7 +341,7 @@ namespace MusicBeePlugin
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(208, 289);
+            this.saveButton.Location = new System.Drawing.Point(208, 299);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(75, 23);
             this.saveButton.TabIndex = 35;
@@ -361,20 +349,11 @@ namespace MusicBeePlugin
             this.saveButton.UseVisualStyleBackColor = true;
             this.saveButton.Click += new System.EventHandler(this.HandleSaveButtonClick);
             // 
-            // latestVersionLabel
-            // 
-            this.latestVersionLabel.AutoSize = true;
-            this.latestVersionLabel.Location = new System.Drawing.Point(154, 323);
-            this.latestVersionLabel.Name = "latestVersionLabel";
-            this.latestVersionLabel.Size = new System.Drawing.Size(0, 13);
-            this.latestVersionLabel.TabIndex = 36;
-            // 
             // InfoWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(457, 351);
-            this.Controls.Add(this.latestVersionLabel);
+            this.ClientSize = new System.Drawing.Size(457, 336);
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.nowPlayingListLimit);
             this.Controls.Add(this.label6);
@@ -400,7 +379,6 @@ namespace MusicBeePlugin
             this.Controls.Add(this.statusLabel);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.internalIPList);
-            this.Controls.Add(this.checkForUpdateButton);
             this.Controls.Add(this.versionLabel);
             this.Controls.Add(this.label1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -422,7 +400,6 @@ namespace MusicBeePlugin
 
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label versionLabel;
-        private System.Windows.Forms.Button checkForUpdateButton;
         private System.Windows.Forms.ListBox internalIPList;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label statusLabel;
@@ -448,6 +425,5 @@ namespace MusicBeePlugin
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.NumericUpDown nowPlayingListLimit;
         private System.Windows.Forms.Button saveButton;
-        private System.Windows.Forms.Label latestVersionLabel;
     }
 }

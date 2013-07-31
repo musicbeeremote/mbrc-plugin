@@ -63,13 +63,6 @@ namespace MusicBeePlugin
             allowedAddressesComboBox.DataSource = ipAddressBinding;
         }
 
-        private void HandleCheckForUpdateButtonClick(object sender, EventArgs e)
-        {
-            latestVersionLabel.Text = UpdateChecker.IsThereAnUpdate(UserSettings.Instance.CurrentVersion, UserSettings.Instance.StoragePath) ?
-                string.Format(@"There is a newer version out (v{0})", UpdateChecker.LatestVersion) :
-                @"Your plugin is up to date";
-        }
-
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
         {
             switch (selectionFilteringComboBox.SelectedIndex)
