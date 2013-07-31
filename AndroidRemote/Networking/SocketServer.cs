@@ -151,6 +151,16 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
         }
 
+        /// <summary>
+        /// Restarts the main socket that is listening for new clients.
+        /// Useful when the user wants to change the listening port.
+        /// </summary>
+        public void RestartSocket()
+        {
+            Stop();
+            Start();
+        }
+
         // this is the call back function,
         private void OnClientConnect(IAsyncResult ar)
         {

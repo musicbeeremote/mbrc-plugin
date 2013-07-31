@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Xml;
+using MusicBeePlugin.AndroidRemote.Events;
 
 namespace MusicBeePlugin.AndroidRemote.Settings
 {
@@ -236,6 +237,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
             document.Save(GetSettingsFile());
+            EventBus.FireEvent(new MessageEvent(EventType.RestartSocket));
         }
 
         private void CreateEmptySettingsFile(string application)

@@ -11,6 +11,7 @@
         public const string InitializeModel = "InitializeModel";
         public const string ReplyAvailable = "ReplyAvailable";
         public const string StartServiceBroadcast = "StartServiceBroadcast";
+        public const string RestartSocket = "RestartSocket";
 
         public const string NowPlayingCoverChange = "NowPlayingCoverChange";
         public const string NowPlayingLyricsChange = "NowPlayingLyricsChange";
