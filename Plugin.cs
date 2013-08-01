@@ -148,8 +148,7 @@ namespace MusicBeePlugin
         /// </param>
         private void MenuItemClicked(object sender, EventArgs args)
         {
-            mWindow = new InfoWindow();
-            mWindow.Show();
+            DisplayInfoWindow();
         }
 
         public void UpdateWindowStatus(bool status)
@@ -216,6 +215,16 @@ namespace MusicBeePlugin
             }
         }
 
+        private void DisplayInfoWindow()
+        {
+            if (mWindow == null || !mWindow.Visible)
+            {
+                mWindow = new InfoWindow();    
+            }
+
+            mWindow.Show();    
+        } 
+
         /// <summary>
         /// Creates the MusicBee plugin Configuration panel.
         /// </summary>
@@ -227,7 +236,8 @@ namespace MusicBeePlugin
         /// </returns>
         public bool Configure(IntPtr panelHandle)
         {
-            return false;
+            DisplayInfoWindow();
+            return true;
         }
 
         /// <summary>
