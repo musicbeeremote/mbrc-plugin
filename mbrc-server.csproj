@@ -86,6 +86,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AndroidRemote\Commands\Internal\RestartSocketCommand.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\ShowFirstRunDialogCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\SocketStatusChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\StartServiceBroadcast.cs" />
     <Compile Include="AndroidRemote\Commands\ReplayAvailable.cs" />
@@ -230,7 +231,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_ConfigurationName="Any" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_BuildVersioningStyle="None.None.None.Increment" />
+      <UserProperties BuildVersion_BuildVersioningStyle="None.None.None.Increment" BuildVersion_AssemblyInfoFilename="Properties\AssemblyInfo.cs" BuildVersion_ConfigurationName="Any" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
     </VisualStudio>
   </ProjectExtensions>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />

@@ -23,6 +23,7 @@
             controller.AddCommand(EventType.StartServiceBroadcast, typeof(StartServiceBroadcast));
             controller.AddCommand(EventType.SocketStatusChange, typeof(SocketStatusChanged));
             controller.AddCommand(EventType.RestartSocket, typeof(RestartSocketCommand));
+            controller.AddCommand(EventType.ShowFirstRunDialog, typeof(ShowFirstRunDialogCommand));
             /** Protocol Related commands **/
             controller.AddCommand(Constants.Player, typeof (RequestPlayer));
             controller.AddCommand(Constants.Protocol, typeof (RequestProtocol));            

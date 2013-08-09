@@ -122,6 +122,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(new MessageEvent(EventType.ActionSocketStart));
             EventBus.FireEvent(new MessageEvent(EventType.InitializeModel));
             EventBus.FireEvent(new MessageEvent(EventType.StartServiceBroadcast));
+            EventBus.FireEvent(new MessageEvent(EventType.ShowFirstRunDialog));
 
             positionUpdateTimer = new Timer(20000);
             positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
@@ -214,6 +215,13 @@ namespace MusicBeePlugin
                                        new SocketMessage(Constants.PlayerRepeat,
                                                          Constants.Message, repeat).toJsonString()));
             }
+        }
+
+        public void OpenInfoWindow()
+        {
+            IntPtr hwnd = mbApiInterface.MB_GetWindowHandle();
+            Form MB = (Form)Form.FromHandle(hwnd);
+            MB.Invoke(new MethodInvoker(DisplayInfoWindow));
         }
 
         private void DisplayInfoWindow()
@@ -564,30 +572,26 @@ namespace MusicBeePlugin
         /// <returns>Track Rating</returns>
         public void RequestTrackRating(string rating, string clientId)
         {
-            if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
+            try
             {
-                mbApiInterface.Library_SetFileTag(mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, rating);
-                mbApiInterface.Library_CommitTagsToFile(mbApiInterface.NowPlaying_GetFileUrl());
-                mbApiInterface.Player_GetShowRatingTrack();
-                mbApiInterface.MB_RefreshPanels();
-            }
-
-
-            if (!String.IsNullOrEmpty(clientId))
-            {
+                if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
+                {
+                    mbApiInterface.Library_SetFileTag(mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, rating);
+                    mbApiInterface.Library_CommitTagsToFile(mbApiInterface.NowPlaying_GetFileUrl());
+                    mbApiInterface.Player_GetShowRatingTrack();
+                    mbApiInterface.MB_RefreshPanels();
+                }
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingRating, Constants.Reply,
                             mbApiInterface.Library_GetFileTag(
-                            mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString(), clientId));
-            }
-            else
-            {
-                EventBus.FireEvent(
-                    new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingRating,Constants.Reply,
-                            mbApiInterface.Library_GetFileTag(
                                 mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString()));
+            }
+            catch (Exception e)
+            {
+#if DEBUG
+                ErrorHandler.LogError(e);
+#endif
             }
         }
 

@@ -232,6 +232,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             if (!File.Exists(GetSettingsFile()))
             {
                 isFirst = true;
+                CreateEmptySettingsFile(Application);
             }
             else
             {
@@ -241,9 +242,14 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 if (String.IsNullOrEmpty(lastRun))
                 {
                     isFirst = true;
-                    WriteNodeValue(document, LastRunVersion, CurrentVersion);
-                    document.Save(GetSettingsFile());
                 }    
+            }
+
+            if (isFirst)
+            {
+                document.Load(GetSettingsFile());
+                WriteNodeValue(document, LastRunVersion, CurrentVersion);
+                document.Save(GetSettingsFile());
             }
             
             return isFirst;

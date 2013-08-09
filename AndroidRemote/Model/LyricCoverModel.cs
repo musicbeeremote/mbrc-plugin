@@ -82,6 +82,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
             }
             finally
             {
+                previousAlbum = album;
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingCover, Constants.Message, cover).toJsonString()));
