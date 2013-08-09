@@ -126,6 +126,7 @@ namespace MusicBeePlugin
             positionUpdateTimer = new Timer(20000);
             positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
             positionUpdateTimer.Enabled = true;
+
             return about;
         }
 
@@ -1206,7 +1207,7 @@ namespace MusicBeePlugin
             else if (queue == QueueType.PlayNow)
             {
                 mbApiInterface.NowPlayingList_Clear();
-                mbApiInterface.NowPlayingList_QueueFilesNext(trackList.ToArray());
+                mbApiInterface.NowPlayingList_QueueFilesLast(trackList.ToArray());
                 mbApiInterface.NowPlayingList_PlayNow(trackList[0]);
             }
         }

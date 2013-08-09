@@ -28,6 +28,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string SFolder = "mb_remote\\";
 
+        private const string LastRunVersion = "lastrunversion";
+
         private static readonly UserSettings Settings = new UserSettings();
 
         private string storagePath;
@@ -217,6 +219,34 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             {
                 node.InnerText = value;
             }
+        }
+
+        /// <summary>
+        /// Determines if it is the first run of the application.
+        /// </summary>
+        /// <returns></returns>
+        public bool IsFirstRun()
+        {
+            bool isFirst = false;
+            XmlDocument document = new XmlDocument();
+            if (!File.Exists(GetSettingsFile()))
+            {
+                isFirst = true;
+            }
+            else
+            {
+                document.Load(GetSettingsFile());
+                string lastRun = ReadNodeValue(document, LastRunVersion);
+
+                if (String.IsNullOrEmpty(lastRun))
+                {
+                    isFirst = true;
+                    WriteNodeValue(document, LastRunVersion, CurrentVersion);
+                    document.Save(GetSettingsFile());
+                }    
+            }
+            
+            return isFirst;
         }
 
         /// <summary>

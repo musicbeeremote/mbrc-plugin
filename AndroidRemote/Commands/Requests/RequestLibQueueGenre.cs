@@ -9,7 +9,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
     {
         public void Dispose()
         {
-            throw new NotImplementedException();
         }
 
         public void Execute(IEvent eEvent)
