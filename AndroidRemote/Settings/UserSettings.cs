@@ -261,10 +261,6 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// <remarks></remarks>
         public void SaveSettings()
         {
-            if (!Directory.Exists(storagePath))
-            {
-                Directory.CreateDirectory(storagePath);
-            }
             if (!File.Exists(GetSettingsFile()))
             {
                 CreateEmptySettingsFile(Application);
@@ -278,6 +274,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private void CreateEmptySettingsFile(string application)
         {
+            if (!Directory.Exists(storagePath))
+            {
+                Directory.CreateDirectory(storagePath);
+            }
             XmlDocument document = new XmlDocument();
             XmlDeclaration declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
             XmlElement root = document.CreateElement(application);

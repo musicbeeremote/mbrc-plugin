@@ -35,6 +35,11 @@ namespace MusicBeePlugin
         /// <param name="isRunning"></param>
         public void UpdateSocketStatus(bool isRunning)
         {
+            if (InvokeRequired)
+            {
+                Invoke(new MethodInvoker(() => UpdateSocketStatus(isRunning)));
+                return;
+            }
             if (isRunning)
             {
                 statusLabel.Text = @"Running";

@@ -574,18 +574,27 @@ namespace MusicBeePlugin
         {
             try
             {
-                if (!string.IsNullOrEmpty(rating) && (float.Parse(rating) >= 0 && float.Parse(rating) <= 5))
+                char a = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+                rating = rating.Replace('.', a);
+                float fRating;
+                if (!float.TryParse(rating, out fRating))
                 {
-                    mbApiInterface.Library_SetFileTag(mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, rating);
+                    fRating = -1;
+                }
+                if (fRating >= 0  && fRating <= 5)
+                {
+                    mbApiInterface.Library_SetFileTag(mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating, fRating.ToString());
                     mbApiInterface.Library_CommitTagsToFile(mbApiInterface.NowPlaying_GetFileUrl());
                     mbApiInterface.Player_GetShowRatingTrack();
                     mbApiInterface.MB_RefreshPanels();
                 }
+                rating = mbApiInterface.Library_GetFileTag(
+                    mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating).Replace(a, '.');
+                
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingRating, Constants.Reply,
-                            mbApiInterface.Library_GetFileTag(
-                                mbApiInterface.NowPlaying_GetFileUrl(), MetaDataType.Rating)).toJsonString()));
+                            rating).toJsonString()));
             }
             catch (Exception e)
             {
