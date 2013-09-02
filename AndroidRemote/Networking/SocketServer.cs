@@ -232,10 +232,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     // for the just connected client.
                     WaitForData(workerSocket, clientId);
                 }
-                
-                // Since the main Socket is now free, it can go back and
-                // wait for the other clients who are attempting to connect
-                 mainSocket.BeginAccept(OnClientConnect, null);
             }
             catch (ObjectDisposedException)
             {
@@ -255,6 +251,22 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnClientConnect Exception : " + ex.Message + "\n");
                 ErrorHandler.LogError(ex);
 #endif
+            }
+            finally
+            {
+                try
+                {
+                    // Since the main Socket is now free, it can go back and
+                    // wait for the other clients who are attempting to connect
+                    mainSocket.BeginAccept(OnClientConnect, null);
+                }
+                catch (Exception e)
+                {
+#if DEBUG
+                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : OnClientConnect Exception : " + e.Message + "\n");
+                    ErrorHandler.LogError(e);
+#endif
+                }
             }
         }
 
