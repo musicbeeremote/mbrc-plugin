@@ -74,7 +74,9 @@
         /// <param name="fileUrl"></param>
         public void SetTitle(string title, string fileUrl)
         {
-            this.title = String.IsNullOrEmpty(title) ? fileUrl.Substring(fileUrl.LastIndexOf('\\') + 1) : title;
+            this.title = String.IsNullOrEmpty(title) ? 
+                (String.IsNullOrEmpty(fileUrl) ? "" : fileUrl.Substring(fileUrl.LastIndexOf('\\') + 1)) :
+                title;
         }
 
         /// <summary>
