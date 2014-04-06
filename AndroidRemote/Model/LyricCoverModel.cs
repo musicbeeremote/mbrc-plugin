@@ -30,15 +30,23 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         public void SetCover(string base64, string album)
         {
-            var hash = Utilities.Utilities.Sha1Hash(base64);
-            if (xHash != null && xHash.Equals(hash))
+            if (!String.IsNullOrEmpty(base64))
             {
-                return;
+                var hash = Utilities.Utilities.Sha1Hash(base64);
+                if (xHash != null && xHash.Equals(hash))
+                {
+                    return;
+                }
+
+                xHash = hash;
+                cover = Utilities.Utilities.ImageResize(base64);
             }
-
-            xHash = hash;
-            cover = Utilities.Utilities.ImageResize(base64);
-
+            else
+            {
+                cover = String.Empty;
+                xHash = null;
+            }
+            
             EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingCover, Constants.Message, cover).toJsonString()));

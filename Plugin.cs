@@ -651,11 +651,10 @@ namespace MusicBeePlugin
             else if (mbApiInterface.ApiRevision >= 17)
             {
                 string cover = mbApiInterface.NowPlaying_GetDownloadedArtwork();
-                if (!String.IsNullOrEmpty(cover))
-                {
-                    EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange, cover, "",
-                                                        mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
-                }
+                EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
+                    !String.IsNullOrEmpty(cover) ? cover : String.Empty, "",
+                    mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
+                
             }
             else
             {
@@ -1174,54 +1173,21 @@ namespace MusicBeePlugin
         /// <param name="query"></param>
         public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
-            string filter = String.Empty;
-            List<string> trackList = new List<string>();
-            bool loop = true;
-            switch (tag)
-            {
-                case MetaTag.artist:
-                    filter = XmlFilter(new[] {"ArtistPeople"}, query, true);
-                    break;
-                case MetaTag.album:
-                    filter = XmlFilter(new[] {"Album"}, query, true);
-                    break;
-                case MetaTag.genre:
-                    filter = XmlFilter(new[] {"Genre"}, query, true);
-                    break;
-                case MetaTag.title:
-                    trackList.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(query)));
-                    loop = false;
-                    break;
-                case MetaTag.none:
-                    return;
-                default:
-                    return;
-            }
+            var trackList = tag != MetaTag.title ? GetUrlsForTag(tag, query) : new[] {query};
 
-            if (trackList.Count == 0)
+            switch (queue)
             {
-                mbApiInterface.Library_QueryFiles(filter);
-                while (loop)
-                {
-                    string current = mbApiInterface.Library_QueryGetNextFile();
-                    if (String.IsNullOrEmpty(current)) break;
-                    trackList.Add(current);
-                }
-            }
-
-            if (queue == QueueType.Next)
-            {
-                mbApiInterface.NowPlayingList_QueueFilesNext(trackList.ToArray());
-            }
-            else if (queue == QueueType.Last)
-            {
-                mbApiInterface.NowPlayingList_QueueFilesLast(trackList.ToArray());
-            }
-            else if (queue == QueueType.PlayNow)
-            {
-                mbApiInterface.NowPlayingList_Clear();
-                mbApiInterface.NowPlayingList_QueueFilesLast(trackList.ToArray());
-                mbApiInterface.NowPlayingList_PlayNow(trackList[0]);
+                case QueueType.Next:
+                    mbApiInterface.NowPlayingList_QueueFilesNext(trackList);
+                    break;
+                case QueueType.Last:
+                    mbApiInterface.NowPlayingList_QueueFilesLast(trackList);
+                    break;
+                case QueueType.PlayNow:
+                    mbApiInterface.NowPlayingList_Clear();
+                    mbApiInterface.NowPlayingList_QueueFilesLast(trackList);
+                    mbApiInterface.NowPlayingList_PlayNow(trackList[0]);
+                    break;
             }
         }
 

@@ -16,6 +16,11 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         private static readonly SHA1Managed Sha1 = new SHA1Managed();
         private static byte[] _hash = new byte[20];
 
+        /// <summary>
+        /// Given a string it returns the SHA1 hash of the string
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>System.String.</returns>
         public static string Sha1Hash(string value)
         {
             var mHash = new String('0', 40);
@@ -31,6 +36,11 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             return mHash;
         }
 
+        /// <summary>
+        /// Given a filestream it returns the SHA1 hash of the string
+        /// </summary>
+        /// <param name="fs">The fs.</param>
+        /// <returns>System.String.</returns>
         public static string Sha1Hash(FileStream fs)
         {
             _hash = Sha1.ComputeHash(fs);
@@ -49,6 +59,14 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
         }
 
+        /// <summary>
+        /// Given a base64 encoded image it resizes the image and returns the resized image
+        /// in a base64 encoded JPEG.
+        /// </summary>
+        /// <param name="base64">The base64.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="height">The height.</param>
+        /// <returns>System.String.</returns>
         public static string ImageResize(string base64, int width = 300, int height = 300)
         {
             var cover = String.Empty;
