@@ -4,9 +4,6 @@ using MusicBeePlugin.AndroidRemote.Networking;
 namespace MusicBeePlugin.AndroidRemote.Model
 {
     using System;
-    using System.Drawing;
-    using System.Drawing.Drawing2D;
-    using System.IO;
     using System.Security;
     using System.Text.RegularExpressions;
     using Error;
@@ -17,7 +14,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
         /** Singleton **/
         private static readonly LyricCoverModel Model = new LyricCoverModel();
 
-        private string previousAlbum;
+        private string xHash;
         private string cover;
         private string lyrics;
 
@@ -33,60 +30,18 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         public void SetCover(string base64, string album)
         {
-            if(previousAlbum!=null)
+            var hash = Utilities.Utilities.Sha1Hash(base64);
+            if (xHash != null && xHash.Equals(hash))
             {
-                if (!previousAlbum.Equals("") && !album.Equals("Unknown Album") && previousAlbum.Equals(album)) return;    
-            }
-            else
-            {
-                previousAlbum = album;
+                return;
             }
 
-            try
-            {
-                if (String.IsNullOrEmpty(base64))
-                {
-                    cover = string.Empty;
-                    return;
-                }
-                using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(base64)))
-                using (Image albumCover = Image.FromStream(ms, true))
-                {
-                    ms.Flush();
-                    int sourceWidth = albumCover.Width;
-                    int sourceHeight = albumCover.Height;
+            xHash = hash;
+            cover = Utilities.Utilities.ImageResize(base64);
 
-                    float nPercentW = (300 / (float)sourceWidth);
-                    float nPercentH = (300 / (float)sourceHeight);
-
-                    var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                    int destWidth = (int)(sourceWidth * nPercent);
-                    int destHeight = (int)(sourceHeight * nPercent);
-                    using (var bmp = new Bitmap(destWidth, destHeight))
-                    using (MemoryStream ms2 = new MemoryStream())
-                    {
-                        Graphics graph = Graphics.FromImage(bmp);
-                        graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
-                        graph.Dispose();
-
-                        bmp.Save(ms2, System.Drawing.Imaging.ImageFormat.Png);
-                        cover = Convert.ToBase64String(ms2.ToArray());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ErrorHandler.LogError(ex);
-                cover = String.Empty;
-            }
-            finally
-            {
-                previousAlbum = album;
-                EventBus.FireEvent(
+            EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingCover, Constants.Message, cover).toJsonString()));
-            }
         }
 
         public string Cover
