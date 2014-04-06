@@ -1253,5 +1253,43 @@ namespace MusicBeePlugin
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.NowPlayingListSearch, Constants.Reply,result).toJsonString(), clientId));
         }
+
+        public string[] GetUrlsForTag(MetaTag tag, string query)
+        {
+            var filter = String.Empty;
+            string[] tracks = { };
+            switch (tag)
+            {
+                case MetaTag.artist:
+                    filter = XmlFilter(new[] { "ArtistPeople" }, query, true);
+                    break;
+                case MetaTag.album:
+                    filter = XmlFilter(new[] { "Album" }, query, true);
+                    break;
+                case MetaTag.genre:
+                    filter = XmlFilter(new[] { "Genre" }, query, true);
+                    break;
+            }
+
+            mbApiInterface.Library_QueryFilesEx(filter, ref tracks);
+
+            var list = tracks.Select(file => new MetaData
+            {
+                file = file,
+                artist = mbApiInterface.Library_GetFileTag(file, MetaDataType.Artist),
+                album_artist = mbApiInterface.Library_GetFileTag(file, MetaDataType.AlbumArtist),
+                album = mbApiInterface.Library_GetFileTag(file, MetaDataType.Album),
+                title = mbApiInterface.Library_GetFileTag(file, MetaDataType.TrackTitle),
+                genre = mbApiInterface.Library_GetFileTag(file, MetaDataType.Genre),
+                year = mbApiInterface.Library_GetFileTag(file, MetaDataType.Year),
+                track_no = mbApiInterface.Library_GetFileTag(file, MetaDataType.TrackNo),
+                disc = mbApiInterface.Library_GetFileTag(file, MetaDataType.DiscNo)
+            }).ToList();
+            list.Sort();
+            tracks = list.Select(r => r.file)
+                    .ToArray();
+
+            return tracks;
+        }
     }
 }
