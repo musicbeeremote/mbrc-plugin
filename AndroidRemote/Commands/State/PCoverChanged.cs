@@ -12,7 +12,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.State
 
         public void Execute(IEvent eEvent)
         {
-            LyricCoverModel.Instance.SetCover(eEvent.DataToString(), eEvent.ExtraData);
+            LyricCoverModel.Instance.SetCover(eEvent.DataToString());
         }
     }
 }

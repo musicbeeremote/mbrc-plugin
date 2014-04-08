@@ -338,8 +338,7 @@ namespace MusicBeePlugin
                     if (mbApiInterface.ApiRevision >= 17)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
-                                                            mbApiInterface.NowPlaying_GetDownloadedArtwork(), "",
-                                                            mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
+                                                            mbApiInterface.NowPlaying_GetDownloadedArtwork()));
                     }
                     break;
                 case NotificationType.NowPlayingListChanged:
@@ -645,21 +644,18 @@ namespace MusicBeePlugin
             if (!String.IsNullOrEmpty(mbApiInterface.NowPlaying_GetArtwork()))
             {
                 EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
-                                                    mbApiInterface.NowPlaying_GetArtwork(), "",
-                                                    mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
+                                                    mbApiInterface.NowPlaying_GetArtwork()));
             }
             else if (mbApiInterface.ApiRevision >= 17)
             {
-                string cover = mbApiInterface.NowPlaying_GetDownloadedArtwork();
+                var cover = mbApiInterface.NowPlaying_GetDownloadedArtwork();
                 EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
-                    !String.IsNullOrEmpty(cover) ? cover : String.Empty, "",
-                    mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
+                    !String.IsNullOrEmpty(cover) ? cover : String.Empty));
                 
             }
             else
             {
-                EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange, String.Empty, "",
-                                                    mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Album)));
+                EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange, String.Empty));
             }
         }
 
