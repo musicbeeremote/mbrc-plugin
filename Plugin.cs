@@ -1113,7 +1113,7 @@ namespace MusicBeePlugin
 
                     int trackNumber = 0;
                     int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
-                    string src = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(currentTrack));
+                    string src = currentTrack;
 
                     tracks.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                                          mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
@@ -1146,7 +1146,7 @@ namespace MusicBeePlugin
 
                     int trackNumber = 0;
                     int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
-                    string src = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(currentTrack));
+                    string src = currentTrack;
 
                     trackList.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                                               mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber, src));
