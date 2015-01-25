@@ -40,7 +40,14 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             Type commandType = commandMap[((IEvent)e).Type];
             using (ICommand command = (ICommand)Activator.CreateInstance(commandType))
             {
-                command.Execute((IEvent)e);
+                try
+                {
+                    command.Execute((IEvent)e);
+                }
+                catch (Exception ex)
+                {
+                    //ignore exception?
+                }
             }
         }
 
