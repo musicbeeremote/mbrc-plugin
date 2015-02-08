@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.22310.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-server", "mbrc-server.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-plugin", "plugin\mbrc-plugin.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
