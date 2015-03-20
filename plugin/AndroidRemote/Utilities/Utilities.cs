@@ -67,7 +67,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <param name="width">The width.</param>
         /// <param name="height">The height.</param>
         /// <returns>System.String.</returns>
-        public static string ImageResize(string base64, int width = 300, int height = 300)
+        public static string ImageResize(string base64, int width = 400, int height = 400)
         {
             var cover = String.Empty;
             try

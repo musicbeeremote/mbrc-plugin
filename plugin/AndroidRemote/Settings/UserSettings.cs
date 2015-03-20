@@ -181,7 +181,13 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             }
         }
 
-        /// <summary>
+	    /// <summary>
+	    /// Since there is an issue with the existing search for a number of users
+	    /// an alternative implementation exists.
+	    /// </summary>
+	    public bool AlternativeSearch { get; set; } = false;
+
+	    /// <summary>
         /// 
         /// </summary>
         /// <param name="path"></param>

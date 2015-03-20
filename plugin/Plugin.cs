@@ -95,14 +95,14 @@ namespace MusicBeePlugin
             about.Author = "Konstantinos Paparas (aka Kelsos)";
             about.TargetApplication = "MusicBee Remote";
 
-            Version v = Assembly.GetExecutingAssembly().GetName().Version;
-            UserSettings.Instance.CurrentVersion = v.ToString();
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            UserSettings.Instance.CurrentVersion = version.ToString();
 
             // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             about.Type = PluginType.General;
-            about.VersionMajor = Convert.ToInt16(v.Major);
-            about.VersionMinor = Convert.ToInt16(v.Minor);
-            about.Revision = Convert.ToInt16(v.Revision);
+            about.VersionMajor = Convert.ToInt16(version.Major);
+            about.VersionMinor = Convert.ToInt16(version.Minor);
+            about.Revision = Convert.ToInt16(version.Build);
             about.MinInterfaceVersion = MinInterfaceVersion;
             about.MinApiRevision = MinApiRevision;
             about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
@@ -1103,17 +1103,17 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void LibrarySearchTitle(string title, string clientId)
         {
-            List<Track> tracks = new List<Track>();
+            var tracks = new List<Track>();
             if (mbApiInterface.Library_QueryFiles(XmlFilter(new[] {"Title"}, title, false)))
             {
                 while (true)
                 {
-                    string currentTrack = mbApiInterface.Library_QueryGetNextFile();
+                    var currentTrack = mbApiInterface.Library_QueryGetNextFile();
                     if (string.IsNullOrEmpty(currentTrack)) break;
 
-                    int trackNumber = 0;
+                    var trackNumber = 0;
                     int.TryParse(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
-                    string src = currentTrack;
+                    var src = currentTrack;
 
                     tracks.Add(new Track(mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                                          mbApiInterface.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
