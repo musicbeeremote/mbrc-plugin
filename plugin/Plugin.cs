@@ -47,7 +47,7 @@ namespace MusicBeePlugin
         /// <summary>
         /// The shuffle.
         /// </summary>
-        private bool shuffle;
+        private ShuffleState _shuffleState;
 
         /// <summary>
         /// Represents the current repeat mode.
@@ -170,7 +170,7 @@ namespace MusicBeePlugin
         {
             scrobble = mbApiInterface.Player_GetScrobbleEnabled();
             repeat = mbApiInterface.Player_GetRepeat();
-            shuffle = mbApiInterface.Player_GetShuffle();
+            _shuffleState = GetShuffleState();
             timer = new Timer {Interval = 1000};
             timer.Elapsed += HandleTimerElapsed;
             timer.Enabled = true;
@@ -190,12 +190,12 @@ namespace MusicBeePlugin
         /// </param>
         private void HandleTimerElapsed(object sender, ElapsedEventArgs args)
         {
-            if (mbApiInterface.Player_GetShuffle() != shuffle)
+            if (GetShuffleState() != _shuffleState)
             {
-                shuffle = mbApiInterface.Player_GetShuffle();
+                _shuffleState = GetShuffleState();
                 EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(
                                                                                   Constants.PlayerShuffle,
-                                                                                  Constants.Message, shuffle)
+                                                                                  Constants.Message, _shuffleState)
                                                                                   .toJsonString()));
             }
 
@@ -451,6 +451,55 @@ namespace MusicBeePlugin
                     EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerShuffle, Constants.Reply,
                         mbApiInterface.Player_GetShuffle()).toJsonString()));
+        }
+
+        /// <summary>
+        /// Changes the player shuffle and autodj state following the model of MusicBee. 
+        /// </summary>
+        /// <param name="action"></param>
+        public void RequestAutoDjShuffleState(StateAction action)
+        {
+
+            var shuffleEnabled = mbApiInterface.Player_GetShuffle();
+            var autoDjEnabled = mbApiInterface.Player_GetAutoDjEnabled();
+    
+            if (action == StateAction.Toggle)
+            {
+                if (shuffleEnabled && !autoDjEnabled)
+                {
+                    mbApiInterface.Player_StartAutoDj();
+
+                }
+                else if (autoDjEnabled)
+                {
+                    mbApiInterface.Player_EndAutoDj();
+                }
+                else
+                {
+                    mbApiInterface.Player_SetShuffle(true);
+                }
+            }
+            
+            var socketMessage = new SocketMessage(Constants.PlayerShuffle,
+                Constants.Reply, GetShuffleState());
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, socketMessage.toJsonString());
+            EventBus.FireEvent(messageEvent);
+        }
+
+        private ShuffleState GetShuffleState()
+        {
+            var shuffleEnabled = mbApiInterface.Player_GetShuffle();
+            var autoDjEnabled = mbApiInterface.Player_GetAutoDjEnabled();
+            var state = ShuffleState.off;
+            if (shuffleEnabled && !autoDjEnabled)
+            {
+                state = ShuffleState.shuffle;
+            }
+            else if (autoDjEnabled)
+            {
+                state = ShuffleState.autodj;
+            }
+            return state;
         }
 
         /// <summary>
@@ -852,19 +901,18 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void RequestPlayerStatus(string clientId)
         {
-            var status = new
-            {
-                playerrepeat = mbApiInterface.Player_GetRepeat().ToString(),
-                playermute = mbApiInterface.Player_GetMute(),
-                playershuffle = mbApiInterface.Player_GetShuffle(),
-                scrobbler = mbApiInterface.Player_GetScrobbleEnabled(),
-                playerstate = mbApiInterface.Player_GetPlayState().ToString(),
-                playervolume =
-                    ((int) Math.Round(mbApiInterface.Player_GetVolume()*100, 1)).ToString(
-                        CultureInfo.InvariantCulture)
-            };
-
-
+            var status = new Dictionary<string, object>();
+            status["playerrepeat"] = mbApiInterface.Player_GetRepeat().ToString();
+            status["playermute"] = mbApiInterface.Player_GetMute();
+            status["playershuffle"] = Authenticator.ClientProtocolMisMatch(clientId) 
+                ? (object) mbApiInterface.Player_GetShuffle()
+                : GetShuffleState();
+            status["scrobbler"] = mbApiInterface.Player_GetScrobbleEnabled();
+            status["playerstate"] = mbApiInterface.Player_GetPlayState().ToString();
+            status["playervolume"] =
+                ((int) Math.Round(mbApiInterface.Player_GetVolume()*100, 1)).ToString(
+                    CultureInfo.InvariantCulture);
+            
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerStatus, Constants.Reply, status).toJsonString(), clientId));

@@ -7,7 +7,7 @@
         public const string Player = "player";
         public const string Protocol = "protocol";
         public const string PlayerName = "MusicBee";
-        public const float ProtocolVersion = 2;
+        public const float ProtocolVersion = 2.1f;
         public const string PluginVersion = "pluginversion";
         public const string NotAllowed = "notallowed";
         #endregion
@@ -66,6 +66,11 @@
 
         #endregion
 
+        #region Protocol 2.1 
 
+        public const string Ping = "ping";
+        public const string Pong = "pong";
+
+        #endregion
     }
 }

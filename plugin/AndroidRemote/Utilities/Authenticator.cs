@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
@@ -68,5 +69,22 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             ConnectedClients.TryGetValue(clientId, out client);
             return client;
         }
+
+        /// <summary>
+        /// Checks the client protocol version of a specified client and how it matches
+        /// against the server protocol version. If the client doesn't match the 
+        /// method will return true.
+        /// </summary>
+        /// <param name="clientId">The ide of the client</param>
+        /// <returns>True if the version is different false if it is the same.</returns>
+        public static bool ClientProtocolMisMatch(string clientId)
+        {
+            var client = Client(clientId);
+            var clientProtocolVersion = client?.ClientProtocolVersion
+                                        ?? (int)Constants.ProtocolVersion;
+
+            return Math.Abs(clientProtocolVersion - Constants.ProtocolVersion) > 0;
+        }
+            
     }
 }

@@ -34,6 +34,11 @@
         public bool Authenticated { get; set; }
 
         /// <summary>
+        /// Represents the version of the protocol supported by the client.
+        /// </summary>
+        public float ClientProtocolVersion { get; set; }
+
+        /// <summary>
         /// Function used to increase the number of packages received by the specific client.
         /// </summary>
         public void IncreasePacketNumber()

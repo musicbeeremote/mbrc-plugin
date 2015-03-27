@@ -53,7 +53,7 @@
     <OutputPath>..\build\bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
+    <WarningLevel>0</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
     <PlatformTarget>x86</PlatformTarget>
     <DocumentationFile>MB_REMOTE.XML</DocumentationFile>
@@ -91,6 +91,7 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AndroidRemote\Commands\InstaReplies\PingReply.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\RestartSocketCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\ShowFirstRunDialogCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\SocketStatusChanged.cs" />
@@ -153,6 +154,7 @@
     <Compile Include="AndroidRemote\Entities\SocketMessage.cs" />
     <Compile Include="AndroidRemote\Entities\Track.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingTrack.cs" />
+    <Compile Include="AndroidRemote\Enumerations\ShuffleState.cs" />
     <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />
     <Compile Include="AndroidRemote\Enumerations\LastfmStatus.cs" />
     <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
@@ -240,7 +242,7 @@
     </VisualStudio>
   </ProjectExtensions>
   <PropertyGroup>
-    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)*.*" "C:\Users\developer\Documents\MusicBee\Plugins"</PostBuildEvent>
+    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)*.*" "C:\Program Files\MusicBee\Plugins"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.
