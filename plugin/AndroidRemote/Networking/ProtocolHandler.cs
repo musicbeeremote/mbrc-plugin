@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using MusicBeePlugin.AndroidRemote.Entities;
 using ServiceStack.Text;
 
@@ -29,8 +30,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             try
             {
-                List<SocketMessage> msgList = new List<SocketMessage>();
-                if (String.IsNullOrEmpty(incomingMessage))
+                var msgList = new List<SocketMessage>();
+                if (string.IsNullOrEmpty(incomingMessage))
                 {
                     return;
                 }
@@ -38,22 +39,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 {
 #if DEBUG
                     Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Proccessing : " + incomingMessage + "\n");
-                    
-                    HttpHandler http = new HttpHandler();
-                    if (http.IsHttpRequest(incomingMessage))
-                    {
-                        //OnReplyAvailable(new MessageEventArgs(http.GetHttpReply(), clientId));
-                    }
-
+                
 #endif
-                    
-                    foreach (
-                        string msg in
-                            incomingMessage.Replace("\0","").Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        if (msg.Equals("\n")) continue;
-                        msgList.Add(new SocketMessage(JsonObject.Parse(msg)));
-                    }
+
+                    msgList.AddRange(from msg in incomingMessage.Replace("\0", "")
+                                     .Split(new[] {"\r\n"}, StringSplitOptions.RemoveEmptyEntries) where !msg.Equals("\n") select new SocketMessage(JsonObject.Parse(msg)));
                 }
                 catch (Exception ex)
                 {
