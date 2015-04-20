@@ -15,7 +15,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(new SocketMessage(Constants.PluginVersion, Constants.Reply, UserSettings.Instance.CurrentVersion).toJsonString());
+            SocketServer.Instance.Send(new SocketMessage(Constants.PluginVersion, UserSettings.Instance.CurrentVersion).ToJsonString());
         }
     }
 }

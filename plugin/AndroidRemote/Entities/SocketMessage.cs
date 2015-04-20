@@ -1,50 +1,46 @@
-﻿using System;
+﻿using System.Runtime.Serialization;
 using ServiceStack.Text;
-
 
 namespace MusicBeePlugin.AndroidRemote.Entities
 {
+    [DataContract]
     public class SocketMessage
     {
-        public SocketMessage(string context, string type, Object data)
+        public SocketMessage(string context, object data)
         {
-            this.context = context;
-            this.data = data;
-            this.type = type;
+            Context = context;
+            Data = data;
         }
 
         public SocketMessage(JsonObject jObj)
         {
-            this.context = jObj.Get("context");
+            Context = jObj.Get("context");
 
-            var data = jObj.Get("data");
-            if (data == null)
+            var messageData = jObj.Get("data");
+            if (messageData == null)
             {
-                this.data = "";
+                Data = "";
             }
             else
             {
-                if (data.Contains("{")&&data.Contains("}"))
+                if (messageData.Contains("{") && messageData.Contains("}"))
                 {
-                    this.data = jObj.Object("data");
+                    Data = jObj.Object("data");
                 }
                 else
                 {
-                    this.data = data;
+                    Data = messageData;
                 }
             }
-
-
-            this.type = jObj.Get("type");
         }
 
-        public string context { get; set; }
+        [DataMember(Name = "context")]
+        public string Context { get; set; }
 
-        public string type { get; set; }
+        [DataMember(Name = "data")]
+        public object Data { get; set; }
 
-        public object data { get; set; }
-
-        public string toJsonString()
+        public string ToJsonString()
         {
             return JsonSerializer.SerializeToString(this);
         }

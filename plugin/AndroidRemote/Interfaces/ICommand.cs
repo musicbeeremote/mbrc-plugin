@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace MusicBeePlugin.AndroidRemote.Interfaces
+﻿namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
-    interface ICommand:IDisposable
+    interface ICommand
     {
         void Execute(IEvent eEvent);
     }

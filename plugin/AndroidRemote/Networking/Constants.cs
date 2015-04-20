@@ -70,6 +70,7 @@
 
         public const string Ping = "ping";
         public const string Pong = "pong";
+        public const string Init = "init";
 
         #endregion
     }

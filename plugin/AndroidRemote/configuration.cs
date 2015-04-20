@@ -63,6 +63,12 @@
             controller.AddCommand(Constants.LibraryArtistAlbums, typeof(RequestLibArtistAlbums));
             controller.AddCommand(Constants.LibraryAlbumTracks, typeof(RequestLibAlbumTracks));
             controller.AddCommand(Constants.LibraryGenreArtists, typeof(RequestLibGenreArtists));
+
+#region 2.1 protocol additions
+            controller.AddCommand(Constants.Pong, typeof(HandlePong));
+            controller.AddCommand(Constants.Ping, typeof(PingReply));
+            controller.AddCommand(Constants.Init, typeof(ProcessInitRequest));
+#endregion
         }
     }
 }

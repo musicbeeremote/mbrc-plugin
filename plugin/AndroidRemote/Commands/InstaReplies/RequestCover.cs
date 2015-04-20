@@ -15,7 +15,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingCover, Constants.Reply, LyricCoverModel.Instance.Cover).toJsonString());
+            var message =
+                new SocketMessage(Constants.NowPlayingCover, LyricCoverModel.Instance.Cover)
+                    .ToJsonString();
+            SocketServer.Instance.Send(message, eEvent.ClientId);
         }
     }
 }

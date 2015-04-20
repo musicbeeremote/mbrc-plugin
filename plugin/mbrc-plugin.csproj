@@ -42,8 +42,8 @@
     <UpdateAssemblyVersion>True</UpdateAssemblyVersion>
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
-    <AssemblyVersionSettings>None.None.Increment.None</AssemblyVersionSettings>
-    <AssemblyVersion>0.12.1325.</AssemblyVersion>
+    <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
+    <AssemblyVersion>0.13.0.1356</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -91,7 +91,9 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AndroidRemote\Commands\InstaReplies\HandlePong.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\PingReply.cs" />
+    <Compile Include="AndroidRemote\Commands\InstaReplies\ProcessInitRequest.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\RestartSocketCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\ShowFirstRunDialogCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\SocketStatusChanged.cs" />

@@ -24,7 +24,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                     client.ClientProtocolVersion = clientProtocolVersion;
                 }
             }
-            SocketServer.Instance.Send(new SocketMessage(Constants.Protocol, Constants.Reply, Constants.ProtocolVersion).toJsonString(), eEvent.ClientId); 
+            SocketServer.Instance.Send(new SocketMessage(Constants.Protocol, Constants.ProtocolVersion).ToJsonString(), eEvent.ClientId); 
         }
     }
 }
