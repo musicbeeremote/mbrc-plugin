@@ -43,7 +43,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>0.13.0.1356</AssemblyVersion>
+    <AssemblyVersion>0.13.0.1358</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -119,6 +119,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPause.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
@@ -142,7 +143,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlayer.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestSongInfo.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerStatus.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayPauseTrackCommand.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlay.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrackCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\InitializeModelStateCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs" />

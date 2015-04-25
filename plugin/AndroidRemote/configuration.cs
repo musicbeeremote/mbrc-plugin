@@ -68,7 +68,10 @@
             controller.AddCommand(Constants.Pong, typeof(HandlePong));
             controller.AddCommand(Constants.Ping, typeof(PingReply));
             controller.AddCommand(Constants.Init, typeof(ProcessInitRequest));
-#endregion
+            controller.AddCommand(Constants.PlayerPlay, typeof(RequestPlay));
+            controller.AddCommand(Constants.PlayerPause, typeof (RequestPause));
+
+            #endregion
         }
     }
 }

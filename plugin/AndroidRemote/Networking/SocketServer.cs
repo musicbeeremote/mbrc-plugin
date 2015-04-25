@@ -37,7 +37,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         private bool _isRunning;
         private Timer pingTimer;
-
+        private const string NewLine = "\r\n";
 
 
         /// <summary>
@@ -395,7 +395,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             try
             {
-                var data = System.Text.Encoding.UTF8.GetBytes(message + "\r\n");
+                var data = System.Text.Encoding.UTF8.GetBytes(message + NewLine);
                 Socket wSocket;
                 if(_availableWorkerSockets.TryGetValue(clientId,out wSocket))
                 {
@@ -428,7 +428,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 #endif
             try
             {
-                var data = System.Text.Encoding.UTF8.GetBytes(message);
+                var data = System.Text.Encoding.UTF8.GetBytes(message + NewLine);
 
                 foreach (var key in _availableWorkerSockets.Keys)
                 {

@@ -1295,5 +1295,25 @@ namespace MusicBeePlugin
 
             return tracks;
         }
+
+        public void RequestPlay(string clientId)
+        {
+            var state = mbApiInterface.Player_GetPlayState();
+
+            if (state != PlayState.Playing)
+            {
+                mbApiInterface.Player_PlayPause();
+            }
+        }
+
+        public void RequestPausePlayback(string clientId)
+        {
+            var state = mbApiInterface.Player_GetPlayState();
+
+            if (state == PlayState.Playing)
+            {
+                mbApiInterface.Player_PlayPause();
+            }
+        }
     }
 }

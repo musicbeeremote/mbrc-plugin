@@ -57,21 +57,17 @@
         public const string PlaylistList = "playlistlist"; 
 
         #endregion
-
-        #region Protocol 2. SocketMessage type identifiers.
-
-        public const string Request = "req";
-        public const string Reply = "rep";
-        public const string Message = "msg";
-
-        #endregion
-
+        
         #region Protocol 2.1 
 
         public const string Ping = "ping";
         public const string Pong = "pong";
         public const string Init = "init";
+        public const string PlayerPlay = "playerplay";
+        public const string PlayerPause = "playerpause";
 
         #endregion
+
+
     }
 }
