@@ -954,16 +954,22 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.NowPlayingListMove,reply).ToJsonString(), clientId));
         }
 
-        private string XmlFilter(string[] tags, string query, bool isStrict)
+        private static string XmlFilter(string[] tags, string query, bool isStrict)
         {
-            XElement filter = new XElement("Source",
-                                           new XAttribute("Type", 1));
+            var source =
+                (short)
+                    (UserSettings.Instance.Source != SearchSource.None
+                        ? UserSettings.Instance.Source
+                        : SearchSource.Library);
 
-            XElement conditions = new XElement("Conditions",
+            var filter = new XElement("Source",
+                                           new XAttribute("Type", source));
+
+            var conditions = new XElement("Conditions",
                                                new XAttribute("CombineMethod", "Any"));
-            foreach (string tag in tags)
+            foreach (var tag in tags)
             {
-                XElement condition = new XElement("Condition",
+                var condition = new XElement("Condition",
                                                   new XAttribute("Field", tag),
                                                   new XAttribute("Comparison", isStrict ? "Is" : "Contains"),
                                                   new XAttribute("Value", query));

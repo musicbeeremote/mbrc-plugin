@@ -55,6 +55,13 @@ namespace MusicBeePlugin
             this.label6 = new System.Windows.Forms.Label();
             this.nowPlayingListLimit = new System.Windows.Forms.NumericUpDown();
             this.saveButton = new System.Windows.Forms.Button();
+            this.label7 = new System.Windows.Forms.Label();
+            this.label8 = new System.Windows.Forms.Label();
+            this.libraryCheckbox = new System.Windows.Forms.CheckBox();
+            this.inboxCheckbox = new System.Windows.Forms.CheckBox();
+            this.podcastCheckbox = new System.Windows.Forms.CheckBox();
+            this.videoCheckbox = new System.Windows.Forms.CheckBox();
+            this.audiobookCheckbox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nowPlayingListLimit)).BeginInit();
@@ -349,11 +356,90 @@ namespace MusicBeePlugin
             this.saveButton.UseVisualStyleBackColor = true;
             this.saveButton.Click += new System.EventHandler(this.HandleSaveButtonClick);
             // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(19, 333);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(78, 13);
+            this.label7.TabIndex = 37;
+            this.label7.Text = "Search Source";
+            // 
+            // label8
+            // 
+            this.label8.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.label8.Location = new System.Drawing.Point(18, 348);
+            this.label8.Name = "label8";
+            this.label8.Size = new System.Drawing.Size(265, 1);
+            this.label8.TabIndex = 36;
+            // 
+            // libraryCheckbox
+            // 
+            this.libraryCheckbox.AutoSize = true;
+            this.libraryCheckbox.Location = new System.Drawing.Point(18, 353);
+            this.libraryCheckbox.Name = "libraryCheckbox";
+            this.libraryCheckbox.Size = new System.Drawing.Size(57, 17);
+            this.libraryCheckbox.TabIndex = 38;
+            this.libraryCheckbox.Text = "Library";
+            this.libraryCheckbox.UseVisualStyleBackColor = true;
+            this.libraryCheckbox.CheckedChanged += new System.EventHandler(this.LibraryCheckboxCheckedChanged);
+            // 
+            // inboxCheckbox
+            // 
+            this.inboxCheckbox.AutoSize = true;
+            this.inboxCheckbox.Location = new System.Drawing.Point(18, 376);
+            this.inboxCheckbox.Name = "inboxCheckbox";
+            this.inboxCheckbox.Size = new System.Drawing.Size(52, 17);
+            this.inboxCheckbox.TabIndex = 39;
+            this.inboxCheckbox.Text = "Inbox";
+            this.inboxCheckbox.UseVisualStyleBackColor = true;
+            this.inboxCheckbox.CheckedChanged += new System.EventHandler(this.inboxCheckbox_CheckedChanged);
+            // 
+            // podcastCheckbox
+            // 
+            this.podcastCheckbox.AutoSize = true;
+            this.podcastCheckbox.Location = new System.Drawing.Point(18, 399);
+            this.podcastCheckbox.Name = "podcastCheckbox";
+            this.podcastCheckbox.Size = new System.Drawing.Size(70, 17);
+            this.podcastCheckbox.TabIndex = 40;
+            this.podcastCheckbox.Text = "Podcasts";
+            this.podcastCheckbox.UseVisualStyleBackColor = true;
+            this.podcastCheckbox.CheckedChanged += new System.EventHandler(this.podcastCheckbox_CheckedChanged);
+            // 
+            // videoCheckbox
+            // 
+            this.videoCheckbox.AutoSize = true;
+            this.videoCheckbox.Location = new System.Drawing.Point(104, 375);
+            this.videoCheckbox.Name = "videoCheckbox";
+            this.videoCheckbox.Size = new System.Drawing.Size(58, 17);
+            this.videoCheckbox.TabIndex = 42;
+            this.videoCheckbox.Text = "Videos";
+            this.videoCheckbox.UseVisualStyleBackColor = true;
+            this.videoCheckbox.CheckedChanged += new System.EventHandler(this.videoCheckbox_CheckedChanged);
+            // 
+            // audiobookCheckbox
+            // 
+            this.audiobookCheckbox.AutoSize = true;
+            this.audiobookCheckbox.Location = new System.Drawing.Point(104, 352);
+            this.audiobookCheckbox.Name = "audiobookCheckbox";
+            this.audiobookCheckbox.Size = new System.Drawing.Size(82, 17);
+            this.audiobookCheckbox.TabIndex = 41;
+            this.audiobookCheckbox.Text = "Audiobooks";
+            this.audiobookCheckbox.UseVisualStyleBackColor = true;
+            this.audiobookCheckbox.CheckedChanged += new System.EventHandler(this.audiobookCheckbox_CheckedChanged);
+            // 
             // InfoWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(457, 336);
+            this.ClientSize = new System.Drawing.Size(452, 458);
+            this.Controls.Add(this.videoCheckbox);
+            this.Controls.Add(this.audiobookCheckbox);
+            this.Controls.Add(this.podcastCheckbox);
+            this.Controls.Add(this.inboxCheckbox);
+            this.Controls.Add(this.libraryCheckbox);
+            this.Controls.Add(this.label7);
+            this.Controls.Add(this.label8);
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.nowPlayingListLimit);
             this.Controls.Add(this.label6);
@@ -425,5 +511,12 @@ namespace MusicBeePlugin
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.NumericUpDown nowPlayingListLimit;
         private System.Windows.Forms.Button saveButton;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.CheckBox libraryCheckbox;
+        private System.Windows.Forms.CheckBox inboxCheckbox;
+        private System.Windows.Forms.CheckBox podcastCheckbox;
+        private System.Windows.Forms.CheckBox videoCheckbox;
+        private System.Windows.Forms.CheckBox audiobookCheckbox;
     }
 }

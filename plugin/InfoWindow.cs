@@ -1,36 +1,33 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Drawing;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.Tools;
 
 namespace MusicBeePlugin
 {
-    using System;
-    using System.Collections.Generic;
-    using System.ComponentModel;
-    using System.Diagnostics;
-    using System.Drawing;
-    using System.Text.RegularExpressions;
-    using System.Windows.Forms;
-
-    using AndroidRemote.Settings;
-    using Tools;
-
     /// <summary>
-    /// Represents the Settings and monitoring dialog of the plugin.
+    ///     Represents the Settings and monitoring dialog of the plugin.
     /// </summary>
     public partial class InfoWindow : Form
     {
+        private BindingList<string> ipAddressBinding;
 
-        private BindingList<String> ipAddressBinding;  
         /// <summary>
-        /// 
         /// </summary>
         public InfoWindow()
         {
-            this.InitializeComponent();
-            this.ipAddressBinding = new BindingList<string>();
+            InitializeComponent();
+            ipAddressBinding = new BindingList<string>();
         }
 
         /// <summary>
-        /// Updates the visual indicator with the current Socket server status.
+        ///     Updates the visual indicator with the current Socket server status.
         /// </summary>
         /// <param name="isRunning"></param>
         public void UpdateSocketStatus(bool isRunning)
@@ -59,13 +56,27 @@ namespace MusicBeePlugin
 
         private void InfoWindowLoad(object sender, EventArgs e)
         {
-            this.internalIPList.DataSource = NetworkTools.GetPrivateAddressList();
-            this.versionLabel.Text = UserSettings.Instance.CurrentVersion;
-            this.portNumericUpDown.Value = UserSettings.Instance.ListeningPort;
-            this.UpdateFilteringSelection(UserSettings.Instance.FilterSelection);
-            this.nowPlayingListLimit.Value = UserSettings.Instance.NowPlayingListLimit;
+            var settings = UserSettings.Instance;
+            internalIPList.DataSource = NetworkTools.GetPrivateAddressList();
+            versionLabel.Text = settings.CurrentVersion;
+            portNumericUpDown.Value = settings.ListeningPort;
+            UpdateFilteringSelection(settings.FilterSelection);
+            nowPlayingListLimit.Value = settings.NowPlayingListLimit;
             UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = ipAddressBinding;
+
+            if (settings.Source == SearchSource.None) 
+            {
+                settings.Source |= SearchSource.Library;
+            }
+
+            libraryCheckbox.SetChecked((settings.Source & SearchSource.Library) == SearchSource.Library);
+            audiobookCheckbox.SetChecked((settings.Source & SearchSource.Audiobooks) == SearchSource.Audiobooks);
+            podcastCheckbox.SetChecked((settings.Source & SearchSource.Podcasts) == SearchSource.Podcasts);
+            inboxCheckbox.SetChecked((settings.Source & SearchSource.Inbox) == SearchSource.Inbox);
+            videoCheckbox.SetChecked((settings.Source & SearchSource.Videos) == SearchSource.Videos);
+
+            Debug.WriteLine((int) settings.Source);
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
@@ -129,20 +140,19 @@ namespace MusicBeePlugin
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            UserSettings.Instance.ListeningPort = (uint)this.portNumericUpDown.Value;
-            UserSettings.Instance.NowPlayingListLimit = (uint)this.nowPlayingListLimit.Value;
+            UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
+            UserSettings.Instance.NowPlayingListLimit = (uint) nowPlayingListLimit.Value;
             switch (selectionFilteringComboBox.SelectedIndex)
             {
                 case 0:
                     break;
                 case 1:
                     UserSettings.Instance.BaseIp = ipAddressInputTextBox.Text;
-                    UserSettings.Instance.LastOctetMax = (uint)this.rangeNumericUpDown.Value;
+                    UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
                     break;
                 case 2:
                     UserSettings.Instance.IpAddressList = new List<string>(ipAddressBinding);
                     break;
-
             }
             UserSettings.Instance.SaveSettings();
         }
@@ -163,7 +173,8 @@ namespace MusicBeePlugin
 
         private bool IsAddressValid()
         {
-            const string Pattern = @"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b";
+            const string Pattern =
+                @"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b";
             return Regex.IsMatch(ipAddressInputTextBox.Text, Pattern);
         }
 
@@ -173,9 +184,72 @@ namespace MusicBeePlugin
             ipAddressInputTextBox.BackColor = isAddressValid ? Color.LightGreen : Color.Red;
             if (isAddressValid && selectionFilteringComboBox.SelectedIndex == 1)
             {
-                string[] addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                var addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(),
+                    StringSplitOptions.RemoveEmptyEntries);
                 rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
             }
+        }
+
+        private void LibraryCheckboxCheckedChanged(object sender, EventArgs e)
+        {
+            if (libraryCheckbox.Checked)
+            {
+                UserSettings.Instance.Source |= SearchSource.Library;
+            }
+            else
+            {
+                UserSettings.Instance.Source &= ~SearchSource.Library;
+            }
+        }
+
+        private void audiobookCheckbox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (audiobookCheckbox.Checked)
+            {
+                UserSettings.Instance.Source |= SearchSource.Audiobooks;
+            }
+            else
+            {
+                UserSettings.Instance.Source &= ~SearchSource.Audiobooks;
+            }
+        }
+
+        private void inboxCheckbox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (inboxCheckbox.Checked)
+            {
+                UserSettings.Instance.Source |= SearchSource.Inbox;
+            }
+            else
+            {
+                UserSettings.Instance.Source &= ~SearchSource.Inbox;
+            }
+        }
+
+        private void podcastCheckbox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (podcastCheckbox.Checked)
+            {
+                UserSettings.Instance.Source |= SearchSource.Podcasts;
+            }
+            else
+            {
+                UserSettings.Instance.Source &= ~SearchSource.Podcasts;
+            }
+        }
+
+        private void videoCheckbox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (videoCheckbox.Checked)
+            {
+                UserSettings.Instance.Source |= SearchSource.Videos;
+            }
+            else
+            {
+                UserSettings.Instance.Source &= ~SearchSource.Videos;
+            }
+
+            Debug.WriteLine((int )UserSettings.Instance.Source);
         }
     }
 }
