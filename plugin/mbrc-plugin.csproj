@@ -245,7 +245,7 @@
     </VisualStudio>
   </ProjectExtensions>
   <PropertyGroup>
-    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)*.*" "C:\Program Files\MusicBee\Plugins"</PostBuildEvent>
+    <PostBuildEvent>copy /Y "$(TargetDir)\*.*" "G:\visual studio 2015\Projects\Musicbee\Plugins"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.
