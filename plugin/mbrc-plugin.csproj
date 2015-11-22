@@ -119,6 +119,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestOutputDeviceList.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPause.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
@@ -154,6 +155,7 @@
     <Compile Include="AndroidRemote\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Entities\MetaData.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingListTrack.cs" />
+    <Compile Include="AndroidRemote\Entities\OutputDevice.cs" />
     <Compile Include="AndroidRemote\Entities\SocketMessage.cs" />
     <Compile Include="AndroidRemote\Entities\Track.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingTrack.cs" />

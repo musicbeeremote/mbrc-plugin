@@ -604,6 +604,21 @@ namespace MusicBeePlugin
                         trackList).ToJsonString(),clientId));
         }
 
+        public void RequestOutputDevice(string clientId)
+        {
+            string[] deviceNames;
+            string activeDeviceName;
+
+            mbApiInterface.Player_GetOutputDevices(out deviceNames, out activeDeviceName);
+
+            OutputDevice currentDevices = new OutputDevice(deviceNames, activeDeviceName);
+
+            EventBus.FireEvent(
+                new MessageEvent(EventType.ReplyAvailable,
+                    new SocketMessage(Constants.PlayerOutput,
+                        currentDevices).ToJsonString(), clientId));
+        }
+
         /// <summary>
         /// If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
         /// the function will set the new rating as the current track's new track rating. In any other case it will
