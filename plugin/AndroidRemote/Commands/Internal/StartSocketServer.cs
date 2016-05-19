@@ -13,6 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         public void Execute(IEvent eEvent)
         {
             SocketServer.Instance.Start();
+ 
         }
     }
 }

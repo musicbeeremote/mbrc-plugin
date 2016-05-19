@@ -72,6 +72,10 @@
             controller.AddCommand(Constants.PlayerPause, typeof (RequestPause));
 
             #endregion
+
+            #region 2.2 protocol additions
+            controller.AddCommand(Constants.PlaylistPlay, typeof(RequestPlaylistPlay));
+            #endregion
         }
     }
 }

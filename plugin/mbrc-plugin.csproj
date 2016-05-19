@@ -122,6 +122,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestPause.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistPlay.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestRating.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestRepeat.cs" />
@@ -154,6 +155,8 @@
     <Compile Include="AndroidRemote\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Entities\MetaData.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingListTrack.cs" />
+    <Compile Include="AndroidRemote\Entities\Page.cs" />
+    <Compile Include="AndroidRemote\Entities\Playlist.cs" />
     <Compile Include="AndroidRemote\Entities\SocketMessage.cs" />
     <Compile Include="AndroidRemote\Entities\Track.cs" />
     <Compile Include="AndroidRemote\Entities\NowPlayingTrack.cs" />
@@ -249,7 +252,7 @@
     </VisualStudio>
   </ProjectExtensions>
   <PropertyGroup>
-    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)*.*" "C:\Program Files\MusicBee\Plugins"</PostBuildEvent>
+    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)*.*" "C:\MusicBee\Plugins"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.

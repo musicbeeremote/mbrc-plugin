@@ -878,15 +878,39 @@ namespace MusicBeePlugin
         /// <summary>
         /// The function checks the MusicBee api and gets all the available playlist urls.
         /// </summary>
-        public void GetAvailablePlaylistUrls()
+        /// <param name="clientId"></param>
+        public void GetAvailablePlaylistUrls(string clientId)
         {
             mbApiInterface.Playlist_QueryPlaylists();
-            string playlistUrl;
+            var playlists = new List<Playlist>();
             while (true)
             {
-                playlistUrl = mbApiInterface.Playlist_QueryGetNextPlaylist();
-                if (string.IsNullOrEmpty(playlistUrl)) break;
+                var url = mbApiInterface.Playlist_QueryGetNextPlaylist();
+
+                if (string.IsNullOrEmpty(url))
+                {
+                    break;
+                }
+
+                var name = mbApiInterface.Playlist_GetName(url);
+
+                var playlist = new Playlist
+                {
+                    Name = name,
+                    Url = url
+                };
+                playlists.Add(playlist);
             }
+
+            var data = new SocketMessage(Constants.PlaylistList, playlists).ToJsonString();
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
+        }
+
+        public void PlayPlaylist(string clientId, string url)
+        {
+            var success = mbApiInterface.Playlist_PlayNow(url);
+            var data = new SocketMessage(Constants.PlaylistPlay, success).ToJsonString();
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
         }
 
         /// <summary>

@@ -2,6 +2,8 @@
 {
     internal static class Constants
     {
+        
+
         #region Protocol 2. Basic functionality
         public const string Error = "error";
         public const string Player = "player";
@@ -66,6 +68,11 @@
         public const string PlayerPlay = "playerplay";
         public const string PlayerPause = "playerpause";
 
+        #endregion
+
+        #region Protocol 2.2
+
+        public const string PlaylistPlay = "playlistplay";
         #endregion
 
 
