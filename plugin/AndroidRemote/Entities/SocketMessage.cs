@@ -34,6 +34,11 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             }
         }
 
+        public SocketMessage()
+        {
+            
+        }
+
         [DataMember(Name = "context")]
         public string Context { get; set; }
 

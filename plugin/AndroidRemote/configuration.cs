@@ -75,6 +75,7 @@
 
             #region 2.2 protocol additions
             controller.AddCommand(Constants.PlaylistPlay, typeof(RequestPlaylistPlay));
+            controller.AddCommand(Constants.LibraryBrowseGenres, typeof(RequestBrowseGenres));
             #endregion
         }
     }
