@@ -440,7 +440,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         RemoveDeadSocket(key);
                         EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
                     }
-                    if (isConnected && Authenticator.IsClientAuthenticated(key))
+                    if (isConnected && Authenticator.IsClientAuthenticated(key) && Authenticator.IsClientBroadcastEnabled(key))
                     {
                         worker.Send(data);
                     }

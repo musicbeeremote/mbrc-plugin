@@ -29,6 +29,23 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         }
 
         /// <summary>
+        /// Returns if a client is Broadcast enabled. A broadcast enabled client will receive all the service broadcasts
+        /// about status changes.
+        /// </summary>
+        /// <param name="clientId">The id of the client that is used as an identification</param>
+        /// <returns></returns>
+        public static bool IsClientBroadcastEnabled(string clientId)
+        {
+            var enabled = true;
+            SocketClient client;
+            if (ConnectedClients.TryGetValue(clientId, out client))
+            {
+                enabled = client.BroadcastsEnabled;
+            }
+            return enabled;
+        }
+
+        /// <summary>
         ///  Removes a client from the Client List when the client disconnects from the server.
         /// </summary>
         /// <param name="clientId"> </param>

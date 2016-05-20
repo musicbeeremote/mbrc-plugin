@@ -50,24 +50,32 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 #endif
                 }
 
+                var client = Authenticator.Client(clientId);
+
                 foreach (var msg in msgList)
                 {
-                    if (Authenticator.Client(clientId).PacketNumber == 0 && msg.Context != Constants.Player)
-                    {
-                        EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,
-                            clientId));
-                        return;
-                    }
-                    if (Authenticator.Client(clientId).PacketNumber == 1 && msg.Context != Constants.Protocol)
+                    if (client.PacketNumber == 0 && msg.Context != Constants.Player)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,
                             clientId));
                         return;
                     }
 
+                    if (client.PacketNumber == 1 && msg.Context != Constants.Protocol)
+                    {
+                        EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,
+                            clientId));
+                        return;
+                    }
+
+                    if (msg.Context == Constants.Protocol && msg.Data.Equals(Constants.NoBroadcast))
+                    {
+                        client.BroadcastsEnabled = false;
+                    }
+
                     EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));
                 }
-                Authenticator.Client(clientId).IncreasePacketNumber();
+                client.IncreasePacketNumber();
             }
             catch (Exception ex)
             {

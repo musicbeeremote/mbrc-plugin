@@ -2,7 +2,6 @@
 {
     internal static class Constants
     {
-        
 
         #region Protocol 2. Basic functionality
         public const string Error = "error";
@@ -73,6 +72,8 @@
         #region Protocol 2.2
 
         public const string PlaylistPlay = "playlistplay";
+        public const string NoBroadcast = "nobroadcast";
+
         #endregion
 
 

@@ -39,6 +39,12 @@
         public float ClientProtocolVersion { get; set; }
 
         /// <summary>
+        /// Represents if the client will receive broadcast actions from the service (like volume updates etc).
+        /// This property is by default enabled. If disable the client will receive only responses to specific requests.
+        /// </summary>
+        public bool BroadcastsEnabled { get; set; } = true;
+
+        /// <summary>
         /// Function used to increase the number of packages received by the specific client.
         /// </summary>
         public void IncreasePacketNumber()
