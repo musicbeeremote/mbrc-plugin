@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Runtime.Serialization;
 using System.Xml.Linq;
 
 namespace MusicBeePlugin.AndroidRemote.Entities
 {
+    [DataContract]
     class Album : IEquatable<Album>
     {
+        
         public Album(string artist, string album)
         {
             this.album = album;
@@ -12,8 +15,10 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             TrackCount = 1;
         }
 
+        [DataMember(Name = "album")]
         public string album { get; private set; }
 
+        [DataMember(Name = "artist")]
         public string artist { get; private set; }
 
         public void IncreaseCount()
@@ -21,6 +26,7 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             TrackCount++;
         }
 
+        [DataMember(Name = "count")]
         public int TrackCount { get; private set; }
 
         public XElement toXElement()

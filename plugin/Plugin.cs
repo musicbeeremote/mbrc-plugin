@@ -1,27 +1,26 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Timers;
 using System.Windows.Forms;
+using System.Xml.Linq;
+using MusicBeePlugin.AndroidRemote;
+using MusicBeePlugin.AndroidRemote.Controller;
+using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Enumerations;
+using MusicBeePlugin.AndroidRemote.Error;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.AndroidRemote.Utilities;
+using ServiceStack.Text;
+using Timer = System.Timers.Timer;
 
 namespace MusicBeePlugin
 {
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Xml.Linq;
-    using AndroidRemote;
-    using AndroidRemote.Events;
-    using AndroidRemote.Networking;
-    using ServiceStack.Text;
-    using System;
-    using System.Globalization;
-    using System.IO;
-    using System.Reflection;
-    using System.Timers;
-    using AndroidRemote.Controller;
-    using AndroidRemote.Entities;
-    using AndroidRemote.Error;
-    using AndroidRemote.Settings;
-    using AndroidRemote.Utilities;
-    using AndroidRemote.Enumerations;
-    using Timer = System.Timers.Timer;
-
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
@@ -1011,34 +1010,35 @@ namespace MusicBeePlugin
         /// <param name="clientId">The client that initiated the call. (Should also be the only one to receive the data.</param>
         public void LibrarySearchAlbums(string albumName, string clientId)
         {
-            List<Album> albumList = new List<Album>();
+            var filter = XmlFilter(new[] { "Album" }, albumName, false);
 
-            if (api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album",
-                XmlFilter(new[] {"Album"}, albumName, false)))
+            var albums = new List<Album>();
+
+            if (api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", filter))
             {
                 try
                 {
                     foreach (
-                        string entry in
+                        var entry in
                             new List<string>(api.Library_QueryGetLookupTableValue(null)
                                 .Split(new[] {"\0\0"}, StringSplitOptions.None)))
                     {
-                        if (String.IsNullOrEmpty(entry)) continue;
-                        string[] albumInfo = entry.Split('\0');
+                        if (string.IsNullOrEmpty(entry)) continue;
+                        var albumInfo = entry.Split('\0');
                         if (albumInfo.Length < 2) continue;
 
-                        Album current = albumInfo.Length == 3
+                        var current = albumInfo.Length == 3
                             ? new Album(albumInfo[1], albumInfo[2])
                             : new Album(albumInfo[0], albumInfo[1]);
                         if (current.album.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
-                        if (!albumList.Contains(current))
+                        if (!albums.Contains(current))
                         {
-                            albumList.Add(current);
+                            albums.Add(current);
                         }
                         else
                         {
-                            albumList.ElementAt(albumList.IndexOf(current)).IncreaseCount();
+                            albums.ElementAt(albums.IndexOf(current)).IncreaseCount();
                         }
                     }
                 }
@@ -1052,8 +1052,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibrarySearchAlbum,
-                        albumList).ToJsonString(), clientId));
-            albumList = null;
+                        albums).ToJsonString(), clientId));
         }
 
         /// <summary>
@@ -1063,14 +1062,14 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void LibraryGetArtistAlbums(string artist, string clientId)
         {
-            List<Album> albumList = new List<Album>();
+            var albumList = new List<Album>();
             if (api.Library_QueryFiles(XmlFilter(new[] {"ArtistPeople"}, artist, true)))
             {
                 while (true)
                 {
-                    string currentFile = api.Library_QueryGetNextFile();
-                    if (String.IsNullOrEmpty(currentFile)) break;
-                    Album current = new Album(api.Library_GetFileTag(currentFile, MetaDataType.AlbumArtist),
+                    var currentFile = api.Library_QueryGetNextFile();
+                    if (string.IsNullOrEmpty(currentFile)) break;
+                    var current = new Album(api.Library_GetFileTag(currentFile, MetaDataType.AlbumArtist),
                         api.Library_GetFileTag(currentFile, MetaDataType.Album));
                     if (!albumList.Contains(current))
                     {
@@ -1086,7 +1085,6 @@ namespace MusicBeePlugin
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibraryArtistAlbums,
                         albumList).ToJsonString(), clientId));
-            albumList = null;
         }
 
         /// <summary>
@@ -1096,17 +1094,15 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void LibrarySearchArtist(string artist, string clientId)
         {
-            List<Artist> artistList = new List<Artist>();
+            var artistList = new List<Artist>();
+
             if (api.Library_QueryLookupTable("artist", "count",
                 XmlFilter(new[] {"ArtistPeople"}, artist, false)))
             {
-                foreach (
-                    string entry in
-                        api.Library_QueryGetLookupTableValue(null).Split(new[] {"\0\0"}, StringSplitOptions.None))
-                {
-                    string[] artistInfo = entry.Split(new[] {'\0'});
-                    artistList.Add(new Artist(artistInfo[0], int.Parse(artistInfo[1])));
-                }
+                artistList.AddRange(api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Select(entry => entry.Split('\0'))
+                    .Select(artistInfo => new Artist(artistInfo[0], int.Parse(artistInfo[1]))));
             }
 
             api.Library_QueryLookupTable(null, null, null);
@@ -1115,7 +1111,6 @@ namespace MusicBeePlugin
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibrarySearchArtist,
                         artistList).ToJsonString(), clientId));
-            artistList = null;
         }
 
 
@@ -1126,17 +1121,14 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void LibraryGetGenreArtists(string genre, string clientId)
         {
-            List<Artist> artistList = new List<Artist>();
+            var artistList = new List<Artist>();
 
             if (api.Library_QueryLookupTable("artist", "count", XmlFilter(new[] {"Genre"}, genre, true)))
             {
-                foreach (
-                    string entry in
-                        api.Library_QueryGetLookupTableValue(null).Split(new[] {"\0\0"}, StringSplitOptions.None))
-                {
-                    string[] artistInfo = entry.Split(new[] {'\0'});
-                    artistList.Add(new Artist(artistInfo[0], int.Parse(artistInfo[1])));
-                }
+                artistList.AddRange(api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Select(entry => entry.Split('\0'))
+                    .Select(artistInfo => new Artist(artistInfo[0], int.Parse(artistInfo[1]))));
             }
 
             api.Library_QueryLookupTable(null, null, null);
@@ -1187,17 +1179,159 @@ namespace MusicBeePlugin
             api.Library_QueryLookupTable(null, null, null);
 
             var total = genres.Count;
-            var realLimit = limit > total ? total : limit;
+            var realLimit = offset + limit > total ? total - offset : limit;
+
             var message = new SocketMessage
             {
                 Context = Constants.LibraryBrowseGenres,
                 Data = new Page<Genre>
                 {
-                    Data = genres.GetRange(offset, realLimit),
+                    Data = offset > total ? new List<Genre>() : genres.GetRange(offset, realLimit),
                     Offset = offset,
                     Limit = limit,
                     Total = total
                     
+                }
+            };
+
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
+        }
+
+        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000)
+        {
+        
+            var artists = new List<Artist>();
+
+            if (api.Library_QueryLookupTable("artist", "count", null))
+            {
+                artists.AddRange(api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] { "\0\0" }, StringSplitOptions.None)
+                    .Select(entry => entry.Split('\0'))
+                    .Select(artistInfo => new Artist(artistInfo[0], int.Parse(artistInfo[1]))));
+            }
+
+            api.Library_QueryLookupTable(null, null, null);
+            var total = artists.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.LibraryBrowseArtists,
+                Data = new Page<Artist>
+                {
+                    Data = offset > total ? new List<Artist>() : artists.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
+        }
+
+        public void LibraryBrowseAlbums(string clientId, int offset = 0, int limit = 4000)
+        {
+
+            var albums = new List<Album>();
+
+            if (api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null))
+            {
+                try
+                {
+                    var data = new List<string>(api.Library_QueryGetLookupTableValue(null)
+                        .Split(new[] { "\0\0" }, StringSplitOptions.None));
+                    foreach (var entry in data)
+                    {
+                        if (string.IsNullOrEmpty(entry)) continue;
+
+                        var albumInfo = entry.Split('\0');
+                        if (albumInfo.Length < 2) continue;
+
+                        var current = albumInfo.Length == 3
+                            ? new Album(albumInfo[1], albumInfo[2])
+                            : new Album(albumInfo[0], albumInfo[1]);
+             
+
+                        if (!albums.Contains(current))
+                        {
+                            albums.Add(current);
+                        }
+                        else
+                        {
+                            albums.ElementAt(albums.IndexOf(current)).IncreaseCount();
+                        }
+                    }
+                }
+                catch (IndexOutOfRangeException)
+                {
+                }
+            }
+
+            api.Library_QueryLookupTable(null, null, null);
+
+            var total = albums.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.LibraryBrowseAlbums,
+                Data = new Page<Album>
+                {
+                    Data = offset > total ? new List<Album>() : albums.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
+
+        }
+
+        public void LibraryBrowseTracks(string clientId, int offset = 0, int limit = 4000)
+        {
+            var tracks = new List<Track>();
+            if (api.Library_QueryFiles(null))
+            {
+                while (true)
+                {
+                    var currentTrack = api.Library_QueryGetNextFile();
+                    if (string.IsNullOrEmpty(currentTrack)) break;
+
+                    int trackNumber;
+                    int discNumber;
+                    long albumId;
+                    int.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
+                    int.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.DiscNo), out discNumber);
+                    long.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.AlbumId), out albumId);
+                    
+                    var track = new Track
+                    {
+                        Artist = api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
+                        Title = api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
+                        Album = api.Library_GetFileTag(currentTrack, MetaDataType.Album),
+                        AlbumId = albumId,
+                        Disc = discNumber,
+                        Trackno = trackNumber,
+                        Src = currentTrack,
+                       
+                    };
+                    tracks.Add(track);
+                }
+            }
+
+            var total = tracks.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.LibraryBrowseTracks,
+                Data = new Page<Track>
+                {
+                    Data = offset> total ? new List<Track>() : tracks.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
                 }
             };
 
