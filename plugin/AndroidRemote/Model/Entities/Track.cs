@@ -37,9 +37,12 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 
         [DataMember(Name = "album")]
         public string Album { get; set; }
+         
+        [DataMember(Name = "album_artist")]
+        public string AlbumArtist { get; set; }
 
-        [DataMember(Name = "album_id")]
-        public long AlbumId { get; set; }
+        [DataMember(Name = "genre")]
+        public string Genre { get; set; }
 
         public bool Equals(Track other)
         {

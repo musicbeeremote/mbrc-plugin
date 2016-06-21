@@ -13,6 +13,7 @@ using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Error;
 using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
@@ -68,6 +69,7 @@ namespace MusicBeePlugin
 
         private static Plugin selfInstance;
         private InfoWindow mWindow;
+        private bool userChangingShuffle;
 
 
         /// <summary>
@@ -188,11 +190,11 @@ namespace MusicBeePlugin
         /// </param>
         private void HandleTimerElapsed(object sender, ElapsedEventArgs args)
         {
-            if (GetShuffleState() != _shuffleState)
+            if (GetShuffleState() != _shuffleState && !userChangingShuffle)
             {
                 _shuffleState = GetShuffleState();
                 EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(
-                    Constants.PlayerShuffle, _shuffleState)
+                        Constants.PlayerShuffle, _shuffleState)
                     .ToJsonString()));
             }
 
@@ -302,23 +304,23 @@ namespace MusicBeePlugin
                 case NotificationType.VolumeLevelChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.PlayerVolume,
-                            ((int)
-                                Math.Round(
-                                    api.Player_GetVolume()*100,
-                                    1))).ToJsonString()));
+                        ((int)
+                            Math.Round(
+                                api.Player_GetVolume() * 100,
+                                1))).ToJsonString()));
                     break;
                 case NotificationType.VolumeMuteChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.PlayerMute,
                             api.Player_GetMute()).ToJsonString()
-                        ));
+                    ));
                     break;
                 case NotificationType.PlayStateChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.PlayerState,
-                            api
-                                .Player_GetPlayState
-                                ()).ToJsonString
+                                api
+                                    .Player_GetPlayState
+                                    ()).ToJsonString
                             ()));
                     break;
                 case NotificationType.NowPlayingLyricsReady:
@@ -406,7 +408,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// When called if the volume string is an integer in the range [0,100] it 
+        /// When called if the volume string is an integer in the range [0,100] it
         /// changes the volume to the specific value and returns the new value.
         /// In any other case it just returns the current value for the volume.
         /// </summary>
@@ -415,13 +417,13 @@ namespace MusicBeePlugin
         {
             if (volume >= 0)
             {
-                api.Player_SetVolume((float) volume/100);
+                api.Player_SetVolume((float) volume / 100);
             }
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerVolume,
-                        ((int) Math.Round(api.Player_GetVolume()*100, 1))).ToJsonString()));
+                        ((int) Math.Round(api.Player_GetVolume() * 100, 1))).ToJsonString()));
 
             if (api.Player_GetMute())
             {
@@ -449,19 +451,24 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// Changes the player shuffle and autodj state following the model of MusicBee. 
+        /// Changes the player shuffle and autodj state following the model of MusicBee.
         /// </summary>
         /// <param name="action"></param>
         public void RequestAutoDjShuffleState(StateAction action)
         {
             var shuffleEnabled = api.Player_GetShuffle();
             var autoDjEnabled = api.Player_GetAutoDjEnabled();
+            var shuffleState = ShuffleState.off;
 
             if (action == StateAction.Toggle)
             {
                 if (shuffleEnabled && !autoDjEnabled)
                 {
-                    api.Player_StartAutoDj();
+                    var success = api.Player_StartAutoDj();
+                    if (success)
+                    {
+                        shuffleState = ShuffleState.autodj;
+                    }
                 }
                 else if (autoDjEnabled)
                 {
@@ -469,13 +476,21 @@ namespace MusicBeePlugin
                 }
                 else
                 {
-                    api.Player_SetShuffle(true);
+                    var success = api.Player_SetShuffle(true);
+                    if (success)
+                    {
+                        shuffleState = ShuffleState.shuffle;
+                    }
                 }
             }
+            this.userChangingShuffle = true;
 
-            var socketMessage = new SocketMessage(Constants.PlayerShuffle, GetShuffleState());
+            this._shuffleState = shuffleState;
+
+            var socketMessage = new SocketMessage(Constants.PlayerShuffle, shuffleState);
             var messageEvent = new MessageEvent(EventType.ReplyAvailable, socketMessage.ToJsonString());
             EventBus.FireEvent(messageEvent);
+            this.userChangingShuffle = false;
         }
 
         private ShuffleState GetShuffleState()
@@ -513,7 +528,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="action"></param>
         public void RequestScrobblerState(StateAction action)
@@ -559,47 +574,91 @@ namespace MusicBeePlugin
                         api.Player_GetRepeat()).ToJsonString()));
         }
 
-        /// <summary>
-        /// It gets the 100 first tracks of the playlist and returns them in an XML formated String without a root element.
-        /// </summary>
-        /// <param name="clientProtocolVersion"> </param>
-        /// <param name="clientId"> </param>
-        /// <returns>XML formated string without root element</returns>
-        public void RequestNowPlayingList(double clientProtocolVersion, string clientId)
+        public void RequestNowPlayingListPage(string clientId, int offset = 0, int limit = 4000)
         {
             api.NowPlayingList_QueryFiles(null);
 
-            List<NowPlayingListTrack> trackList = new List<NowPlayingListTrack>();
-            int position = 1;
-            while (position <= UserSettings.Instance.NowPlayingListLimit)
+            var tracks = new List<NowPlaying>();
+            var position = 1;
+            while (true)
             {
-                string playListTrack = api.NowPlayingList_QueryGetNextFile();
-                if (String.IsNullOrEmpty(playListTrack))
+                var trackPath = api.NowPlayingList_QueryGetNextFile();
+                if (string.IsNullOrEmpty(trackPath))
                     break;
 
-                string artist = api.Library_GetFileTag(playListTrack, MetaDataType.Artist);
-                string title = api.Library_GetFileTag(playListTrack, MetaDataType.TrackTitle);
+                var artist = api.Library_GetFileTag(trackPath, MetaDataType.Artist);
+                var title = api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
 
-                if (String.IsNullOrEmpty(artist))
+                if (string.IsNullOrEmpty(title))
                 {
-                    artist = "Unknown Artist";
+                    var index = trackPath.LastIndexOf('\\');
+                    title = trackPath.Substring(index + 1);
                 }
 
-                if (String.IsNullOrEmpty(title))
+                var track = new NowPlaying
                 {
-                    int index = playListTrack.LastIndexOf('\\');
-                    title = playListTrack.Substring(index + 1);
-                }
+                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
+                    Title = title,
+                    Position = position,
+                    Path = trackPath
+                };
 
-                trackList.Add(
-                    new NowPlayingListTrack(artist, title, position));
+                tracks.Add(track);
                 position++;
             }
 
-            EventBus.FireEvent(
-                new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingList,
-                        trackList).ToJsonString(), clientId));
+            var total = tracks.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.NowPlayingList,
+                Data = new Page<NowPlaying>
+                {
+                    Data = offset > total ? new List<NowPlaying>() : tracks.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
+        }
+
+        public void RequestNowPlayingList(string clientId)
+        {
+            api.NowPlayingList_QueryFiles(null);
+
+            var trackList = new List<NowPlayingListTrack>();
+            var position = 1;
+            while (position <= UserSettings.Instance.NowPlayingListLimit)
+            {
+                var trackPath = api.NowPlayingList_QueryGetNextFile();
+                if (string.IsNullOrEmpty(trackPath))
+                    break;
+
+                var artist = api.Library_GetFileTag(trackPath, MetaDataType.Artist);
+                var title = api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
+
+                if (string.IsNullOrEmpty(title))
+                {
+                    var index = trackPath.LastIndexOf('\\');
+                    title = trackPath.Substring(index + 1);
+                }
+
+                var track = new NowPlayingListTrack
+                {
+                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
+                    Title = title,
+                    Position = position,
+                    Path = trackPath
+                };
+                trackList.Add(track);
+                position++;
+            }
+
+            var jsonString = new SocketMessage(Constants.NowPlayingList, trackList).ToJsonString();
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, jsonString, clientId);
+            EventBus.FireEvent(messageEvent);
         }
 
         /// <summary>
@@ -700,7 +759,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="request"></param>
         public void RequestPlayPosition(string request)
@@ -757,7 +816,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="index"></param>
         /// <param name="clientId"></param>
@@ -911,7 +970,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="clientId"></param>
         public void RequestPlayerStatus(string clientId)
@@ -925,7 +984,7 @@ namespace MusicBeePlugin
                     : GetShuffleState(),
                 [Constants.PlayerScrobble] = api.Player_GetScrobbleEnabled(),
                 [Constants.PlayerState] = api.Player_GetPlayState().ToString(),
-                [Constants.PlayerVolume] = ((int) Math.Round(api.Player_GetVolume()*100, 1)).ToString(
+                [Constants.PlayerVolume] = ((int) Math.Round(api.Player_GetVolume() * 100, 1)).ToString(
                     CultureInfo.InvariantCulture)
             };
 
@@ -934,7 +993,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="clientId"></param>
         public void RequestTrackInfo(string clientId)
@@ -977,16 +1036,26 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.NowPlayingListMove, reply).ToJsonString(), clientId));
         }
 
-        private static string XmlFilter(string[] tags, string query, bool isStrict)
+        private static string XmlFilter(string[] tags, string query, bool isStrict,
+            SearchSource source = SearchSource.None)
         {
-            var source =
-                (short)
-                    (UserSettings.Instance.Source != SearchSource.None
-                        ? UserSettings.Instance.Source
-                        : SearchSource.Library);
+            short src;
+            if (source != SearchSource.None)
+            {
+                src = (short) source;
+            }
+            else
+            {
+                var userDefaults = UserSettings.Instance.Source != SearchSource.None;
+                src = (short)
+                (userDefaults
+                    ? UserSettings.Instance.Source
+                    : SearchSource.Library);
+            }
+
 
             var filter = new XElement("Source",
-                new XAttribute("Type", source));
+                new XAttribute("Type", src));
 
             var conditions = new XElement("Conditions",
                 new XAttribute("CombineMethod", "Any"));
@@ -1010,7 +1079,7 @@ namespace MusicBeePlugin
         /// <param name="clientId">The client that initiated the call. (Should also be the only one to receive the data.</param>
         public void LibrarySearchAlbums(string albumName, string clientId)
         {
-            var filter = XmlFilter(new[] { "Album" }, albumName, false);
+            var filter = XmlFilter(new[] {"Album"}, albumName, false);
 
             var albums = new List<Album>();
 
@@ -1020,8 +1089,8 @@ namespace MusicBeePlugin
                 {
                     foreach (
                         var entry in
-                            new List<string>(api.Library_QueryGetLookupTableValue(null)
-                                .Split(new[] {"\0\0"}, StringSplitOptions.None)))
+                        new List<string>(api.Library_QueryGetLookupTableValue(null)
+                            .Split(new[] {"\0\0"}, StringSplitOptions.None)))
                     {
                         if (string.IsNullOrEmpty(entry)) continue;
                         var albumInfo = entry.Split('\0');
@@ -1088,7 +1157,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="artist"></param>
         /// <param name="clientId"></param>
@@ -1115,7 +1184,7 @@ namespace MusicBeePlugin
 
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="genre"></param>
         /// <param name="clientId"></param>
@@ -1141,7 +1210,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="genre"></param>
         /// <param name="clientId"></param>
@@ -1172,9 +1241,9 @@ namespace MusicBeePlugin
             if (api.Library_QueryLookupTable("genre", "count", null))
             {
                 genres.AddRange(api.Library_QueryGetLookupTableValue(null)
-                  .Split(new[] { "\0\0" }, StringSplitOptions.None)
-                  .Select(entry => entry.Split(new[] { '\0' }, StringSplitOptions.None))
-                  .Select(genreInfo => new Genre(genreInfo[0], int.Parse(genreInfo[1]))));
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
+                    .Select(genreInfo => new Genre(genreInfo[0], int.Parse(genreInfo[1]))));
             }
             api.Library_QueryLookupTable(null, null, null);
 
@@ -1190,7 +1259,6 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                    
                 }
             };
 
@@ -1200,13 +1268,12 @@ namespace MusicBeePlugin
 
         public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000)
         {
-        
             var artists = new List<Artist>();
 
             if (api.Library_QueryLookupTable("artist", "count", null))
             {
                 artists.AddRange(api.Library_QueryGetLookupTableValue(null)
-                    .Split(new[] { "\0\0" }, StringSplitOptions.None)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
                     .Select(entry => entry.Split('\0'))
                     .Select(artistInfo => new Artist(artistInfo[0], int.Parse(artistInfo[1]))));
             }
@@ -1232,7 +1299,6 @@ namespace MusicBeePlugin
 
         public void LibraryBrowseAlbums(string clientId, int offset = 0, int limit = 4000)
         {
-
             var albums = new List<Album>();
 
             if (api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null))
@@ -1240,7 +1306,7 @@ namespace MusicBeePlugin
                 try
                 {
                     var data = new List<string>(api.Library_QueryGetLookupTableValue(null)
-                        .Split(new[] { "\0\0" }, StringSplitOptions.None));
+                        .Split(new[] {"\0\0"}, StringSplitOptions.None));
                     foreach (var entry in data)
                     {
                         if (string.IsNullOrEmpty(entry)) continue;
@@ -1251,7 +1317,7 @@ namespace MusicBeePlugin
                         var current = albumInfo.Length == 3
                             ? new Album(albumInfo[1], albumInfo[2])
                             : new Album(albumInfo[0], albumInfo[1]);
-             
+
 
                         if (!albums.Contains(current))
                         {
@@ -1286,7 +1352,6 @@ namespace MusicBeePlugin
 
             var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
             EventBus.FireEvent(messageEvent);
-
         }
 
         public void LibraryBrowseTracks(string clientId, int offset = 0, int limit = 4000)
@@ -1301,21 +1366,20 @@ namespace MusicBeePlugin
 
                     int trackNumber;
                     int discNumber;
-                    long albumId;
+
                     int.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
                     int.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.DiscNo), out discNumber);
-                    long.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.AlbumId), out albumId);
-                    
+
                     var track = new Track
                     {
                         Artist = api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                         Title = api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
                         Album = api.Library_GetFileTag(currentTrack, MetaDataType.Album),
-                        AlbumId = albumId,
+                        AlbumArtist = api.Library_GetFileTag(currentTrack, MetaDataType.AlbumArtist),
+                        Genre = api.Library_GetFileTag(currentTrack, MetaDataType.Genre),
                         Disc = discNumber,
                         Trackno = trackNumber,
                         Src = currentTrack,
-                       
                     };
                     tracks.Add(track);
                 }
@@ -1328,7 +1392,7 @@ namespace MusicBeePlugin
                 Context = Constants.LibraryBrowseTracks,
                 Data = new Page<Track>
                 {
-                    Data = offset> total ? new List<Track>() : tracks.GetRange(offset, realLimit),
+                    Data = offset > total ? new List<Track>() : tracks.GetRange(offset, realLimit),
                     Offset = offset,
                     Limit = limit,
                     Total = total
@@ -1379,17 +1443,17 @@ namespace MusicBeePlugin
         /// <param name="client"></param>
         public void LibraryGetAlbumTracks(string album, string client)
         {
-            List<Track> trackList = new List<Track>();
+            var trackList = new List<Track>();
             if (api.Library_QueryFiles(XmlFilter(new[] {"Album"}, album, true)))
             {
                 while (true)
                 {
-                    string currentTrack = api.Library_QueryGetNextFile();
+                    var currentTrack = api.Library_QueryGetNextFile();
                     if (string.IsNullOrEmpty(currentTrack)) break;
 
-                    int trackNumber = 0;
+                    int trackNumber;
                     int.TryParse(api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
-                    string src = currentTrack;
+                    var src = currentTrack;
 
                     trackList.Add(new Track(api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                         api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber, src));
@@ -1400,8 +1464,10 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibraryAlbumTracks, trackList).ToJsonString(), client));
+        }
 
-            trackList = null;
+        public void RequestRadioStations(string clientId)
+        {
         }
 
         /// <summary>

@@ -1,32 +1,24 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Entities
+﻿namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     class NowPlayingListTrack
     {
-        private readonly int position;
-        private readonly string artist;
-        private readonly string title;
-
         public NowPlayingListTrack(string artist, string title, int position)
         {
-            this.position = position;
-            this.artist = artist;
-            this.title = title;
+            Position = position;
+            Artist = artist;
+            Title = title;
         }
 
-        public string Artist
+        public NowPlayingListTrack()
         {
-            get { return artist; }
         }
 
-        public string Title
-        {
-            get { return title; }
-        }
+        public string Artist { get; set; }
 
-        public int Position
-        {
-            get { return position; }
-        }
+        public string Title { get; set; }
 
+        public string Path { get; set; }
+
+        public int Position { get; set; }
     }
 }

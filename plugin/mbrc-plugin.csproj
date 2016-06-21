@@ -158,6 +158,7 @@
     <Compile Include="AndroidRemote\Model\Entities\Artist.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Model\Entities\MetaData.cs" />
+    <Compile Include="AndroidRemote\Model\Entities\NowPlaying.cs" />
     <Compile Include="AndroidRemote\Model\Entities\NowPlayingListTrack.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Page.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Playlist.cs" />

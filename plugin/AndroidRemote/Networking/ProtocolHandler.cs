@@ -71,6 +71,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (msg.Context == Constants.Protocol && msg.Data.Equals(Constants.NoBroadcast))
                     {
                         client.BroadcastsEnabled = false;
+                        client.ClientProtocolVersion = 2.2f;
                     }
 
                     EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));
