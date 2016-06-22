@@ -68,10 +68,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         return;
                     }
 
-                    if (msg.Context == Constants.Protocol && msg.Data.Equals(Constants.NoBroadcast))
+                    if (msg.Context == Constants.Protocol && msg.Data is JsonObject)
                     {
-                        client.BroadcastsEnabled = false;
-                        client.ClientProtocolVersion = 2.2f;
+                        var data = (JsonObject) msg.Data;
+                        client.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
+                        client.ClientProtocolVersion = data.Get<float>("protocol_version");
                     }
 
                     EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));
