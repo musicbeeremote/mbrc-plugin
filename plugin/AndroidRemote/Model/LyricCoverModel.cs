@@ -1,27 +1,24 @@
 ﻿using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
+using NLog;
 
 namespace MusicBeePlugin.AndroidRemote.Model
 {
     using System;
     using System.Security;
     using System.Text.RegularExpressions;
-    using Error;
     using Events;
 
     internal class LyricCoverModel
     {
         /** Singleton **/
-        private static readonly LyricCoverModel Model = new LyricCoverModel();
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+         
 
-        private string xHash;
-        private string cover;
-        private string lyrics;
+        private string _xHash;
+        private string _lyrics;
 
-        public static LyricCoverModel Instance
-        {
-            get { return Model; }
-        }
+        public static LyricCoverModel Instance { get; } = new LyricCoverModel();
 
         private LyricCoverModel()
         {
@@ -32,25 +29,22 @@ namespace MusicBeePlugin.AndroidRemote.Model
         {
             var hash = Utilities.Utilities.Sha1Hash(base64);
 
-            if (xHash != null && xHash.Equals(hash))
+            if (_xHash != null && _xHash.Equals(hash))
             {
                 return;
             }
 
-            cover = String.IsNullOrEmpty(base64)
-                ? String.Empty
+            Cover = string.IsNullOrEmpty(base64)
+                ? string.Empty
                 : Utilities.Utilities.ImageResize(base64);
-            xHash = hash;
+            _xHash = hash;
 
             EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingCover, cover).ToJsonString()));
+                        new SocketMessage(Constants.NowPlayingCover, Cover).ToJsonString()));
         }
 
-        public string Cover
-        {
-            get { return cover; }
-        }
+        public string Cover { get; private set; }
 
         public string Lyrics
         {
@@ -58,7 +52,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
             {
                 try
                 {
-                    string lStr = value.Trim();
+                    var lStr = value.Trim();
                     if (lStr.Contains("\r\r\n\r\r\n"))
                     {
                         /* Convert new line & empty line to xml safe format */
@@ -69,25 +63,23 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     //lStr = lStr.Replace("\r\n", "&lt;p&gt;");
                     //lStr = lStr.Replace("\n", "&lt;br&gt;");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
-                    Regex regEx = new Regex(pattern);
-                    lyrics = SecurityElement.Escape(regEx.Replace(lStr, String.Empty));
+                    var regEx = new Regex(pattern);
+                    _lyrics = SecurityElement.Escape(regEx.Replace(lStr, String.Empty));
                 }
                 catch (Exception ex)
                 {
-#if DEBUG
-                    ErrorHandler.LogError(ex);
-#endif
-                    lyrics = String.Empty;
+                    _logger.Error(ex, "Lyrics processing");
+                    _lyrics = string.Empty;
                 }
                 finally
                 {
-                    if (!String.IsNullOrEmpty(lyrics))
+                    if (!string.IsNullOrEmpty(_lyrics))
                         EventBus.FireEvent(
                             new MessageEvent(EventType.ReplyAvailable,
-                                new SocketMessage(Constants.NowPlayingLyrics, lyrics).ToJsonString()));
+                                new SocketMessage(Constants.NowPlayingLyrics, _lyrics).ToJsonString()));
                 }
             }
-            get { return lyrics; }
+            get { return _lyrics; }
         }
     }
 }

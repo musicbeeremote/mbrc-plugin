@@ -150,4 +150,6 @@ $RECYCLE.BIN/
 MB_REMOTE.XML
 
 .nuget/*
-/.idea
+.idea
+*.iml
+*.dll

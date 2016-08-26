@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Diagnostics;
 using MusicBeePlugin.AndroidRemote.Interfaces;
+using NLog;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 {
-    class HandlePong : ICommand
+    internal class HandlePong : ICommand
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         public void Execute(IEvent eEvent)
         {
-#if DEBUG
-            Debug.WriteLine("Pong: {0}", DateTime.UtcNow);
-#endif
+            _logger.Debug($"Pong: {DateTime.UtcNow}");
         }
     }
 }

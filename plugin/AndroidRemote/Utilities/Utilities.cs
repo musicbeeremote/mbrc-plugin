@@ -6,12 +6,12 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using NLog;
 using Encoder = System.Drawing.Imaging.Encoder;
-using MusicBeePlugin.AndroidRemote.Error;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
-    class Utilities
+    internal class Utilities
     {
         private static readonly SHA1Managed Sha1 = new SHA1Managed();
         private static byte[] _hash = new byte[20];
@@ -23,8 +23,8 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <returns>System.String.</returns>
         public static string Sha1Hash(string value)
         {
-            var mHash = new String('0', 40);
-            if (String.IsNullOrEmpty(value)) return mHash;
+            var mHash = new string('0', 40);
+            if (string.IsNullOrEmpty(value)) return mHash;
             _hash = Sha1.ComputeHash(Encoding.UTF8.GetBytes(value));
             var sb = new StringBuilder();
             foreach (var hex in _hash.Select(b => b.ToString("x2")))
@@ -67,12 +67,12 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <param name="width">The width.</param>
         /// <param name="height">The height.</param>
         /// <returns>System.String.</returns>
-        public static string ImageResize(string base64, int width = 400, int height = 400)
+        public static string ImageResize(string base64, int width = 600, int height = 600)
         {
-            var cover = String.Empty;
+            var cover = string.Empty;
             try
             {
-                if (String.IsNullOrEmpty(base64))
+                if (string.IsNullOrEmpty(base64))
                 {
                     return cover;
                 }
@@ -110,9 +110,8 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             }
             catch (Exception ex)
             {
-#if DEBUG
-                ErrorHandler.LogError(ex);
-#endif
+                var logger = LogManager.GetCurrentClassLogger();
+                logger.Error(ex);
             }
             return cover;
         }

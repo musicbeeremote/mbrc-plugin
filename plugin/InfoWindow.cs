@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.Tools;
+using NLog;
 
 namespace MusicBeePlugin
 {
@@ -16,14 +17,15 @@ namespace MusicBeePlugin
     /// </summary>
     public partial class InfoWindow : Form
     {
-        private BindingList<string> ipAddressBinding;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private BindingList<string> _ipAddressBinding;
 
         /// <summary>
         /// </summary>
         public InfoWindow()
         {
             InitializeComponent();
-            ipAddressBinding = new BindingList<string>();
+            _ipAddressBinding = new BindingList<string>();
         }
 
         /// <summary>
@@ -63,7 +65,7 @@ namespace MusicBeePlugin
             UpdateFilteringSelection(settings.FilterSelection);
             nowPlayingListLimit.Value = settings.NowPlayingListLimit;
             UpdateSocketStatus(SocketServer.Instance.IsRunning);
-            allowedAddressesComboBox.DataSource = ipAddressBinding;
+            allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
             if (settings.Source == SearchSource.None) 
             {
@@ -76,7 +78,7 @@ namespace MusicBeePlugin
             inboxCheckbox.SetChecked((settings.Source & SearchSource.Inbox) == SearchSource.Inbox);
             videoCheckbox.SetChecked((settings.Source & SearchSource.Videos) == SearchSource.Videos);
 
-            Debug.WriteLine((int) settings.Source);
+            _logger.Debug($"Selected source is -> {settings.Source}");
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
@@ -129,7 +131,7 @@ namespace MusicBeePlugin
                     selectionFilteringComboBox.SelectedIndex = 1;
                     break;
                 case FilteringSelection.Specific:
-                    ipAddressBinding = new BindingList<string>(UserSettings.Instance.IpAddressList);
+                    _ipAddressBinding = new BindingList<string>(UserSettings.Instance.IpAddressList);
                     selectionFilteringComboBox.SelectedIndex = 2;
                     break;
                 default:
@@ -151,7 +153,7 @@ namespace MusicBeePlugin
                     UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
                     break;
                 case 2:
-                    UserSettings.Instance.IpAddressList = new List<string>(ipAddressBinding);
+                    UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
                     break;
             }
             UserSettings.Instance.SaveSettings();
@@ -160,15 +162,15 @@ namespace MusicBeePlugin
         private void AddAddressButtonClick(object sender, EventArgs e)
         {
             if (!IsAddressValid()) return;
-            if (!ipAddressBinding.Contains(ipAddressInputTextBox.Text))
+            if (!_ipAddressBinding.Contains(ipAddressInputTextBox.Text))
             {
-                ipAddressBinding.Add(ipAddressInputTextBox.Text);
+                _ipAddressBinding.Add(ipAddressInputTextBox.Text);
             }
         }
 
         private void RemoveAddressButtonClick(object sender, EventArgs e)
         {
-            ipAddressBinding.Remove(allowedAddressesComboBox.Text);
+            _ipAddressBinding.Remove(allowedAddressesComboBox.Text);
         }
 
         private bool IsAddressValid()
@@ -249,7 +251,7 @@ namespace MusicBeePlugin
                 UserSettings.Instance.Source &= ~SearchSource.Videos;
             }
 
-            Debug.WriteLine((int )UserSettings.Instance.Source);
+            _logger.Debug($"Source in settings is -> {UserSettings.Instance.Source}");
         }
     }
 }

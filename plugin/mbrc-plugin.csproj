@@ -77,6 +77,10 @@
     </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\packages\NLog.4.3.7\lib\net40\NLog.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="ServiceStack.Text">
       <HintPath>..\packages\ServiceStack.Text.3.9.71\lib\net35\ServiceStack.Text.dll</HintPath>
     </Reference>
@@ -178,7 +182,6 @@
     <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
     <Compile Include="AndroidRemote\Networking\HttpHandler.cs" />
     <Compile Include="AndroidRemote\Networking\Constants.cs" />
-    <Compile Include="AndroidRemote\Error\ErrorHandler.cs" />
     <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
     <Compile Include="AndroidRemote\Utilities\IdGenerator.cs" />
     <Compile Include="AndroidRemote\Utilities\Utilities.cs" />

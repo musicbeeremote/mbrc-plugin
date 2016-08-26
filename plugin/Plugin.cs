@@ -11,12 +11,14 @@ using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
-using MusicBeePlugin.AndroidRemote.Error;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using ServiceStack.Text;
 using Timer = System.Timers.Timer;
 
@@ -27,6 +29,7 @@ namespace MusicBeePlugin
     /// </summary>
     public partial class Plugin
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         /// <summary>
         /// The mb api interface.
         /// </summary>
@@ -112,7 +115,12 @@ namespace MusicBeePlugin
                 return about;
             }
 
-            ErrorHandler.SetLogFilePath(api.Setting_GetPersistentStoragePath());
+#if DEBUG
+            InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + "\\" + "mb_remote", LogLevel.Debug);
+#else
+            InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + "\\" + "mb_remote", LogLevel.Error);
+#endif
+        
 
             StartPlayerStatusMonitoring();
 
@@ -306,7 +314,7 @@ namespace MusicBeePlugin
                         new SocketMessage(Constants.PlayerVolume,
                         ((int)
                             Math.Round(
-                                api.Player_GetVolume() * 100,
+                                api.Player_GetVolume()*100,
                                 1))).ToJsonString()));
                     break;
                 case NotificationType.VolumeMuteChanged:
@@ -417,13 +425,13 @@ namespace MusicBeePlugin
         {
             if (volume >= 0)
             {
-                api.Player_SetVolume((float) volume / 100);
+                api.Player_SetVolume((float) volume/100);
             }
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerVolume,
-                        ((int) Math.Round(api.Player_GetVolume() * 100, 1))).ToJsonString()));
+                        ((int) Math.Round(api.Player_GetVolume()*100, 1))).ToJsonString()));
 
             if (api.Player_GetMute())
             {
@@ -483,14 +491,14 @@ namespace MusicBeePlugin
                     }
                 }
             }
-            this.userChangingShuffle = true;
+            //  this.userChangingShuffle = true;
 
-            this._shuffleState = shuffleState;
+            //this._shuffleState = shuffleState;
 
-            var socketMessage = new SocketMessage(Constants.PlayerShuffle, shuffleState);
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, socketMessage.ToJsonString());
-            EventBus.FireEvent(messageEvent);
-            this.userChangingShuffle = false;
+//            var socketMessage = new SocketMessage(Constants.PlayerShuffle, shuffleState);
+//            var messageEvent = new MessageEvent(EventType.ReplyAvailable, socketMessage.ToJsonString());
+//            EventBus.FireEvent(messageEvent);
+            // this.userChangingShuffle = false;
         }
 
         private ShuffleState GetShuffleState()
@@ -697,9 +705,7 @@ namespace MusicBeePlugin
             }
             catch (Exception e)
             {
-#if DEBUG
-                ErrorHandler.LogError(e);
-#endif
+                _logger.Error(e, "On Rating call");
             }
         }
 
@@ -710,7 +716,7 @@ namespace MusicBeePlugin
         /// </summary>
         public void RequestNowPlayingTrackLyrics()
         {
-            if (!String.IsNullOrEmpty(api.NowPlaying_GetLyrics()))
+            if (!string.IsNullOrEmpty(api.NowPlaying_GetLyrics()))
             {
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
@@ -719,11 +725,11 @@ namespace MusicBeePlugin
             }
             else if (api.ApiRevision >= 17)
             {
-                string lyrics = api.NowPlaying_GetDownloadedLyrics();
+                var lyrics = api.NowPlaying_GetDownloadedLyrics();
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingLyrics,
-                            !String.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics").ToJsonString()));
+                            !string.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics").ToJsonString()));
             }
             else
             {
@@ -984,7 +990,7 @@ namespace MusicBeePlugin
                     : GetShuffleState(),
                 [Constants.PlayerScrobble] = api.Player_GetScrobbleEnabled(),
                 [Constants.PlayerState] = api.Player_GetPlayState().ToString(),
-                [Constants.PlayerVolume] = ((int) Math.Round(api.Player_GetVolume() * 100, 1)).ToString(
+                [Constants.PlayerVolume] = ((int) Math.Round(api.Player_GetVolume()*100, 1)).ToString(
                     CultureInfo.InvariantCulture)
             };
 
@@ -1581,6 +1587,62 @@ namespace MusicBeePlugin
             {
                 api.Player_PlayPause();
             }
+        }
+
+        /// <summary>
+        ///     Initializes the logging configuration.
+        /// </summary>
+        /// <param name="storagePath"></param>
+        public static void InitializeLoggingConfiguration(string storagePath, LogLevel logLevel)
+        {
+            var config = new LoggingConfiguration();
+
+            var consoleTarget = new ColoredConsoleTarget();
+            var fileTarget = new FileTarget()
+            {
+                ArchiveAboveSize = 2097152,
+                ArchiveEvery = FileArchivePeriod.Day,
+                ArchiveNumbering = ArchiveNumberingMode.Rolling,
+                EnableArchiveFileCompression = true
+            };
+            var debugger = new DebuggerTarget();
+
+
+#if DEBUG
+            var sentinalTarget = new NLogViewerTarget()
+            {
+                Name = "sentinel",
+                Address = "udp://127.0.0.1:9999",
+                IncludeNLogData = true,
+                IncludeSourceInfo = true
+            };
+
+            var sentinelRule = new LoggingRule("*", LogLevel.Trace, sentinalTarget);
+            config.AddTarget("sentinel", sentinalTarget);
+            config.LoggingRules.Add(sentinelRule);
+#endif
+
+            config.AddTarget("console", consoleTarget);
+            config.AddTarget("file", fileTarget);
+            config.AddTarget("debugger", debugger);
+
+            consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} ${message} ${exception}";
+            fileTarget.FileName = $"{storagePath}\\error.log";
+            fileTarget.Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}||${exception}";
+
+            debugger.Layout = fileTarget.Layout;
+
+            var consoleRule = new LoggingRule("*", LogLevel.Debug, consoleTarget);
+            config.LoggingRules.Add(consoleRule);
+
+            var fileRule = new LoggingRule("*", logLevel, fileTarget);
+
+            config.LoggingRules.Add(fileRule);
+
+            var debuggerRule = new LoggingRule("*", LogLevel.Debug, debugger);
+            config.LoggingRules.Add(debuggerRule);
+
+            LogManager.Configuration = config;
         }
     }
 }

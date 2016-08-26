@@ -1,18 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using MusicBeePlugin.AndroidRemote.Entities;
-using MusicBeePlugin.AndroidRemote.Error;
+
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using NLog;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
     internal class ProtocolHandler
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+           
         /// <summary>
         ///     Processes the incoming message and answer's sending back the needed data.
         /// </summary>
@@ -20,9 +21,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <param name="clientId"> </param>
         public void ProcessIncomingMessage(string incomingMessage, string clientId)
         {
-#if DEBUG
-            ErrorHandler.VerboseValue("Incoming --> " + incomingMessage);
-#endif
+            _logger.Debug($"Received by client: {clientId} message --> {incomingMessage}");
+
             try
             {
                 var msgList = new List<SocketMessage>();
@@ -41,13 +41,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 catch (Exception ex)
                 {
-#if DEBUG
-                    ErrorHandler.LogError(ex);
-                    ErrorHandler.LogValue(incomingMessage);
-
-                    Debug.WriteLine(DateTime.Now.ToString(CultureInfo.InvariantCulture) + " : Exception at : " +
-                                    incomingMessage + "\n");
-#endif
+                    _logger.Error(ex, $"while processing message -> {incomingMessage} from {clientId}");
                 }
 
                 var client = Authenticator.Client(clientId);
@@ -81,9 +75,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
-#if DEBUG
-                ErrorHandler.LogError(ex);
-#endif
+                _logger.Error(ex, $"Processing message failed --> {incomingMessage} from {clientId}");
             }
         }
     }
