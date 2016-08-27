@@ -94,6 +94,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <returns></returns>
         public void Stop()
         {
+            _logger.Debug("Stopping socket service");
             try
             {
                 _mainSocket?.Close();
@@ -122,6 +123,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <returns></returns>
         public void Start()
         {
+            _logger.Debug($"Socket starts listening on port: {UserSettings.Instance.ListeningPort}");
             try
             {
                 _mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
