@@ -12,9 +12,17 @@ namespace MusicBeePlugin.Tools
     {
         public static List<string> GetPrivateAddressList()
         {
-            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+            var host = Dns.GetHostEntry(Dns.GetHostName());
 
             return (from address in host.AddressList where address.AddressFamily == AddressFamily.InterNetwork select address.ToString()).ToList();
+
+        }
+
+        public static List<IPAddress> GetAddressList()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+
+            return (from address in host.AddressList where address.AddressFamily == AddressFamily.InterNetwork select address).ToList();
 
         }
 
