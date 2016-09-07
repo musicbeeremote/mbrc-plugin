@@ -16,10 +16,10 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         }
 
         [DataMember(Name = "album")]
-        public string album { get; private set; }
+        public string album { get; }
 
         [DataMember(Name = "artist")]
-        public string artist { get; private set; }
+        public string artist { get; }
 
         public void IncreaseCount()
         {
@@ -29,17 +29,14 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         [DataMember(Name = "count")]
         public int TrackCount { get; private set; }
 
-        public XElement toXElement()
-        {
-            return new XElement("album", 
-                new XElement("albumartist", artist),
-                new XElement("albumname", album),
-                new XElement("count", TrackCount));
-        }
-
         public bool Equals(Album other)
         {
             return other.artist.Equals(artist) && other.album.Equals(album);
+        }
+
+        public override int GetHashCode()
+        {
+            return artist.GetHashCode() ^ album.GetHashCode();
         }
     }
 }

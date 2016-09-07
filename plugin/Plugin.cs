@@ -30,6 +30,7 @@ namespace MusicBeePlugin
     public partial class Plugin
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         /// <summary>
         /// The mb api interface.
         /// </summary>
@@ -120,7 +121,7 @@ namespace MusicBeePlugin
 #else
             InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + "\\" + "mb_remote", LogLevel.Error);
 #endif
-        
+
 
             StartPlayerStatusMonitoring();
 
@@ -1303,6 +1304,26 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
+        private Album CreateAlbum(string queryResult)
+        {
+            var albumInfo = queryResult.Split('\0');
+            if (albumInfo.Length == 1)
+            {
+                return new Album(albumInfo[0], string.Empty);
+            }
+
+            if (albumInfo.Length == 2 && queryResult.StartsWith("\0"))
+            {
+                return new Album(albumInfo[1], string.Empty);
+            }
+
+            var current = albumInfo.Length == 3
+                         ? new Album(albumInfo[1], albumInfo[2])
+                         : new Album(albumInfo[0], albumInfo[1]);
+
+            return current;
+        }
+
         public void LibraryBrowseAlbums(string clientId, int offset = 0, int limit = 4000)
         {
             var albums = new List<Album>();
@@ -1311,32 +1332,20 @@ namespace MusicBeePlugin
             {
                 try
                 {
-                    var data = new List<string>(api.Library_QueryGetLookupTableValue(null)
-                        .Split(new[] {"\0\0"}, StringSplitOptions.None));
-                    foreach (var entry in data)
-                    {
-                        if (string.IsNullOrEmpty(entry)) continue;
+                    var data = api.Library_QueryGetLookupTableValue(null)
+                        .Split(new[] { "\0\0" }, StringSplitOptions.None)
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .Select(s => s.Trim())
+                        .Select(CreateAlbum)
+                        .Distinct()
+                        .ToList();
 
-                        var albumInfo = entry.Split('\0');
-                        if (albumInfo.Length < 2) continue;
-
-                        var current = albumInfo.Length == 3
-                            ? new Album(albumInfo[1], albumInfo[2])
-                            : new Album(albumInfo[0], albumInfo[1]);
-
-
-                        if (!albums.Contains(current))
-                        {
-                            albums.Add(current);
-                        }
-                        else
-                        {
-                            albums.ElementAt(albums.IndexOf(current)).IncreaseCount();
-                        }
-                    }
+                    albums.AddRange(data);;
+ 
                 }
-                catch (IndexOutOfRangeException)
+                catch (IndexOutOfRangeException ex)
                 {
+                    _logger.Error(ex, "While loading album data");
                 }
             }
 
@@ -1510,15 +1519,15 @@ namespace MusicBeePlugin
         /// <param name="clientId">Client</param>
         public void NowPlayingSearch(string query, string clientId)
         {
-            bool result = false;
+            var result = false;
             api.NowPlayingList_QueryFiles(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false));
 
             while (true)
             {
-                string currentTrack = api.NowPlayingList_QueryGetNextFile();
-                if (String.IsNullOrEmpty(currentTrack)) break;
-                string artist = api.Library_GetFileTag(currentTrack, MetaDataType.Artist);
-                string title = api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle);
+                var currentTrack = api.NowPlayingList_QueryGetNextFile();
+                if (string.IsNullOrEmpty(currentTrack)) break;
+                var artist = api.Library_GetFileTag(currentTrack, MetaDataType.Artist);
+                var title = api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle);
 
                 if (title.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0 &&
                     artist.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
@@ -1533,7 +1542,7 @@ namespace MusicBeePlugin
 
         public string[] GetUrlsForTag(MetaTag tag, string query)
         {
-            var filter = String.Empty;
+            var filter = string.Empty;
             string[] tracks = {};
             switch (tag)
             {
@@ -1628,7 +1637,10 @@ namespace MusicBeePlugin
 
             consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} ${message} ${exception}";
             fileTarget.FileName = $"{storagePath}\\error.log";
-            fileTarget.Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}||${exception}";
+            fileTarget.Layout = "${longdate} [${level:uppercase=true}]${newline}" +
+                                "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
+                                "${message}${newline}" +
+                                "${when:when=length('${exception}') > 0: ${exception}${newline}}";
 
             debugger.Layout = fileTarget.Layout;
 
