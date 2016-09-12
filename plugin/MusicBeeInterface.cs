@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace MusicBeePlugin
 {
-    public partial class Plugin
+    public partial class Plugin 
     {
         public const short PluginInfoVersion = 1;
         public const short MinInterfaceVersion = 36;
@@ -392,7 +392,7 @@ namespace MusicBeePlugin
             AlbumArtistRaw = 34,     // stored album artist
             Artist = 32,             // displayed artist
             MultiArtist = 33,        // individual artists, separated by a null char
-			PrimaryArtist = 19,      // first artist from multi-artist tagged file, otherwise displayed artist
+            PrimaryArtist = 19,      // first artist from multi-artist tagged file, otherwise displayed artist
             Artists = 144,
             ArtistsWithArtistRole = 145,
             ArtistsWithPerformerRole = 146,

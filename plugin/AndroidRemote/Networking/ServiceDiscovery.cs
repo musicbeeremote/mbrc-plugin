@@ -29,7 +29,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
             ips.ForEach(address =>
             {
-                _logger.Debug($"Starting discovery listener at {MulticastAddress}:{Port}");
+                _logger.Debug($"Starting discovery listener at {MulticastAddress}:{Port} for interface {address}");
                 var udpClient = new UdpClient(AddressFamily.InterNetwork) {EnableBroadcast = true};
                 udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 udpClient.Client.Bind(new IPEndPoint(address, Port));

@@ -21,8 +21,6 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string Selection = "selection";
 
-        private const string NowPlayingLimit = "nplimit";
-
         private const string SFilename = "settings.xml";
 
         private const string SFolder = "mb_remote\\";
@@ -31,9 +29,11 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string LibrarySource = "source";
 
+        private const string LogsEnabled = "logs_enabled";
+
         private uint listeningPort;
 
-        private uint nowPlayingListLimit;
+       
         private SearchSource _source;
 
         public SearchSource Source
@@ -60,21 +60,6 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             set
             {
                 listeningPort = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public uint NowPlayingListLimit
-        {
-            get
-            {
-                return nowPlayingListLimit > 0 ? nowPlayingListLimit : 5000;
-            }
-            set
-            {
-                nowPlayingListLimit = value;
             }
         }
 
@@ -119,7 +104,16 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 	    /// </summary>
 	    public bool AlternativeSearch { get; set; } = false;
 
-	    /// <summary>
+        /// <summary>
+        /// Enables Debug logging to the production version of the plugin
+        /// </summary>
+        public bool DebugLogEnabled { get; set; }
+
+        public static string LogFilePath = "\\mbrc.log";
+
+        public string FullLogPath => StoragePath + LogFilePath;
+
+        /// <summary>
         /// 
         /// </summary>
         /// <param name="path"></param>
@@ -133,6 +127,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             return StoragePath + SFilename;
         }
 
+
         /// <summary>
         /// Writes an XML node.
         /// </summary>
@@ -142,16 +137,13 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// <remarks></remarks>
         private static void WriteNodeValue(XmlDocument document, string name, string value)
         {
-            XmlNode node = document.SelectSingleNode("//" + name);
+            var node = document.SelectSingleNode("//" + name);
             if (node == null)
             {
-                XmlElement pattern = document.CreateElement(name);
+                var pattern = document.CreateElement(name);
                 XmlNode root = document.DocumentElement;
                 pattern.InnerText = value;
-                if (root != null)
-                {
-                    root.AppendChild(pattern);
-                }
+                root?.AppendChild(pattern);
             }
             else
             {
@@ -232,13 +224,13 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             }
             WriteNodeValue(document, Values, GetValues());
             WriteNodeValue(document, Selection, FilterSelection.ToString());
-            WriteNodeValue(document, NowPlayingLimit, nowPlayingListLimit.ToString(CultureInfo.InvariantCulture));
             WriteNodeValue(document, LibrarySource, ((short) Source).ToString());
+            WriteNodeValue(document, LogsEnabled, DebugLogEnabled.ToString());
         }
 
         private string ReadNodeValue(XmlNode document, string name)
         {
-            XmlNode node = document.SelectSingleNode("//" + name);
+            var node = document.SelectSingleNode("//" + name);
             return node?.InnerText ?? string.Empty;
         }
 
@@ -261,9 +253,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                                                   : 3000;
                 UpdateFilteringSelection(ReadNodeValue(document, Selection));
                 SetValues(ReadNodeValue(document, Values));
-                nowPlayingListLimit = uint.TryParse(ReadNodeValue(document, NowPlayingLimit), out nowPlayingListLimit)
-                                          ? nowPlayingListLimit
-                                          : 5000;
+                bool debugEnabled;
+                bool.TryParse(ReadNodeValue(document, LogsEnabled), out debugEnabled);
+                DebugLogEnabled = debugEnabled;
+      
 
                 short source;
                 Source = (SearchSource) (short.TryParse(ReadNodeValue(document, LibrarySource), out source) ? source : 1);
@@ -282,13 +275,13 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             switch (FilterSelection)
             {
                 case FilteringSelection.All:
-                    return String.Empty;
+                    return string.Empty;
                 case FilteringSelection.Range:
                     return FlattenAllowedRange();
                 case FilteringSelection.Specific:
                     return FlattenAllowedAddressList();
                 default:
-                    return String.Empty;
+                    return string.Empty;
             }
         }
 
@@ -317,11 +310,11 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// <returns></returns>
         public string FlattenAllowedRange()
         {
-            if (!String.IsNullOrEmpty(BaseIp) && (LastOctetMax > 1 || LastOctetMax < 255))
+            if (!string.IsNullOrEmpty(BaseIp) && (LastOctetMax > 1 || LastOctetMax < 255))
             {
                 return BaseIp + "," + LastOctetMax;
             }
-            return String.Empty;
+            return string.Empty;
         }
 
         /// <summary>
@@ -330,11 +323,11 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// <param name="range"></param>
         public void UnFlattenAllowedRange(string range)
         {
-            if (String.IsNullOrEmpty(range))
+            if (string.IsNullOrEmpty(range))
             {
                 return;
             }
-            string[] splitRange = range.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var splitRange = range.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             BaseIp = splitRange[0];
             LastOctetMax = uint.Parse(splitRange[1]);
         }

@@ -27,7 +27,7 @@ namespace MusicBeePlugin
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
-    public partial class Plugin
+    public partial class Plugin : InfoWindow.IOnDebugSelectionChanged
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -66,14 +66,10 @@ namespace MusicBeePlugin
         /// <summary>
         /// Returns the plugin instance (Singleton);
         /// </summary>
-        public static Plugin Instance
-        {
-            get { return selfInstance; }
-        }
+        public static Plugin Instance { get; private set; }
 
-        private static Plugin selfInstance;
-        private InfoWindow mWindow;
-        private bool userChangingShuffle;
+        private InfoWindow _mWindow;
+        private bool _userChangingShuffle;
 
 
         /// <summary>
@@ -83,7 +79,7 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            selfInstance = this;
+            Instance = this;
             JsConfig.ExcludeTypeInfo = true;
             Configuration.Register(Controller.Instance);
 
@@ -117,9 +113,9 @@ namespace MusicBeePlugin
             }
 
 #if DEBUG
-            InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + "\\" + "mb_remote", LogLevel.Debug);
+            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, LogLevel.Debug);
 #else
-            InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + "\\" + "mb_remote", LogLevel.Error);
+            InitializeLoggingConfiguration((UserSettings.Instance.FullLogPath, LogLevel.Error);
 #endif
 
 
@@ -164,9 +160,9 @@ namespace MusicBeePlugin
 
         public void UpdateWindowStatus(bool status)
         {
-            if (mWindow != null && mWindow.Visible)
+            if (_mWindow != null && _mWindow.Visible)
             {
-                mWindow.UpdateSocketStatus(status);
+                _mWindow.UpdateSocketStatus(status);
             }
         }
 
@@ -199,7 +195,7 @@ namespace MusicBeePlugin
         /// </param>
         private void HandleTimerElapsed(object sender, ElapsedEventArgs args)
         {
-            if (GetShuffleState() != _shuffleState && !userChangingShuffle)
+            if (GetShuffleState() != _shuffleState && !_userChangingShuffle)
             {
                 _shuffleState = GetShuffleState();
                 EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, new SocketMessage(
@@ -233,12 +229,13 @@ namespace MusicBeePlugin
 
         private void DisplayInfoWindow()
         {
-            if (mWindow == null || !mWindow.Visible)
+            if (_mWindow == null || !_mWindow.Visible)
             {
-                mWindow = new InfoWindow();
+                _mWindow = new InfoWindow();
+                _mWindow.SetOnDebugSelectionListener(this);
             }
 
-            mWindow.Show();
+            _mWindow.Show();
         }
 
         /// <summary>
@@ -639,7 +636,7 @@ namespace MusicBeePlugin
 
             var trackList = new List<NowPlayingListTrack>();
             var position = 1;
-            while (position <= UserSettings.Instance.NowPlayingListLimit)
+            while (position <= 5000)
             {
                 var trackPath = api.NowPlayingList_QueryGetNextFile();
                 if (string.IsNullOrEmpty(trackPath))
@@ -978,7 +975,7 @@ namespace MusicBeePlugin
 
         /// <summary>
         ///
-        /// </summary>
+        /// </summary>ea
         /// <param name="clientId"></param>
         public void RequestPlayerStatus(string clientId)
         {
@@ -1601,8 +1598,8 @@ namespace MusicBeePlugin
         /// <summary>
         ///     Initializes the logging configuration.
         /// </summary>
-        /// <param name="storagePath"></param>
-        public static void InitializeLoggingConfiguration(string storagePath, LogLevel logLevel)
+        /// <param name="logFilePath"></param>
+        public static void InitializeLoggingConfiguration(string logFilePath, LogLevel logLevel)
         {
             var config = new LoggingConfiguration();
 
@@ -1636,7 +1633,7 @@ namespace MusicBeePlugin
             config.AddTarget("debugger", debugger);
 
             consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} ${message} ${exception}";
-            fileTarget.FileName = $"{storagePath}\\error.log";
+            fileTarget.FileName = logFilePath;
             fileTarget.Layout = "${longdate} [${level:uppercase=true}]${newline}" +
                                 "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
                                 "${message}${newline}" +
@@ -1655,6 +1652,11 @@ namespace MusicBeePlugin
             config.LoggingRules.Add(debuggerRule);
 
             LogManager.Configuration = config;
+        }
+
+        public void SelectionChanged(bool enabled)
+        {
+            InitializeLoggingConfiguration(api.Setting_GetPersistentStoragePath() + UserSettings.LogFilePath, enabled ? LogLevel.Debug : LogLevel.Error);
         }
     }
 }

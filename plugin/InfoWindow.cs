@@ -19,6 +19,7 @@ namespace MusicBeePlugin
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
+        private IOnDebugSelectionChanged listener;
 
         /// <summary>
         /// </summary>
@@ -63,7 +64,7 @@ namespace MusicBeePlugin
             versionLabel.Text = settings.CurrentVersion;
             portNumericUpDown.Value = settings.ListeningPort;
             UpdateFilteringSelection(settings.FilterSelection);
-            nowPlayingListLimit.Value = settings.NowPlayingListLimit;
+   
             UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
@@ -72,11 +73,7 @@ namespace MusicBeePlugin
                 settings.Source |= SearchSource.Library;
             }
 
-            libraryCheckbox.SetChecked((settings.Source & SearchSource.Library) == SearchSource.Library);
-            audiobookCheckbox.SetChecked((settings.Source & SearchSource.Audiobooks) == SearchSource.Audiobooks);
-            podcastCheckbox.SetChecked((settings.Source & SearchSource.Podcasts) == SearchSource.Podcasts);
-            inboxCheckbox.SetChecked((settings.Source & SearchSource.Inbox) == SearchSource.Inbox);
-            videoCheckbox.SetChecked((settings.Source & SearchSource.Videos) == SearchSource.Videos);
+            debugEnabled.Checked = settings.DebugLogEnabled;
 
             _logger.Debug($"Selected source is -> {settings.Source}");
         }
@@ -143,7 +140,7 @@ namespace MusicBeePlugin
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
             UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
-            UserSettings.Instance.NowPlayingListLimit = (uint) nowPlayingListLimit.Value;
+     
             switch (selectionFilteringComboBox.SelectedIndex)
             {
                 case 0:
@@ -175,83 +172,41 @@ namespace MusicBeePlugin
 
         private bool IsAddressValid()
         {
-            const string Pattern =
+            const string pattern =
                 @"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b";
-            return Regex.IsMatch(ipAddressInputTextBox.Text, Pattern);
+            return Regex.IsMatch(ipAddressInputTextBox.Text, pattern);
         }
 
         private void HandleIpAddressInputTextBoxTextChanged(object sender, EventArgs e)
         {
             var isAddressValid = IsAddressValid();
             ipAddressInputTextBox.BackColor = isAddressValid ? Color.LightGreen : Color.Red;
-            if (isAddressValid && selectionFilteringComboBox.SelectedIndex == 1)
-            {
-                var addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(),
-                    StringSplitOptions.RemoveEmptyEntries);
-                rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
-            }
+            if (!isAddressValid || selectionFilteringComboBox.SelectedIndex != 1) return;
+            var addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(),
+                StringSplitOptions.RemoveEmptyEntries);
+            rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
         }
 
-        private void LibraryCheckboxCheckedChanged(object sender, EventArgs e)
+        private void DebugCheckboxCheckedChanged(object sender, EventArgs e)
         {
-            if (libraryCheckbox.Checked)
-            {
-                UserSettings.Instance.Source |= SearchSource.Library;
-            }
-            else
-            {
-                UserSettings.Instance.Source &= ~SearchSource.Library;
-            }
+            var settings = UserSettings.Instance;
+            settings.DebugLogEnabled = debugEnabled.Checked;
+            listener?.SelectionChanged(settings.DebugLogEnabled);
         }
 
-        private void audiobookCheckbox_CheckedChanged(object sender, EventArgs e)
+        private void OpenLogButtonClick(object sender, EventArgs e)
         {
-            if (audiobookCheckbox.Checked)
-            {
-                UserSettings.Instance.Source |= SearchSource.Audiobooks;
-            }
-            else
-            {
-                UserSettings.Instance.Source &= ~SearchSource.Audiobooks;
-            }
+            Process.Start(UserSettings.Instance.FullLogPath);
         }
 
-        private void inboxCheckbox_CheckedChanged(object sender, EventArgs e)
+        public interface IOnDebugSelectionChanged
         {
-            if (inboxCheckbox.Checked)
-            {
-                UserSettings.Instance.Source |= SearchSource.Inbox;
-            }
-            else
-            {
-                UserSettings.Instance.Source &= ~SearchSource.Inbox;
-            }
+            void SelectionChanged(bool enabled);
         }
 
-        private void podcastCheckbox_CheckedChanged(object sender, EventArgs e)
+        public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
         {
-            if (podcastCheckbox.Checked)
-            {
-                UserSettings.Instance.Source |= SearchSource.Podcasts;
-            }
-            else
-            {
-                UserSettings.Instance.Source &= ~SearchSource.Podcasts;
-            }
-        }
-
-        private void videoCheckbox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (videoCheckbox.Checked)
-            {
-                UserSettings.Instance.Source |= SearchSource.Videos;
-            }
-            else
-            {
-                UserSettings.Instance.Source &= ~SearchSource.Videos;
-            }
-
-            _logger.Debug($"Source in settings is -> {UserSettings.Instance.Source}");
+            this.listener = listener;
         }
     }
 }
