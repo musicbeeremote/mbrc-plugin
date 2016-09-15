@@ -10,3 +10,4 @@ Change Log
 -Adds settings button to easily open the log.
 -Makes the discovery listen to all available interfaces.
 -Adds new paginated API to enable library browsing.
+-Fixes an issue where the last.fm love status was the opposite of the expected.

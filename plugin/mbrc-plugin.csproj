@@ -180,7 +180,6 @@
     <Compile Include="AndroidRemote\Events\MessageEvent.cs" />
     <Compile Include="AndroidRemote\Interfaces\ICommand.cs" />
     <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
-    <Compile Include="AndroidRemote\Networking\HttpHandler.cs" />
     <Compile Include="AndroidRemote\Networking\Constants.cs" />
     <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
     <Compile Include="AndroidRemote\Utilities\IdGenerator.cs" />
