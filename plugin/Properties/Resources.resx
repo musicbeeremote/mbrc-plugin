@@ -132,4 +132,7 @@
   <data name="new_version">
     <value xml:space="preserve">There is a new Version of MusicBee Remote plugin</value>
   </data>
+  <data name="InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist" xml:space="preserve">
+    <value>Log file doesn't exist</value>
+  </data>
 </root>

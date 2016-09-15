@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
 
@@ -196,7 +198,15 @@ namespace MusicBeePlugin
 
         private void OpenLogButtonClick(object sender, EventArgs e)
         {
-            Process.Start(UserSettings.Instance.FullLogPath);
+            if (File.Exists(UserSettings.Instance.FullLogPath))
+            {
+                Process.Start(UserSettings.Instance.FullLogPath);
+            }
+            else
+            {
+                MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
+            }
+           
         }
 
         public interface IOnDebugSelectionChanged

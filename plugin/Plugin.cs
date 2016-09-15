@@ -115,7 +115,8 @@ namespace MusicBeePlugin
 #if DEBUG
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, LogLevel.Debug);
 #else
-            InitializeLoggingConfiguration((UserSettings.Instance.FullLogPath, LogLevel.Error);
+            var logLevel = UserSettings.Instance.DebugLogEnabled ? LogLevel.Debug : LogLevel.Error;
+            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
 
 
@@ -1601,19 +1602,20 @@ namespace MusicBeePlugin
         {
             var config = new LoggingConfiguration();
 
-            var fileTarget = new FileTarget()
+            var fileTarget = new FileTarget
             {
                 ArchiveAboveSize = 2097152,
                 ArchiveEvery = FileArchivePeriod.Day,
                 ArchiveNumbering = ArchiveNumberingMode.Rolling,
-                EnableArchiveFileCompression = true
+                MaxArchiveFiles = 5,
+                EnableArchiveFileCompression = true,
+                FileName = logFilePath,
+                Layout = "${longdate} [${level:uppercase=true}]${newline}" +
+                         "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
+                         "${message}${newline}" +
+                         "${when:when=length('${exception}') > 0: ${exception}${newline}}"
             };
 
-            fileTarget.FileName = logFilePath;
-            fileTarget.Layout = "${longdate} [${level:uppercase=true}]${newline}" +
-                                "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
-                                "${message}${newline}" +
-                                "${when:when=length('${exception}') > 0: ${exception}${newline}}";
 
 #if DEBUG
             var consoleTarget = new ColoredConsoleTarget();
