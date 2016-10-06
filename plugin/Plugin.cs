@@ -66,7 +66,8 @@ namespace MusicBeePlugin
         /// <summary>
         /// Returns the plugin instance (Singleton);
         /// </summary>
-        public static Plugin Instance { get; private set; }
+        public static Plugin
+        Instance { get; private set; }
 
         private InfoWindow _mWindow;
         private bool _userChangingShuffle;
@@ -300,7 +301,7 @@ namespace MusicBeePlugin
             {
                 case NotificationType.TrackChanged:
                     RequestNowPlayingTrackCover();
-                    RequestTrackRating(String.Empty, String.Empty);
+                    RequestTrackRating(string.Empty, string.Empty);
                     RequestLoveStatus("status", "all");
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
@@ -334,7 +335,7 @@ namespace MusicBeePlugin
                     if (_api.ApiRevision >= 17)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.NowPlayingLyricsChange,
-                            !String.IsNullOrEmpty(_api.NowPlaying_GetDownloadedLyrics())
+                            !string.IsNullOrEmpty(_api.NowPlaying_GetDownloadedLyrics())
                                 ? _api.NowPlaying_GetDownloadedLyrics()
                                 : "Lyrics Not Found"));
                     }
@@ -1656,6 +1657,52 @@ namespace MusicBeePlugin
         public void SelectionChanged(bool enabled)
         {
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, enabled ? LogLevel.Debug : LogLevel.Error);
+        }
+
+        /// <summary>
+        /// Gets a Page of playlists from the plugin api and sends it to the client that requested it.
+        /// </summary>
+        /// <param name="clientId">The id of the client performing the request</param>
+        /// <param name="offset">The starting position (zero based) of the dataset</param>
+        /// <param name="limit">The number of elements in the dataset</param>
+        public void GetAvailablePlaylistUrls(string clientId, int offset, int limit)
+        {
+            _api.Playlist_QueryPlaylists();
+            var playlists = new List<Playlist>();
+            while (true)
+            {
+                var url = _api.Playlist_QueryGetNextPlaylist();
+
+                if (string.IsNullOrEmpty(url))
+                {
+                    break;
+                }
+
+                var name = _api.Playlist_GetName(url);
+
+                var playlist = new Playlist
+                {
+                    Name = name,
+                    Url = url
+                };
+                playlists.Add(playlist);
+            }
+
+            var total = playlists.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.PlaylistList,
+                Data = new Page<Playlist>
+                {
+                    Data = offset > total ? new List<Playlist>() : playlists.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
         }
     }
 }
