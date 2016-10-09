@@ -66,7 +66,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     {
                         var data = (JsonObject) msg.Data;
                         client.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
-                        client.ClientProtocolVersion = data.Get<float>("protocol_version");
+                        client.ClientProtocolVersion = data.Get<int>("protocol_version");
                     }
 
                     EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));

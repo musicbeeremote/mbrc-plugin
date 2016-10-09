@@ -6,12 +6,15 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
     using System.Collections.Generic;
     using System.Linq;
     using Networking;
+
     /// <summary>
     /// Responsible for the client authentication. Keeps a list of the connected clients.
     /// </summary>
     public static class Authenticator
     {
-        private static readonly ConcurrentDictionary<string, SocketClient> ConnectedClients = new ConcurrentDictionary<string, SocketClient>(); 
+        private static readonly ConcurrentDictionary<string, SocketClient> ConnectedClients =
+            new ConcurrentDictionary<string, SocketClient>();
+
         /// <summary>
         /// Returns if a clients has passed the authentication stage and thus can receive data.
         /// </summary>
@@ -21,7 +24,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             bool authenticated = false;
             SocketClient client;
-            if(ConnectedClients.TryGetValue(clientId, out client))
+            if (ConnectedClients.TryGetValue(clientId, out client))
             {
                 authenticated = client.Authenticated;
             }
@@ -67,7 +70,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public static void AddClientOnConnect(string clientId)
         {
             SocketClient client;
-            if(ConnectedClients.ContainsKey(clientId))
+            if (ConnectedClients.ContainsKey(clientId))
             {
                 ConnectedClients.TryRemove(clientId, out client);
             }
@@ -98,10 +101,15 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var client = Client(clientId);
             var clientProtocolVersion = client?.ClientProtocolVersion
-                                        ?? (int)Constants.ProtocolVersion;
+                                        ?? (int) Constants.ProtocolVersion;
 
             return Math.Abs(clientProtocolVersion - Constants.ProtocolVersion) > 0;
         }
-            
+
+        public static int ClientProtocolVersion(string clientId)
+        {
+            var client = Client(clientId);
+            return client?.ClientProtocolVersion ?? 2;
+        }
     }
 }

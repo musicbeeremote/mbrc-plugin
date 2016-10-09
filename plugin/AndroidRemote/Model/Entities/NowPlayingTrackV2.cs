@@ -1,45 +1,41 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Entities
-{
+﻿using System.Runtime.Serialization;
+using MusicBeePlugin.AndroidRemote.Entities;
 
-    public class NowPlayingTrack : NowPlayingTrackBase
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
+{
+    [DataContract]
+    public class NowPlayingTrackV2 : NowPlayingTrackBase
     {
         private string _artist;
         private string _album;
 
-        public NowPlayingTrack(string artist, string title, string album, string year)
-        {
-            _artist = artist;
-            Title = title;
-            _album = album;
-            Year = year;
-        }
 
-        public NowPlayingTrack(string artist, string title)
-        {
-            _artist = artist;
-            Title = title;
-            _album = Year = string.Empty;
-        }
-
-        public NowPlayingTrack()
+        public NowPlayingTrackV2()
         {
             _artist = Title = _album = Year = string.Empty;
         }
 
+        [DataMember(Name = "artist")]
         public override string Artist
         {
             get { return _artist; }
             set { _artist = GetArtistText(value); }
         }
 
+        [DataMember(Name = "title")]
         public override string Title { get; set; }
 
+        [DataMember(Name = "album")]
         public override string Album
         {
             get { return _album; }
             set { _album = GetAlbumValue(value); }
         }
 
+        [DataMember(Name = "year")]
         public sealed override string Year { get; set; }
+
+        [DataMember(Name = "path")]
+        public string Path { get; set; }
     }
 }

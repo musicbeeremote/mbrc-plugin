@@ -79,6 +79,7 @@
             controller.AddCommand(Constants.LibraryBrowseArtists, typeof(RequestBrowseArtists));
             controller.AddCommand(Constants.LibraryBrowseAlbums, typeof(RequestBrowseAlbums));
             controller.AddCommand(Constants.LibraryBrowseTracks, typeof(RequestBrowseTracks));
+            controller.AddCommand(EventType.BroadcastEvent, typeof(BroadcastEventAvailable));
             #endregion
 
         }

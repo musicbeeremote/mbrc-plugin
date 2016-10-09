@@ -17,5 +17,6 @@
         public const string NowPlayingLyricsChange = "NowPlayingLyricsChange";
         public const string SocketStatusChange = "SocketStatusChange";
         public const string ShowFirstRunDialog = "ShowFirstRunDialog";
+        public const string BroadcastEvent = "BroadcastEvent";
     }
 }

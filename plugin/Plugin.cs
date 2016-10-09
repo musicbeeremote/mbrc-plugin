@@ -272,7 +272,7 @@ namespace MusicBeePlugin
         /// </summary>
         public void Uninstall()
         {
-            string settingsFolder = _api.Setting_GetPersistentStoragePath + "\\mb_remote";
+            var settingsFolder = _api.Setting_GetPersistentStoragePath + "\\mb_remote";
             if (Directory.Exists(settingsFolder))
             {
                 Directory.Delete(settingsFolder);
@@ -305,9 +305,13 @@ namespace MusicBeePlugin
                     RequestLoveStatus("status", "all");
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
-                    EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo())
-                            .ToJsonString()));
+
+                    var broadcastEvent = new BroadcastEvent();
+                    var socketMessage = new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());
+                    broadcastEvent.AddMessage(Constants.V2, socketMessage);
+                    var socketMessagev2 = new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2());
+                    broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+                    EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
                     break;
                 case NotificationType.VolumeLevelChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
@@ -356,7 +360,7 @@ namespace MusicBeePlugin
 
         private NowPlayingTrack GetTrackInfo()
         {
-            NowPlayingTrack nowPlayingTrack = new NowPlayingTrack
+            var nowPlayingTrack = new NowPlayingTrack
             {
                 Artist = _api.NowPlaying_GetFileTag(MetaDataType.Artist),
                 Album = _api.NowPlaying_GetFileTag(MetaDataType.Album),
@@ -364,6 +368,21 @@ namespace MusicBeePlugin
             };
             nowPlayingTrack.SetTitle(_api.NowPlaying_GetFileTag(MetaDataType.TrackTitle),
                 _api.NowPlaying_GetFileUrl());
+            return nowPlayingTrack;
+        }
+
+        private NowPlayingTrackV2 GetTrackInfoV2()
+        {
+            var fileUrl = _api.NowPlaying_GetFileUrl();
+            var nowPlayingTrack = new NowPlayingTrackV2
+            {
+                Artist = _api.NowPlaying_GetFileTag(MetaDataType.Artist),
+                Album = _api.NowPlaying_GetFileTag(MetaDataType.Album),
+                Year = _api.NowPlaying_GetFileTag(MetaDataType.Year),
+                Path = fileUrl
+            };
+            nowPlayingTrack.SetTitle(_api.NowPlaying_GetFileTag(MetaDataType.TrackTitle),
+                fileUrl);
             return nowPlayingTrack;
         }
 

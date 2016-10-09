@@ -36,7 +36,7 @@
         /// <summary>
         /// Represents the version of the protocol supported by the client.
         /// </summary>
-        public float ClientProtocolVersion { get; set; }
+        public int ClientProtocolVersion { get; set; }
 
         /// <summary>
         /// Represents if the client will receive broadcast actions from the service (like volume updates etc).

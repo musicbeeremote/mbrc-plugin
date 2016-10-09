@@ -9,7 +9,7 @@
         public const string Player = "player";
         public const string Protocol = "protocol";
         public const string PlayerName = "MusicBee";
-        public const float ProtocolVersion = 2.2f;
+        public const int ProtocolVersion = 3;
         public const string PluginVersion = "pluginversion";
         public const string NotAllowed = "notallowed";
         #endregion
@@ -70,7 +70,7 @@
 
         #endregion
 
-        #region Protocol 2.2
+        #region Protocol 3
 
         public const string PlaylistPlay = "playlistplay";
         public const string NoBroadcast = "nobroadcast";
@@ -82,5 +82,11 @@
         #endregion
 
 
+        #region ProtocolVersion
+
+        public const int V2 = 2;
+        public const int V3 = 3;
+
+        #endregion
     }
 }

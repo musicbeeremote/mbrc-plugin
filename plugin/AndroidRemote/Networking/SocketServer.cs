@@ -382,6 +382,39 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             worker?.Dispose();
         }
 
+
+        public void Broadcast(BroadcastEvent broadcastEvent)
+        {
+            _logger.Debug($"broadcasting message {broadcastEvent}");
+
+            try
+            {
+                foreach (var key in _availableWorkerSockets.Keys)
+                {
+                    Socket worker;
+                    if (!_availableWorkerSockets.TryGetValue(key, out worker)) continue;
+                    var isConnected = worker != null && worker.Connected;
+                    if(!isConnected)
+                    {
+                        RemoveDeadSocket(key);
+                        EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
+                    }
+
+                    if (!isConnected || !Authenticator.IsClientAuthenticated(key) ||
+                        !Authenticator.IsClientBroadcastEnabled(key)) continue;
+
+                    var clientProtocol = Authenticator.ClientProtocolVersion(key);
+                    var message = broadcastEvent.GetMessage(clientProtocol);
+                    var data = System.Text.Encoding.UTF8.GetBytes(message + NewLine);
+                    worker.Send(data);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "While sending message to all available clients");
+            }
+        }
+
         /// <summary>
         /// 
         /// </summary>

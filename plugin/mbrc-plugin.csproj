@@ -43,7 +43,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>0.13.0.1378</AssemblyVersion>
+    <AssemblyVersion>1.0.0.1412</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -101,6 +101,7 @@
     <Compile Include="AndroidRemote\Commands\InstaReplies\HandlePong.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\PingReply.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\ProcessInitRequest.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\BroadcastEventAvailable.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\RestartSocketCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\ShowFirstRunDialogCommand.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\SocketStatusChanged.cs" />
@@ -161,12 +162,15 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs" />
     <Compile Include="AndroidRemote\configuration.cs" />
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
+    <Compile Include="AndroidRemote\Events\BroadcastEvent.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Album.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Artist.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Genre.cs" />
     <Compile Include="AndroidRemote\Model\Entities\MetaData.cs" />
     <Compile Include="AndroidRemote\Model\Entities\NowPlaying.cs" />
     <Compile Include="AndroidRemote\Model\Entities\NowPlayingListTrack.cs" />
+    <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackBase.cs" />
+    <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackV2.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Page.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Playlist.cs" />
     <Compile Include="AndroidRemote\Model\Entities\SocketMessage.cs" />
@@ -256,6 +260,7 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
