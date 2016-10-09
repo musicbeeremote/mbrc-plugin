@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Timers;
 using System.Windows.Forms;
@@ -67,7 +68,7 @@ namespace MusicBeePlugin
         /// Returns the plugin instance (Singleton);
         /// </summary>
         public static Plugin
-        Instance { get; private set; }
+            Instance { get; private set; }
 
         private InfoWindow _mWindow;
         private bool _userChangingShuffle;
@@ -318,7 +319,7 @@ namespace MusicBeePlugin
                         new SocketMessage(Constants.PlayerVolume,
                         ((int)
                             Math.Round(
-                                _api.Player_GetVolume()*100,
+                                _api.Player_GetVolume() * 100,
                                 1))).ToJsonString()));
                     break;
                 case NotificationType.VolumeMuteChanged:
@@ -444,13 +445,13 @@ namespace MusicBeePlugin
         {
             if (volume >= 0)
             {
-                _api.Player_SetVolume((float) volume/100);
+                _api.Player_SetVolume((float) volume / 100);
             }
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerVolume,
-                        ((int) Math.Round(_api.Player_GetVolume()*100, 1))).ToJsonString()));
+                        ((int) Math.Round(_api.Player_GetVolume() * 100, 1))).ToJsonString()));
 
             if (_api.Player_GetMute())
             {
@@ -1015,7 +1016,7 @@ namespace MusicBeePlugin
                     : GetShuffleState(),
                 [Constants.PlayerScrobble] = _api.Player_GetScrobbleEnabled(),
                 [Constants.PlayerState] = _api.Player_GetPlayState().ToString(),
-                [Constants.PlayerVolume] = ((int) Math.Round(_api.Player_GetVolume()*100, 1)).ToString(
+                [Constants.PlayerVolume] = ((int) Math.Round(_api.Player_GetVolume() * 100, 1)).ToString(
                     CultureInfo.InvariantCulture)
             };
 
@@ -1029,9 +1030,13 @@ namespace MusicBeePlugin
         /// <param name="clientId"></param>
         public void RequestTrackInfo(string clientId)
         {
-            EventBus.FireEvent(new MessageEvent(
-                EventType.ReplyAvailable,
-                new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo()).ToJsonString(), clientId));
+            var protocolVersion = Authenticator.ClientProtocolVersion(clientId);
+            var message = protocolVersion > 2
+                ? new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2())
+                : new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());
+
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
         }
 
 
