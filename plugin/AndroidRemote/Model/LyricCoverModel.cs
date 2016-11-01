@@ -13,7 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
     {
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-         
+
 
         private string _xHash;
         private string _lyrics;
@@ -22,7 +22,6 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         private LyricCoverModel()
         {
-            
         }
 
         public void SetCover(string base64)
@@ -39,9 +38,9 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 : Utilities.Utilities.ImageResize(base64);
             _xHash = hash;
 
-            EventBus.FireEvent(
-                    new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingCover, Cover).ToJsonString()));
+            var jsonString = new SocketMessage(Constants.NowPlayingCover, Cover).ToJsonString();
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, jsonString);
+            EventBus.FireEvent(messageEvent);
         }
 
         public string Cover { get; private set; }

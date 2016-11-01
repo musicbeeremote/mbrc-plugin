@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System.Diagnostics;
+using System.Threading;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
 {
@@ -8,31 +9,34 @@ namespace MusicBeePlugin.AndroidRemote.Controller
  
     internal class Controller
     {
-        private readonly Dictionary<string, Type> commandMap; 
+        private readonly Dictionary<string, Type> _commandMap;
 
-        private static readonly Controller ClassInstance = new Controller();
-
-        public static Controller Instance
-        {
-            get { return ClassInstance; }
-        }
+        public static Controller Instance { get; } = new Controller();
 
         public void AddCommand(string eventType,Type command)
         {
-            if (commandMap.ContainsKey(eventType)) return;
-            commandMap.Add(eventType,command);
+            if (_commandMap.ContainsKey(eventType)) return;
+            _commandMap.Add(eventType,command);
         }
 
         public void RemoveCommand(string eventType)
         {
-            if (commandMap.ContainsKey(eventType))
-                commandMap.Remove(eventType);    
+            if (_commandMap.ContainsKey(eventType))
+                _commandMap.Remove(eventType);    
         }
 
         public void CommandExecute(IEvent e)
         {
-            if (!commandMap.ContainsKey(e.Type)) return;
-            var commandType = commandMap[e.Type];
+            if (e?.Type == null)
+            {
+#if DEBUG
+                Debug.WriteLine("failed to execute command due to missing type/or event");
+#endif
+                return;
+            }
+
+            if (!_commandMap.ContainsKey(e.Type)) return;
+            var commandType = _commandMap[e.Type];
             var command = (ICommand) Activator.CreateInstance(commandType);
             try
             {
@@ -47,7 +51,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
 
         private Controller()
         {
-            commandMap = new Dictionary<string, Type>();
+            _commandMap = new Dictionary<string, Type>();
         }
     }
 }

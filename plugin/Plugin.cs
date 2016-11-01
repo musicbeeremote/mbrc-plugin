@@ -9,6 +9,7 @@ using System.Timers;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
+using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
@@ -290,6 +291,33 @@ namespace MusicBeePlugin
             //UserSettings.SaveSettings("mbremote");
         }
 
+        public static void BroadcastCover(string cover)
+        {
+            var payload = new CoverPayload(cover, false);
+            var broadcastEvent = new BroadcastEvent();
+            var socketMessage = new SocketMessage(Constants.NowPlayingCover, cover);
+            broadcastEvent.AddMessage(Constants.V2, socketMessage);
+            var socketMessagev2 = new SocketMessage(Constants.NowPlayingCover, payload);
+            broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+            EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
+        }
+
+        public static void BroadcastLyrics(string lyrics)
+        {
+            var old = !string.IsNullOrEmpty(lyrics)
+                ? lyrics
+                : "Lyrics Not Found";
+
+            var lyricsPayload = new LyricsPayload(lyrics);
+
+            var broadcastEvent = new BroadcastEvent();
+            var socketMessage = new SocketMessage(Constants.NowPlayingLyrics, old);
+            broadcastEvent.AddMessage(Constants.V2, socketMessage);
+            var socketMessagev2 = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
+            broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+            EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
+        }
+
         /// <summary>
         /// Receives event Notifications from MusicBee. It is only required if the about.ReceiveNotificationFlags = PlayerEvents.
         /// </summary>
@@ -339,17 +367,13 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingLyricsReady:
                     if (_api.ApiRevision >= 17)
                     {
-                        EventBus.FireEvent(new MessageEvent(EventType.NowPlayingLyricsChange,
-                            !string.IsNullOrEmpty(_api.NowPlaying_GetDownloadedLyrics())
-                                ? _api.NowPlaying_GetDownloadedLyrics()
-                                : "Lyrics Not Found"));
+                        BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics());
                     }
                     break;
                 case NotificationType.NowPlayingArtworkReady:
                     if (_api.ApiRevision >= 17)
                     {
-                        EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
-                            _api.NowPlaying_GetDownloadedArtwork()));
+                        BroadcastCover(_api.NowPlaying_GetDownloadedArtwork());
                     }
                     break;
                 case NotificationType.NowPlayingListChanged:
@@ -789,8 +813,8 @@ namespace MusicBeePlugin
                     _api.Player_SetPosition(newPosition);
                 }
             }
-            int currentPosition = _api.Player_GetPosition();
-            int totalDuration = _api.NowPlaying_GetDuration();
+            var currentPosition = _api.Player_GetPosition();
+            var totalDuration = _api.NowPlaying_GetDuration();
 
             var position = new
             {
