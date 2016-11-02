@@ -14,13 +14,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             Plugin.Instance.RequestTrackRating("-1", eEvent.ClientId);
             Plugin.Instance.RequestLoveStatus(eEvent.DataToString(), eEvent.ClientId);
             Plugin.Instance.RequestPlayerStatus(eEvent.ClientId);
-            
-
-            var cover =
-                new SocketMessage(Constants.NowPlayingCover, LyricCoverModel.Instance.Cover)
-                    .ToJsonString();
-            SocketServer.Instance.Send(cover, eEvent.ClientId);
-            SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, LyricCoverModel.Instance.Lyrics).ToJsonString(), eEvent.ClientId);
+            Plugin.BroadcastCover(LyricCoverModel.Instance.Cover);
+            Plugin.BroadcastLyrics(LyricCoverModel.Instance.Lyrics);
         }
     }
 }

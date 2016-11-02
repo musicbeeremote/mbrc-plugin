@@ -11,7 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands
             Status = string.IsNullOrEmpty(lyrics) ? NotFound : Success;
         }
 
-        public const int Reading = 1;
+        public const int Retrieving = 1;
         public const int NotFound = 404;
         public const int Success = 200;
 

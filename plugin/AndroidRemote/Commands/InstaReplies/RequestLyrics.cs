@@ -1,3 +1,5 @@
+using MusicBeePlugin.AndroidRemote.Utilities;
+
 namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 {
     using Entities;
@@ -5,7 +7,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
     using Interfaces;
     using Networking;
 
-    class RequestLyrics : ICommand
+    internal class RequestLyrics : ICommand
     {
         public void Dispose()
         {
@@ -14,7 +16,16 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, LyricCoverModel.Instance.Lyrics).ToJsonString(), eEvent.ClientId);
+            if (Authenticator.ClientProtocolVersion(eEvent.ClientId) > 2)
+            {
+                var lyricsPayload = new LyricsPayload(LyricCoverModel.Instance.Lyrics);
+                SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload).ToJsonString(), eEvent.ClientId);
+            }
+            else
+            {
+                SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, LyricCoverModel.Instance.Lyrics).ToJsonString(), eEvent.ClientId);
+            }
+
         }
     }
 }

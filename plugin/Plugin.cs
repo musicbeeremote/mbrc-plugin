@@ -302,16 +302,27 @@ namespace MusicBeePlugin
             EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
         }
 
-        public static void BroadcastLyrics(string lyrics)
+        public static void BroadcastLyrics(string lyrics, bool retrieving = false)
         {
-            var old = !string.IsNullOrEmpty(lyrics)
-                ? lyrics
-                : "Lyrics Not Found";
+            string versionTwoData;
+            if (!string.IsNullOrEmpty(lyrics))
+            {
+                versionTwoData = lyrics;
+            }
+            else
+            {
+                versionTwoData = retrieving ? "Retrieving Lyrics" : "Lyrics Not Found";
+            }
 
             var lyricsPayload = new LyricsPayload(lyrics);
 
+            if (retrieving && string.IsNullOrEmpty(lyrics))
+            {
+                lyricsPayload.Status = LyricsPayload.Retrieving;
+            }
+
             var broadcastEvent = new BroadcastEvent();
-            var socketMessage = new SocketMessage(Constants.NowPlayingLyrics, old);
+            var socketMessage = new SocketMessage(Constants.NowPlayingLyrics, versionTwoData);
             broadcastEvent.AddMessage(Constants.V2, socketMessage);
             var socketMessagev2 = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
             broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
@@ -367,13 +378,15 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingLyricsReady:
                     if (_api.ApiRevision >= 17)
                     {
-                        BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics());
+                        EventBus.FireEvent(new MessageEvent(EventType.NowPlayingLyricsChange,
+                            _api.NowPlaying_GetDownloadedLyrics()));
                     }
                     break;
                 case NotificationType.NowPlayingArtworkReady:
                     if (_api.ApiRevision >= 17)
                     {
-                        BroadcastCover(_api.NowPlaying_GetDownloadedArtwork());
+                        EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
+                            _api.NowPlaying_GetDownloadedArtwork()));
                     }
                     break;
                 case NotificationType.NowPlayingListChanged:
@@ -753,25 +766,15 @@ namespace MusicBeePlugin
         {
             if (!string.IsNullOrEmpty(_api.NowPlaying_GetLyrics()))
             {
-                EventBus.FireEvent(
-                    new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingLyrics,
-                            _api.NowPlaying_GetLyrics()).ToJsonString()));
+                BroadcastLyrics(_api.NowPlaying_GetLyrics());
             }
             else if (_api.ApiRevision >= 17)
             {
-                var lyrics = _api.NowPlaying_GetDownloadedLyrics();
-                EventBus.FireEvent(
-                    new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingLyrics,
-                            !string.IsNullOrEmpty(lyrics) ? lyrics : "Retrieving Lyrics").ToJsonString()));
+                BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics(), true);
             }
             else
             {
-                EventBus.FireEvent(
-                    new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.NowPlayingLyrics,
-                            "Lyrics Not Found").ToJsonString()));
+                BroadcastLyrics(string.Empty);
             }
         }
 

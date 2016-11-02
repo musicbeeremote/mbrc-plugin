@@ -38,9 +38,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 : Utilities.Utilities.ImageResize(base64);
             _xHash = hash;
 
-            var jsonString = new SocketMessage(Constants.NowPlayingCover, Cover).ToJsonString();
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, jsonString);
-            EventBus.FireEvent(messageEvent);
+            Plugin.BroadcastCover(Cover);
         }
 
         public string Cover { get; private set; }
@@ -63,7 +61,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     //lStr = lStr.Replace("\n", "&lt;br&gt;");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
                     var regEx = new Regex(pattern);
-                    _lyrics = SecurityElement.Escape(regEx.Replace(lStr, String.Empty));
+                    _lyrics = SecurityElement.Escape(regEx.Replace(lStr, string.Empty));
                 }
                 catch (Exception ex)
                 {
@@ -72,10 +70,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 }
                 finally
                 {
-                    if (!string.IsNullOrEmpty(_lyrics))
-                        EventBus.FireEvent(
-                            new MessageEvent(EventType.ReplyAvailable,
-                                new SocketMessage(Constants.NowPlayingLyrics, _lyrics).ToJsonString()));
+                    Plugin.BroadcastLyrics(_lyrics);
                 }
             }
             get { return _lyrics; }
