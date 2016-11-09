@@ -1,23 +1,21 @@
 using System.Collections.Generic;
 using System.Linq;
+using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Entities;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
     public class BroadcastEvent
     {
-        public BroadcastEvent()
+        private readonly string _content;
+
+        public BroadcastEvent(string content)
         {
+            _content = content;
             BroadcastMessages = new Dictionary<int, SocketMessage>();
         }
 
         private Dictionary<int, SocketMessage> BroadcastMessages { get; }
-
-
-        public void AddMessage(int version, SocketMessage message)
-        {
-            BroadcastMessages.Add(version, message);
-        }
 
         public string GetMessage(int clientVersion)
         {
@@ -37,6 +35,18 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             SocketMessage message;
             var retrieved = BroadcastMessages.TryGetValue(messageApi, out message);
             return retrieved ? message.ToJsonString() : string.Empty;
+        }
+
+        public void addPayload(int apiVersion, object payload)
+        {
+            var socketMessage = new SocketMessage(_content, payload);
+            BroadcastMessages.Add(apiVersion, socketMessage);
+        }
+
+        public override string ToString()
+        {
+            var messages = string.Join(";", BroadcastMessages.Select(x => x.Key + "=" + x.Value));
+            return $"{nameof(BroadcastMessages)}: {messages}, {nameof(_content)}: {_content}";
         }
     }
 }

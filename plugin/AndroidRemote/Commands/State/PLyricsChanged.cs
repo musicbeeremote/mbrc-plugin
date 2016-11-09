@@ -1,7 +1,7 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.State
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
-    using MusicBeePlugin.AndroidRemote.Model;
+    using Interfaces;
+    using Model;
 
     /// <summary>
     /// 

@@ -49,5 +49,10 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         {
             return JsonSerializer.SerializeToString(this);
         }
+
+        public override string ToString()
+        {
+            return JsonSerializer.SerializeToString(this);
+        }
     }
 }

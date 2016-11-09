@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Timers;
 using System.Windows.Forms;
@@ -294,38 +293,21 @@ namespace MusicBeePlugin
         public static void BroadcastCover(string cover)
         {
             var payload = new CoverPayload(cover, false);
-            var broadcastEvent = new BroadcastEvent();
-            var socketMessage = new SocketMessage(Constants.NowPlayingCover, cover);
-            broadcastEvent.AddMessage(Constants.V2, socketMessage);
-            var socketMessagev2 = new SocketMessage(Constants.NowPlayingCover, payload);
-            broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+            var broadcastEvent = new BroadcastEvent(Constants.NowPlayingCover);
+            broadcastEvent.addPayload(Constants.V2, cover);
+            broadcastEvent.addPayload(Constants.V3, payload);
             EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
         }
 
-        public static void BroadcastLyrics(string lyrics, bool retrieving = false)
+        public static void BroadcastLyrics(string lyrics)
         {
-            string versionTwoData;
-            if (!string.IsNullOrEmpty(lyrics))
-            {
-                versionTwoData = lyrics;
-            }
-            else
-            {
-                versionTwoData = retrieving ? "Retrieving Lyrics" : "Lyrics Not Found";
-            }
+            var versionTwoData = !string.IsNullOrEmpty(lyrics) ? lyrics : "Lyrics Not Found";
 
             var lyricsPayload = new LyricsPayload(lyrics);
 
-            if (retrieving && string.IsNullOrEmpty(lyrics))
-            {
-                lyricsPayload.Status = LyricsPayload.Retrieving;
-            }
-
-            var broadcastEvent = new BroadcastEvent();
-            var socketMessage = new SocketMessage(Constants.NowPlayingLyrics, versionTwoData);
-            broadcastEvent.AddMessage(Constants.V2, socketMessage);
-            var socketMessagev2 = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
-            broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+            var broadcastEvent = new BroadcastEvent(Constants.NowPlayingLyrics);
+            broadcastEvent.addPayload(Constants.V2, versionTwoData);
+            broadcastEvent.addPayload(Constants.V3, lyricsPayload);
             EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
         }
 
@@ -346,11 +328,9 @@ namespace MusicBeePlugin
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
 
-                    var broadcastEvent = new BroadcastEvent();
-                    var socketMessage = new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());
-                    broadcastEvent.AddMessage(Constants.V2, socketMessage);
-                    var socketMessagev2 = new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2());
-                    broadcastEvent.AddMessage(Constants.V3, socketMessagev2);
+                    var broadcastEvent = new BroadcastEvent(Constants.NowPlayingTrack);
+                    broadcastEvent.addPayload(Constants.V2, GetTrackInfo());
+                    broadcastEvent.addPayload(Constants.V3, GetTrackInfoV2());
                     EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
                     break;
                 case NotificationType.VolumeLevelChanged:
@@ -770,7 +750,7 @@ namespace MusicBeePlugin
             }
             else if (_api.ApiRevision >= 17)
             {
-                BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics(), true);
+                BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics());
             }
             else
             {
@@ -785,7 +765,7 @@ namespace MusicBeePlugin
         /// </summary>
         public void RequestNowPlayingTrackCover()
         {
-            if (!String.IsNullOrEmpty(_api.NowPlaying_GetArtwork()))
+            if (!string.IsNullOrEmpty(_api.NowPlaying_GetArtwork()))
             {
                 EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
                     _api.NowPlaying_GetArtwork()));
@@ -794,7 +774,7 @@ namespace MusicBeePlugin
             {
                 var cover = _api.NowPlaying_GetDownloadedArtwork();
                 EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
-                    !String.IsNullOrEmpty(cover) ? cover : String.Empty));
+                    !string.IsNullOrEmpty(cover) ? cover : string.Empty));
             }
             else
             {

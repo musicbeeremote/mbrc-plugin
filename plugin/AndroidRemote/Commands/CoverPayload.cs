@@ -35,5 +35,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands
 
         [DataMember(Name = "cover")]
         public string Cover { get; set; }
+
+        public override string ToString()
+        {
+            return $"{nameof(Status)}: {Status}";
+        }
     }
 }
