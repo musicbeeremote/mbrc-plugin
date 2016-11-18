@@ -78,6 +78,7 @@
         public const string LibraryBrowseArtists = "browseartists";
         public const string LibraryBrowseAlbums = "browsealbums";
         public const string LibraryBrowseTracks = "browsetracks";
+        public const string NowPlayingQueue = "nowplayingqueue";
 
         #endregion
 
@@ -88,5 +89,7 @@
         public const int V3 = 3;
 
         #endregion
+
+
     }
 }

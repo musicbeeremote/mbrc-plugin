@@ -33,7 +33,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 try
                 {
                     msgList.AddRange(from msg
-                        in incomingMessage.Replace("\0", "")
+                        in incomingMessage
                             .Split(new[] {"\r\n"},
                                 StringSplitOptions.RemoveEmptyEntries)
                         where !msg.Equals("\n")

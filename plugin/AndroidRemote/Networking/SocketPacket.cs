@@ -1,4 +1,6 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Networking
+﻿using System.Text;
+
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     using System.Net.Sockets;
 
@@ -17,6 +19,7 @@
         {
             MCurrentSocket = socket;
             ClientId = clientId;
+            Partial = new StringBuilder();
         }
 
         /// <summary>
@@ -30,10 +33,11 @@
         public string ClientId { get; private set; }
 
         // Buffer to store the data sent by the client
-        private byte[] dataBuffer = new byte[1024];
         /// <summary>
         /// 
         /// </summary>
-        public byte[] DataBuffer { get { return dataBuffer; } set { dataBuffer = value; } }
+        public byte[] DataBuffer { get; set; } = new byte[1024];
+
+        public StringBuilder Partial { get; private set; }
     }
 }

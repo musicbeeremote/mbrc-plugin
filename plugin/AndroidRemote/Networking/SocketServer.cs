@@ -22,7 +22,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         private readonly ProtocolHandler _handler;
 
-        private readonly ConcurrentDictionary<string, Socket> _availableWorkerSockets;  
+        private readonly ConcurrentDictionary<string, Socket> _availableWorkerSockets;
 
         /// <summary>
         /// The main socket. This is the Socket that listens for new client connections.
@@ -80,7 +80,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 if (!_availableWorkerSockets.TryRemove(clientId, out workerSocket)) return;
                 workerSocket.Close();
                 workerSocket.Dispose();
-                
             }
             catch (Exception ex)
             {
@@ -138,7 +137,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 IsRunning = true;
 
                 _pingTimer = new Timer(15000);
-                _pingTimer.Elapsed +=  PingTimerOnElapsed;
+                _pingTimer.Elapsed += PingTimerOnElapsed;
                 _pingTimer.Enabled = true;
             }
             catch (SocketException se)
@@ -176,7 +175,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 // Validate If client should connect.
                 var ipAddress = ((IPEndPoint) workerSocket.RemoteEndPoint).Address;
                 var ipString = ipAddress.ToString();
-                
+
                 var isAllowed = false;
                 switch (UserSettings.Instance.FilterSelection)
                 {
@@ -191,9 +190,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         break;
                     case FilteringSelection.Range:
                         var connectingAddress = ipString.Split(".".ToCharArray(),
-                                                                   StringSplitOptions.RemoveEmptyEntries);
+                            StringSplitOptions.RemoveEmptyEntries);
                         var baseIp = UserSettings.Instance.BaseIp.Split(".".ToCharArray(),
-                                                                             StringSplitOptions.RemoveEmptyEntries);
+                            StringSplitOptions.RemoveEmptyEntries);
                         if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
                             connectingAddress[2] == baseIp[2])
                         {
@@ -214,7 +213,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 if (!isAllowed)
                 {
-                    workerSocket.Send(System.Text.Encoding.UTF8.GetBytes(new SocketMessage(Constants.NotAllowed,string.Empty).ToJsonString()));
+                    workerSocket.Send(
+                        System.Text.Encoding.UTF8.GetBytes(
+                            new SocketMessage(Constants.NotAllowed, string.Empty).ToJsonString()));
                     workerSocket.Close();
                     _logger.Debug($"Client {ipString} was force disconnected IP was not in the allowed addresses");
                     _mainSocket.BeginAccept(OnClientConnect, null);
@@ -233,15 +234,17 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
-                _logger.Debug($"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnection: Socket has been closed\n");
+                _logger.Debug(
+                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnection: Socket has been closed\n");
             }
             catch (SocketException se)
             {
-                _logger.Debug(se,"On client connect" );
+                _logger.Debug(se, "On client connect");
             }
             catch (Exception ex)
             {
-                _logger.Debug($"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnect Exception : {ex.Message}\n");
+                _logger.Debug(
+                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnect Exception : {ex.Message}\n");
             }
             finally
             {
@@ -254,14 +257,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 catch (Exception e)
                 {
                     _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
-                                    $" : OnClientConnect Exception : " + e.Message + "\n");
-
+                                  $" : OnClientConnect Exception : " + e.Message + "\n");
                 }
             }
         }
 
         // Start waiting for data from the client
-        private void WaitForData(Socket socket, string clientId)
+        private void WaitForData(Socket socket, string clientId, SocketPacket packet = null)
         {
             try
             {
@@ -273,10 +275,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     _workerCallback = OnDataReceived;
                 }
 
-                var socketPacket = new SocketPacket(socket, clientId);
+                var socketPacket = packet ?? new SocketPacket(socket, clientId);
 
                 socket.BeginReceive(socketPacket.DataBuffer, 0, socketPacket.DataBuffer.Length, SocketFlags.None,
-                                    _workerCallback, socketPacket);
+                    _workerCallback, socketPacket);
             }
             catch (SocketException se)
             {
@@ -308,27 +310,40 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 var decoder = System.Text.Encoding.UTF8.GetDecoder();
 
                 decoder.GetChars(socketData.DataBuffer, 0, iRx, chars, 0);
-                if(chars.Length==1&&chars[0]==0)
+                if (chars.Length == 1 && chars[0] == 0)
                 {
                     socketData.MCurrentSocket.Close();
                     socketData.MCurrentSocket.Dispose();
                     return;
                 }
-                var message = new string(chars);
+                var message = new string(chars).Replace("\0", "");
 
                 if (string.IsNullOrEmpty(message))
                     return;
-                
-                _handler.ProcessIncomingMessage(message,socketData.ClientId);
-                
+
+                if (!message.EndsWith("\r\n"))
+                {
+                    socketData.Partial.Append(message);
+                    WaitForData(socketData.MCurrentSocket, socketData.ClientId, socketData);
+                    return;
+                }
+
+                if (socketData.Partial.Length > 0)
+                {
+                    message = socketData.Partial.Append(message).ToString();
+                    socketData.Partial.Clear();
+                }
+
+                _handler.ProcessIncomingMessage(message, socketData.ClientId);
+
                 // Continue the waiting for data on the Socket.
-                WaitForData(socketData.MCurrentSocket, socketData.ClientId);
+                WaitForData(socketData.MCurrentSocket, socketData.ClientId, socketData);
             }
             catch (ObjectDisposedException)
             {
                 EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, clientId));
                 _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
-                                $" : OnDataReceived: Socket has been closed\n");
+                              $" : OnDataReceived: Socket has been closed\n");
             }
             catch (SocketException se)
             {
@@ -341,7 +356,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 else
                 {
-                   _logger.Error(se, "On DataReceive");
+                    _logger.Error(se, "On DataReceive");
                 }
             }
         }
@@ -355,7 +370,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             _logger.Debug($"sending-{clientId}:{message}");
 
-            if(clientId.Equals("all"))
+            if (clientId.Equals("all"))
             {
                 Send(message);
                 return;
@@ -364,7 +379,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             {
                 var data = System.Text.Encoding.UTF8.GetBytes(message + NewLine);
                 Socket wSocket;
-                if(_availableWorkerSockets.TryGetValue(clientId,out wSocket))
+                if (_availableWorkerSockets.TryGetValue(clientId, out wSocket))
                 {
                     wSocket.Send(data);
                 }
@@ -394,7 +409,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     Socket worker;
                     if (!_availableWorkerSockets.TryGetValue(key, out worker)) continue;
                     var isConnected = worker != null && worker.Connected;
-                    if(!isConnected)
+                    if (!isConnected)
                     {
                         RemoveDeadSocket(key);
                         EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
@@ -432,12 +447,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     Socket worker;
                     if (!_availableWorkerSockets.TryGetValue(key, out worker)) continue;
                     var isConnected = (worker != null && worker.Connected);
-                    if(!isConnected)
+                    if (!isConnected)
                     {
                         RemoveDeadSocket(key);
                         EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
                     }
-                    if (isConnected && Authenticator.IsClientAuthenticated(key) && Authenticator.IsClientBroadcastEnabled(key))
+                    if (isConnected && Authenticator.IsClientAuthenticated(key) &&
+                        Authenticator.IsClientBroadcastEnabled(key))
                     {
                         worker.Send(data);
                     }

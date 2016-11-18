@@ -1522,21 +1522,7 @@ namespace MusicBeePlugin
         public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
             var trackList = tag != MetaTag.title ? GetUrlsForTag(tag, query) : new[] {query};
-
-            switch (queue)
-            {
-                case QueueType.Next:
-                    _api.NowPlayingList_QueueFilesNext(trackList);
-                    break;
-                case QueueType.Last:
-                    _api.NowPlayingList_QueueFilesLast(trackList);
-                    break;
-                case QueueType.PlayNow:
-                    _api.NowPlayingList_Clear();
-                    _api.NowPlayingList_QueueFilesLast(trackList);
-                    _api.NowPlayingList_PlayNow(trackList[0]);
-                    break;
-            }
+            QueueFiles(queue, trackList);
         }
 
         /// <summary>
@@ -1734,6 +1720,23 @@ namespace MusicBeePlugin
             };
             var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
             EventBus.FireEvent(messageEvent);
+        }
+
+        public bool QueueFiles(QueueType queue, string[] data)
+        {
+            switch (queue)
+            {
+                case QueueType.Next:
+                    return _api.NowPlayingList_QueueFilesNext(data);
+                case QueueType.Last:
+                    return _api.NowPlayingList_QueueFilesLast(data);
+                case QueueType.PlayNow:
+                    _api.NowPlayingList_Clear();
+                    _api.NowPlayingList_QueueFilesLast(data);
+                    return _api.NowPlayingList_PlayNow(data[0]);
+                default:
+                    return false;
+            }
         }
     }
 }

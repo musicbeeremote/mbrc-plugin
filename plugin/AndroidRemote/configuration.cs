@@ -64,7 +64,7 @@
             controller.AddCommand(Constants.LibraryAlbumTracks, typeof(RequestLibAlbumTracks));
             controller.AddCommand(Constants.LibraryGenreArtists, typeof(RequestLibGenreArtists));
 
-#region 2.1 protocol additions
+            #region Protocol 2.1
             controller.AddCommand(Constants.Pong, typeof(HandlePong));
             controller.AddCommand(Constants.Ping, typeof(PingReply));
             controller.AddCommand(Constants.Init, typeof(ProcessInitRequest));
@@ -73,13 +73,14 @@
 
             #endregion
 
-            #region 2.2 protocol additions
+            #region Protocol 3
             controller.AddCommand(Constants.PlaylistPlay, typeof(RequestPlaylistPlay));
             controller.AddCommand(Constants.LibraryBrowseGenres, typeof(RequestBrowseGenres));
             controller.AddCommand(Constants.LibraryBrowseArtists, typeof(RequestBrowseArtists));
             controller.AddCommand(Constants.LibraryBrowseAlbums, typeof(RequestBrowseAlbums));
             controller.AddCommand(Constants.LibraryBrowseTracks, typeof(RequestBrowseTracks));
             controller.AddCommand(EventType.BroadcastEvent, typeof(BroadcastEventAvailable));
+            controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowplayingQueue));
             #endregion
 
         }
