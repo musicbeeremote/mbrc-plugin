@@ -53,6 +53,7 @@ namespace MusicBeePlugin
             this.saveButton = new System.Windows.Forms.Button();
             this.debugEnabled = new System.Windows.Forms.CheckBox();
             this.openLogButton = new System.Windows.Forms.Button();
+            this.firewallCheckbox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).BeginInit();
             this.SuspendLayout();
@@ -319,11 +320,22 @@ namespace MusicBeePlugin
             this.openLogButton.UseVisualStyleBackColor = true;
             this.openLogButton.Click += new System.EventHandler(this.OpenLogButtonClick);
             // 
+            // firewallCheckbox
+            // 
+            this.firewallCheckbox.AutoSize = true;
+            this.firewallCheckbox.Location = new System.Drawing.Point(208, 270);
+            this.firewallCheckbox.Name = "firewallCheckbox";
+            this.firewallCheckbox.Size = new System.Drawing.Size(99, 17);
+            this.firewallCheckbox.TabIndex = 38;
+            this.firewallCheckbox.Text = "Update Firewall";
+            this.firewallCheckbox.UseVisualStyleBackColor = true;
+            // 
             // InfoWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(452, 339);
+            this.Controls.Add(this.firewallCheckbox);
             this.Controls.Add(this.openLogButton);
             this.Controls.Add(this.debugEnabled);
             this.Controls.Add(this.saveButton);
@@ -390,5 +402,6 @@ namespace MusicBeePlugin
         private System.Windows.Forms.Button saveButton;
         private System.Windows.Forms.CheckBox debugEnabled;
         private System.Windows.Forms.Button openLogButton;
+        private System.Windows.Forms.CheckBox firewallCheckbox;
     }
 }

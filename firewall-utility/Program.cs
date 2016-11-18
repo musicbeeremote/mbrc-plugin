@@ -12,15 +12,6 @@
     /// </summary>
     internal class Program
     {
-        /// <summary>
-        ///     This is the HTTP port argument identifier.
-        /// </summary>
-        private const string Http = "-h";
-
-        /// <summary>
-        ///     The name of the HTTP rule.
-        /// </summary>
-        private const string HttpRule = "MusicBee Remote: HTTP Port";
 
         /// <summary>
         ///     This is the socket port argument identifier.
@@ -30,7 +21,7 @@
         /// <summary>
         ///     The name of the socket rule.
         /// </summary>
-        private const string SocketRule = "MusicBee Remote: Websocket Port";
+        private const string SocketRule = "MusicBee Remote: Listening Port";
 
         /// <summary>
         ///     Creates a firewall rule.
@@ -101,30 +92,23 @@
         {
             var dictionary = new Dictionary<string, int>();
 
-            if (args.Length == 4)
+            if (args.Length == 2)
             {
-                for (var i = 0; i < args.Length; i += 2)
-                {
-                    var key = args[i];
-                    int val;
-                    int.TryParse(args[i + 1], out val);
-                    dictionary.Add(key, val);
-                }
+                var key = args[0];
+                int val;
+                int.TryParse(args[0 + 1], out val);
+                dictionary.Add(key, val);
 
-                int httpPort;
                 int socketPort;
-                if (dictionary.TryGetValue(Http, out httpPort) && dictionary.TryGetValue(Socket, out socketPort))
+                if (dictionary.TryGetValue(Socket, out socketPort))
                 {
                     CreateFirewallRuleForPort(socketPort, SocketRule);
-                    CreateFirewallRuleForPort(httpPort, HttpRule);
                     return;
                 }
             }
 
-            Console.WriteLine("{0} -s 3000 -h 8188\n", AppDomain.CurrentDomain.FriendlyName);
+            Console.WriteLine("{0} -s 3000", AppDomain.CurrentDomain.FriendlyName);
             Console.WriteLine("\t -s: \t This will create the rule for the socket server port");
-            Console.WriteLine("\t -h: \t This will create the rule for the HTTP REST server port\n");
-            Console.WriteLine("Both arguments are required");
             Console.WriteLine("**For the rules to be created administrative rights are required**");
         }
     }

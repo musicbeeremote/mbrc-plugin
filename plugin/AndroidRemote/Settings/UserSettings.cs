@@ -31,6 +31,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string LogsEnabled = "logs_enabled";
 
+        private const string UpdateFirewallNode = "update_firewall";
+
         private uint listeningPort;
 
        
@@ -99,10 +101,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         public string CurrentVersion { get; set; }
 
         /// <summary>
-	    /// Since there is an issue with the existing search for a number of users
-	    /// an alternative implementation exists.
-	    /// </summary>
-	    public bool AlternativeSearch { get; set; } = false;
+        /// Since there is an issue with the existing search for a number of users
+        /// an alternative implementation exists.
+        /// </summary>
+        public bool AlternativeSearch { get; set; } = false;
 
         /// <summary>
         /// Enables Debug logging to the production version of the plugin
@@ -112,6 +114,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         public static string LogFilePath = "\\mbrc.log";
 
         public string FullLogPath => StoragePath + LogFilePath;
+        public bool UpdateFirewall { get; set; }
 
         /// <summary>
         /// 
@@ -226,6 +229,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             WriteNodeValue(document, Selection, FilterSelection.ToString());
             WriteNodeValue(document, LibrarySource, ((short) Source).ToString());
             WriteNodeValue(document, LogsEnabled, DebugLogEnabled.ToString());
+            WriteNodeValue(document, UpdateFirewallNode, UpdateFirewall.ToString());
         }
 
         private string ReadNodeValue(XmlNode document, string name)
@@ -256,6 +260,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 bool debugEnabled;
                 bool.TryParse(ReadNodeValue(document, LogsEnabled), out debugEnabled);
                 DebugLogEnabled = debugEnabled;
+
+                bool updateFirewall;
+                bool.TryParse(ReadNodeValue(document, UpdateFirewallNode), out updateFirewall);
+                UpdateFirewall = updateFirewall;
       
 
                 short source;

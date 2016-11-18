@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-plugin", "plugin\mbrc-plugin.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "firewall-utility", "firewall-utility\firewall-utility.csproj", "{48E9B838-6430-459B-9B44-D1E3548DF393}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,17 +27,29 @@ Global
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Win32.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
-		BuildVersion_BuildVersioningStyle = None.None.Increment.None
-		BuildVersion_ConfigurationName = Release
-		BuildVersion_UpdateAssemblyVersion = True
-		BuildVersion_UpdateFileVersion = True
-		BuildVersion_UseGlobalSettings = False
 		BuildVersion_UseUniversalClock = True
+		BuildVersion_UseGlobalSettings = False
+		BuildVersion_UpdateFileVersion = True
+		BuildVersion_UpdateAssemblyVersion = True
+		BuildVersion_ConfigurationName = Release
+		BuildVersion_BuildVersioningStyle = None.None.Increment.None
+		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
 	EndGlobalSection
 EndGlobal

@@ -76,6 +76,7 @@ namespace MusicBeePlugin
             }
 
             debugEnabled.Checked = settings.DebugLogEnabled;
+            firewallCheckbox.Checked = settings.UpdateFirewall;
 
             _logger.Debug($"Selected source is -> {settings.Source}");
         }
@@ -155,7 +156,14 @@ namespace MusicBeePlugin
                     UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
                     break;
             }
+
+            UserSettings.Instance.UpdateFirewall = firewallCheckbox.Checked;
             UserSettings.Instance.SaveSettings();
+
+            if (firewallCheckbox.Checked)
+            {
+                UpdateFirewallRules(UserSettings.Instance.ListeningPort);
+            }
         }
 
         private void AddAddressButtonClick(object sender, EventArgs e)
@@ -217,6 +225,22 @@ namespace MusicBeePlugin
         public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
         {
             this.listener = listener;
+        }
+
+        /// <summary>
+        ///     When called it will execute the firewall-utility passing the port settings
+        ///     needed by the plugin.
+        /// </summary>
+        public void UpdateFirewallRules(uint port)
+        {
+            var startInfo = new ProcessStartInfo(
+                $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe")
+            {
+                Verb = "runas",
+                Arguments =
+                    $"-s {port}"
+            };
+            Process.Start(startInfo);
         }
     }
 }
