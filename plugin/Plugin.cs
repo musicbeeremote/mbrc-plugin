@@ -503,7 +503,6 @@ namespace MusicBeePlugin
         {
             var shuffleEnabled = _api.Player_GetShuffle();
             var autoDjEnabled = _api.Player_GetAutoDjEnabled();
-            var shuffleState = ShuffleState.off;
 
             if (action != StateAction.Toggle) return;
             if (shuffleEnabled && !autoDjEnabled)
@@ -526,6 +525,9 @@ namespace MusicBeePlugin
                     _shuffleState = ShuffleState.shuffle;
                 }
             }
+
+            var socketMessage = new SocketMessage(Constants.PlayerShuffle, _shuffleState);
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, socketMessage.SerializeToString()));
         }
 
         private ShuffleState GetShuffleState()
@@ -541,6 +543,7 @@ namespace MusicBeePlugin
             {
                 state = ShuffleState.autodj;
             }
+
             return state;
         }
 
