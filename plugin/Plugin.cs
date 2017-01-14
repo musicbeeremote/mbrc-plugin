@@ -327,7 +327,6 @@ namespace MusicBeePlugin
                     RequestLoveStatus("status", "all");
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
-
                     var broadcastEvent = new BroadcastEvent(Constants.NowPlayingTrack);
                     broadcastEvent.addPayload(Constants.V2, GetTrackInfo());
                     broadcastEvent.addPayload(Constants.V3, GetTrackInfoV2());
@@ -380,28 +379,52 @@ namespace MusicBeePlugin
         {
             var nowPlayingTrack = new NowPlayingTrack
             {
-                Artist = _api.NowPlaying_GetFileTag(MetaDataType.Artist),
-                Album = _api.NowPlaying_GetFileTag(MetaDataType.Album),
-                Year = _api.NowPlaying_GetFileTag(MetaDataType.Year)
+                Artist = GetNowPlayingArtist(),
+                Album = GetNowPlayingAlbum(),
+                Year = GetNowPlayingYear()
             };
-            nowPlayingTrack.SetTitle(_api.NowPlaying_GetFileTag(MetaDataType.TrackTitle),
-                _api.NowPlaying_GetFileUrl());
+            nowPlayingTrack.SetTitle(GetNowPlayingTrackTitle(), GetNowPlayingFileUrl());
             return nowPlayingTrack;
         }
 
+
         private NowPlayingTrackV2 GetTrackInfoV2()
         {
-            var fileUrl = _api.NowPlaying_GetFileUrl();
+            var fileUrl = GetNowPlayingFileUrl();
             var nowPlayingTrack = new NowPlayingTrackV2
             {
-                Artist = _api.NowPlaying_GetFileTag(MetaDataType.Artist),
-                Album = _api.NowPlaying_GetFileTag(MetaDataType.Album),
-                Year = _api.NowPlaying_GetFileTag(MetaDataType.Year),
+                Artist = GetNowPlayingArtist(),
+                Album = GetNowPlayingAlbum(),
+                Year = GetNowPlayingYear(),
                 Path = fileUrl
             };
-            nowPlayingTrack.SetTitle(_api.NowPlaying_GetFileTag(MetaDataType.TrackTitle),
-                fileUrl);
+            nowPlayingTrack.SetTitle(GetNowPlayingTrackTitle(), fileUrl);
             return nowPlayingTrack;
+        }
+
+        private string GetNowPlayingFileUrl()
+        {
+            return _api.NowPlaying_GetFileUrl();
+        }
+
+        private string GetNowPlayingArtist()
+        {
+            return _api.NowPlaying_GetFileTag(MetaDataType.Artist);
+        }
+
+        private string GetNowPlayingTrackTitle()
+        {
+            return _api.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
+        }
+
+        private string GetNowPlayingYear()
+        {
+            return _api.NowPlaying_GetFileTag(MetaDataType.Year);
+        }
+
+        private string GetNowPlayingAlbum()
+        {
+            return _api.NowPlaying_GetFileTag(MetaDataType.Album);
         }
 
         /// <summary>
@@ -727,7 +750,8 @@ namespace MusicBeePlugin
                     _api.MB_RefreshPanels();
                 }
                 rating = _api.Library_GetFileTag(
-                    _api.NowPlaying_GetFileUrl(), MetaDataType.Rating).Replace(a, '.');
+                        _api.NowPlaying_GetFileUrl(), MetaDataType.Rating)
+                    .Replace(a, '.');
 
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
@@ -1284,7 +1308,7 @@ namespace MusicBeePlugin
                 genres.AddRange(_api.Library_QueryGetLookupTableValue(null)
                     .Split(new[] {"\0\0"}, StringSplitOptions.None)
                     .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
-                    .Select(genreInfo => new Genre(genreInfo[0], int.Parse(genreInfo[1]))));
+                    .Select(genreInfo => new Genre(genreInfo[0].Cleanup(), int.Parse(genreInfo[1]))));
             }
             _api.Library_QueryLookupTable(null, null, null);
 
@@ -1316,7 +1340,7 @@ namespace MusicBeePlugin
                 artists.AddRange(_api.Library_QueryGetLookupTableValue(null)
                     .Split(new[] {"\0\0"}, StringSplitOptions.None)
                     .Select(entry => entry.Split('\0'))
-                    .Select(artistInfo => new Artist(artistInfo[0], int.Parse(artistInfo[1]))));
+                    .Select(artistInfo => new Artist(artistInfo[0].Cleanup(), int.Parse(artistInfo[1]))));
             }
 
             _api.Library_QueryLookupTable(null, null, null);
@@ -1338,14 +1362,16 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
-        private Album CreateAlbum(string queryResult)
+        private static Album CreateAlbum(string queryResult)
         {
             var albumInfo = queryResult.Split('\0');
+
+            albumInfo = albumInfo.Select(s => s.Cleanup()).ToArray();
+
             if (albumInfo.Length == 1)
             {
                 return new Album(albumInfo[0], string.Empty);
             }
-
             if (albumInfo.Length == 2 && queryResult.StartsWith("\0"))
             {
                 return new Album(albumInfo[1], string.Empty);
@@ -1420,11 +1446,11 @@ namespace MusicBeePlugin
 
                     var track = new Track
                     {
-                        Artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
-                        Title = _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
-                        Album = _api.Library_GetFileTag(currentTrack, MetaDataType.Album),
-                        AlbumArtist = _api.Library_GetFileTag(currentTrack, MetaDataType.AlbumArtist),
-                        Genre = _api.Library_GetFileTag(currentTrack, MetaDataType.Genre),
+                        Artist = GetArtistForTrack(currentTrack),
+                        Title = GetTitleForTrack(currentTrack),
+                        Album = GetAlbumForTrack(currentTrack),
+                        AlbumArtist = GetAlbumArtistForTrack(currentTrack),
+                        Genre = GetGenreForTrack(currentTrack),
                         Disc = discNumber,
                         Trackno = trackNumber,
                         Src = currentTrack,
@@ -1449,6 +1475,31 @@ namespace MusicBeePlugin
 
             var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
             EventBus.FireEvent(messageEvent);
+        }
+
+        private string GetGenreForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, MetaDataType.Genre).Cleanup();
+        }
+
+        private string GetAlbumArtistForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, MetaDataType.AlbumArtist).Cleanup();
+        }
+
+        private string GetAlbumForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, MetaDataType.Album).Cleanup();
+        }
+
+        private string GetTitleForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle).Cleanup();
+        }
+
+        private string GetArtistForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, MetaDataType.Artist).Cleanup();
         }
 
         /// <summary>
@@ -1560,7 +1611,7 @@ namespace MusicBeePlugin
         public string[] GetUrlsForTag(MetaTag tag, string query)
         {
             var filter = string.Empty;
-            string[] tracks = {};
+            string[] tracks = { };
             switch (tag)
             {
                 case MetaTag.artist:
@@ -1577,17 +1628,18 @@ namespace MusicBeePlugin
             _api.Library_QueryFilesEx(filter, ref tracks);
 
             var list = tracks.Select(file => new MetaData
-            {
-                file = file,
-                artist = _api.Library_GetFileTag(file, MetaDataType.Artist),
-                album_artist = _api.Library_GetFileTag(file, MetaDataType.AlbumArtist),
-                album = _api.Library_GetFileTag(file, MetaDataType.Album),
-                title = _api.Library_GetFileTag(file, MetaDataType.TrackTitle),
-                genre = _api.Library_GetFileTag(file, MetaDataType.Genre),
-                year = _api.Library_GetFileTag(file, MetaDataType.Year),
-                track_no = _api.Library_GetFileTag(file, MetaDataType.TrackNo),
-                disc = _api.Library_GetFileTag(file, MetaDataType.DiscNo)
-            }).ToList();
+                {
+                    file = file,
+                    artist = _api.Library_GetFileTag(file, MetaDataType.Artist),
+                    album_artist = _api.Library_GetFileTag(file, MetaDataType.AlbumArtist),
+                    album = _api.Library_GetFileTag(file, MetaDataType.Album),
+                    title = _api.Library_GetFileTag(file, MetaDataType.TrackTitle),
+                    genre = _api.Library_GetFileTag(file, MetaDataType.Genre),
+                    year = _api.Library_GetFileTag(file, MetaDataType.Year),
+                    track_no = _api.Library_GetFileTag(file, MetaDataType.TrackNo),
+                    disc = _api.Library_GetFileTag(file, MetaDataType.DiscNo)
+                })
+                .ToList();
             list.Sort();
             tracks = list.Select(r => r.file)
                 .ToArray();
@@ -1676,7 +1728,8 @@ namespace MusicBeePlugin
 
         public void SelectionChanged(bool enabled)
         {
-            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, enabled ? LogLevel.Debug : LogLevel.Error);
+            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath,
+                enabled ? LogLevel.Debug : LogLevel.Error);
         }
 
         /// <summary>
