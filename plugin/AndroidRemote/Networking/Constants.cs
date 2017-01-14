@@ -27,6 +27,7 @@
         public const string PlayerState = "playerstate";
         public const string PlayerVolume = "playervolume";
         public const string PlayerAutoDj = "playerautodj";
+        public const string PlayerOutput = "playeroutput";
 
         public const string NowPlayingTrack = "nowplayingtrack";
         public const string NowPlayingCover = "nowplayingcover";
