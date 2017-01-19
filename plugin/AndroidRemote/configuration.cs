@@ -83,6 +83,11 @@
             controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowplayingQueue));
             #endregion
 
+            #region Protocol 4
+            controller.AddCommand(Constants.PlayerOutput, typeof(RequestOutputDeviceList));
+            controller.AddCommand(Constants.PlayerOutputSwitch, typeof(RequestPlayerOutputSwitch));
+            #endregion
+
         }
     }
 }

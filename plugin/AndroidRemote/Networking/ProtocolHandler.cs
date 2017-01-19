@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using MusicBeePlugin.AndroidRemote.Entities;
-
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
@@ -13,7 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
     internal class ProtocolHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-           
+
         /// <summary>
         ///     Processes the incoming message and answer's sending back the needed data.
         /// </summary>
@@ -48,6 +48,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
                 foreach (var msg in msgList)
                 {
+                    if (msg.Context == Constants.VerifyConnection)
+                    {
+                        EventBus.FireEvent(
+                            new MessageEvent(EventType.ReplyAvailable,
+                                new SocketMessage(Constants.VerifyConnection,
+                                    string.Empty).ToJsonString(), clientId));
+                        return;
+                    }
+
                     if (client.PacketNumber == 0 && msg.Context != Constants.Player)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,

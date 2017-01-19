@@ -17,11 +17,12 @@ namespace MusicBeePlugin
     /// <summary>
     ///     Represents the Settings and monitoring dialog of the plugin.
     /// </summary>
-    public partial class InfoWindow : Form
+    public partial class InfoWindow : Form, SocketTester.IConnectionListener
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
         private IOnDebugSelectionChanged listener;
+        private SocketTester _socketTester;
 
         /// <summary>
         /// </summary>
@@ -66,11 +67,11 @@ namespace MusicBeePlugin
             versionLabel.Text = settings.CurrentVersion;
             portNumericUpDown.Value = settings.ListeningPort;
             UpdateFilteringSelection(settings.FilterSelection);
-   
+
             UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
-            if (settings.Source == SearchSource.None) 
+            if (settings.Source == SearchSource.None)
             {
                 settings.Source |= SearchSource.Library;
             }
@@ -79,6 +80,9 @@ namespace MusicBeePlugin
             firewallCheckbox.Checked = settings.UpdateFirewall;
 
             _logger.Debug($"Selected source is -> {settings.Source}");
+
+            _socketTester = new SocketTester {ConnectionListener = this};
+            _socketTester.VerifyConnection();
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
@@ -143,7 +147,7 @@ namespace MusicBeePlugin
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
             UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
-     
+
             switch (selectionFilteringComboBox.SelectedIndex)
             {
                 case 0:
@@ -164,6 +168,8 @@ namespace MusicBeePlugin
             {
                 UpdateFirewallRules(UserSettings.Instance.ListeningPort);
             }
+
+            _socketTester.VerifyConnection();
         }
 
         private void AddAddressButtonClick(object sender, EventArgs e)
@@ -214,7 +220,6 @@ namespace MusicBeePlugin
             {
                 MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
             }
-           
         }
 
         public interface IOnDebugSelectionChanged
@@ -241,6 +246,11 @@ namespace MusicBeePlugin
                     $"-s {port}"
             };
             Process.Start(startInfo);
+        }
+
+        public void OnConnectionResult(bool isConnnected)
+        {
+            UpdateSocketStatus(isConnnected);
         }
     }
 }

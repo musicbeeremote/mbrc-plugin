@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.1451</AssemblyVersion>
+    <AssemblyVersion>1.1.0.1455</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -138,9 +138,10 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowplayingQueue.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
-	<Compile Include="AndroidRemote\Commands\Requests\RequestOutputDeviceList.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestOutputDeviceList.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPause.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerOutputSwitch.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistPlay.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
@@ -180,7 +181,7 @@
     <Compile Include="AndroidRemote\Model\Entities\NowPlayingListTrack.cs" />
     <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackBase.cs" />
     <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackV2.cs" />
-	<Compile Include="AndroidRemote\Entities\OutputDevice.cs" />
+    <Compile Include="AndroidRemote\Entities\OutputDevice.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Page.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Playlist.cs" />
     <Compile Include="AndroidRemote\Model\Entities\SocketMessage.cs" />
@@ -199,6 +200,7 @@
     <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
     <Compile Include="AndroidRemote\Networking\Constants.cs" />
     <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
+    <Compile Include="AndroidRemote\Networking\SocketTester.cs" />
     <Compile Include="AndroidRemote\Utilities\IdGenerator.cs" />
     <Compile Include="AndroidRemote\Utilities\Utilities.cs" />
     <Compile Include="CheckboxExtension.cs" />

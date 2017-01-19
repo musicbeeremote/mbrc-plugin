@@ -1,6 +1,6 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
+    using Interfaces;
 
     internal class RequestRating : ICommand
     {

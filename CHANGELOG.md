@@ -2,6 +2,12 @@ Change Log
 ---------
 # Versions
 
+## 1.1.0
+- Adds a proper socket checker to update the status.
+- Fixes an issue with the rating when using specific locales (like German)
+- Fixes an issue with the favorite state not updating properly when changing tracks
+- Adds protocol support for switching audio outputs
+
 ## 1.0.0
 - Adds new API for playlist retrieval.
 - Adds new API for now playing that works with pagination.

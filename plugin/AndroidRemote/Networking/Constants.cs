@@ -2,14 +2,13 @@
 {
     internal static class Constants
     {
-        
 
         #region Protocol 2. Basic functionality
         public const string Error = "error";
         public const string Player = "player";
         public const string Protocol = "protocol";
         public const string PlayerName = "MusicBee";
-        public const int ProtocolVersion = 3;
+        public const int ProtocolVersion = 4;
         public const string PluginVersion = "pluginversion";
         public const string NotAllowed = "notallowed";
         #endregion
@@ -27,7 +26,6 @@
         public const string PlayerState = "playerstate";
         public const string PlayerVolume = "playervolume";
         public const string PlayerAutoDj = "playerautodj";
-        public const string PlayerOutput = "playeroutput";
 
         public const string NowPlayingTrack = "nowplayingtrack";
         public const string NowPlayingCover = "nowplayingcover";
@@ -83,11 +81,20 @@
 
         #endregion
 
+        #region Protocol 4
+
+        public const string PlayerOutput = "playeroutput";
+        public const string VerifyConnection = "verifyconnection";
+        public const string PlayerOutputSwitch = "playeroutputswitch";
+
+        #endregion
+
 
         #region ProtocolVersion
 
         public const int V2 = 2;
         public const int V3 = 3;
+        public const int V4 = 4;
 
         #endregion
 

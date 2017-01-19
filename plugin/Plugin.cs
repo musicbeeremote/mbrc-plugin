@@ -9,6 +9,7 @@ using System.Windows.Forms;
 using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Commands;
+using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
@@ -217,10 +218,28 @@ namespace MusicBeePlugin
             if (_api.Player_GetRepeat() != _repeat)
             {
                 _repeat = _api.Player_GetRepeat();
-                EventBus.FireEvent(new MessageEvent(
-                    EventType.ReplyAvailable,
-                    new SocketMessage(Constants.PlayerRepeat, _repeat).ToJsonString()));
+                var payload = new SocketMessage(Constants.PlayerRepeat, _repeat).ToJsonString();
+                SendReply(payload);
             }
+        }
+
+        private static void SendReply(string payload, string clientId = "")
+        {
+            MessageEvent message;
+            if (string.IsNullOrEmpty(clientId))
+            {
+                message = new MessageEvent(
+                    EventType.ReplyAvailable,
+                    payload);
+            }
+            else
+            {
+                message = new MessageEvent(
+                    EventType.ReplyAvailable,
+                    payload, clientId);
+            }
+
+            EventBus.FireEvent(message);
         }
 
         public void OpenInfoWindow()
@@ -333,12 +352,12 @@ namespace MusicBeePlugin
                     EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
-                        new SocketMessage(Constants.PlayerVolume,
-                        ((int)
-                            Math.Round(
-                                _api.Player_GetVolume() * 100,
-                                1))).ToJsonString()));
+                    var payload = new SocketMessage(Constants.PlayerVolume,
+                    (int)
+                    Math.Round(
+                        _api.Player_GetVolume() * 100,
+                        1)).ToJsonString();
+                    SendReply(payload);
                     break;
                 case NotificationType.VolumeMuteChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
@@ -727,14 +746,12 @@ namespace MusicBeePlugin
             string[] deviceNames;
             string activeDeviceName;
 
-            mbApiInterface.Player_GetOutputDevices(out deviceNames, out activeDeviceName);
+            _api.Player_GetOutputDevices(out deviceNames, out activeDeviceName);
 
-            OutputDevice currentDevices = new OutputDevice(deviceNames, activeDeviceName);
+            var currentDevices = new OutputDevice(deviceNames, activeDeviceName);
 
-            EventBus.FireEvent(
-                new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.PlayerOutput,
-                        currentDevices).ToJsonString(), clientId));
+            SendReply(new SocketMessage(Constants.PlayerOutput,
+                currentDevices).ToJsonString(), clientId);
         }
 
         /// <summary>
@@ -759,7 +776,7 @@ namespace MusicBeePlugin
                 if (fRating >= 0 && fRating <= 5)
                 {
                     _api.Library_SetFileTag(_api.NowPlaying_GetFileUrl(), MetaDataType.Rating,
-                        fRating.ToString(CultureInfo.InvariantCulture));
+                        fRating.ToString(CultureInfo.CurrentCulture));
                     _api.Library_CommitTagsToFile(_api.NowPlaying_GetFileUrl());
                     _api.Player_GetShowRatingTrack();
                     _api.MB_RefreshPanels();
@@ -864,14 +881,14 @@ namespace MusicBeePlugin
             if (int.TryParse(index, out trackIndex))
             {
                 _api.NowPlayingList_QueryFiles(null);
-                string trackToPlay = String.Empty;
-                int lTrackIndex = 0;
+                var trackToPlay = string.Empty;
+                var lTrackIndex = 0;
                 while (trackIndex != lTrackIndex)
                 {
                     trackToPlay = _api.NowPlayingList_QueryGetNextFile();
                     lTrackIndex++;
                 }
-                if (!String.IsNullOrEmpty(trackToPlay))
+                if (!string.IsNullOrEmpty(trackToPlay))
                     result = _api.NowPlayingList_PlayNow(trackToPlay);
             }
 
@@ -955,6 +972,11 @@ namespace MusicBeePlugin
             {
                 mb.Invoke(new MethodInvoker(SetLfmLoveBan));
             }
+            else
+            {
+                SendLfmStatusMessage(GetLfmStatus());
+            }
+
         }
 
         private void SetLfmNormalStatus()
@@ -967,7 +989,7 @@ namespace MusicBeePlugin
             }
         }
 
-        private void SendLfmStatusMessage(LastfmStatus lastfmStatus)
+        private static void SendLfmStatusMessage(LastfmStatus lastfmStatus)
         {
             var data = new SocketMessage(Constants.NowPlayingLfmRating, lastfmStatus).ToJsonString();
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data));
@@ -1580,6 +1602,7 @@ namespace MusicBeePlugin
 
         public void RequestRadioStations(string clientId)
         {
+
         }
 
         /// <summary>
@@ -1808,6 +1831,12 @@ namespace MusicBeePlugin
                 default:
                     return false;
             }
+        }
+
+        public void SwitchOutputDevice(string outputDevice, string clientId)
+        {
+            _api.Player_SetOutputDevice(outputDevice);
+            RequestOutputDevice(clientId);
         }
     }
 }
