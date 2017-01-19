@@ -1,31 +1,20 @@
-﻿using System;
+﻿using System.Runtime.Serialization;
 
 namespace MusicBeePlugin.AndroidRemote.Entities
 {
+    [DataContract]
     public class OutputDevice
     {
-        private string[] deviceNames;
-        private string activeDeviceName;
-
         public OutputDevice(string[] deviceNames, string activeDeviceName)
         {
-            this.deviceNames = deviceNames;
-            this.activeDeviceName = activeDeviceName;
+            DeviceNames = deviceNames;
+            ActiveDeviceName = activeDeviceName;
         }
 
-        public string ActiveDeviceName
-        {
-            get { return activeDeviceName; }
+        [DataMember(Name = "active")]
+        public string ActiveDeviceName { get; set; }
 
-            set { activeDeviceName = value; }
-        }
-
-        public string[] DeviceNames
-        {
-            get { return deviceNames; }
-            set { deviceNames = value; }
-        }
-
-
+        [DataMember(Name = "devices")]
+        public string[] DeviceNames { get; set; }
     }
 }

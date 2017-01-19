@@ -7,6 +7,7 @@ Change Log
 - Fixes an issue with the rating when using specific locales (like German)
 - Fixes an issue with the favorite state not updating properly when changing tracks
 - Adds protocol support for switching audio outputs
+- Adds protocol support for getting Radio Stations
 
 ## 1.0.0
 - Adds new API for playlist retrieval.

@@ -86,6 +86,7 @@
         public const string PlayerOutput = "playeroutput";
         public const string VerifyConnection = "verifyconnection";
         public const string PlayerOutputSwitch = "playeroutputswitch";
+        public const string RadioStations = "radiostations";
 
         #endregion
 

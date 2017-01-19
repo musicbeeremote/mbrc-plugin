@@ -9,7 +9,6 @@ using System.Windows.Forms;
 using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Commands;
-using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
@@ -353,10 +352,10 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.VolumeLevelChanged:
                     var payload = new SocketMessage(Constants.PlayerVolume,
-                    (int)
-                    Math.Round(
-                        _api.Player_GetVolume() * 100,
-                        1)).ToJsonString();
+                        (int)
+                        Math.Round(
+                            _api.Player_GetVolume() * 100,
+                            1)).ToJsonString();
                     SendReply(payload);
                     break;
                 case NotificationType.VolumeMuteChanged:
@@ -976,7 +975,6 @@ namespace MusicBeePlugin
             {
                 SendLfmStatusMessage(GetLfmStatus());
             }
-
         }
 
         private void SetLfmNormalStatus()
@@ -1603,6 +1601,26 @@ namespace MusicBeePlugin
         public void RequestRadioStations(string clientId)
         {
 
+            var radioStations = new string[] { };
+            var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
+            List<RadioStation> stations;
+            if (success)
+            {
+
+                stations = radioStations.Select(s => new RadioStation
+                    {
+                        Url = s,
+                        Name = _api.Library_GetFileTag(s, MetaDataType.TrackTitle)
+                    })
+                    .ToList();
+            }
+            else
+            {
+                stations = new List<RadioStation>();
+            }
+
+            var payload = new SocketMessage(Constants.RadioStations, stations).ToJsonString();
+            SendReply(payload, clientId);
         }
 
         /// <summary>

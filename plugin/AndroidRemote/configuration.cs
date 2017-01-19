@@ -86,6 +86,7 @@
             #region Protocol 4
             controller.AddCommand(Constants.PlayerOutput, typeof(RequestOutputDeviceList));
             controller.AddCommand(Constants.PlayerOutputSwitch, typeof(RequestPlayerOutputSwitch));
+            controller.AddCommand(Constants.RadioStations, typeof(RequestRadioStations));
             #endregion
 
         }
