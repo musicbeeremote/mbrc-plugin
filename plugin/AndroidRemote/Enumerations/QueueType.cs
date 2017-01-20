@@ -4,6 +4,7 @@
     {
         Last,
         Next,
-        PlayNow
+        PlayNow,
+        AddAndPlay
     }
 }

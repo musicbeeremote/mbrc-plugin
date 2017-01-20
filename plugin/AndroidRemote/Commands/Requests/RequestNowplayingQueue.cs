@@ -15,6 +15,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             var payload = eEvent.Data as JsonObject;
             var queueType = payload.Get<string>("queue");
             var data = payload.Get<List<string>>("data");
+            var play = payload.Get<string>("play");
 
             if (data == null)
             {
@@ -31,8 +32,12 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 queue = QueueType.Last;
             }
+            else if (queueType.Equals("add-all"))
+            {
+                queue = QueueType.AddAndPlay;
+            }
 
-            var success = Plugin.Instance.QueueFiles(queue, data.ToArray());
+            var success = Plugin.Instance.QueueFiles(queue, data.ToArray(), play);
 
             SendResponse(eEvent.ClientId, success ? 200 : 500);
         }

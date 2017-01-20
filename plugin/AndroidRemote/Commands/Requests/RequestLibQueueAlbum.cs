@@ -4,7 +4,7 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibQueueAlbum:ICommand
+    class RequestLibQueueAlbum : ICommand
     {
         public void Dispose()
         {
@@ -14,8 +14,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         {
             string type, query;
 
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
+            ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
             QueueType qType;
             switch (type)
             {
@@ -27,6 +27,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                     break;
                 case "now":
                     qType = QueueType.PlayNow;
+                    break;
+                case "add-all":
+                    qType = QueueType.AddAndPlay;
                     break;
                 default:
                     qType = QueueType.Next;

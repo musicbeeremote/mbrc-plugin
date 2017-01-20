@@ -1631,8 +1631,17 @@ namespace MusicBeePlugin
         /// <param name="query"></param>
         public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
-            var trackList = tag != MetaTag.title ? GetUrlsForTag(tag, query) : new[] {query};
-            QueueFiles(queue, trackList);
+            string[] trackList;
+            if (tag == MetaTag.title && queue == QueueType.PlayNow)
+            {
+                trackList = new[] {query};
+            }
+            else
+            {
+                trackList = GetUrlsForTag(tag, query);
+            }
+
+            QueueFiles(queue, trackList, query);
         }
 
         /// <summary>
@@ -1679,7 +1688,11 @@ namespace MusicBeePlugin
                 case MetaTag.genre:
                     filter = XmlFilter(new[] {"Genre"}, query, true);
                     break;
+                case MetaTag.title:
+                    filter = "";
+                    break;
             }
+
 
             _api.Library_QueryFilesEx(filter, ref tracks);
 
@@ -1834,7 +1847,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
-        public bool QueueFiles(QueueType queue, string[] data)
+        public bool QueueFiles(QueueType queue, string[] data, string query = "")
         {
             switch (queue)
             {
@@ -1846,6 +1859,10 @@ namespace MusicBeePlugin
                     _api.NowPlayingList_Clear();
                     _api.NowPlayingList_QueueFilesLast(data);
                     return _api.NowPlayingList_PlayNow(data[0]);
+                case QueueType.AddAndPlay:
+                    _api.NowPlayingList_Clear();
+                    _api.NowPlayingList_QueueFilesLast(data);
+                    return _api.NowPlayingList_PlayNow(query);
                 default:
                     return false;
             }
