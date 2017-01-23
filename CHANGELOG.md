@@ -3,6 +3,7 @@ Change Log
 # Versions
 
 ## 1.1.0
+- Adds a check to avoid a case where invalid characters in the tags would result in a sync failure.
 - Adds a proper socket checker to update the status.
 - Fixes an issue with the rating when using specific locales (like German)
 - Fixes an issue with the favorite state not updating properly when changing tracks
