@@ -43,6 +43,20 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             var udpClient = (UdpClient) ar.AsyncState;
             var mEndPoint = new IPEndPoint(IPAddress.Any, Port);
             var request = udpClient.EndReceive(ar, ref mEndPoint);
+            try
+            {
+                HandleDiscovery(request, mEndPoint, udpClient);
+            }
+            catch (Exception e)
+            {
+               _logger.Debug(e, "Failed to proceed with messages");
+            }
+
+            udpClient.BeginReceive(OnDataReceived, udpClient);
+        }
+
+        private void HandleDiscovery(byte[] request, IPEndPoint mEndPoint, UdpClient udpClient)
+        {
             var mRequest = Encoding.UTF8.GetString(request);
             var incoming = JsonObject.Parse(mRequest);
 
@@ -71,7 +85,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 var notify = ErrorMessage("unsupported action");
                 SendResponse(notify, mEndPoint, udpClient);
             }
-            udpClient.BeginReceive(OnDataReceived, udpClient);
         }
 
         private void SendResponse(Dictionary<string, object> notify, IPEndPoint mEndPoint, UdpClient udpClient)
