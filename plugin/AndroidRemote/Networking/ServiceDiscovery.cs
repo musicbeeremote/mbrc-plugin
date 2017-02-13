@@ -49,7 +49,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception e)
             {
-               _logger.Debug(e, "Failed to proceed with messages");
+               _logger.Error(e, "Failed to proceed with messages");
             }
 
             udpClient.BeginReceive(OnDataReceived, udpClient);
