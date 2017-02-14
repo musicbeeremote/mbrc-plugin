@@ -1,0 +1,47 @@
+﻿<UserControl x:Class="mbrcPartyMode.View.ClientDetailView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:mbrcPartyMode.View"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:mbrcPartyMode.ViewModel">
+    <!--
+        d:DesignHeight="300"
+        d:DesignWidth="300"
+        mc:Ignorable="d">
+    -->
+
+
+    <GroupBox Header="{Binding CommandOverViewText}">
+        <StackPanel Visibility="{Binding IsVisible}">
+            <CheckBox x:Name="CkBoxCanAddToPlayList"
+                      Content="Can add to play list"
+                      IsChecked="{Binding CanAddToPlayList}" />
+            <CheckBox x:Name="CkBoxCanDeleteFromPlayList"
+                      Content="Can delete from play list"
+                      IsChecked="{Binding CanDeleteFromPlayList}" />
+            <CheckBox x:Name="CkBoxCanskipForward"
+                      Content="Can skip forward"
+                      IsChecked="{Binding CanSkipForwards}" />
+            <CheckBox x:Name="CkBoxCanSkipBackward"
+                      Content="Can skip backward"
+                      IsChecked="{Binding CanSkipBackwards}" />
+            <CheckBox x:Name="CkBoxCanStartStopPlayer"
+                      Content="Can start/stop player"
+                      IsChecked="{Binding CanStartStopPlayer}" />
+            <CheckBox x:Name="CkBoxCanVolumeUpDown"
+                      Content="Can set volume up or down"
+                      IsChecked="{Binding CanVolumeUpDown}" />
+            <CheckBox x:Name="CkBoxCanMute"
+                      Content="Can mute"
+                      IsChecked="{Binding CanMute}" />
+            <CheckBox x:Name="CkBoxCanShuffel"
+                      Content="Can Shuffle"
+                      IsChecked="{Binding CanShuffle}" />
+            <CheckBox x:Name="CkBoxCanReplay"
+                      Content="Can activate replay"
+                      IsChecked="{Binding CanReplay}" />
+        </StackPanel>
+    </GroupBox>
+
+</UserControl>
