@@ -1,6 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
-    interface ICommand
+   public  interface ICommand
     {
         void Execute(IEvent eEvent);
     }

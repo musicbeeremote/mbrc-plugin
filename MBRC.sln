@@ -7,6 +7,23 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-plugin", "plugin\mbrc-
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "firewall-utility", "firewall-utility\firewall-utility.csproj", "{48E9B838-6430-459B-9B44-D1E3548DF393}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{445C3839-41BD-4B4D-8B5E-CDBC5E0BFF2E}"
+EndProject
+Project("{911E67C6-3D85-4FCE-B560-20A9C3E3FF48}") = "MusicBee", "..\..\Program Files (x86)\MusicBee\MusicBee.exe", "{40887B6B-E244-473A-A25E-A21BFB44EEF1}"
+	ProjectSection(DebuggerProjectSystem) = preProject
+		PortSupplier = 00000000-0000-0000-0000-000000000000
+		Executable = C:\Program Files (x86)\MusicBee\MusicBee.exe
+		RemoteMachine = HOLZE-PC
+		StartingDirectory = C:\Program Files (x86)\MusicBee
+		Environment = Default
+		LaunchingEngine = 00000000-0000-0000-0000-000000000000
+		UseLegacyDebugEngines = No
+		LaunchSQLEngine = No
+		AttachLaunchAction = No
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-partymode", "mbrcPartyMode\mbrc-partymode.csproj", "{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +56,24 @@ Global
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.ActiveCfg = Release|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.Build.0 = Release|Any CPU
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Debug|Any CPU.ActiveCfg = Release|x86
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Debug|Mixed Platforms.ActiveCfg = Release|x86
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Debug|Win32.ActiveCfg = Release|x86
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Release|Any CPU.ActiveCfg = Release|x86
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{40887B6B-E244-473A-A25E-A21BFB44EEF1}.Release|Win32.ActiveCfg = Release|x86
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Debug|Win32.Build.0 = Debug|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Win32.ActiveCfg = Release|Any CPU
+		{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}.Release|Win32.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

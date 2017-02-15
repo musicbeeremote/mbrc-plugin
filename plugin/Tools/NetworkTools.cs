@@ -8,7 +8,7 @@ using System.Text;
 
 namespace MusicBeePlugin.Tools
 {
-    class NetworkTools
+    public class NetworkTools
     {
         public static List<string> GetPrivateAddressList()
         {

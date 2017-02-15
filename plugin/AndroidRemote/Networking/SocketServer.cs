@@ -1,17 +1,17 @@
-using System.Collections.Concurrent;
-using System.Timers;
 using MusicBeePlugin.AndroidRemote.Entities;
 using NLog;
+using System.Collections.Concurrent;
+using System.Timers;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
+    using Events;
+    using Settings;
     using System;
     using System.Globalization;
     using System.Net;
     using System.Net.Sockets;
-    using Settings;
     using Utilities;
-    using Events;
 
     /// <summary>
     /// The socket server.
@@ -38,14 +38,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         private Timer _pingTimer;
         private const string NewLine = "\r\n";
 
-
         /// <summary>
         /// Returns the Instance of the signleton socketserver
         /// </summary>
         public static SocketServer Instance { get; } = new SocketServer();
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private SocketServer()
         {
@@ -55,7 +54,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public bool IsRunning
         {
@@ -67,9 +66,23 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
         }
 
+        public IPAddress GetIpAddress(string client)
+        {
+            Socket socket = null;
+            bool res = _availableWorkerSockets.TryGetValue(client, out socket);
+
+            if (socket != null)
+            {
+                return ((IPEndPoint)(socket.RemoteEndPoint)).Address;
+            }
+            else
+            {
+                return null;
+            }
+        }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="clientId"> </param>
         public void KickClient(string clientId)
@@ -126,7 +139,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             try
             {
                 _mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                // Create the listening socket.    
+                // Create the listening socket.
                 var ipLocal = new IPEndPoint(IPAddress.Any, Convert.ToInt32(UserSettings.Instance.ListeningPort));
                 // Bind to local IP address.
                 _mainSocket.Bind(ipLocal);
@@ -173,7 +186,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 var workerSocket = _mainSocket.EndAccept(ar);
 
                 // Validate If client should connect.
-                var ipAddress = ((IPEndPoint) workerSocket.RemoteEndPoint).Address;
+                var ipAddress = ((IPEndPoint)workerSocket.RemoteEndPoint).Address;
                 var ipString = ipAddress.ToString();
 
                 var isAllowed = false;
@@ -188,6 +201,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                             }
                         }
                         break;
+
                     case FilteringSelection.Range:
                         var connectingAddress = ipString.Split(".".ToCharArray(),
                             StringSplitOptions.RemoveEmptyEntries);
@@ -200,22 +214,20 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                             int baseIpAddressLowOctet;
                             int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
                             int.TryParse(baseIp[3], out baseIpAddressLowOctet);
-                            if (connectingAddressLowOctet >= baseIpAddressLowOctet &&
-                                baseIpAddressLowOctet <= UserSettings.Instance.LastOctetMax)
+                            if (connectingAddressLowOctet >= baseIpAddressLowOctet && baseIpAddressLowOctet <= UserSettings.Instance.LastOctetMax)
                             {
                                 isAllowed = true;
                             }
                         }
                         break;
+
                     default:
                         isAllowed = true;
                         break;
                 }
                 if (!isAllowed)
                 {
-                    workerSocket.Send(
-                        System.Text.Encoding.UTF8.GetBytes(
-                            new SocketMessage(Constants.NotAllowed, string.Empty).ToJsonString()));
+                    workerSocket.Send(System.Text.Encoding.UTF8.GetBytes(new SocketMessage(Constants.NotAllowed, string.Empty).ToJsonString()));
                     workerSocket.Close();
                     _logger.Debug($"Client {ipString} was force disconnected IP was not in the allowed addresses");
                     _mainSocket.BeginAccept(OnClientConnect, null);
@@ -228,14 +240,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 // Inform the the Protocol Handler that a new Client has been connected, prepare for handshake.
                 EventBus.FireEvent(new MessageEvent(EventType.ActionClientConnected, string.Empty, clientId));
 
-                // Let the worker Socket do the further processing 
+                // Let the worker Socket do the further processing
                 // for the just connected client.
                 WaitForData(workerSocket, clientId);
             }
             catch (ObjectDisposedException)
             {
-                _logger.Debug(
-                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnection: Socket has been closed\n");
+                _logger.Debug($"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnection: Socket has been closed\n");
             }
             catch (SocketException se)
             {
@@ -243,8 +254,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (Exception ex)
             {
-                _logger.Debug(
-                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnect Exception : {ex.Message}\n");
+                _logger.Debug($"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnect Exception : {ex.Message}\n");
             }
             finally
             {
@@ -297,7 +307,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             var clientId = string.Empty;
             try
             {
-                var socketData = (SocketPacket) ar.AsyncState;
+                var socketData = (SocketPacket)ar.AsyncState;
                 // Complete the BeginReceive() asynchronus call by EndReceive() method
                 // which will return the number of characters written to the stream
                 // by the client.
@@ -362,7 +372,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="message"></param>
         /// <param name="clientId"></param>
@@ -397,7 +407,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             worker?.Dispose();
         }
 
-
         public void Broadcast(BroadcastEvent broadcastEvent)
         {
             _logger.Debug($"broadcasting message {broadcastEvent}");
@@ -431,7 +440,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="message"></param>
         public void Send(string message)
@@ -463,6 +472,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             {
                 _logger.Error(ex, "While sending message to all available clients");
             }
+        }
+
+        public System.Collections.Generic.List<Socket> GetConnectedSockets()
+        {
+            return (System.Collections.Generic.List<System.Net.Sockets.Socket>)_availableWorkerSockets.Values;
         }
 
         /// <summary>
