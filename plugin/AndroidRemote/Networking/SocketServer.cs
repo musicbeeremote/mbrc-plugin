@@ -68,12 +68,12 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         public IPAddress GetIpAddress(string client)
         {
-            Socket socket = null;
-            bool res = _availableWorkerSockets.TryGetValue(client, out socket);
+            Socket socket;
+            var clientExists = _availableWorkerSockets.TryGetValue(client, out socket);
 
-            if (socket != null)
+            if (clientExists && socket != null)
             {
-                return ((IPEndPoint)(socket.RemoteEndPoint)).Address;
+                return ((IPEndPoint) (socket.RemoteEndPoint)).Address;
             }
             else
             {
@@ -225,6 +225,12 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         isAllowed = true;
                         break;
                 }
+
+                if (Equals(ipAddress, IPAddress.Loopback))
+                {
+                    isAllowed = true;
+                }
+
                 if (!isAllowed)
                 {
                     workerSocket.Send(System.Text.Encoding.UTF8.GetBytes(new SocketMessage(Constants.NotAllowed, string.Empty).ToJsonString()));
