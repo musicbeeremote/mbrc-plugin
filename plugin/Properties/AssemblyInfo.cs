@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Kelsos")]
 [assembly: AssemblyProduct("MusicBee Remote Control")]
-[assembly: AssemblyCopyright("Copyright © Konstantinos Paparas (kelsos) 2015")]
+[assembly: AssemblyCopyright("Copyright © Konstantinos Paparas (kelsos) 2011 - 2017")]
 [assembly: AssemblyTrademark("kelsos")]
 [assembly: AssemblyCulture("")]
 
