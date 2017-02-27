@@ -113,12 +113,11 @@ namespace MusicBeePlugin
             this.tabPage1.TabIndex = 0;
             this.tabPage1.Text = "main ";
             this.tabPage1.UseVisualStyleBackColor = true;
-            this.tabPage1.Click += new System.EventHandler(this.tabPage1_Click);
             // 
             // firewallCheckbox
             // 
             this.firewallCheckbox.AutoSize = true;
-            this.firewallCheckbox.Location = new System.Drawing.Point(260, 318);
+            this.firewallCheckbox.Location = new System.Drawing.Point(302, 365);
             this.firewallCheckbox.Margin = new System.Windows.Forms.Padding(4);
             this.firewallCheckbox.Name = "firewallCheckbox";
             this.firewallCheckbox.Size = new System.Drawing.Size(127, 21);
@@ -151,7 +150,7 @@ namespace MusicBeePlugin
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(260, 393);
+            this.saveButton.Location = new System.Drawing.Point(302, 394);
             this.saveButton.Margin = new System.Windows.Forms.Padding(4);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(100, 28);
@@ -341,10 +340,10 @@ namespace MusicBeePlugin
             // 
             // helpButton
             // 
-            this.helpButton.Location = new System.Drawing.Point(414, 393);
+            this.helpButton.Location = new System.Drawing.Point(449, 394);
             this.helpButton.Margin = new System.Windows.Forms.Padding(4);
             this.helpButton.Name = "helpButton";
-            this.helpButton.Size = new System.Drawing.Size(159, 28);
+            this.helpButton.Size = new System.Drawing.Size(123, 28);
             this.helpButton.TabIndex = 45;
             this.helpButton.Text = "Help";
             this.helpButton.UseVisualStyleBackColor = true;
@@ -492,6 +491,5 @@ namespace MusicBeePlugin
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.TabPage partyModeTP;
         private System.Windows.Forms.Integration.ElementHost elementHost1;
-
     }
 }
