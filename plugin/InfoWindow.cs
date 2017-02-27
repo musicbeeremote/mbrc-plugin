@@ -32,8 +32,7 @@ namespace MusicBeePlugin
         {
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
-            PartyModeView partyModeView = new PartyModeView();
-            partyModeView.DataContext = new PartyModeViewModel();
+            var partyModeView = new PartyModeView {DataContext = new PartyModeViewModel()};
             partyModeView.InitializeComponent();
             this.elementHost1.Dock = DockStyle.Fill;
             this.elementHost1.Child = partyModeView;
@@ -260,6 +259,11 @@ namespace MusicBeePlugin
         public void OnConnectionResult(bool isConnnected)
         {
             UpdateSocketStatus(isConnnected);
+        }
+
+        private void tabPage1_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
