@@ -1,8 +1,8 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
+    using Interfaces;
 
-    class RequestNowPlayingPlay:ICommand
+    internal class RequestNowPlayingPlay:ICommand
     {
         public void Dispose()
         {

@@ -8,39 +8,33 @@ namespace mbrcPartyMode.ViewModel
 {
     public class ClientViewModel : ModelBase, IDisposable
     {
-        private PartyModeModel model;
-        private ObservableCollection<ClientAdress> connectedClients = null;
-        private ConnectedClientAddress selectedClient;
+        private readonly PartyModeModel _model;
+        private ObservableCollection<ClientAdress> _connectedClients;
+        private ConnectedClientAddress _selectedClient;
 
         public ClientViewModel(PartyModeModel model)
         {
-            this.model = model;
-            this.ConnectedClients = new ObservableCollection<ClientAdress>(model.ConnectedAddresses);
+            _model = model;
+            ConnectedClients = new ObservableCollection<ClientAdress>(model.ConnectedAddresses);
             model.PropertyChanged += ModelOnPropertyChangend;
         }
 
         public ObservableCollection<ClientAdress> ConnectedClients
         {
-            get
-            {
-                return connectedClients;
-            }
+            get { return _connectedClients; }
             set
             {
-                connectedClients = value;
+                _connectedClients = value;
                 OnPropertyChanged(nameof(ConnectedClients));
             }
         }
 
         public ConnectedClientAddress SelectedClient
         {
-            get
-            {
-                return selectedClient;
-            }
+            get { return _selectedClient; }
             set
             {
-                selectedClient = value;
+                _selectedClient = value;
                 OnPropertyChanged(nameof(SelectedClient));
             }
         }
@@ -48,16 +42,14 @@ namespace mbrcPartyMode.ViewModel
 
         public void ModelOnPropertyChangend(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(model.ConnectedAddresses))
-            {
-                this.ConnectedClients = new ObservableCollection<ClientAdress>(model.ConnectedAddresses);
-                OnPropertyChanged(nameof(SelectedClient));
-            }
+            if (e.PropertyName != nameof(_model.ConnectedAddresses)) return;
+            ConnectedClients = new ObservableCollection<ClientAdress>(_model.ConnectedAddresses);
+            OnPropertyChanged(nameof(SelectedClient));
         }
 
         public void Dispose()
         {
-            model.PropertyChanged -= ModelOnPropertyChangend;
+            _model.PropertyChanged -= ModelOnPropertyChangend;
         }
     }
 }

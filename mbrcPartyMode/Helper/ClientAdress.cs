@@ -10,36 +10,35 @@ namespace mbrcPartyMode.Helper
     {
         public ClientAdress(IPAddress ipadr) : this(PartyModeNetworkTools.GetMACAddress(ipadr))
         {
-            ipAddress = ipadr;
+            _ipAddress = ipadr;
         }
 
         private ClientAdress(PhysicalAddress macAdr)
         {
-            this.macAdress = macAdr;
-            this.LastLogIn = DateTime.Now;
-            this.canAddToPlayList = false;
-            this.skipBackwards = false;
-            this.skipForwards = false;
-            this.startStopPlayer = false;
-            this.canDeleteFromPlayList = false;
+            _macAddress = macAdr;
+            LastLogIn = DateTime.Now;
+            _canAddToPlayList = false;
+            _skipBackwards = false;
+            _skipForwards = false;
+            _startStopPlayer = false;
+            _canDeleteFromPlayList = false;
         }
 
         #region vars
 
+        private bool _canAddToPlayList;
+        private bool _canDeleteFromPlayList;
+        private bool _skipForwards;
+        private bool _skipBackwards;
+        private bool _startStopPlayer;
+        private bool _canVolumeUpDown;
+        private bool _canMute;
+        private bool _canShuffle;
+        private bool _canReplay;
 
-        private bool canAddToPlayList;
-        private bool canDeleteFromPlayList;
-        private bool skipForwards;
-        private bool skipBackwards;
-        private bool startStopPlayer;
-        private bool canVolumeUpDown;
-        private bool canMute;
-        private bool canShuffel;
-        private bool canReplay;
-
-        private PhysicalAddress macAdress;
-        private DateTime lastLogIn;
-        private IPAddress ipAddress;
+        private PhysicalAddress _macAddress;
+        private DateTime _lastLogIn;
+        private IPAddress _ipAddress;
 
         #endregion vars
 
@@ -47,138 +46,75 @@ namespace mbrcPartyMode.Helper
 
         public virtual bool CanAddToPlayList
         {
-            get
-            {
-                return canAddToPlayList;
-            }
-
-            set
-            {
-                canAddToPlayList = value;
-            }
+            get { return _canAddToPlayList; }
+            set { _canAddToPlayList = value; }
         }
 
         public virtual bool CanDeleteFromPlayList
         {
-            get
-            {
-                return canDeleteFromPlayList;
-            }
-
-            set
-            {
-                canDeleteFromPlayList = value;
-            }
+            get { return _canDeleteFromPlayList; }
+            set { _canDeleteFromPlayList = value; }
         }
 
         public virtual bool CanSkipForwards
         {
-            get
-            {
-                return skipForwards;
-            }
-
-            set
-            {
-                skipForwards = value;
-            }
+            get { return _skipForwards; }
+            set { _skipForwards = value; }
         }
 
         public virtual bool CanSkipBackwards
         {
-            get
-            {
-                return skipBackwards;
-            }
-
-            set
-            {
-                skipBackwards = value;
-            }
+            get { return _skipBackwards; }
+            set { _skipBackwards = value; }
         }
 
         public virtual bool CanStartStopPlayer
         {
-            get
-            {
-                return startStopPlayer;
-            }
-
-            set
-            {
-                startStopPlayer = value;
-            }
+            get { return _startStopPlayer; }
+            set { _startStopPlayer = value; }
         }
 
         public virtual bool CanVolumeUpDown
         {
-            get
-            {
-                return canVolumeUpDown;
-            }
-
-            set
-            {
-                canVolumeUpDown = value;
-            }
+            get { return _canVolumeUpDown; }
+            set { _canVolumeUpDown = value; }
         }
 
         public virtual bool CanMute
         {
-            get
-            {
-                return canMute;
-            }
-
-            set
-            {
-                canMute = value;
-            }
+            get { return _canMute; }
+            set { _canMute = value; }
         }
 
         public virtual bool CanShuffle
         {
-            get
-            {
-                return canShuffel;
-            }
-
-            set
-            {
-                canShuffel = value;
-            }
+            get { return _canShuffle; }
+            set { _canShuffle = value; }
         }
 
         public virtual bool CanReplay
         {
-            get
-            {
-                return canReplay;
-            }
-
-            set
-            {
-                canReplay = value;
-            }
+            get { return _canReplay; }
+            set { _canReplay = value; }
         }
 
         public virtual PhysicalAddress MacAdress
         {
-            get { return macAdress; }
-            set { macAdress = value; }
+            get { return _macAddress; }
+            set { _macAddress = value; }
         }
 
         public virtual IPAddress IpAddress
         {
-            get { return ipAddress; }
-            set { ipAddress = value; }
-        }
-        public DateTime LastLogIn
-        {
-            get { return lastLogIn; }
-            set { lastLogIn = value; }
+            get { return _ipAddress; }
+            set { _ipAddress = value; }
         }
 
+        public DateTime LastLogIn
+        {
+            get { return _lastLogIn; }
+            set { _lastLogIn = value; }
+        }
 
         #endregion Properties
 
@@ -186,16 +122,14 @@ namespace mbrcPartyMode.Helper
 
         bool IEquatable<ClientAdress>.Equals(ClientAdress other)
         {
-            return this.Equals(other);
+            return Equals(other);
         }
 
         public bool Equals(ClientAdress obj)
         {
-            ClientAdress other;
+            var other = obj;
 
-            other = (ClientAdress)obj;
-
-            return macAdress.ToString() == other.macAdress.ToString();
+            return _macAddress.ToString() == other._macAddress.ToString();
         }
 
         #endregion Equatable

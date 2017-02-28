@@ -23,7 +23,7 @@ namespace MusicBeePlugin
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
-        private IOnDebugSelectionChanged listener;
+        private IOnDebugSelectionChanged _listener;
         private SocketTester _socketTester;
 
         /// <summary>
@@ -34,9 +34,9 @@ namespace MusicBeePlugin
             _ipAddressBinding = new BindingList<string>();
             var partyModeView = new PartyModeView {DataContext = new PartyModeViewModel()};
             partyModeView.InitializeComponent();
-            this.elementHost1.Dock = DockStyle.Fill;
-            this.elementHost1.Child = partyModeView;
-            this.helpButton.Click += HelpButtonClick;
+            elementHost1.Dock = DockStyle.Fill;
+            elementHost1.Child = partyModeView;
+            helpButton.Click += HelpButtonClick;
         }
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace MusicBeePlugin
         {
             var settings = UserSettings.Instance;
             settings.DebugLogEnabled = debugEnabled.Checked;
-            listener?.SelectionChanged(settings.DebugLogEnabled);
+            _listener?.SelectionChanged(settings.DebugLogEnabled);
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
@@ -237,7 +237,7 @@ namespace MusicBeePlugin
 
         public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
         {
-            this.listener = listener;
+            _listener = listener;
         }
 
         /// <summary>

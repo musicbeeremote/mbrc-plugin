@@ -1,33 +1,19 @@
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.Diagnostics;
 using MusicBeePlugin.AndroidRemote.Interfaces;
-using NLog;
-using mbrcPartyMode;
-using mbrcPartyMode.Helper;
 
-namespace MusicBeePlugin.AndroidRemote.Commands
+namespace MusicBeePlugin.PartyMode
 {
-
     public abstract class CommandDecorator : ICommand
     {
-        private ICommand command;
-
+        private readonly ICommand _command;
 
         protected CommandDecorator(ICommand cmd)
         {
-            this.command = cmd;
+            _command = cmd;
         }
-
-      
 
         public virtual void Execute(IEvent eEvent)
         {
-           
-            command.Execute(eEvent);
+            _command.Execute(eEvent);
         }
     }
-
-
 }

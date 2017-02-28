@@ -1,117 +1,87 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     /// <summary>
     /// Class MetaData. 
     /// Represents a packet payload for library meta data.
     /// </summary>
-    class MetaData : IComparable<MetaData>
+    internal class MetaData : IComparable<MetaData>
     {
-        private const String Empty = @"[Empty]";
-        private string _file;
-        private string _hash;
+        private const string Empty = @"[Empty]";
         private string _artist;
-        private string _album_artist;
         private string _album;
         private string _title;
         private string _genre;
-        private string _year;
-        private string _disc;
-        private string _track_no;
 
         [IgnoreDataMember]
-        public string file
-        {
-            get { return _file; }
-            set { _file = value; }
-        }
+        public string File { get; set; }
 
-        public string album
+        public string Album
         {
             get { return _album; }
-            set { _album = String.IsNullOrEmpty(value) ? Empty : value; }
+            set { _album = string.IsNullOrEmpty(value) ? Empty : value; }
         }
 
-        public string title
+        public string Title
         {
             get { return _title; }
             set
             {
-                _title = !String.IsNullOrEmpty(value)
+                _title = !string.IsNullOrEmpty(value)
                     ? value
-                    : (String.IsNullOrEmpty(_file)
-                        ? String.Empty
-                        : _file.Substring(_file.LastIndexOf('\\') + 1));
+                    : (string.IsNullOrEmpty(File)
+                        ? string.Empty
+                        : File.Substring(File.LastIndexOf('\\') + 1));
             }
         }
 
-        public string genre
+        public string Genre
         {
             get { return _genre; }
-            set { _genre = String.IsNullOrEmpty(value) ? Empty : value; }
+            set { _genre = string.IsNullOrEmpty(value) ? Empty : value; }
         }
 
-        public string year
-        {
-            get { return _year; }
-            set { _year = value; }
-        }
+        public string Year { get; set; }
 
-        public string track_no
-        {
-            get { return _track_no; }
-            set { _track_no = value; }
-        }
+        public string TrackNo { get; set; }
 
-        public string hash
-        {
-            get { return _hash; }
-            set { _hash = value; }
-        }
+        public string Hash { get; set; }
 
-        public string artist
+        public string Artist
         {
             get { return _artist; }
-            set { _artist = String.IsNullOrEmpty(value) ? Empty : value; }
+            set { _artist = string.IsNullOrEmpty(value) ? Empty : value; }
         }
 
-        public string album_artist
-        {
-            get { return _album_artist; }
-            set { _album_artist = value; }
-        }
+        public string AlbumArtist { get; set; }
 
-        public string disc
-        {
-            get { return _disc; }
-            set { _disc = value; }
-        }
+        public string Disc { get; set; }
 
         public int CompareTo(MetaData other)
         {
-            if (!String.IsNullOrEmpty(album_artist) && other.album_artist != album_artist)
+            if (!string.IsNullOrEmpty(AlbumArtist) && other.AlbumArtist != AlbumArtist)
             {
-                return String.Compare(album_artist, other.album_artist, StringComparison.OrdinalIgnoreCase);
+                return string.Compare(AlbumArtist, other.AlbumArtist, StringComparison.OrdinalIgnoreCase);
             }
-            if (!String.IsNullOrEmpty(album) && other.album != album)
+            if (!string.IsNullOrEmpty(Album) && other.Album != Album)
             {
-                return String.Compare(album, other.album, StringComparison.OrdinalIgnoreCase);
+                return string.Compare(Album, other.Album, StringComparison.OrdinalIgnoreCase);
             }
-            if (!String.IsNullOrEmpty(disc) && other.disc != disc)
+            if (!string.IsNullOrEmpty(Disc) && other.Disc != Disc)
             {
                 int thisDisc;
                 int otherDisc;
-                int.TryParse(disc, out thisDisc);
-                int.TryParse(other.disc, out otherDisc);
+                int.TryParse(Disc, out thisDisc);
+                int.TryParse(other.Disc, out otherDisc);
                 return thisDisc - otherDisc;
             }
 
             int thisTrack;
             int otherTrack;
-            int.TryParse(track_no, out thisTrack);
-            int.TryParse(other.track_no, out otherTrack);
+            int.TryParse(TrackNo, out thisTrack);
+            int.TryParse(other.TrackNo, out otherTrack);
             return thisTrack - otherTrack;
 
         }

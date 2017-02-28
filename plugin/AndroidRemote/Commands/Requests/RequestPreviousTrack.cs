@@ -4,7 +4,7 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestPreviousTrack:ICommand
+    internal class RequestPreviousTrack:ICommand
     {
         public void Dispose()
         {

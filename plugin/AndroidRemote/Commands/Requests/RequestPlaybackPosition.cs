@@ -1,6 +1,6 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
+    using Interfaces;
 
     public class RequestPlaybackPosition : ICommand
     {

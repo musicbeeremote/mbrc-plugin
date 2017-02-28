@@ -7,19 +7,19 @@ namespace mbrcPartyMode.ViewModel
 {
     public class LogViewerViewModel : ModelBase, IDisposable
     {
-        private readonly PartyModeModel model;
+        private readonly PartyModeModel _model;
 
         public LogViewerViewModel(PartyModeModel model)
         {
-            this.model = model;
+            _model = model;
             Logs = new ObservableCollectionEx<ServerMessageView>();
-            this.model.PropertyChanged += OnPropertyChanged;
+            _model.PropertyChanged += OnPropertyChanged;
             ServerCommandExecuted();
         }
 
         public ObservableCollectionEx<ServerMessageView> Logs
         {
-            get; private set;
+            get;
         }
 
         private void ServerCommandExecuted()
@@ -28,7 +28,7 @@ namespace mbrcPartyMode.ViewModel
             ServerMessage serverMessage;
 
 
-            while (model.ServerMessagesQueue.TryDequeue(out serverMessage))
+            while (_model.ServerMessagesQueue.TryDequeue(out serverMessage))
             {
                 Logs.Add(new ServerMessageView(Logs.Count, serverMessage));
             }
@@ -42,7 +42,7 @@ namespace mbrcPartyMode.ViewModel
 
         public void Dispose()
         {
-            this.model.PropertyChanged -= OnPropertyChanged;
+            _model.PropertyChanged -= OnPropertyChanged;
         }
     }
 }

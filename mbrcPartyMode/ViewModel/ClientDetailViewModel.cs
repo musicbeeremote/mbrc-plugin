@@ -3,199 +3,114 @@ using System.Windows;
 
 namespace mbrcPartyMode.ViewModel
 {
-    public class ClientDetailViewModel : ModelBase
+    public sealed class ClientDetailViewModel : ModelBase
     {
-        private readonly ClientAdress clientAddress;
+        private readonly ClientAdress _clientAddress;
 
 
         public ClientDetailViewModel(ClientAdress adr)
         {
-            this.clientAddress = adr;
+            _clientAddress = adr;
             OnPropertyChanged(nameof(IsVisible));
         }
 
         public bool CanAddToPlayList
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanAddToPlayList;
-                }
-                return true;
-            }
+            get { return _clientAddress == null || _clientAddress.CanAddToPlayList; }
 
             set
             {
-                if (clientAddress != null)
-                {
-                    clientAddress.CanAddToPlayList = value;
-                    OnPropertyChanged(nameof(CanAddToPlayList));
-                }
+                if (_clientAddress == null) return;
+                _clientAddress.CanAddToPlayList = value;
+                OnPropertyChanged(nameof(CanAddToPlayList));
             }
         }
 
         public bool CanSkipBackwards
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanSkipBackwards;
-                }
-                return true;
-            }
-
+            get { return _clientAddress == null || _clientAddress.CanSkipBackwards; }
             set
             {
-                clientAddress.CanSkipBackwards = value;
+                _clientAddress.CanSkipBackwards = value;
                 OnPropertyChanged(nameof(CanSkipBackwards));
             }
         }
 
         public bool CanDeleteFromPlayList
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanDeleteFromPlayList;
-                }
-                return true;
-            }
-
+            get { return _clientAddress == null || _clientAddress.CanDeleteFromPlayList; }
             set
             {
-                clientAddress.CanDeleteFromPlayList = value;
+                _clientAddress.CanDeleteFromPlayList = value;
                 OnPropertyChanged(nameof(CanDeleteFromPlayList));
             }
         }
 
         public bool CanSkipForwards
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanSkipForwards;
-                }
-                return true;
-            }
-
+            get { return _clientAddress == null || _clientAddress.CanSkipForwards; }
             set
             {
-                clientAddress.CanSkipForwards = value;
-                OnPropertyChanged(nameof(this.CanSkipForwards));
+                _clientAddress.CanSkipForwards = value;
+                OnPropertyChanged(nameof(CanSkipForwards));
             }
         }
 
         public bool CanStartStopPlayer
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanStartStopPlayer;
-                }
-                return true;
-            }
-
+            get { return _clientAddress == null || _clientAddress.CanStartStopPlayer; }
             set
             {
-                clientAddress.CanStartStopPlayer = value;
+                _clientAddress.CanStartStopPlayer = value;
                 OnPropertyChanged(nameof(CanStartStopPlayer));
             }
         }
 
         public bool CanVolumeUpDown
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanVolumeUpDown;
-                }
-                return true;
-            }
+            get { return _clientAddress == null || _clientAddress.CanVolumeUpDown; }
             set
             {
-                clientAddress.CanVolumeUpDown = value;
+                _clientAddress.CanVolumeUpDown = value;
                 OnPropertyChanged(nameof(CanVolumeUpDown));
             }
         }
 
         public bool CanShuffle
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanShuffle;
-                }
-                return true;
-            }
+            get { return _clientAddress == null || _clientAddress.CanShuffle; }
             set
             {
-                clientAddress.CanShuffle = value;
+                _clientAddress.CanShuffle = value;
                 OnPropertyChanged(nameof(CanShuffle));
             }
         }
 
         public bool CanReplay
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanReplay;
-                }
-                return true;
-            }
+            get { return _clientAddress == null || _clientAddress.CanReplay; }
             set
             {
-                clientAddress.CanReplay = value;
+                _clientAddress.CanReplay = value;
                 OnPropertyChanged(nameof(CanReplay));
             }
         }
-        
+
         public bool CanMute
         {
-            get
-            {
-                if (clientAddress != null)
-                {
-                    return clientAddress.CanMute;
-                }
-                return true;
-            }
+            get { return _clientAddress == null || _clientAddress.CanMute; }
             set
             {
-                clientAddress.CanMute = value;
+                _clientAddress.CanMute = value;
                 OnPropertyChanged(nameof(CanMute));
             }
         }
-        public Visibility IsVisible
-        {
-            get
-            {
-                if (clientAddress == null)
-                {
-                    return Visibility.Hidden;
-                }
-                else
-                {
-                    return Visibility.Visible;
-                }
-            }
-           
-        }
+
+        public Visibility IsVisible => _clientAddress == null ? Visibility.Hidden : Visibility.Visible;
 
         #region text
 
-        public string CommandOverViewText
-        {
-            get { return "command restrictions"; }
-        }
+        public string CommandOverViewText => "command restrictions";
 
         #endregion text
     }

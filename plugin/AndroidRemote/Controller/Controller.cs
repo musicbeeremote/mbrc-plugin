@@ -1,9 +1,8 @@
 ﻿using System.Diagnostics;
-using System.Threading;
+using MusicBeePlugin.PartyMode;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
 {
-    using Commands;
     using Interfaces;
     using System;
     using System.Collections.Generic;
@@ -45,13 +44,13 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             var command = (ICommand)Activator.CreateInstance(commandType);
             try
             {
-                PartyModeCommandDedcorator cmdDecorator = new PartyModeCommandDedcorator(command);
+                var cmdDecorator = new PartyModeCommandDedcorator(command);
                 cmdDecorator.Execute(e);
             }
             catch (Exception ex)
             {
 #if DEBUG
-                Debug.WriteLine(ex.Message.ToString()+ "\n"+ ex.StackTrace.ToString());
+                Debug.WriteLine(ex.Message+ "\n"+ ex.StackTrace);
 #endif
                 // Oh noes something went wrong... let's ignore the exception?
             }

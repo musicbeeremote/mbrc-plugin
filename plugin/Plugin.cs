@@ -312,8 +312,8 @@ namespace MusicBeePlugin
         {
             var payload = new CoverPayload(cover, false);
             var broadcastEvent = new BroadcastEvent(Constants.NowPlayingCover);
-            broadcastEvent.addPayload(Constants.V2, cover);
-            broadcastEvent.addPayload(Constants.V3, payload);
+            broadcastEvent.AddPayload(Constants.V2, cover);
+            broadcastEvent.AddPayload(Constants.V3, payload);
             EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
         }
 
@@ -324,8 +324,8 @@ namespace MusicBeePlugin
             var lyricsPayload = new LyricsPayload(lyrics);
 
             var broadcastEvent = new BroadcastEvent(Constants.NowPlayingLyrics);
-            broadcastEvent.addPayload(Constants.V2, versionTwoData);
-            broadcastEvent.addPayload(Constants.V3, lyricsPayload);
+            broadcastEvent.AddPayload(Constants.V2, versionTwoData);
+            broadcastEvent.AddPayload(Constants.V3, lyricsPayload);
             EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
         }
 
@@ -346,8 +346,8 @@ namespace MusicBeePlugin
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
                     var broadcastEvent = new BroadcastEvent(Constants.NowPlayingTrack);
-                    broadcastEvent.addPayload(Constants.V2, GetTrackInfo());
-                    broadcastEvent.addPayload(Constants.V3, GetTrackInfoV2());
+                    broadcastEvent.AddPayload(Constants.V2, GetTrackInfo());
+                    broadcastEvent.AddPayload(Constants.V3, GetTrackInfoV2());
                     EventBus.FireEvent(new MessageEvent(EventType.BroadcastEvent, broadcastEvent));
                     break;
                 case NotificationType.VolumeLevelChanged:
@@ -1204,7 +1204,7 @@ namespace MusicBeePlugin
                         var current = albumInfo.Length == 3
                             ? new Album(albumInfo[1], albumInfo[2])
                             : new Album(albumInfo[0], albumInfo[1]);
-                        if (current.album.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (current.Name.IndexOf(albumName, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                         if (!albums.Contains(current))
                         {
@@ -1601,6 +1601,8 @@ namespace MusicBeePlugin
         public void RequestRadioStations(string clientId)
         {
 
+            //todo: radio api should use pagination
+
             var radioStations = new string[] { };
             var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
             List<RadioStation> stations;
@@ -1698,19 +1700,19 @@ namespace MusicBeePlugin
 
             var list = tracks.Select(file => new MetaData
                 {
-                    file = file,
-                    artist = _api.Library_GetFileTag(file, MetaDataType.Artist),
-                    album_artist = _api.Library_GetFileTag(file, MetaDataType.AlbumArtist),
-                    album = _api.Library_GetFileTag(file, MetaDataType.Album),
-                    title = _api.Library_GetFileTag(file, MetaDataType.TrackTitle),
-                    genre = _api.Library_GetFileTag(file, MetaDataType.Genre),
-                    year = _api.Library_GetFileTag(file, MetaDataType.Year),
-                    track_no = _api.Library_GetFileTag(file, MetaDataType.TrackNo),
-                    disc = _api.Library_GetFileTag(file, MetaDataType.DiscNo)
+                    File = file,
+                    Artist = _api.Library_GetFileTag(file, MetaDataType.Artist),
+                    AlbumArtist = _api.Library_GetFileTag(file, MetaDataType.AlbumArtist),
+                    Album = _api.Library_GetFileTag(file, MetaDataType.Album),
+                    Title = _api.Library_GetFileTag(file, MetaDataType.TrackTitle),
+                    Genre = _api.Library_GetFileTag(file, MetaDataType.Genre),
+                    Year = _api.Library_GetFileTag(file, MetaDataType.Year),
+                    TrackNo = _api.Library_GetFileTag(file, MetaDataType.TrackNo),
+                    Disc = _api.Library_GetFileTag(file, MetaDataType.DiscNo)
                 })
                 .ToList();
             list.Sort();
-            tracks = list.Select(r => r.file)
+            tracks = list.Select(r => r.File)
                 .ToArray();
 
             return tracks;

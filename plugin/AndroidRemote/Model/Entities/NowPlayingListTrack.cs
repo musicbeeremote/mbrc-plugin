@@ -1,6 +1,9 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Model.Entities
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
-    class NowPlayingListTrack
+    [DataContract]
+    internal class NowPlayingListTrack
     {
         public NowPlayingListTrack(string artist, string title, int position)
         {
@@ -13,12 +16,16 @@
         {
         }
 
+        [DataMember(Name = "Artist")]
         public string Artist { get; set; }
 
+        [DataMember(Name = "Title")]
         public string Title { get; set; }
 
+        [DataMember(Name = "Path")]
         public string Path { get; set; }
 
+        [DataMember(Name = "Position")]
         public int Position { get; set; }
     }
 }

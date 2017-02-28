@@ -47,7 +47,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
             Owner = owner;
             Event = Owner.GetType().GetEvent(EventName, BindingFlags.Public | BindingFlags.Instance);
             if (Event == null)
-                throw new InvalidOperationException(String.Format("Could not resolve event name {0}", EventName));
+                throw new InvalidOperationException($"Could not resolve event name {EventName}");
 
             //Create an event handler for the event that will call the ExecuteCommand method
             EventHandler = EventHandlerGenerator.CreateDelegate(
@@ -66,17 +66,15 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         }
 
         #region IDisposable Members
-        bool disposed = false;
+        bool _disposed;
         /// <summary>
         /// Unregisters the EventHandler from the Event
         /// </summary>
         public void Dispose()
         {
-            if (!disposed)
-            {
-                Event.RemoveEventHandler(Owner, EventHandler);
-                disposed = true;
-            }
+            if (_disposed) return;
+            Event.RemoveEventHandler(Owner, EventHandler);
+            _disposed = true;
         }
 
         #endregion

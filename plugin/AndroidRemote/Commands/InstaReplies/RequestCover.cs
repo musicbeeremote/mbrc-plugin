@@ -1,9 +1,9 @@
-﻿using MusicBeePlugin.AndroidRemote.Utilities;
+﻿using MusicBeePlugin.AndroidRemote.Model.Entities;
+using MusicBeePlugin.AndroidRemote.Utilities;
 using static MusicBeePlugin.AndroidRemote.Networking.Constants;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 {
-    using Entities;
     using Interfaces;
     using Model;
     using Networking;

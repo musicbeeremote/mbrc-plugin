@@ -3,7 +3,7 @@ using MusicBeePlugin.AndroidRemote.Networking;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Internal
 {
-    class StopSocketServer:ICommand
+    internal class StopSocketServer:ICommand
     {
         public void Dispose()
         {

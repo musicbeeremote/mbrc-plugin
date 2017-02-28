@@ -27,9 +27,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// <returns>Returns true if the command can execute. By default true is returned so that if the user of SimpleCommand does not specify a CanExecuteCommand delegate the command still executes.</returns>
         public bool CanExecute(object parameter)
         {
-            if (CanExecuteDelegate != null)
-                return CanExecuteDelegate(parameter);
-            return true;// if there is no can execute default to true
+            return CanExecuteDelegate == null || CanExecuteDelegate(parameter);
         }
 
         public event EventHandler CanExecuteChanged
@@ -44,8 +42,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// <param name="parameter">THe command parameter to be passed</param>
         public void Execute(object parameter)
         {
-            if (ExecuteDelegate != null)
-                ExecuteDelegate(parameter);
+            ExecuteDelegate?.Invoke(parameter);
         }
 
         #endregion

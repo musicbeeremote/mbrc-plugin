@@ -1,10 +1,11 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Commands.Requests
+﻿using MusicBeePlugin.AndroidRemote.Model.Entities;
+
+namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using Entities;
     using Interfaces;
     using Networking;
 
-    class RequestPlayer:ICommand
+    internal class RequestPlayer:ICommand
     {
         public void Dispose()
         {

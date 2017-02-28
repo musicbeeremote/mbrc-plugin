@@ -6,11 +6,8 @@ namespace mbrcPartyMode.ViewModel.Commands
 {
     public class PartyModeCommands
     {
-       
-
-     
-
     }
+
     public class SaveCommand : ICommand
     {
         public event EventHandler CanExecuteChanged;
@@ -25,8 +22,4 @@ namespace mbrcPartyMode.ViewModel.Commands
             PartyModeModel.Instance.SaveSettings();
         }
     }
-
-
-
-
 }

@@ -33,16 +33,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string UpdateFirewallNode = "update_firewall";
 
-        private uint listeningPort;
+        private uint _listeningPort;
 
-       
-        private SearchSource _source;
 
-        public SearchSource Source
-        {
-            get { return _source; }
-            set { _source = value; }
-        }
+        public SearchSource Source { get; set; }
 
 
         /// <summary>
@@ -55,14 +49,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// </summary>
         public uint ListeningPort
         {
-            get
-            {
-                return listeningPort;
-            }
-            set
-            {
-                listeningPort = value;
-            }
+            get { return _listeningPort; }
+            set { _listeningPort = value; }
         }
 
         /// <summary>
@@ -122,7 +110,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// <param name="path"></param>
         public void SetStoragePath(string path)
         {
-            this.StoragePath = path + SFolder;
+            StoragePath = path + SFolder;
         }
 
         private string GetSettingsFile()
@@ -184,7 +172,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 WriteNodeValue(document, LastRunVersion, CurrentVersion);
                 document.Save(GetSettingsFile());
             }
-            
+
             return isFirst;
         }
 
@@ -198,7 +186,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             {
                 CreateEmptySettingsFile(Application);
             }
-            XmlDocument document = new XmlDocument();
+            var document = new XmlDocument();
             document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
             document.Save(GetSettingsFile());
@@ -211,9 +199,9 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             {
                 Directory.CreateDirectory(StoragePath);
             }
-            XmlDocument document = new XmlDocument();
-            XmlDeclaration declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
-            XmlElement root = document.CreateElement(application);
+            var document = new XmlDocument();
+            var declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
+            var root = document.CreateElement(application);
             document.InsertBefore(declaration, document.DocumentElement);
             document.AppendChild(root);
             document.Save(GetSettingsFile());
@@ -221,9 +209,9 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private void WriteApplicationSetting(XmlDocument document)
         {
-            if (listeningPort < 65535)
+            if (_listeningPort < 65535)
             {
-                WriteNodeValue(document, PortNumber, listeningPort.ToString(CultureInfo.InvariantCulture));
+                WriteNodeValue(document, PortNumber, _listeningPort.ToString(CultureInfo.InvariantCulture));
             }
             WriteNodeValue(document, Values, GetValues());
             WriteNodeValue(document, Selection, FilterSelection.ToString());
@@ -232,7 +220,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             WriteNodeValue(document, UpdateFirewallNode, UpdateFirewall.ToString());
         }
 
-        private string ReadNodeValue(XmlNode document, string name)
+        private static string ReadNodeValue(XmlNode document, string name)
         {
             var node = document.SelectSingleNode("//" + name);
             return node?.InnerText ?? string.Empty;
@@ -252,8 +240,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             {
                 var document = new XmlDocument();
                 document.Load(GetSettingsFile());
-                listeningPort = uint.TryParse(ReadNodeValue(document, PortNumber), out listeningPort)
-                                                  ? listeningPort
+                _listeningPort = uint.TryParse(ReadNodeValue(document, PortNumber), out _listeningPort)
+                                                  ? _listeningPort
                                                   : 3000;
                 UpdateFilteringSelection(ReadNodeValue(document, Selection));
                 SetValues(ReadNodeValue(document, Values));
@@ -309,6 +297,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 case FilteringSelection.Specific:
                     UnflattenAllowedAddressList(values);
                     break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 

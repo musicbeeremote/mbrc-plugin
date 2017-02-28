@@ -1,5 +1,4 @@
 ﻿using mbrcPartyMode.Helper;
-using System;
 
 namespace mbrcPartyMode
 {
@@ -21,17 +20,16 @@ namespace mbrcPartyMode
     }
 
     public delegate void ClientConnectedEventHandler(object sender, ClientEventArgs e);
+
     public delegate void ClientDisconnectedEventHandler(object sender, ClientEventArgs e);
+
     public delegate void ServerCommandExecutedEventHandler(object sender, ServerCommandEventArgs e);
 
     public class PartyModeCommandHandler
     {
         #region vars
 
-        private static PartyModeCommandHandler instance;
-
-        public PartyModeCommandHandler()
-        { }
+        private static PartyModeCommandHandler _instance;
 
         public event ClientConnectedEventHandler ClientConnected;
         public event ClientDisconnectedEventHandler ClientDisconnected;
@@ -39,18 +37,12 @@ namespace mbrcPartyMode
 
         #endregion vars
 
-        public static PartyModeCommandHandler Instance
+        private PartyModeCommandHandler()
         {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new PartyModeCommandHandler();
-                }
-
-                return instance;
-            }
         }
+
+
+        public static PartyModeCommandHandler Instance => _instance ?? (_instance = new PartyModeCommandHandler());
 
         public bool IsCommandAllowed(MappingCommand cmd, ClientAdress adr)
         {
@@ -82,29 +74,17 @@ namespace mbrcPartyMode
 
         public void OnClientConnected(ConnectedClientAddress adr)
         {
-
-            if (ClientConnected != null)
-            {
-                ClientConnected(this, new ClientEventArgs(adr));
-            }
+            ClientConnected?.Invoke(this, new ClientEventArgs(adr));
         }
 
         public void OnClientDisconnected(ConnectedClientAddress adr)
         {
-
-            if (ClientDisconnected != null)
-            {
-                ClientDisconnected(this, new ClientEventArgs(adr));
-            }
-
+            ClientDisconnected?.Invoke(this, new ClientEventArgs(adr));
         }
 
         public void OnServerCommandExecuted(string client, string command, bool isCmdAllowed)
         {
-            if (ServerCommandExecuted != null)
-            {
-                ServerCommandExecuted(this, new ServerCommandEventArgs(client, command, isCmdAllowed));
-            }
+            ServerCommandExecuted?.Invoke(this, new ServerCommandEventArgs(client, command, isCmdAllowed));
         }
     }
 }

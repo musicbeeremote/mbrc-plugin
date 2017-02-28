@@ -11,13 +11,7 @@ namespace mbrcPartyMode.ViewModel
     {
         #region vars
 
-        private readonly PartyModeModel model;
-        private readonly ClientViewModel clientViewModel;
-        private ClientDetailViewModel clientDetailViewModel;
-        private readonly LogViewerViewModel logViewerViewModel;
-        private bool isActive = false;
-        private readonly Dispatcher _dispatcher;
-        private static object _syncLock = new object();
+        private readonly PartyModeModel _model;
 
         #endregion vars
 
@@ -25,82 +19,58 @@ namespace mbrcPartyMode.ViewModel
 
         public PartyModeViewModel()
         {
-            this.model = PartyModeModel.Instance;
-            this.clientViewModel = new ClientViewModel(model);
-            this.clientDetailViewModel = new ClientDetailViewModel(clientViewModel.SelectedClient);
-            this.logViewerViewModel = new LogViewerViewModel(model);
-            this.clientViewModel.PropertyChanged += OnPropertyChanged;
-            this.model.PropertyChanged += OnPropertyChanged;
-            this.isActive = model.Settings.IsActive;
+            _model = PartyModeModel.Instance;
+            ClientViewModel = new ClientViewModel(_model);
+            ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
+            LogViewerViewModel = new LogViewerViewModel(_model);
+            ClientViewModel.PropertyChanged += OnPropertyChanged;
+            _model.PropertyChanged += OnPropertyChanged;
 
-            this.SaveCommand = new SaveCommand();
-            this.model.RequestAllServerMessages();
+            SaveCommand = new SaveCommand();
+            _model.RequestAllServerMessages();
 
-            if (AppDomain.CurrentDomain != null)
-            {
-                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            }
-
-            if (Dispatcher.CurrentDispatcher != null)
-            {
-                Dispatcher.CurrentDispatcher.UnhandledException += CurrentDispatcher_UnhandledException;
-            }
-
-            _dispatcher = Dispatcher.CurrentDispatcher;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            Dispatcher.CurrentDispatcher.UnhandledException += CurrentDispatcher_UnhandledException;
         }
 
         #endregion constructor
 
         #region ViewModels
 
-        public ClientViewModel ClientViewModel
-        {
-            get { return clientViewModel; }
-        }
+        public ClientViewModel ClientViewModel { get; }
 
-        public ClientDetailViewModel ClientDetailViewModel
-        {
-            get { return clientDetailViewModel; }
-        }
+        public ClientDetailViewModel ClientDetailViewModel { get; private set; }
 
-        public LogViewerViewModel LogViewerViewModel
-        {
-            get { return logViewerViewModel; }
-        }
+        public LogViewerViewModel LogViewerViewModel { get; }
 
         #endregion ViewModels
 
         #region Commands
 
-        public ICommand SaveCommand
-        {
-            get;
-            private set;
-        }
+        public ICommand SaveCommand { get; }
 
         #endregion Commands
 
         private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ClientViewModel.SelectedClient))
-            { SelectedClientChanged(); }
+            {
+                SelectedClientChanged();
+            }
         }
 
         private void SelectedClientChanged()
         {
-            this.clientDetailViewModel = new ClientDetailViewModel(clientViewModel.SelectedClient);
+            ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
             OnPropertyChanged(nameof(ClientDetailViewModel));
         }
 
         public bool IsActive
         {
-            get
-            {
-                return model.Settings.IsActive;
-            }
+            get { return _model.Settings.IsActive; }
             set
             {
-                model.Settings.IsActive = value;
+                _model.Settings.IsActive = value;
                 OnPropertyChanged(nameof(IsActive));
             }
         }
@@ -133,17 +103,14 @@ namespace mbrcPartyMode.ViewModel
 
         #region Disposing
 
-        public ICommand UnloadedCmd
-        {
-            get { return new UnloadedCommand(Dispose); }
-        }
+        public ICommand UnloadedCmd => new UnloadedCommand(Dispose);
 
         public void Dispose()
         {
-            this.clientViewModel.PropertyChanged -= OnPropertyChanged;
-            this.model.PropertyChanged -= OnPropertyChanged;
-            this.logViewerViewModel.Dispose();
-            this.clientViewModel.Dispose();
+            ClientViewModel.PropertyChanged -= OnPropertyChanged;
+            _model.PropertyChanged -= OnPropertyChanged;
+            LogViewerViewModel.Dispose();
+            ClientViewModel.Dispose();
             AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
             Dispatcher.CurrentDispatcher.UnhandledException -= CurrentDispatcher_UnhandledException;
         }

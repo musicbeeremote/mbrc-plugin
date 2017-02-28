@@ -1,7 +1,8 @@
-﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+﻿using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
 
-namespace MusicBeePlugin.AndroidRemote
+namespace MusicBeePlugin.AndroidRemote.Commands.Internal
 {
     internal class BroadcastEventAvailable : ICommand
     {

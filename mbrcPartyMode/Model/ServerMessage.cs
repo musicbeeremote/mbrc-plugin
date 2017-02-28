@@ -4,15 +4,7 @@ namespace mbrcPartyMode.Model
     {
         public ServerMessage(string client, string command, bool deny)
         {
-            if (Client == string.Empty)
-            {
-                Client = "---";
-            }
-            else
-            {
-                Client = client;
-            }
-
+            Client = Client == string.Empty ? "---" : client;
             Command = command;
             Deny = deny;
         }

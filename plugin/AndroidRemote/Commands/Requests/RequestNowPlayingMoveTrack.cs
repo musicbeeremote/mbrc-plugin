@@ -3,7 +3,7 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestNowPlayingMoveTrack : ICommand
+    internal class RequestNowPlayingMoveTrack : ICommand
     {
         public void Dispose()
         {  

@@ -6,7 +6,7 @@ using NLog;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibQueueArtist : ICommand
+    internal class RequestLibQueueArtist : ICommand
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         public void Dispose()

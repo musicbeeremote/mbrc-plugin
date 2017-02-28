@@ -7,10 +7,10 @@ namespace mbrcPartyMode
     {
         public ClientEventArgs(ConnectedClientAddress adr)
         {
-            this.adr = adr;
+            Adr = adr;
         }
 
-        public ConnectedClientAddress adr { get; set; }
+        public ConnectedClientAddress Adr { get; set; }
     }
 
 }

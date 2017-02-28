@@ -3,22 +3,21 @@ using System.Collections.Generic;
 
 namespace mbrcPartyMode.Helper
 {
-
-   public class CycledList<T> : IList<T>
+    public class CycledList<T> : IList<T>
     {
-        private readonly IList<T> list = new List<T>();
-        private readonly long limit;
+        private readonly IList<T> _list = new List<T>();
+        private readonly long _limit;
 
         public CycledList(long maxElements)
         {
-            limit = maxElements;
+            _limit = maxElements;
         }
 
         #region Implementation of IEnumerable
 
         public IEnumerator<T> GetEnumerator()
         {
-            return list.GetEnumerator();
+            return _list.GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -32,48 +31,40 @@ namespace mbrcPartyMode.Helper
 
         public void Add(T item)
         {
-            if (list.Count >= this.limit)
+            if (_list.Count >= _limit)
             {
-                list.RemoveAt(0);
-                list.Add(item);
-               
+                _list.RemoveAt(0);
+                _list.Add(item);
             }
             else
             {
-                list.Add(item);
+                _list.Add(item);
             }
-           
         }
 
         public void Clear()
         {
-            list.Clear();
+            _list.Clear();
         }
 
         public bool Contains(T item)
         {
-            return list.Contains(item);
+            return _list.Contains(item);
         }
 
         public void CopyTo(T[] array, int arrayIndex)
         {
-            list.CopyTo(array, arrayIndex);
+            _list.CopyTo(array, arrayIndex);
         }
 
         public bool Remove(T item)
         {
-            return list.Remove(item);
+            return _list.Remove(item);
         }
 
-        public int Count
-        {
-            get { return list.Count; }
-        }
+        public int Count => _list.Count;
 
-        public bool IsReadOnly
-        {
-            get { return list.IsReadOnly; }
-        }
+        public bool IsReadOnly => _list.IsReadOnly;
 
         #endregion
 
@@ -81,30 +72,25 @@ namespace mbrcPartyMode.Helper
 
         public int IndexOf(T item)
         {
-            return list.IndexOf(item);
+            return _list.IndexOf(item);
         }
 
         public void Insert(int index, T item)
         {
-            list.Insert(index, item);
+            _list.Insert(index, item);
         }
 
         public void RemoveAt(int index)
         {
-            list.RemoveAt(index);
+            _list.RemoveAt(index);
         }
 
         public T this[int index]
         {
-            get { return list[index]; }
-            set { list[index] = value; }
+            get { return _list[index]; }
+            set { _list[index] = value; }
         }
 
         #endregion
-
-
-
-      
     }
-
 }

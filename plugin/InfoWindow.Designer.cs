@@ -191,6 +191,7 @@ namespace MusicBeePlugin
             this.addAddressButton.TabIndex = 46;
             this.addAddressButton.Text = "+";
             this.addAddressButton.UseVisualStyleBackColor = true;
+            this.removeAddressButton.Click += new System.EventHandler(this.AddAddressButtonClick);
             // 
             // allowedLabel
             // 

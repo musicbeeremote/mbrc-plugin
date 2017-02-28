@@ -18,25 +18,26 @@ namespace mbrcPartyMode.Helper
 
         }
 
-        private bool _suppressNotification = false;
+        private bool _suppressNotification;
 
         // Override the event so this class can access it
-        public override event System.Collections.Specialized.NotifyCollectionChangedEventHandler CollectionChanged;
+        public override event NotifyCollectionChangedEventHandler CollectionChanged;
 
-        protected override void OnCollectionChanged(System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
         {
             if (_suppressNotification) return;
             // Be nice - use BlockReentrancy like MSDN said
             using (BlockReentrancy())
             {
-                System.Collections.Specialized.NotifyCollectionChangedEventHandler eventHandler = CollectionChanged;
+                var eventHandler = CollectionChanged;
                 if (eventHandler == null) return;
 
-                Delegate[] delegates = eventHandler.GetInvocationList();
+                var delegates = eventHandler.GetInvocationList();
 
-                foreach (System.Collections.Specialized.NotifyCollectionChangedEventHandler handler in delegates)
+                foreach (var @delegate in delegates)
                 {
-                    DispatcherObject dispatcherObject = handler.Target as DispatcherObject;
+                    var handler = (NotifyCollectionChangedEventHandler) @delegate;
+                    var dispatcherObject = handler.Target as DispatcherObject;
                     // If the subscriber is a DispatcherObject and different thread
                     if (dispatcherObject != null && dispatcherObject.CheckAccess() == false)
                     {

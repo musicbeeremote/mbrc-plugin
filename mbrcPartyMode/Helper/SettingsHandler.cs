@@ -10,16 +10,16 @@ namespace mbrcPartyMode.Helper
 {
     public class SettingsHandler
     {
-        private string filePath;
+        private readonly string _filePath;
 
         public SettingsHandler()
         {
             //filePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            filePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\MusicBee\\mb_remote\\partyModeSettings.json";
+            _filePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\MusicBee\\mb_remote\\partyModeSettings.json";
 
-            if (!File.Exists(filePath))
+            if (!File.Exists(_filePath))
             {
-                var stream = File.Create(filePath);
+                var stream = File.Create(_filePath);
                 stream.Close();
             }
 
@@ -32,24 +32,22 @@ namespace mbrcPartyMode.Helper
 
         public Settings GetSettings()
         {
-            var filestring = LoadJson(this.filePath);
-            var settings = JsonSerializer.DeserializeFromString<Settings>(filestring);//.DeserializeObject<Settings>(filestring);
-
-            if (settings == null) settings = new Settings();
+            var filestring = LoadJson(_filePath);
+            var settings = JsonSerializer.DeserializeFromString<Settings>(filestring) ?? new Settings();//.DeserializeObject<Settings>(filestring);
 
             return ValidateSettings(settings);
         }
 
         public void SaveSettings(Settings settings)
         {
-            this.SaveJson(filePath, settings);
+            SaveJson(_filePath, settings);
         }
 
-        private string LoadJson(string path)
+        private static string LoadJson(string path)
         {
             string json;
 
-            using (StreamReader sr = new StreamReader(path))
+            using (var sr = new StreamReader(path))
             {
                 json = sr.ReadToEnd();
             }
@@ -57,12 +55,11 @@ namespace mbrcPartyMode.Helper
             return json;
         }
 
-        private void SaveJson(string path, Settings settings)
+        private static void SaveJson(string path, Settings settings)
         {
-            string fileString = JsonSerializer.SerializeToString<Settings>(settings);
+            var fileString = JsonSerializer.SerializeToString(settings);
 
-
-            using (StreamWriter sw = new StreamWriter(path))
+            using (var sw = new StreamWriter(path))
             {
                 sw.Write(fileString);
                 sw.Flush();
@@ -77,20 +74,19 @@ namespace mbrcPartyMode.Helper
         /// <returns></returns>
         public static PhysicalAddress StrictParseAddress(string address)
         {
-            PhysicalAddress newAddress = PhysicalAddress.Parse(address);
-            if (PhysicalAddress.None.Equals(newAddress))
-                return null;
-
-            return newAddress;
+            var newAddress = PhysicalAddress.Parse(address);
+            return PhysicalAddress.None.Equals(newAddress) ? null : newAddress;
         }
 
-        private Settings ValidateSettings(Settings settings)
+        private static Settings ValidateSettings(Settings settings)
         {
-            DateTime storageIsOverDate = DateTime.Now.AddDays(settings.AddressStoreDays * -1);
+            var storageIsOverDate = DateTime.Now.AddDays(settings.AddressStoreDays * -1);
 
-            var validAddresses = settings.KnownAdresses.Where(x => DateTime.Compare(x.LastLogIn, storageIsOverDate) > 1);
+            var validAddresses = settings.KnownAdresses
+                .Where(x => DateTime.Compare(x.LastLogIn, storageIsOverDate) > 1)
+                .ToList();
 
-            if (validAddresses != null && validAddresses.Count() > 0) settings.KnownAdresses = validAddresses.ToList<ClientAdress>();
+            if (validAddresses.Any()) settings.KnownAdresses = validAddresses;
 
             return settings;
         }

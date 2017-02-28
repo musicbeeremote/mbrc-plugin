@@ -1,25 +1,24 @@
 ﻿using System;
 using System.Runtime.Serialization;
-using System.Xml.Linq;
 
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     [DataContract]
-    class Album : IEquatable<Album>
+    internal class Album : IEquatable<Album>
     {
-        
-        public Album(string artist, string album)
+
+        public Album(string artist, string name)
         {
-            this.album = album;
-            this.artist = artist;
+            Name = name;
+            Artist = artist;
             TrackCount = 1;
         }
 
         [DataMember(Name = "album")]
-        public string album { get; }
+        public string Name { get; }
 
         [DataMember(Name = "artist")]
-        public string artist { get; }
+        public string Artist { get; }
 
         public void IncreaseCount()
         {
@@ -31,12 +30,12 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 
         public bool Equals(Album other)
         {
-            return other.artist.Equals(artist) && other.album.Equals(album);
+            return other != null && (other.Artist.Equals(Artist) && other.Name.Equals(Name));
         }
 
         public override int GetHashCode()
         {
-            return artist.GetHashCode() ^ album.GetHashCode();
+            return Artist.GetHashCode() ^ Name.GetHashCode();
         }
     }
 }

@@ -12,11 +12,9 @@ namespace mbrcPartyMode.Model
     {
         #region vars
 
-        private static PartyModeModel instance;
-        private Settings settings;
-        private List<ConnectedClientAddress> connectedAdresses;
-        private SettingsHandler handler;
-        private CycledList<ServerMessage> serverMessages;
+        private static PartyModeModel _instance;
+        private readonly SettingsHandler _handler;
+        private readonly CycledList<ServerMessage> _serverMessages;
 
         #endregion vars
 
@@ -24,57 +22,45 @@ namespace mbrcPartyMode.Model
 
         public PartyModeModel()
         {
-            handler = new SettingsHandler();
-            settings = handler.GetSettings();
+            _handler = new SettingsHandler();
+            Settings = _handler.GetSettings();
 
-            PartyModeCommandHandler commandHandler = PartyModeCommandHandler.Instance;
+            var commandHandler = PartyModeCommandHandler.Instance;
 
             commandHandler.ClientConnected += ClientConnected;
             commandHandler.ClientDisconnected += ClientDisconnected;
             commandHandler.ServerCommandExecuted += ServerCommandExecuted;
-            connectedAdresses = new List<ConnectedClientAddress>();
+            ConnectedAddresses = new List<ConnectedClientAddress>();
 
-            serverMessages = new CycledList<ServerMessage>(10000);
+            _serverMessages = new CycledList<ServerMessage>(10000);
 
             ServerMessagesQueue = new ConcurrentQueue<ServerMessage>();
         }
 
         #endregion constructor
 
-        public static PartyModeModel Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new PartyModeModel();
-                }
-                return instance;
-            }
-        }
+        public static PartyModeModel Instance => _instance ?? (_instance = new PartyModeModel());
 
         public void AddAddress(ConnectedClientAddress adr)
         {
-            connectedAdresses.Add(adr);
+            ConnectedAddresses.Add(adr);
         }
 
         public void RemoveAddress(ConnectedClientAddress adr)
         {
-            if (connectedAdresses.Any())
+            if (!ConnectedAddresses.Any()) return;
+            var cadr = ConnectedAddresses.SingleOrDefault(x => x.ClientId == adr.ClientId);
+            if (cadr != null)
             {
-                var cadr = connectedAdresses.SingleOrDefault(x => x.ClientId == adr.ClientId);
-                if (cadr != null)
-                {
-                    connectedAdresses.Remove(adr);
-                }
+                ConnectedAddresses.Remove(adr);
             }
         }
 
         public ConnectedClientAddress GetConnectedClientAdresss(string clientId, IPAddress ipadress)
         {
-            if (connectedAdresses.Any())
+            if (ConnectedAddresses.Any())
             {
-                var cadr = connectedAdresses.SingleOrDefault(x => x.ClientId == clientId);
+                var cadr = ConnectedAddresses.SingleOrDefault(x => x.ClientId == clientId);
                 if (cadr != null)
                 {
                     return cadr;
@@ -83,50 +69,36 @@ namespace mbrcPartyMode.Model
             return new ConnectedClientAddress(ipadress, clientId);
         }
 
-        public Settings Settings
-        {
-            get
-            {
-                return settings;
-            }
-        }
+        public Settings Settings { get; }
 
-        public List<ConnectedClientAddress> ConnectedAddresses
-        {
-            get
-            {
-                return connectedAdresses;
-            }
-        }
+        public List<ConnectedClientAddress> ConnectedAddresses { get; }
 
         private void ClientConnected(object sender, ClientEventArgs e)
         {
-            if (e.adr != null)
+            if (e.Adr == null) return;
+            if (ConnectedAddresses.All(x => x.MacAdress.ToString() != e.Adr.MacAdress.ToString()))
             {
-                if (!connectedAdresses.Any(x => x.MacAdress.ToString() == e.adr.MacAdress.ToString()))
+                //to do: check if the Macadr is not null
+                var knownAdress = Settings.KnownAdresses.SingleOrDefault(x => x.MacAdress.ToString() == e.Adr.MacAdress.ToString());
+                if (knownAdress != null)
                 {
-                    //to do: check if the Macadr is not null
-                    ClientAdress knownAdress = settings.KnownAdresses.SingleOrDefault(x => x.MacAdress.ToString() == e.adr.MacAdress.ToString());
-                    if (knownAdress != null)
-                    {
-                        knownAdress.IpAddress = e.adr.IpAddress;
-                        knownAdress.LastLogIn = DateTime.Now;
-                        connectedAdresses.Add(new ConnectedClientAddress(knownAdress, e.adr.ClientId));
-                    }
-                    else
-                    {
-                        connectedAdresses.Add(e.adr);
-                    }
+                    knownAdress.IpAddress = e.Adr.IpAddress;
+                    knownAdress.LastLogIn = DateTime.Now;
+                    ConnectedAddresses.Add(new ConnectedClientAddress(knownAdress, e.Adr.ClientId));
                 }
-                OnPropertyChanged(nameof(ConnectedAddresses));
+                else
+                {
+                    ConnectedAddresses.Add(e.Adr);
+                }
             }
+            OnPropertyChanged(nameof(ConnectedAddresses));
         }
 
         private void ClientDisconnected(object sender, ClientEventArgs e)
         {
-            if (connectedAdresses.Contains(e.adr))
+            if (ConnectedAddresses.Contains(e.Adr))
             {
-                connectedAdresses.Remove(e.adr);
+                ConnectedAddresses.Remove(e.Adr);
             }
         }
 
@@ -134,7 +106,7 @@ namespace mbrcPartyMode.Model
         {
             
             var serverMessage = new ServerMessage(e.Client, e.Command, !e.IsCommandAllowed);
-            serverMessages.Add(serverMessage);
+            _serverMessages.Add(serverMessage);
             ServerMessagesQueue.Enqueue(serverMessage);
             OnPropertyChanged(nameof(ServerMessagesQueue));
         }
@@ -143,25 +115,22 @@ namespace mbrcPartyMode.Model
 
         public void SaveSettings()
         {
-            foreach (ClientAdress adr in connectedAdresses)
+            foreach (var adr in ConnectedAddresses)
             {
-                ClientAdress kadr = settings.KnownAdresses.SingleOrDefault(x => x.MacAdress.ToString() == adr.MacAdress.ToString());
-                if (kadr != null)
+                var kadr = Settings.KnownAdresses
+                    .SingleOrDefault(x => x.MacAdress.ToString() == adr.MacAdress.ToString());
+                if (kadr == null)
                 {
-                    kadr = adr;
-                }
-                else
-                {
-                    settings.KnownAdresses.Add(adr);
+                    Settings.KnownAdresses.Add(adr);
                 }
             }
 
-            handler.SaveSettings(settings);
+            _handler.SaveSettings(Settings);
         }
 
         public void RequestAllServerMessages()
         {
-            this.ServerMessagesQueue= new ConcurrentQueue<ServerMessage>(serverMessages);
+            ServerMessagesQueue= new ConcurrentQueue<ServerMessage>(_serverMessages);
             OnPropertyChanged(nameof(ServerMessagesQueue));
         }
 

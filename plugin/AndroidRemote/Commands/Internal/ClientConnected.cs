@@ -3,7 +3,7 @@ using MusicBeePlugin.AndroidRemote.Utilities;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Internal
 {
-    class ClientConnected:ICommand
+    internal class ClientConnected:ICommand
     {
         public void Dispose()
         {

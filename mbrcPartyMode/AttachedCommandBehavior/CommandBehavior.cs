@@ -1,5 +1,4 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 
 namespace mbrcPartyMode.AttachedCommandBehavior
@@ -43,8 +42,8 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         public static readonly DependencyProperty CommandProperty =
             DependencyProperty.RegisterAttached("Command", typeof(ICommand), typeof(CommandBehavior),
-                new FrameworkPropertyMetadata((ICommand)null,
-                    new PropertyChangedCallback(OnCommandChanged)));
+                new FrameworkPropertyMetadata(null,
+                    OnCommandChanged));
 
         /// <summary>
         /// Gets the Command property.  
@@ -67,7 +66,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         private static void OnCommandChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            CommandBehaviorBinding binding = FetchOrCreateBinding(d);
+            var binding = FetchOrCreateBinding(d);
             binding.Command = (ICommand)e.NewValue;
         }
 
@@ -80,15 +79,15 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         public static readonly DependencyProperty CommandParameterProperty =
             DependencyProperty.RegisterAttached("CommandParameter", typeof(object), typeof(CommandBehavior),
-                new FrameworkPropertyMetadata((object)null,
-                    new PropertyChangedCallback(OnCommandParameterChanged)));
+                new FrameworkPropertyMetadata(null,
+                    OnCommandParameterChanged));
 
         /// <summary>
         /// Gets the CommandParameter property.  
         /// </summary>
         public static object GetCommandParameter(DependencyObject d)
         {
-            return (object)d.GetValue(CommandParameterProperty);
+            return d.GetValue(CommandParameterProperty);
         }
 
         /// <summary>
@@ -104,7 +103,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         private static void OnCommandParameterChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            CommandBehaviorBinding binding = FetchOrCreateBinding(d);
+            var binding = FetchOrCreateBinding(d);
             binding.CommandParameter = e.NewValue;
         }
 
@@ -117,8 +116,8 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         public static readonly DependencyProperty EventProperty =
             DependencyProperty.RegisterAttached("Event", typeof(string), typeof(CommandBehavior),
-                new FrameworkPropertyMetadata((string)String.Empty,
-                    new PropertyChangedCallback(OnEventChanged)));
+                new FrameworkPropertyMetadata(string.Empty,
+                    OnEventChanged));
 
         /// <summary>
         /// Gets the Event property.  This dependency property 
@@ -143,7 +142,7 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         /// </summary>
         private static void OnEventChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            CommandBehaviorBinding binding = FetchOrCreateBinding(d);
+            var binding = FetchOrCreateBinding(d);
             //check if the Event is set. If yes we need to rebind the Command to the new event and unregister the old one
             if (binding.Event != null && binding.Owner != null)
                 binding.Dispose();
@@ -157,12 +156,10 @@ namespace mbrcPartyMode.AttachedCommandBehavior
         //tries to get a CommandBehaviorBinding from the element. Creates a new instance if there is not one attached
         private static CommandBehaviorBinding FetchOrCreateBinding(DependencyObject d)
         {
-            CommandBehaviorBinding binding = CommandBehavior.GetBehavior(d);
-            if (binding == null)
-            {
-                binding = new CommandBehaviorBinding();
-                CommandBehavior.SetBehavior(d, binding);
-            }
+            var binding = GetBehavior(d);
+            if (binding != null) return binding;
+            binding = new CommandBehaviorBinding();
+            SetBehavior(d, binding);
             return binding;
         }
         #endregion

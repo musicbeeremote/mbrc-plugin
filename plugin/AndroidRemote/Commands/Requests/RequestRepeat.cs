@@ -1,9 +1,9 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using MusicBeePlugin.AndroidRemote.Interfaces;
-    using MusicBeePlugin.AndroidRemote.Utilities;
+    using Interfaces;
+    using Utilities;
 
-    class RequestRepeat:ICommand
+    internal class RequestRepeat:ICommand
     {
         public void Dispose()
         {

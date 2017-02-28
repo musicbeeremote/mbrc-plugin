@@ -1,28 +1,21 @@
+using System.Diagnostics;
 using mbrcPartyMode;
 using mbrcPartyMode.Helper;
 using mbrcPartyMode.Model;
-using mbrcPartyMode.Tools;
-using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Utilities;
-using NLog;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 
-namespace MusicBeePlugin.AndroidRemote.Commands
+namespace MusicBeePlugin.PartyMode
 {
     public class PartyModeCommandDedcorator : CommandDecorator
     {
-        private readonly ICommand cmd;
-        private PartyModeModel model;
+        private readonly ICommand _cmd;
+        private readonly PartyModeModel _model;
 
         public PartyModeCommandDedcorator(ICommand cmd) : base(cmd)
         {
-            this.cmd = cmd;
-            this.model = PartyModeModel.Instance;
+            _cmd = cmd;
+            _model = PartyModeModel.Instance;
         }
 
         public void BeforeExcute(MappingCommand mc, ConnectedClientAddress adr)
@@ -48,29 +41,34 @@ namespace MusicBeePlugin.AndroidRemote.Commands
 
         public override void Execute(IEvent eEvent)
         {
-            Debug.WriteLine("EventTyp: " + eEvent.Type.ToString());
 
-            MappingCommand mc = PartyModeCommandMapper.MapCommand(cmd);
+            if (!_model.Settings.IsActive)
+            {
+                _cmd.Execute(eEvent);
+                return;
+            } 
+
+            var mc = PartyModeCommandMapper.MapCommand(_cmd);
             var socketserver = SocketServer.Instance;
             ConnectedClientAddress adr = null;
             if (socketserver != null)
             {
-                adr = model.GetConnectedClientAdresss(eEvent.ClientId, socketserver.GetIpAddress(eEvent.ClientId));
+                adr = _model.GetConnectedClientAdresss(eEvent.ClientId, socketserver.GetIpAddress(eEvent.ClientId));
             }
 
-            bool isAllowed = PartyModeCommandHandler.Instance.IsCommandAllowed(mc, adr) == true;
-           
+            var isAllowed = PartyModeCommandHandler.Instance.IsCommandAllowed(mc, adr);
+
             if (isAllowed)
             {
                 BeforeExcute(mc, adr);
-                cmd.Execute(eEvent);
+                _cmd.Execute(eEvent);
             }
             else
             {
-                RequestedCommandNotAllowed rmcmd = new RequestedCommandNotAllowed();
+                var rmcmd = new RequestedCommandNotAllowed();
                 rmcmd.Execute(eEvent);
             }
-            PartyModeCommandHandler.Instance.OnServerCommandExecuted(eEvent.ClientId.ToString(), eEvent.Type.ToString(), isAllowed);
+            PartyModeCommandHandler.Instance.OnServerCommandExecuted(eEvent.ClientId, eEvent.Type, isAllowed);
         }
     }
 }
