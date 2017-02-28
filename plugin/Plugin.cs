@@ -1777,9 +1777,8 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.LibraryAlbumTracks, trackList).ToJsonString(), client));
         }
 
-        public void RequestRadioStations(string clientId)
+        public void RequestRadioStations(string clientId, int offset = 0, int limit = 4000)
         {
-
             var radioStations = new string[] { };
             var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
             List<RadioStation> stations;
@@ -1792,14 +1791,28 @@ namespace MusicBeePlugin
                         Name = _api.Library_GetFileTag(s, MetaDataType.TrackTitle)
                     })
                     .ToList();
+
             }
             else
             {
                 stations = new List<RadioStation>();
             }
 
-            var payload = new SocketMessage(Constants.RadioStations, stations).ToJsonString();
-            SendReply(payload, clientId);
+            var total = stations.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            var message = new SocketMessage
+            {
+                Context = Constants.RadioStations,
+                Data = new Page<RadioStation>
+                {
+                    Data = offset > total ? new List<RadioStation>() : stations.GetRange(offset, realLimit),
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+            
+            SendReply(message.ToJsonString(), clientId);
         }
 
         /// <summary>
