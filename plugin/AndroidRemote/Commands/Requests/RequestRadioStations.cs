@@ -1,4 +1,5 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
@@ -6,7 +7,17 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
     {
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.RequestRadioStations(eEvent.ClientId);
+            var data = eEvent.Data as JsonObject;
+            if (data != null)
+            {
+                var offset = data.Get<int>("offset");
+                var limit = data.Get<int>("limit");
+                Plugin.Instance.RequestRadioStations(eEvent.ClientId, offset, limit);
+            }
+            else
+            {
+                Plugin.Instance.RequestRadioStations(eEvent.ClientId);
+            }
         }
     }
 }
