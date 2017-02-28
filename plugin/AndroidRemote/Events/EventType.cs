@@ -1,6 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Events
 {
-    class EventType
+    internal class EventType
     {
         public const string ActionClientConnected = "ActionClientConnected";
         public const string ActionClientDisconnected = "ActionClientDisconnected";

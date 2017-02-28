@@ -4,7 +4,7 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    public class RequestPlaylistList : ICommand
+    internal class RequestPlaylistList : ICommand
     {
         public void Execute(IEvent eEvent)
         {

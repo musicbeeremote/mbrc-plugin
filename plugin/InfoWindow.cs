@@ -11,6 +11,8 @@ using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
+using mbrcPartyMode.View;
+using mbrcPartyMode.ViewModel;
 
 namespace MusicBeePlugin
 {
@@ -21,7 +23,7 @@ namespace MusicBeePlugin
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
-        private IOnDebugSelectionChanged listener;
+        private IOnDebugSelectionChanged _listener;
         private SocketTester _socketTester;
 
         /// <summary>
@@ -30,6 +32,11 @@ namespace MusicBeePlugin
         {
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
+            var partyModeView = new PartyModeView {DataContext = new PartyModeViewModel()};
+            partyModeView.InitializeComponent();
+            elementHost1.Dock = DockStyle.Fill;
+            elementHost1.Child = partyModeView;
+            helpButton.Click += HelpButtonClick;
         }
 
         /// <summary>
@@ -81,7 +88,7 @@ namespace MusicBeePlugin
 
             _logger.Debug($"Selected source is -> {settings.Source}");
 
-            _socketTester = new SocketTester {ConnectionListener = this};
+            _socketTester = new SocketTester { ConnectionListener = this };
             _socketTester.VerifyConnection();
         }
 
@@ -146,7 +153,7 @@ namespace MusicBeePlugin
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
+            UserSettings.Instance.ListeningPort = (uint)portNumericUpDown.Value;
 
             switch (selectionFilteringComboBox.SelectedIndex)
             {
@@ -154,7 +161,7 @@ namespace MusicBeePlugin
                     break;
                 case 1:
                     UserSettings.Instance.BaseIp = ipAddressInputTextBox.Text;
-                    UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
+                    UserSettings.Instance.LastOctetMax = (uint)rangeNumericUpDown.Value;
                     break;
                 case 2:
                     UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
@@ -207,7 +214,7 @@ namespace MusicBeePlugin
         {
             var settings = UserSettings.Instance;
             settings.DebugLogEnabled = debugEnabled.Checked;
-            listener?.SelectionChanged(settings.DebugLogEnabled);
+            _listener?.SelectionChanged(settings.DebugLogEnabled);
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
@@ -220,6 +227,7 @@ namespace MusicBeePlugin
             {
                 MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
             }
+
         }
 
         public interface IOnDebugSelectionChanged
@@ -229,7 +237,7 @@ namespace MusicBeePlugin
 
         public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
         {
-            this.listener = listener;
+            _listener = listener;
         }
 
         /// <summary>

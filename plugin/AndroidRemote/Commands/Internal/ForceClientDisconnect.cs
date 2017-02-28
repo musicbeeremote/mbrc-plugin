@@ -3,7 +3,7 @@
     using Interfaces;
     using Networking;
 
-    class ForceClientDisconnect:ICommand
+    internal class ForceClientDisconnect:ICommand
     {
         public void Dispose()
         {

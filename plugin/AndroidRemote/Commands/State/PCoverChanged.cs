@@ -3,7 +3,7 @@ using MusicBeePlugin.AndroidRemote.Model;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.State
 {
-    class PCoverChanged:ICommand
+    internal class PCoverChanged:ICommand
     {
         public void Dispose()
         {

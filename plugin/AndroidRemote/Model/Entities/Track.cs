@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     [DataContract]
-
-    class Track :IEquatable<Track>, IComparable<Track>
+    internal class Track :IEquatable<Track>, IComparable<Track>
     {
         public Track()
         {
@@ -14,10 +13,10 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 
         public Track(string artist, string title, int trackNo, string src)
         {
-            this.Artist = artist;
-            this.Title = title;
-            this.Src = src;
-            this.Trackno = trackNo;
+            Artist = artist;
+            Title = title;
+            Src = src;
+            Trackno = trackNo;
         }
 
         [DataMember(Name = "src")]
@@ -46,7 +45,7 @@ namespace MusicBeePlugin.AndroidRemote.Entities
 
         public bool Equals(Track other)
         {
-            return (other.Artist.Equals(Artist) && other.Title.Equals(Title));
+            return other != null && other.Artist.Equals(Artist) && other.Title.Equals(Title);
         }
 
         public int CompareTo(Track other)

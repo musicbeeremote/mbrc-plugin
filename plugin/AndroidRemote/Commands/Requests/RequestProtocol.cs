@@ -1,12 +1,11 @@
-﻿
-using MusicBeePlugin.AndroidRemote.Entities;
-using MusicBeePlugin.AndroidRemote.Interfaces;
+﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestProtocol:ICommand
+    internal class RequestProtocol:ICommand
     {
         public void Dispose()
         {

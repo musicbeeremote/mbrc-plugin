@@ -8,7 +8,7 @@
         public const string Player = "player";
         public const string Protocol = "protocol";
         public const string PlayerName = "MusicBee";
-        public const int ProtocolVersion = 4;
+        public const int ProtocolVersion = 5;
         public const string PluginVersion = "pluginversion";
         public const string NotAllowed = "notallowed";
         #endregion
@@ -87,6 +87,16 @@
         public const string VerifyConnection = "verifyconnection";
         public const string PlayerOutputSwitch = "playeroutputswitch";
         public const string RadioStations = "radiostations";
+
+        #endregion
+
+        #region Protocol 5
+
+        /// <summary>
+        /// Command is unavailable for a client due to restrictions on the party mode
+        /// extension.
+        /// </summary>
+        public const string CommandUnavailable = "commandunavailable";
 
         #endregion
 

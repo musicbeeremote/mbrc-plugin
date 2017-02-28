@@ -1,0 +1,66 @@
+﻿<UserControl x:Class="mbrcPartyMode.View.LogViewerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:mbrcPartyMode.View"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DesignHeight="300"
+             d:DesignWidth="300"
+             BorderBrush="Black"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Style/StyleDictonary.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+
+
+
+
+    </UserControl.Resources>
+
+    <DockPanel Width="Auto"
+               Height="Auto"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"
+               DockPanel.Dock="Right">
+        <TextBlock Margin="5"
+                   DockPanel.Dock="Top"
+                   FontSize="10"
+                   Foreground="black">
+            server activity log viewer
+        </TextBlock>
+        <ListView Width="auto"
+                  Height="auto"
+                  MinWidth="100"
+                  MinHeight="100"
+                  DockPanel.Dock="Top"
+                  IsSynchronizedWithCurrentItem="True"
+                  ItemsSource="{Binding Logs}"
+                  ScrollViewer.HorizontalScrollBarVisibility="Visible"
+                  ScrollViewer.VerticalScrollBarVisibility="Visible"
+                  Visibility="{Binding IsDebug}">
+
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Width="40"
+                                    DisplayMemberBinding="{Binding MessageCount}"
+                                    Header="count" />
+                    <GridViewColumn Width="45"
+                                    DisplayMemberBinding="{Binding Client}"
+                                    Header="client" />
+                    <GridViewColumn Width="120"
+                                    DisplayMemberBinding="{Binding Command}"
+                                    Header="command" />
+                    <GridViewColumn Width="50"
+                                    DisplayMemberBinding="{Binding Deny}"
+                                    Header="deny" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </DockPanel>
+
+</UserControl>

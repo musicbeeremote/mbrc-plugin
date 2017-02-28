@@ -1,4 +1,4 @@
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     public abstract class NowPlayingTrackBase
     {

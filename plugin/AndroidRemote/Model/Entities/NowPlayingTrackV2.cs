@@ -1,5 +1,4 @@
 ﻿using System.Runtime.Serialization;
-using MusicBeePlugin.AndroidRemote.Entities;
 
 namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {

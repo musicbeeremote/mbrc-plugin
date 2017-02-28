@@ -1,6 +1,6 @@
 ﻿using System.Runtime.Serialization;
 
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
   [DataContract]
   public class Playlist

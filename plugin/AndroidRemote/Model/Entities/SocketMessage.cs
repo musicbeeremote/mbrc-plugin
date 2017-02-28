@@ -1,7 +1,7 @@
 ﻿using System.Runtime.Serialization;
 using ServiceStack.Text;
 
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     [DataContract]
     public class SocketMessage
@@ -12,11 +12,11 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             Data = data;
         }
 
-        public SocketMessage(JsonObject jObj)
+        public SocketMessage(JsonObject jsonObject)
         {
-            Context = jObj.Get("context");
+            Context = jsonObject.Get("context");
 
-            var messageData = jObj.Get("data");
+            var messageData = jsonObject.Get("data");
             if (messageData == null)
             {
                 Data = "";
@@ -25,7 +25,7 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             {
                 if (messageData.Contains("{") && messageData.Contains("}"))
                 {
-                    Data = jObj.Object("data");
+                    Data = jsonObject.Object("data");
                 }
                 else
                 {

@@ -44,8 +44,12 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.1.0.1457</AssemblyVersion>
+    <AssemblyVersion>1.1.1.1472</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <Prefer32bit>true</Prefer32bit>
+    <LangVersion>6</LangVersion>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -84,6 +88,8 @@
       <Private>False</Private>
       <EmbedAssembly>true</EmbedAssembly>
     </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
     <Reference Include="ServiceStack.Text">
       <HintPath>..\packages\ServiceStack.Text.3.9.71\lib\net35\ServiceStack.Text.dll</HintPath>
       <EmbedAssembly>true</EmbedAssembly>
@@ -93,11 +99,14 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Data.Linq" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data" />
     <Reference Include="System.Core" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AndroidRemote\Commands\CoverPayload.cs" />
@@ -214,6 +223,11 @@
       <DependentUpon>InfoWindow.cs</DependentUpon>
     </Compile>
     <Compile Include="MusicBeeInterface.cs" />
+    <Compile Include="PartyMode\CommandDecorator.cs" />
+    <Compile Include="PartyMode\PartyModeBaseCommand.cs" />
+    <Compile Include="PartyMode\PartyModeCommandDedcorator.cs" />
+    <Compile Include="PartyMode\PartyModeCommandMapper.cs" />
+    <Compile Include="PartyMode\RequestedCommandNotAllowed.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="AndroidRemote\Networking\SocketClient.cs" />
     <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
@@ -274,7 +288,12 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="..\mbrcPartyMode\mbrc-partymode.csproj">
+      <Project>{86bd4fc8-0ff9-4cd6-ac5f-5fc15397df55}</Project>
+      <Name>mbrc-partymode</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>

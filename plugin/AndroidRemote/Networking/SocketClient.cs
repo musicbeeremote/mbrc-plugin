@@ -20,7 +20,7 @@
         /// <summary>
         /// Represents the socket client's id.
         /// </summary>
-        public string ClientId { get; private set; }
+        public string ClientId { get; }
 
         /// <summary>
         /// Represents the number of the packets received by the client.

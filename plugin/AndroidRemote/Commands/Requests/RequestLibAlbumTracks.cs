@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibAlbumTracks : ICommand
+    internal class RequestLibAlbumTracks : ICommand
     {
         public void Dispose()
         {

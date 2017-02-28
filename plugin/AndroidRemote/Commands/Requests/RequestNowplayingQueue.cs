@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using MusicBeePlugin.AndroidRemote.Entities;
+﻿using System.Collections.Generic;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using ServiceStack.Text;
 

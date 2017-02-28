@@ -1,7 +1,8 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     using Interfaces;
-    class RequestLibSearchArtist:ICommand
+
+    internal class RequestLibSearchArtist:ICommand
     {
         public void Dispose()
         {

@@ -3,8 +3,6 @@ using System.Collections.Concurrent;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
-    using System.Collections.Generic;
-    using System.Linq;
     using Networking;
 
     /// <summary>
@@ -22,7 +20,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <returns>true or false depending on the authentication state of the client</returns>
         public static bool IsClientAuthenticated(string clientId)
         {
-            bool authenticated = false;
+            var authenticated = false;
             SocketClient client;
             if (ConnectedClients.TryGetValue(clientId, out client))
             {
@@ -101,7 +99,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var client = Client(clientId);
             var clientProtocolVersion = client?.ClientProtocolVersion
-                                        ?? (int) Constants.ProtocolVersion;
+                                        ?? Constants.ProtocolVersion;
 
             return Math.Abs(clientProtocolVersion - Constants.ProtocolVersion) > 0;
         }

@@ -1,7 +1,8 @@
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     using Interfaces;
-    class RequestLfmLoveRating : ICommand
+
+    internal class RequestLfmLoveRating : ICommand
     {
         public void Dispose()
         {

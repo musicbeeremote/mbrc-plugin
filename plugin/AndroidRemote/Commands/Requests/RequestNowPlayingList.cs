@@ -4,7 +4,7 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestNowPlayingList : ICommand
+    internal class RequestNowPlayingList : ICommand
     {
         public void Dispose()
         {

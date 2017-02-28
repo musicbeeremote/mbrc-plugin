@@ -1,13 +1,10 @@
-﻿using MusicBeePlugin.AndroidRemote.Entities;
-using MusicBeePlugin.AndroidRemote.Networking;
-using NLog;
+﻿using NLog;
 
 namespace MusicBeePlugin.AndroidRemote.Model
 {
     using System;
     using System.Security;
     using System.Text.RegularExpressions;
-    using Events;
 
     internal class LyricCoverModel
     {

@@ -2,7 +2,7 @@
 {
     using Interfaces;
 
-    class EventBus
+    internal class EventBus
     {
         public static void FireEvent(IEvent e)
         {

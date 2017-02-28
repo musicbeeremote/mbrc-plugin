@@ -4,7 +4,7 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibQueueAlbum : ICommand
+    internal class RequestLibQueueAlbum : ICommand
     {
         public void Dispose()
         {

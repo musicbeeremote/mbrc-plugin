@@ -1,14 +1,21 @@
 ﻿
-namespace MusicBeePlugin.AndroidRemote.Entities
+using System.Runtime.Serialization;
+
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
-    class Genre
+    [DataContract]
+    internal class Genre
     {
-        public string genre { get; set; }
-        public int count { get; set; }
-        public Genre(string genre, int count)
+        [DataMember(Name = "genre")]
+        public string Name { get; set; }
+
+        [DataMember(Name = "count")]
+        public int Count { get; set; }
+
+        public Genre(string name, int count)
         {
-            this.genre = genre;
-            this.count = count;
+            Name = name;
+            Count = count;
         }
     }
 }

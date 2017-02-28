@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestPlayPause:ICommand
+    internal class RequestPlayPause:ICommand
     {
         public void Dispose()
         {
