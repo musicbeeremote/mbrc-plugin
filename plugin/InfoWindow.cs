@@ -11,7 +11,7 @@ using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
-using mbrcPartyMode.View;
+using MbrcPartyMode.View;
 using MbrcPartyMode.ViewModel;
 
 namespace MusicBeePlugin

@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.1.1.1472</AssemblyVersion>
+    <AssemblyVersion>1.1.1.1479</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -289,7 +289,7 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\mbrcPartyMode\mbrc-partymode.csproj">
+    <ProjectReference Include="..\mbrc-partymode\mbrc-partymode.csproj">
       <Project>{86bd4fc8-0ff9-4cd6-ac5f-5fc15397df55}</Project>
       <Name>mbrc-partymode</Name>
     </ProjectReference>
