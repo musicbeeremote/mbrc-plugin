@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "firewall-utility", "firewal
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{445C3839-41BD-4B4D-8B5E-CDBC5E0BFF2E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-partymode", "mbrcPartyMode\mbrc-partymode.csproj", "{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-partymode", "mbrc-partymode\mbrc-partymode.csproj", "{86BD4FC8-0FF9-4CD6-AC5F-5FC15397DF55}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
