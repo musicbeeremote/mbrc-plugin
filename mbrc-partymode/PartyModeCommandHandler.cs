@@ -44,7 +44,7 @@ namespace MbrcPartyMode
 
         public static PartyModeCommandHandler Instance => _instance ?? (_instance = new PartyModeCommandHandler());
 
-        public bool IsCommandAllowed(MappingCommand cmd, ClientAdress adr)
+        public bool IsCommandAllowed(MappingCommand cmd, ClientAddress adr)
         {
             if (adr == null) return true;
 

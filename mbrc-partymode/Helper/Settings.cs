@@ -8,7 +8,7 @@ namespace MbrcPartyMode.Helper
     {
         #region constructor
 
-        public Settings(List<ClientAdress> knownAdresses, uint addressStorageDays)
+        public Settings(List<ClientAddress> knownAdresses, uint addressStorageDays)
         {
             _knownAdresses = knownAdresses;
             _addressStorageDays = addressStorageDays;
@@ -16,7 +16,7 @@ namespace MbrcPartyMode.Helper
 
         public Settings()
         {
-            _knownAdresses = new List<ClientAdress>();
+            _knownAdresses = new List<ClientAddress>();
             _addressStorageDays = 90;
         }
 
@@ -24,14 +24,14 @@ namespace MbrcPartyMode.Helper
 
         #region vars
 
-        private List<ClientAdress> _knownAdresses;
+        private List<ClientAddress> _knownAdresses;
         private uint _addressStorageDays;
         private bool _isActive;
 
         #endregion
 
 
-        public List<ClientAdress> KnownAdresses
+        public List<ClientAddress> KnownAdresses
         {
             get { return _knownAdresses; }
             set { _knownAdresses = value; }

@@ -9,17 +9,17 @@ namespace MbrcPartyMode.ViewModel
     public class ClientViewModel : ModelBase, IDisposable
     {
         private readonly PartyModeModel _model;
-        private ObservableCollection<ClientAdress> _connectedClients;
+        private ObservableCollection<ClientAddress> _connectedClients;
         private ConnectedClientAddress _selectedClient;
 
         public ClientViewModel(PartyModeModel model)
         {
             _model = model;
-            ConnectedClients = new ObservableCollection<ClientAdress>(model.ConnectedAddresses);
+            ConnectedClients = new ObservableCollection<ClientAddress>(model.ConnectedAddresses);
             model.PropertyChanged += ModelOnPropertyChangend;
         }
 
-        public ObservableCollection<ClientAdress> ConnectedClients
+        public ObservableCollection<ClientAddress> ConnectedClients
         {
             get { return _connectedClients; }
             set
@@ -43,7 +43,7 @@ namespace MbrcPartyMode.ViewModel
         public void ModelOnPropertyChangend(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != nameof(_model.ConnectedAddresses)) return;
-            ConnectedClients = new ObservableCollection<ClientAdress>(_model.ConnectedAddresses);
+            ConnectedClients = new ObservableCollection<ClientAddress>(_model.ConnectedAddresses);
             OnPropertyChanged(nameof(SelectedClient));
         }
 

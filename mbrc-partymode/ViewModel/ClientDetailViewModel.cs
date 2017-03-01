@@ -5,10 +5,10 @@ namespace MbrcPartyMode.ViewModel
 {
     public sealed class ClientDetailViewModel : ModelBase
     {
-        private readonly ClientAdress _clientAddress;
+        private readonly ClientAddress _clientAddress;
 
 
-        public ClientDetailViewModel(ClientAdress adr)
+        public ClientDetailViewModel(ClientAddress adr)
         {
             _clientAddress = adr;
             OnPropertyChanged(nameof(IsVisible));

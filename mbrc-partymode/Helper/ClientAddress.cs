@@ -6,14 +6,14 @@ using MbrcPartyMode.Tools;
 namespace MbrcPartyMode.Helper
 {
     [Serializable]
-    public class ClientAdress : IEquatable<ClientAdress>
+    public class ClientAddress : IEquatable<ClientAddress>
     {
-        public ClientAdress(IPAddress ipadr) : this(PartyModeNetworkTools.GetMACAddress(ipadr))
+        public ClientAddress(IPAddress ipadr) : this(PartyModeNetworkTools.GetMACAddress(ipadr))
         {
             _ipAddress = ipadr;
         }
 
-        private ClientAdress(PhysicalAddress macAdr)
+        private ClientAddress(PhysicalAddress macAdr)
         {
             _macAddress = macAdr;
             LastLogIn = DateTime.Now;
@@ -120,12 +120,12 @@ namespace MbrcPartyMode.Helper
 
         #region Equatable
 
-        bool IEquatable<ClientAdress>.Equals(ClientAdress other)
+        bool IEquatable<ClientAddress>.Equals(ClientAddress other)
         {
             return Equals(other);
         }
 
-        public bool Equals(ClientAdress obj)
+        public bool Equals(ClientAddress obj)
         {
             var other = obj;
 

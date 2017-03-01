@@ -3,14 +3,14 @@ using System.Net;
 namespace MbrcPartyMode.Helper
 {
 
-    public sealed class ConnectedClientAddress : ClientAdress
+    public sealed class ConnectedClientAddress : ClientAddress
     {
         public ConnectedClientAddress(IPAddress ipadr, string clintId) : base(ipadr)
         {
             ClientId = clintId;
         }
 
-        public ConnectedClientAddress(ClientAdress adr, string clintId) : this(adr.IpAddress, clintId)
+        public ConnectedClientAddress(ClientAddress adr, string clintId) : this(adr.IpAddress, clintId)
         {
             CanAddToPlayList = adr.CanAddToPlayList;
             CanDeleteFromPlayList = adr.CanDeleteFromPlayList;

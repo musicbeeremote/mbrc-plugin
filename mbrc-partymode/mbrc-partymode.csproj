@@ -67,7 +67,7 @@
     <Compile Include="ClientEventArgs.cs" />
     <Compile Include="Helper\ConnnectedClientAddress.cs" />
     <Compile Include="Model\PartyModeModel.cs" />
-    <Compile Include="Helper\ClientAdress.cs" />
+    <Compile Include="Helper\ClientAddress.cs" />
     <Compile Include="Helper\Settings.cs" />
     <Compile Include="Model\ServerMessage.cs" />
     <Compile Include="PartyModeCommandHandler.cs" />
