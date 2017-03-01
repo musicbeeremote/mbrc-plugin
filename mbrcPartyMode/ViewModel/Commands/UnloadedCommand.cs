@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Input;
 
-namespace mbrcPartyMode.ViewModel.Commands
+namespace MbrcPartyMode.ViewModel.Commands
 {
     public class UnloadedCommand : ICommand
     {

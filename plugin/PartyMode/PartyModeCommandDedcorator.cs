@@ -1,7 +1,6 @@
-using System.Diagnostics;
-using mbrcPartyMode;
-using mbrcPartyMode.Helper;
-using mbrcPartyMode.Model;
+using MbrcPartyMode;
+using MbrcPartyMode.Helper;
+using MbrcPartyMode.Model;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
 

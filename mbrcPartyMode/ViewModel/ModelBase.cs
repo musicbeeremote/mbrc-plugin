@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public abstract class ModelBase : INotifyPropertyChanged
     {

@@ -1,4 +1,4 @@
-namespace mbrcPartyMode.Model
+namespace MbrcPartyMode.Model
 {
     public class ServerMessage
     {

@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
 
     public sealed class ConnectedClientAddress : ClientAdress

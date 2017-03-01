@@ -1,7 +1,7 @@
-﻿using mbrcPartyMode.Helper;
-using System.Windows;
+﻿using System.Windows;
+using MbrcPartyMode.Helper;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public sealed class ClientDetailViewModel : ModelBase
     {

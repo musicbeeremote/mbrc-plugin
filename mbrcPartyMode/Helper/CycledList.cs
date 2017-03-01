@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
     public class CycledList<T> : IList<T>
     {

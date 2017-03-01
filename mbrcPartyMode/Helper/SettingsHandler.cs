@@ -1,12 +1,11 @@
-﻿using ServiceStack.Text;
-
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
+using ServiceStack.Text;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
     public class SettingsHandler
     {

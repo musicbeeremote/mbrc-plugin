@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows.Threading;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
 
     /// <summary>

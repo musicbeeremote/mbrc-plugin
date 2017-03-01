@@ -1,6 +1,6 @@
 ﻿using System.Windows.Controls;
 
-namespace mbrcPartyMode.View
+namespace MbrcPartyMode.View
 {
     /// <summary>
     /// Interaction logic for ClientView.xaml

@@ -1,6 +1,6 @@
-﻿using mbrcPartyMode.Helper;
+﻿using MbrcPartyMode.Helper;
 
-namespace mbrcPartyMode
+namespace MbrcPartyMode
 {
     public enum MappingCommand
     {

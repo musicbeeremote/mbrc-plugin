@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 
-namespace mbrcPartyMode.AttachedCommandBehavior
+namespace MbrcPartyMode.AttachedCommandBehavior
 {
     /// <summary>
     /// Defines the command behavior binding

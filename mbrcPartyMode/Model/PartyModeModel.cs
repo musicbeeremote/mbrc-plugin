@@ -1,12 +1,12 @@
-﻿using mbrcPartyMode.Helper;
-using mbrcPartyMode.ViewModel;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using MbrcPartyMode.Helper;
+using MbrcPartyMode.ViewModel;
 
-namespace mbrcPartyMode.Model
+namespace MbrcPartyMode.Model
 {
     public class PartyModeModel : ModelBase
     {
@@ -75,20 +75,20 @@ namespace mbrcPartyMode.Model
 
         private void ClientConnected(object sender, ClientEventArgs e)
         {
-            if (e.Adr == null) return;
-            if (ConnectedAddresses.All(x => x.MacAdress.ToString() != e.Adr.MacAdress.ToString()))
+            if (e.Address == null) return;
+            if (ConnectedAddresses.All(x => x.MacAdress.ToString() != e.Address.MacAdress.ToString()))
             {
                 //to do: check if the Macadr is not null
-                var knownAdress = Settings.KnownAdresses.SingleOrDefault(x => x.MacAdress.ToString() == e.Adr.MacAdress.ToString());
+                var knownAdress = Settings.KnownAdresses.SingleOrDefault(x => x.MacAdress.ToString() == e.Address.MacAdress.ToString());
                 if (knownAdress != null)
                 {
-                    knownAdress.IpAddress = e.Adr.IpAddress;
+                    knownAdress.IpAddress = e.Address.IpAddress;
                     knownAdress.LastLogIn = DateTime.Now;
-                    ConnectedAddresses.Add(new ConnectedClientAddress(knownAdress, e.Adr.ClientId));
+                    ConnectedAddresses.Add(new ConnectedClientAddress(knownAdress, e.Address.ClientId));
                 }
                 else
                 {
-                    ConnectedAddresses.Add(e.Adr);
+                    ConnectedAddresses.Add(e.Address);
                 }
             }
             OnPropertyChanged(nameof(ConnectedAddresses));
@@ -96,9 +96,9 @@ namespace mbrcPartyMode.Model
 
         private void ClientDisconnected(object sender, ClientEventArgs e)
         {
-            if (ConnectedAddresses.Contains(e.Adr))
+            if (ConnectedAddresses.Contains(e.Address))
             {
-                ConnectedAddresses.Remove(e.Adr);
+                ConnectedAddresses.Remove(e.Address);
             }
         }
 

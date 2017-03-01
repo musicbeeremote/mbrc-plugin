@@ -1,7 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Input;
 
-namespace mbrcPartyMode.AttachedCommandBehavior
+namespace MbrcPartyMode.AttachedCommandBehavior
 {
     /// <summary>
     /// Defines the attached properties to create a CommandBehaviorBinding

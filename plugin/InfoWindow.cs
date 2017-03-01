@@ -12,7 +12,7 @@ using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
 using mbrcPartyMode.View;
-using mbrcPartyMode.ViewModel;
+using MbrcPartyMode.ViewModel;
 
 namespace MusicBeePlugin
 {

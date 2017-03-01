@@ -1,8 +1,8 @@
 using System;
-using mbrcPartyMode.Model;
 using System.Windows.Input;
+using MbrcPartyMode.Model;
 
-namespace mbrcPartyMode.ViewModel.Commands
+namespace MbrcPartyMode.ViewModel.Commands
 {
     public class PartyModeCommands
     {

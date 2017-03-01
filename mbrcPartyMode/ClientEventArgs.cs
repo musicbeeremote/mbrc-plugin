@@ -1,16 +1,16 @@
 using System;
-using mbrcPartyMode.Helper;
+using MbrcPartyMode.Helper;
 
-namespace mbrcPartyMode
+namespace MbrcPartyMode
 {
     public class ClientEventArgs : EventArgs
     {
-        public ClientEventArgs(ConnectedClientAddress adr)
+        public ClientEventArgs(ConnectedClientAddress address)
         {
-            Adr = adr;
+            Address = address;
         }
 
-        public ConnectedClientAddress Adr { get; set; }
+        public ConnectedClientAddress Address { get; set; }
     }
 
 }

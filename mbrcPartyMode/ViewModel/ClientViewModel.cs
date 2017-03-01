@@ -1,10 +1,10 @@
 ﻿using System;
-using mbrcPartyMode.Helper;
-using mbrcPartyMode.Model;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using MbrcPartyMode.Helper;
+using MbrcPartyMode.Model;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public class ClientViewModel : ModelBase, IDisposable
     {

@@ -12,7 +12,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace mbrcPartyMode.View
+namespace MbrcPartyMode.View
 {
     /// <summary>
     /// Interaction logic for ClientDetailView.xaml

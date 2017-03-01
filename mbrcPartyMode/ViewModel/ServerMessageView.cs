@@ -1,6 +1,6 @@
-using mbrcPartyMode.Model;
+using MbrcPartyMode.Model;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public class ServerMessageView : ServerMessage
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Windows.Input;
 
-namespace mbrcPartyMode.AttachedCommandBehavior
+namespace MbrcPartyMode.AttachedCommandBehavior
 {
     /// <summary>
     /// Implements the ICommand and wraps up all the verbose stuff so that you can just pass 2 delegates 1 for the CanExecute and one for the Execute

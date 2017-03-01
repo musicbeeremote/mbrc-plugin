@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
     [Serializable]
     public class Settings

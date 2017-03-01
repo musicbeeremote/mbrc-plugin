@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 
-namespace mbrcPartyMode.AttachedCommandBehavior
+namespace MbrcPartyMode.AttachedCommandBehavior
 {
     /// <summary>
     /// Generates delegates according to the specified signature on runtime

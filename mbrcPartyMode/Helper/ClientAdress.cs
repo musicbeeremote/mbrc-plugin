@@ -1,9 +1,9 @@
-﻿using mbrcPartyMode.Tools;
-using System;
+﻿using System;
 using System.Net;
 using System.Net.NetworkInformation;
+using MbrcPartyMode.Tools;
 
-namespace mbrcPartyMode.Helper
+namespace MbrcPartyMode.Helper
 {
     [Serializable]
     public class ClientAdress : IEquatable<ClientAdress>

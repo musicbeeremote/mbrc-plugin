@@ -1,6 +1,6 @@
 using System;
 
-namespace mbrcPartyMode
+namespace MbrcPartyMode
 {
     public class ServerCommandEventArgs : EventArgs
     {

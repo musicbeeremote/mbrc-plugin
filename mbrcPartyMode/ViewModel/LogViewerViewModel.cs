@@ -1,9 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
-using mbrcPartyMode.Helper;
-using mbrcPartyMode.Model;
+using MbrcPartyMode.Helper;
+using MbrcPartyMode.Model;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public class LogViewerViewModel : ModelBase, IDisposable
     {

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using mbrcPartyMode;
+using MbrcPartyMode;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;

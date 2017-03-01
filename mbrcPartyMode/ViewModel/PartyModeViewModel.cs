@@ -1,11 +1,11 @@
-﻿using mbrcPartyMode.Model;
-using mbrcPartyMode.ViewModel.Commands;
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using MbrcPartyMode.Model;
+using MbrcPartyMode.ViewModel.Commands;
 
-namespace mbrcPartyMode.ViewModel
+namespace MbrcPartyMode.ViewModel
 {
     public class PartyModeViewModel : ModelBase, IDisposable
     {
