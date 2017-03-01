@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.1.1.1479</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1481</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -110,75 +110,22 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AndroidRemote\Commands\CoverPayload.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\HandlePong.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\PingReply.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\ProcessInitRequest.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\BroadcastEventAvailable.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\RestartSocketCommand.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\ShowFirstRunDialogCommand.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\SocketStatusChanged.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\StartServiceBroadcast.cs" />
+    <Compile Include="AndroidRemote\Commands\InstaReplies\InstantReplyCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\InternalCommands.cs" />
     <Compile Include="AndroidRemote\Commands\LyricsPayload.cs" />
     <Compile Include="AndroidRemote\Commands\QueuePayload.cs" />
     <Compile Include="AndroidRemote\Commands\QueueResponse.cs" />
-    <Compile Include="AndroidRemote\Commands\ReplayAvailable.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestAutoDj.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\RequestCover.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseAlbums.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseTracks.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseArtists.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseGenres.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\RequestLyrics.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibAlbumTracks.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibArtistAlbums.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibGenreArtists.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueAlbum.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueArtist.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueGenre.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueTrack.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchAlbum.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchArtist.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchGenre.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestLibSearchTitle.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingMoveTrack.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestMute.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowplayingQueue.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestOutputDeviceList.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPause.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaybackPosition.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerOutputSwitch.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistList.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlaylistPlay.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\HandeshakeCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\LegacySearchCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\LibraryBrowseCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\NowPlayingCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\OutputCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\PlayerStateCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\PlayingTrackCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\PlaylistCommands.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestRadioStations.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestRating.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestRepeat.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestScrobble.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestShuffle.cs" />
-    <Compile Include="AndroidRemote\Commands\State\PCoverChanged.cs" />
-    <Compile Include="AndroidRemote\Commands\State\PLyricsChanged.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingList.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestVolume.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestStop.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayPause.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrack.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\ForceClientDisconnect.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestProtocol.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\ClientDisconnected.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\ClientConnected.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\StopSocketServer.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\StartSocketServer.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayer.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestSongInfo.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerStatus.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPlay.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrackCommand.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\InitializeModelStateCommand.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs" />
+    <Compile Include="AndroidRemote\Commands\State\StateCommands.cs" />
     <Compile Include="AndroidRemote\configuration.cs" />
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
     <Compile Include="AndroidRemote\ControlRemoveExtension.cs" />
@@ -225,11 +172,11 @@
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="PartyMode\CommandDecorator.cs" />
     <Compile Include="PartyMode\PartyModeBaseCommand.cs" />
-    <Compile Include="PartyMode\PartyModeCommandDedcorator.cs" />
+    <Compile Include="PartyMode\PartyModeCommandDecorator.cs" />
     <Compile Include="PartyMode\PartyModeCommandMapper.cs" />
     <Compile Include="PartyMode\RequestedCommandNotAllowed.cs" />
     <Compile Include="Plugin.cs" />
-    <Compile Include="AndroidRemote\Networking\SocketClient.cs" />
+    <Compile Include="AndroidRemote\Networking\SocketConnection.cs" />
     <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
     <Compile Include="AndroidRemote\Model\LyricCoverModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

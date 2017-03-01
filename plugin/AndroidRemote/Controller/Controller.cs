@@ -44,7 +44,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             var command = (ICommand)Activator.CreateInstance(commandType);
             try
             {
-                var cmdDecorator = new PartyModeCommandDedcorator(command);
+                var cmdDecorator = new PartyModeCommandDecorator(command);
                 cmdDecorator.Execute(e);
             }
             catch (Exception ex)

@@ -4,6 +4,7 @@ using MbrcPartyMode;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;
+using static MbrcPartyMode.MappingCommand;
 
 namespace MusicBeePlugin.PartyMode
 {
@@ -11,20 +12,20 @@ namespace MusicBeePlugin.PartyMode
     {
         private static readonly Dictionary<Type, MappingCommand> CommandMap = new Dictionary<Type, MappingCommand>
         {
-            {typeof(RequestStop), MappingCommand.StopPlayer},
-            {typeof(RequestPlay), MappingCommand.StartPlayer},
-            {typeof(RequestPlaylistPlay), MappingCommand.StartPlayer},
-            {typeof(RequestNowPlayingPlay), MappingCommand.StartPlayer},
-            {typeof(RequestNowplayingQueue), MappingCommand.StartPlayer},
-            {typeof(RequestNowPlayingSearch), MappingCommand.StartPlayer},
-            {typeof(RequestNowPlayingTrackRemoval), MappingCommand.StartPlayer},
-            {typeof(RequestNextTrack), MappingCommand.SkipForward},
-            {typeof(RequestPreviousTrack), MappingCommand.SkipBackward},
-            {typeof(RequestPlayPause), MappingCommand.StopPlayer},
-            {typeof(RequestVolume), MappingCommand.CanSetVolume},
+            {typeof(RequestStop), StopPlayer},
+            {typeof(RequestPlay), StartPlayer},
+            {typeof(RequestPlaylistPlay), StartPlayer},
+            {typeof(RequestNowPlayingPlay), StartPlayer},
+            {typeof(RequestNowplayingQueue), StartPlayer},
+            {typeof(RequestNowPlayingSearch), StartPlayer},
+            {typeof(RequestNowPlayingTrackRemoval), StartPlayer},
+            {typeof(RequestNextTrack), SkipForward},
+            {typeof(RequestPreviousTrack), SkipBackward},
+            {typeof(RequestPlayPause), StopPlayer},
+            {typeof(RequestVolume), CanSetVolume},
             {typeof(ClientConnected), MappingCommand.ClientConnected},
             {typeof(ClientDisconnected), MappingCommand.ClientDisconnected},
-            {typeof(StopSocketServer), MappingCommand.StopServer}
+            {typeof(StopSocketServer), StopServer}
         };
 
         public static MappingCommand MapCommand(ICommand cmd)
@@ -33,7 +34,7 @@ namespace MusicBeePlugin.PartyMode
 
             return CommandMap.TryGetValue(cmd.GetType(), out command)
                 ? command
-                : MappingCommand.CommandNotImplemented;
+                : CommandNotImplemented;
         }
     }
 }

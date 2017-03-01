@@ -5,22 +5,22 @@
     /// The information consists of the client id, the number of packets send by the client (to handle the authenticication).
     /// And a flag representing the authentication status of the client.
     /// </summary>
-    public class SocketClient
+    public class SocketConnection
     {
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="clientId"></param>
-        public SocketClient(string clientId)
+        /// <param name="connectionId"></param>
+        public SocketConnection(string connectionId)
         {
-            ClientId = clientId;
+            ConnectionId = connectionId;
             PacketNumber = 0;
         }
 
         /// <summary>
-        /// Represents the socket client's id.
+        /// Unique Identifier of the Socket Connection. (A client might have multiple socket connections
         /// </summary>
-        public string ClientId { get; }
+        public string ConnectionId { get; }
 
         /// <summary>
         /// Represents the number of the packets received by the client.
@@ -45,13 +45,20 @@
         public bool BroadcastsEnabled { get; set; } = true;
 
         /// <summary>
+        /// Unique identifier of the Connected client. This value is reported by the client itself.
+        /// </summary>
+        public string ClientId { get; set; }
+
+        //TODO: SocketConnection should also keep track of the IPaddress
+
+        /// <summary>
         /// Function used to increase the number of packages received by the specific client.
         /// </summary>
         public void IncreasePacketNumber()
         {
             if (PacketNumber >= 0 && PacketNumber < 40)
                 PacketNumber++;
-            Authenticated = (PacketNumber >= 2);
+            Authenticated = PacketNumber >= 2;
         }
     }
 }

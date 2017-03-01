@@ -17,10 +17,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         ///     Processes the incoming message and answer's sending back the needed data.
         /// </summary>
         /// <param name="incomingMessage">The incoming message.</param>
-        /// <param name="clientId"> </param>
-        public void ProcessIncomingMessage(string incomingMessage, string clientId)
+        /// <param name="connectionId"> </param>
+        public void ProcessIncomingMessage(string incomingMessage, string connectionId)
         {
-            _logger.Debug($"Received by client: {clientId} message --> {incomingMessage}");
+            _logger.Debug($"Received by client: {connectionId} message --> {incomingMessage}");
 
             try
             {
@@ -40,10 +40,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, $"while processing message -> {incomingMessage} from {clientId}");
+                    _logger.Error(ex, $"while processing message -> {incomingMessage} from {connectionId}");
                 }
 
-                var client = Authenticator.Client(clientId);
+                var connection = Authenticator.GetConnection(connectionId);
 
                 foreach (var msg in msgList)
                 {
@@ -52,38 +52,44 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         EventBus.FireEvent(
                             new MessageEvent(EventType.ReplyAvailable,
                                 new SocketMessage(Constants.VerifyConnection,
-                                    string.Empty).ToJsonString(), clientId));
+                                    string.Empty).ToJsonString(), connectionId));
                         return;
                     }
 
-                    if (client.PacketNumber == 0 && msg.Context != Constants.Player)
+                    if (connection.PacketNumber == 0 && msg.Context != Constants.Player)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,
-                            clientId));
+                            connectionId));
                         return;
                     }
 
-                    if (client.PacketNumber == 1 && msg.Context != Constants.Protocol)
+                    if (connection.PacketNumber == 1 && msg.Context != Constants.Protocol)
                     {
                         EventBus.FireEvent(new MessageEvent(EventType.ActionForceClientDisconnect, string.Empty,
-                            clientId));
+                            connectionId));
                         return;
                     }
 
                     if (msg.Context == Constants.Protocol && msg.Data is JsonObject)
                     {
                         var data = (JsonObject) msg.Data;
-                        client.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
-                        client.ClientProtocolVersion = data.Get<int>("protocol_version");
+                        connection.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
+                        connection.ClientProtocolVersion = data.Get<int>("protocol_version");
+                        connection.ClientId = data.Get<string>("client_id");
+
+                        if (string.IsNullOrEmpty(connection.ClientId))
+                        {
+
+                        }
                     }
 
-                    EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));
+                    EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, connectionId));
                 }
-                client.IncreasePacketNumber();
+                connection.IncreasePacketNumber();
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Processing message failed --> {incomingMessage} from {clientId}");
+                _logger.Error(ex, $"Processing message failed --> {incomingMessage} from {connectionId}");
             }
         }
     }

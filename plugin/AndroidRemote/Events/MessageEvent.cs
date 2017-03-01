@@ -8,7 +8,7 @@ namespace MusicBeePlugin.AndroidRemote.Events
         {
             Data = data;
             Type = type;
-            ClientId = "all";
+            ConnectionId = "all";
             ExtraData = string.Empty;
         }
 
@@ -16,7 +16,7 @@ namespace MusicBeePlugin.AndroidRemote.Events
         {
             Type = type;
             Data = data;
-            ClientId = clientId;
+            ConnectionId = clientId;
             ExtraData = string.Empty;
         }
 
@@ -24,14 +24,14 @@ namespace MusicBeePlugin.AndroidRemote.Events
         {
             Type = type;
             Data = ExtraData = string.Empty;
-            ClientId = string.Empty;
+            ConnectionId = string.Empty;
         }
 
         public MessageEvent(string type, object data, string clientId, string extraData)
         {
             Type = type;
             Data = data;
-            ClientId = clientId;
+            ConnectionId = clientId;
             ExtraData = extraData;
         }
 
@@ -44,7 +44,7 @@ namespace MusicBeePlugin.AndroidRemote.Events
 
         public string Type { get; }
 
-        public string ClientId { get; }
+        public string ConnectionId { get; }
 
         public string ExtraData { get; }
     }

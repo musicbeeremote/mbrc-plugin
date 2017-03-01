@@ -5,16 +5,12 @@ using MusicBeePlugin.AndroidRemote.Settings;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    internal class RequestPluginVersion:ICommand
+    internal class RequestPluginVersion : ICommand
     {
-        public void Dispose()
-        {
-        
-        }
-
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(new SocketMessage(Constants.PluginVersion, UserSettings.Instance.CurrentVersion).ToJsonString());
+            SocketServer.Instance.Send(new SocketMessage(Constants.PluginVersion, UserSettings.Instance.CurrentVersion)
+                .ToJsonString());
         }
     }
 }

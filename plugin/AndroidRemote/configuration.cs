@@ -1,6 +1,5 @@
 ﻿namespace MusicBeePlugin.AndroidRemote
 {
-    using Commands;
     using Commands.InstaReplies;
     using Commands.Internal;
     using Commands.Requests;
@@ -18,8 +17,8 @@
             controller.AddCommand(EventType.ActionClientDisconnected, typeof (ClientDisconnected));
             controller.AddCommand(EventType.ActionForceClientDisconnect, typeof (ForceClientDisconnect));
             controller.AddCommand(EventType.InitializeModel, typeof(InitializeModelStateCommand));
-            controller.AddCommand(EventType.NowPlayingCoverChange, typeof(PCoverChanged));
-            controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(PLyricsChanged));
+            controller.AddCommand(EventType.NowPlayingCoverChange, typeof(UpdateCoverCommand));
+            controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(UpdateLyricsCommand));
             controller.AddCommand(EventType.StartServiceBroadcast, typeof(StartServiceBroadcast));
             controller.AddCommand(EventType.SocketStatusChange, typeof(SocketStatusChanged));
             controller.AddCommand(EventType.RestartSocket, typeof(RestartSocketCommand));

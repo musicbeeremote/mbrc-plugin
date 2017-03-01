@@ -3,7 +3,7 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    public class RequestRadioStations:ICommand
+    internal class RequestRadioStations : ICommand
     {
         public void Execute(IEvent eEvent)
         {
@@ -12,11 +12,11 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.RequestRadioStations(eEvent.ClientId, offset, limit);
+                Plugin.Instance.RequestRadioStations(eEvent.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.RequestRadioStations(eEvent.ClientId);
+                Plugin.Instance.RequestRadioStations(eEvent.ConnectionId);
             }
         }
     }

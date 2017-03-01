@@ -222,10 +222,10 @@ namespace MusicBeePlugin
             }
         }
 
-        private static void SendReply(string payload, string clientId = "")
+        private static void SendReply(string payload, string connectionId = "")
         {
             MessageEvent message;
-            if (string.IsNullOrEmpty(clientId))
+            if (string.IsNullOrEmpty(connectionId))
             {
                 message = new MessageEvent(
                     EventType.ReplyAvailable,
@@ -235,7 +235,7 @@ namespace MusicBeePlugin
             {
                 message = new MessageEvent(
                     EventType.ReplyAvailable,
-                    payload, clientId);
+                    payload, connectionId);
             }
 
             EventBus.FireEvent(message);
@@ -449,7 +449,7 @@ namespace MusicBeePlugin
         /// When called plays the next track.
         /// </summary>
         /// <returns></returns>
-        public void RequestNextTrack(string clientId)
+        public void RequestNextTrack(string connectionId)
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
@@ -461,7 +461,7 @@ namespace MusicBeePlugin
         /// When called stops the playback.
         /// </summary>
         /// <returns></returns>
-        public void RequestStopPlayback(string clientId)
+        public void RequestStopPlayback(string connectionId)
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
@@ -473,7 +473,7 @@ namespace MusicBeePlugin
         /// When called changes the play/pause state or starts playing a track if the status is stopped.
         /// </summary>
         /// <returns></returns>
-        public void RequestPlayPauseTrack(string clientId)
+        public void RequestPlayPauseTrack(string connectionId)
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
@@ -485,7 +485,7 @@ namespace MusicBeePlugin
         /// When called plays the previous track.
         /// </summary>
         /// <returns></returns>
-        public void RequestPreviousTrack(string clientId)
+        public void RequestPreviousTrack(string connectionId)
         {
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
@@ -653,7 +653,7 @@ namespace MusicBeePlugin
                         _api.Player_GetRepeat()).ToJsonString()));
         }
 
-        public void RequestNowPlayingListPage(string clientId, int offset = 0, int limit = 4000)
+        public void RequestNowPlayingListPage(string connectionId, int offset = 0, int limit = 4000)
         {
             _api.NowPlayingList_QueryFiles(null);
 
@@ -699,11 +699,11 @@ namespace MusicBeePlugin
                     Total = total
                 }
             };
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
-        public void RequestNowPlayingList(string clientId)
+        public void RequestNowPlayingList(string connectionId)
         {
             _api.NowPlayingList_QueryFiles(null);
 
@@ -736,11 +736,11 @@ namespace MusicBeePlugin
             }
 
             var jsonString = new SocketMessage(Constants.NowPlayingList, trackList).ToJsonString();
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, jsonString, clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, jsonString, connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
-        public void RequestOutputDevice(string clientId)
+        public void RequestOutputDevice(string connectionId)
         {
             string[] deviceNames;
             string activeDeviceName;
@@ -750,7 +750,7 @@ namespace MusicBeePlugin
             var currentDevices = new OutputDevice(deviceNames, activeDeviceName);
 
             SendReply(new SocketMessage(Constants.PlayerOutput,
-                currentDevices).ToJsonString(), clientId);
+                currentDevices).ToJsonString(), connectionId);
         }
 
         /// <summary>
@@ -759,9 +759,9 @@ namespace MusicBeePlugin
         /// just return the rating for the current track.
         /// </summary>
         /// <param name="rating">New Track Rating</param>
-        /// <param name="clientId"> </param>
+        /// <param name="connectionId"> </param>
         /// <returns>Track Rating</returns>
-        public void RequestTrackRating(string rating, string clientId)
+        public void RequestTrackRating(string rating, string connectionId)
         {
             try
             {
@@ -901,8 +901,8 @@ namespace MusicBeePlugin
         ///
         /// </summary>
         /// <param name="index"></param>
-        /// <param name="clientId"></param>
-        public void NowPlayingListRemoveTrack(int index, string clientId)
+        /// <param name="connectionId"></param>
+        public void NowPlayingListRemoveTrack(int index, string connectionId)
         {
             var reply = new
             {
@@ -912,7 +912,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.NowPlayingListRemove,
-                        reply).ToJsonString(), clientId));
+                        reply).ToJsonString(), connectionId));
         }
 
         /// <summary>
@@ -946,8 +946,8 @@ namespace MusicBeePlugin
         /// <param name="action">
         ///     The action can be either love, or ban.
         /// </param>
-        /// <param name="clientId"></param>
-        public void RequestLoveStatus(string action, string clientId)
+        /// <param name="connectionId"></param>
+        public void RequestLoveStatus(string action, string connectionId)
         {
             var hwnd = _api.MB_GetWindowHandle();
             var mb = (Form) Control.FromHandle(hwnd);
@@ -1035,8 +1035,8 @@ namespace MusicBeePlugin
         /// <summary>
         /// The function checks the MusicBee api and gets all the available playlist urls.
         /// </summary>
-        /// <param name="clientId"></param>
-        public void GetAvailablePlaylistUrls(string clientId)
+        /// <param name="connectionId"></param>
+        public void GetAvailablePlaylistUrls(string connectionId)
         {
             _api.Playlist_QueryPlaylists();
             var playlists = new List<Playlist>();
@@ -1060,27 +1060,27 @@ namespace MusicBeePlugin
             }
 
             var data = new SocketMessage(Constants.PlaylistList, playlists).ToJsonString();
-            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, connectionId));
         }
 
-        public void PlayPlaylist(string clientId, string url)
+        public void PlayPlaylist(string connectionId, string url)
         {
             var success = _api.Playlist_PlayNow(url);
             var data = new SocketMessage(Constants.PlaylistPlay, success).ToJsonString();
-            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, connectionId));
         }
 
         /// <summary>
         ///
         /// </summary>ea
-        /// <param name="clientId"></param>
-        public void RequestPlayerStatus(string clientId)
+        /// <param name="connectionId"></param>
+        public void RequestPlayerStatus(string connectionId)
         {
             var status = new Dictionary<string, object>
             {
                 [Constants.PlayerRepeat] = _api.Player_GetRepeat().ToString(),
                 [Constants.PlayerMute] = _api.Player_GetMute(),
-                [Constants.PlayerShuffle] = Authenticator.ClientProtocolMisMatch(clientId)
+                [Constants.PlayerShuffle] = Authenticator.ClientProtocolMisMatch(connectionId)
                     ? (object) _api.Player_GetShuffle()
                     : GetShuffleState(),
                 [Constants.PlayerScrobble] = _api.Player_GetScrobbleEnabled(),
@@ -1090,21 +1090,21 @@ namespace MusicBeePlugin
             };
 
             var data = new SocketMessage(Constants.PlayerStatus, status).ToJsonString();
-            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, connectionId));
         }
 
         /// <summary>
         ///
         /// </summary>
-        /// <param name="clientId"></param>
-        public void RequestTrackInfo(string clientId)
+        /// <param name="connectionId"></param>
+        public void RequestTrackInfo(string connectionId)
         {
-            var protocolVersion = Authenticator.ClientProtocolVersion(clientId);
+            var protocolVersion = Authenticator.ClientProtocolVersion(connectionId);
             var message = protocolVersion > 2
                 ? new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2())
                 : new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());
 
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
@@ -1112,10 +1112,10 @@ namespace MusicBeePlugin
         /// <summary>
         /// Moves a track of the now playing list to a new position.
         /// </summary>
-        /// <param name="clientId">The Id of the client that initiated the request</param>
+        /// <param name="connectionId">The Id of the client that initiated the request</param>
         /// <param name="from">The initial position</param>
         /// <param name="to">The final position</param>
-        public void RequestNowPlayingMove(string clientId, int from, int to)
+        public void RequestNowPlayingMove(string connectionId, int from, int to)
         {
             bool result;
             int[] aFrom = {from};
@@ -1136,9 +1136,10 @@ namespace MusicBeePlugin
                 from,
                 to
             };
+            var jsonString = new SocketMessage(Constants.NowPlayingListMove, reply).ToJsonString();
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingListMove, reply).ToJsonString(), clientId));
+                    jsonString, connectionId));
         }
 
         private static string XmlFilter(string[] tags, string query, bool isStrict,
@@ -1181,8 +1182,8 @@ namespace MusicBeePlugin
         /// Calls the API to get albums matching the specified parameter. Fires an event with the message in JSON format.
         /// </summary>
         /// <param name="albumName">Is used to filter through the data.</param>
-        /// <param name="clientId">The client that initiated the call. (Should also be the only one to receive the data.</param>
-        public void LibrarySearchAlbums(string albumName, string clientId)
+        /// <param name="connectionId">The client that initiated the call. (Should also be the only one to receive the data.</param>
+        public void LibrarySearchAlbums(string albumName, string connectionId)
         {
             var filter = XmlFilter(new[] {"Album"}, albumName, false);
 
@@ -1226,15 +1227,15 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibrarySearchAlbum,
-                        albums).ToJsonString(), clientId));
+                        albums).ToJsonString(), connectionId));
         }
 
         /// <summary>
         /// Used to get all the albums by the specified artist.
         /// </summary>
         /// <param name="artist"></param>
-        /// <param name="clientId"></param>
-        public void LibraryGetArtistAlbums(string artist, string clientId)
+        /// <param name="connectionId"></param>
+        public void LibraryGetArtistAlbums(string artist, string connectionId)
         {
             var albumList = new List<Album>();
             if (_api.Library_QueryFiles(XmlFilter(new[] {"ArtistPeople"}, artist, true)))
@@ -1258,15 +1259,15 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibraryArtistAlbums,
-                        albumList).ToJsonString(), clientId));
+                        albumList).ToJsonString(), connectionId));
         }
 
         /// <summary>
         ///
         /// </summary>
         /// <param name="artist"></param>
-        /// <param name="clientId"></param>
-        public void LibrarySearchArtist(string artist, string clientId)
+        /// <param name="connectionId"></param>
+        public void LibrarySearchArtist(string artist, string connectionId)
         {
             var artistList = new List<Artist>();
 
@@ -1284,7 +1285,7 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibrarySearchArtist,
-                        artistList).ToJsonString(), clientId));
+                        artistList).ToJsonString(), connectionId));
         }
 
 
@@ -1292,8 +1293,8 @@ namespace MusicBeePlugin
         ///
         /// </summary>
         /// <param name="genre"></param>
-        /// <param name="clientId"></param>
-        public void LibraryGetGenreArtists(string genre, string clientId)
+        /// <param name="connectionId"></param>
+        public void LibraryGetGenreArtists(string genre, string connectionId)
         {
             var artistList = new List<Artist>();
 
@@ -1307,7 +1308,7 @@ namespace MusicBeePlugin
 
             _api.Library_QueryLookupTable(null, null, null);
             var message = new SocketMessage(Constants.LibraryGenreArtists, artistList).ToJsonString();
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message, clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message, connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
@@ -1315,8 +1316,8 @@ namespace MusicBeePlugin
         ///
         /// </summary>
         /// <param name="genre"></param>
-        /// <param name="clientId"></param>
-        public void LibrarySearchGenres(string genre, string clientId)
+        /// <param name="connectionId"></param>
+        public void LibrarySearchGenres(string genre, string connectionId)
         {
             var genreList = new List<Genre>();
             var query = XmlFilter(new[] {"Genre"}, genre, false);
@@ -1332,10 +1333,10 @@ namespace MusicBeePlugin
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibrarySearchGenre,
-                        genreList).ToJsonString(), clientId));
+                        genreList).ToJsonString(), connectionId));
         }
 
-        public void LibraryBrowseGenres(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseGenres(string connectionId, int offset = 0, int limit = 4000)
         {
             var genres = new List<Genre>();
             if (_api.Library_QueryLookupTable("genre", "count", null))
@@ -1362,11 +1363,11 @@ namespace MusicBeePlugin
                 }
             };
 
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
-        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseArtists(string connectionId, int offset = 0, int limit = 4000)
         {
             var artists = new List<Artist>();
 
@@ -1393,7 +1394,7 @@ namespace MusicBeePlugin
                 }
             };
 
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
@@ -1419,7 +1420,7 @@ namespace MusicBeePlugin
             return current;
         }
 
-        public void LibraryBrowseAlbums(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseAlbums(string connectionId, int offset = 0, int limit = 4000)
         {
             var albums = new List<Album>();
 
@@ -1459,11 +1460,11 @@ namespace MusicBeePlugin
                 }
             };
 
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
-        public void LibraryBrowseTracks(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseTracks(string connectionId, int offset = 0, int limit = 4000)
         {
             var tracks = new List<Track>();
             if (_api.Library_QueryFiles(null))
@@ -1508,7 +1509,7 @@ namespace MusicBeePlugin
                 }
             };
 
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
@@ -1541,8 +1542,8 @@ namespace MusicBeePlugin
         /// 
         /// </summary>
         /// <param name="title"></param>
-        /// <param name="clientId"></param>
-        public void LibrarySearchTitle(string title, string clientId)
+        /// <param name="connectionId"></param>
+        public void LibrarySearchTitle(string title, string connectionId)
         {
             var tracks = new List<Track>();
             if (_api.Library_QueryFiles(XmlFilter(new[] {"Title"}, title, false)))
@@ -1565,7 +1566,7 @@ namespace MusicBeePlugin
             _api.Library_QueryLookupTable(null, null, null);
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.LibrarySearchTitle, tracks).ToJsonString(), clientId));
+                    new SocketMessage(Constants.LibrarySearchTitle, tracks).ToJsonString(), connectionId));
         }
 
         /// <summary>
@@ -1598,7 +1599,7 @@ namespace MusicBeePlugin
                     new SocketMessage(Constants.LibraryAlbumTracks, trackList).ToJsonString(), client));
         }
 
-        public void RequestRadioStations(string clientId, int offset = 0, int limit = 4000)
+        public void RequestRadioStations(string connectionId, int offset = 0, int limit = 4000)
         {
             var radioStations = new string[] { };
             var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
@@ -1634,7 +1635,7 @@ namespace MusicBeePlugin
             };
 
             var payload = new SocketMessage(Constants.RadioStations, message).ToJsonString();
-            SendReply(payload, clientId);
+            SendReply(payload, connectionId);
         }
 
         /// <summary>
@@ -1663,8 +1664,8 @@ namespace MusicBeePlugin
         /// The title is checked first.
         /// </summary>
         /// <param name="query">The string representing the query</param>
-        /// <param name="clientId">Client</param>
-        public void NowPlayingSearch(string query, string clientId)
+        /// <param name="connectionId">Connection</param>
+        public void NowPlayingSearch(string query, string connectionId)
         {
             var result = false;
             _api.NowPlayingList_QueryFiles(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false));
@@ -1684,7 +1685,7 @@ namespace MusicBeePlugin
 
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
-                    new SocketMessage(Constants.NowPlayingListSearch, result).ToJsonString(), clientId));
+                    new SocketMessage(Constants.NowPlayingListSearch, result).ToJsonString(), connectionId));
         }
 
         public string[] GetUrlsForTag(MetaTag tag, string query)
@@ -1730,7 +1731,7 @@ namespace MusicBeePlugin
             return tracks;
         }
 
-        public void RequestPlay(string clientId)
+        public void RequestPlay(string connectionId)
         {
             var state = _api.Player_GetPlayState();
 
@@ -1740,7 +1741,7 @@ namespace MusicBeePlugin
             }
         }
 
-        public void RequestPausePlayback(string clientId)
+        public void RequestPausePlayback(string connectionId)
         {
             var state = _api.Player_GetPlayState();
 
@@ -1818,10 +1819,10 @@ namespace MusicBeePlugin
         /// <summary>
         /// Gets a Page of playlists from the plugin api and sends it to the client that requested it.
         /// </summary>
-        /// <param name="clientId">The id of the client performing the request</param>
+        /// <param name="connectionId">The id of the client performing the request</param>
         /// <param name="offset">The starting position (zero based) of the dataset</param>
         /// <param name="limit">The number of elements in the dataset</param>
-        public void GetAvailablePlaylistUrls(string clientId, int offset, int limit)
+        public void GetAvailablePlaylistUrls(string connectionId, int offset, int limit)
         {
             _api.Playlist_QueryPlaylists();
             var playlists = new List<Playlist>();
@@ -1857,7 +1858,7 @@ namespace MusicBeePlugin
                     Total = total
                 }
             };
-            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), connectionId);
             EventBus.FireEvent(messageEvent);
         }
 
@@ -1882,10 +1883,10 @@ namespace MusicBeePlugin
             }
         }
 
-        public void SwitchOutputDevice(string outputDevice, string clientId)
+        public void SwitchOutputDevice(string outputDevice, string connectionId)
         {
             _api.Player_SetOutputDevice(outputDevice);
-            RequestOutputDevice(clientId);
+            RequestOutputDevice(connectionId);
         }
     }
 }

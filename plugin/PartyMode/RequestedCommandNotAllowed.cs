@@ -10,7 +10,7 @@ namespace MusicBeePlugin.PartyMode
         {
             var message = new SocketMessage(Constants.CommandUnavailable, string.Empty)
                 .ToJsonString();
-            SocketServer.Instance.Send(message, eEvent.ClientId);
+            SocketServer.Instance.Send(message, eEvent.ConnectionId);
         }
     }
 }

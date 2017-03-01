@@ -72,6 +72,11 @@ namespace MbrcPartyMode
             }
         }
 
+        public bool ClientCanOnlyAdd(ClientAddress address)
+        {
+            return address.CanAddToPlayList && !address.CanStartStopPlayer;
+        }
+
         public void OnClientConnected(ConnectedClientAddress adr)
         {
             ClientConnected?.Invoke(this, new ClientEventArgs(adr));

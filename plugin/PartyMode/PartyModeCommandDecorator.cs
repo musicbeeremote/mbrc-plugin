@@ -1,17 +1,19 @@
 using MbrcPartyMode;
 using MbrcPartyMode.Helper;
 using MbrcPartyMode.Model;
+using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Utilities;
 
 namespace MusicBeePlugin.PartyMode
 {
-    public class PartyModeCommandDedcorator : CommandDecorator
+    public class PartyModeCommandDecorator : CommandDecorator
     {
         private readonly ICommand _cmd;
         private readonly PartyModeModel _model;
 
-        public PartyModeCommandDedcorator(ICommand cmd) : base(cmd)
+        public PartyModeCommandDecorator(ICommand cmd) : base(cmd)
         {
             _cmd = cmd;
             _model = PartyModeModel.Instance;
@@ -32,30 +34,41 @@ namespace MusicBeePlugin.PartyMode
                 case MappingCommand.StopServer:
                     PartyModeModel.Instance.SaveSettings();
                     break;
-
-                default:
-                    break;
             }
         }
 
         public override void Execute(IEvent eEvent)
         {
-
             if (!_model.Settings.IsActive)
             {
                 _cmd.Execute(eEvent);
                 return;
-            } 
+            }
 
             var mc = PartyModeCommandMapper.MapCommand(_cmd);
             var socketserver = SocketServer.Instance;
-            ConnectedClientAddress adr = null;
+            ConnectedClientAddress adr;
+
             if (socketserver != null)
             {
-                adr = _model.GetConnectedClientAdresss(eEvent.ClientId, socketserver.GetIpAddress(eEvent.ClientId));
+                adr = _model.GetConnectedClientAdresss(Authenticator.ClientId(eEvent.ConnectionId),
+                    socketserver.GetIpAddress(eEvent.ConnectionId));
+            }
+            else
+            {
+                return;
             }
 
-            var isAllowed = PartyModeCommandHandler.Instance.IsCommandAllowed(mc, adr);
+            var partyModeCommandHandler = PartyModeCommandHandler.Instance;
+            var isAllowed = partyModeCommandHandler.IsCommandAllowed(mc, adr);
+
+            if (_cmd is RequestNowplayingQueue && partyModeCommandHandler.ClientCanOnlyAdd(adr))
+            {
+                var cmd = new RequestNowplayingPartyQueue();
+                cmd.Execute(eEvent);
+                partyModeCommandHandler.OnServerCommandExecuted(adr.ClientId, "add", true);
+                return;
+            }
 
             if (isAllowed)
             {
@@ -67,7 +80,8 @@ namespace MusicBeePlugin.PartyMode
                 var rmcmd = new RequestedCommandNotAllowed();
                 rmcmd.Execute(eEvent);
             }
-            PartyModeCommandHandler.Instance.OnServerCommandExecuted(eEvent.ClientId, eEvent.Type, isAllowed);
+
+            partyModeCommandHandler.OnServerCommandExecuted(adr.ClientId, eEvent.Type, isAllowed);
         }
     }
 }
