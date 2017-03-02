@@ -5,20 +5,25 @@ using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using ServiceStack.Text;
+using static MusicBeePlugin.AndroidRemote.Commands.CommandPermissions;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    internal class RequestNowPlayingSearch : ICommand
+    internal class RequestNowPlayingSearch : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.NowPlayingSearch(eEvent.DataToString(), eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => StartPlayback;
     }
 
-    public class RequestNowplayingQueue : ICommand
+    public class RequestNowplayingQueue : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override CommandPermissions GetPermissions() => StartPlayback | AddTrack;
+
+        public override void Execute(IEvent eEvent)
         {
             var payload = eEvent.Data as JsonObject;
             var queueType = payload.Get<string>("queue");
@@ -73,9 +78,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         }
     }
 
-    internal class RequestNowPlayingTrackRemoval : ICommand
+    internal class RequestNowPlayingTrackRemoval : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             int index;
             if (int.TryParse(eEvent.DataToString(), out index))
@@ -83,6 +88,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 Plugin.Instance.NowPlayingListRemoveTrack(index, eEvent.ConnectionId);
             }
         }
+
+        public override CommandPermissions GetPermissions() => RemoveTrack;
     }
 
     public class RequestNowplayingPartyQueue : ICommand

@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.2.0.1481</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1482</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -109,9 +109,11 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AndroidRemote\Commands\CommandPermissions.cs" />
     <Compile Include="AndroidRemote\Commands\CoverPayload.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\InstantReplyCommands.cs" />
     <Compile Include="AndroidRemote\Commands\Internal\InternalCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\LimitedCommand.cs" />
     <Compile Include="AndroidRemote\Commands\LyricsPayload.cs" />
     <Compile Include="AndroidRemote\Commands\QueuePayload.cs" />
     <Compile Include="AndroidRemote\Commands\QueueResponse.cs" />

@@ -4,12 +4,14 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    internal class RequestPlaylistPlay : ICommand
+    internal class RequestPlaylistPlay : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.PlayPlaylist(eEvent.ConnectionId, eEvent.DataToString());
         }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack;
     }
 
     internal class RequestPlaylistList : ICommand
@@ -31,7 +33,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
                 Plugin.Instance.GetAvailablePlaylistUrls(eEvent.ConnectionId, offset, limit);
             }
-
         }
     }
 }

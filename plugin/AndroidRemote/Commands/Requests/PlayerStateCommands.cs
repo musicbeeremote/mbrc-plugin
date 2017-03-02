@@ -1,5 +1,6 @@
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using static MusicBeePlugin.AndroidRemote.Commands.CommandPermissions;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
@@ -11,28 +12,34 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         }
     }
 
-    internal class RequestPreviousTrack : ICommand
+    internal class RequestPreviousTrack : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestPreviousTrack(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => PlayPrevious;
     }
 
-    internal class RequestNextTrack : ICommand
+    internal class RequestNextTrack : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestNextTrack(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => PlayNext;
     }
 
-    internal class RequestRepeat : ICommand
+    internal class RequestRepeat : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestRepeatState(eEvent.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
         }
+
+        public override CommandPermissions GetPermissions() => ChangeRepeat;
     }
 
     internal class RequestScrobble : ICommand
@@ -45,9 +52,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         }
     }
 
-    internal class RequestShuffle : ICommand
+    internal class RequestShuffle : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             var stateAction = eEvent.Data.Equals("toggle")
                 ? StateAction.Toggle
@@ -62,65 +69,81 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 Plugin.Instance.RequestAutoDjShuffleState(stateAction);
             }
         }
+
+        public override CommandPermissions GetPermissions() => ChangeShuffle;
     }
 
-    internal class RequestPlay : ICommand
+    internal class RequestPlay : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestPlay(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => StartPlayback;
     }
 
-    internal class RequestPause : ICommand
+    internal class RequestPause : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestPausePlayback(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => StopPlayback;
     }
 
-    internal class RequestPlayPause : ICommand
+    internal class RequestPlayPause : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestPlayPauseTrack(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => StartPlayback | StopPlayback;
     }
 
-    internal class RequestStop : ICommand
+    internal class RequestStop : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestStopPlayback(eEvent.ConnectionId);
         }
+
+        public override CommandPermissions GetPermissions() => StopPlayback;
     }
 
-    internal class RequestVolume : ICommand
+    internal class RequestVolume : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             int iVolume;
             if (!int.TryParse(eEvent.DataToString(), out iVolume)) return;
 
             Plugin.Instance.RequestVolumeChange(iVolume);
         }
+
+        public override CommandPermissions GetPermissions() => ChangeVolume;
     }
 
-    internal class RequestMute : ICommand
+    internal class RequestMute : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestMuteState(eEvent.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
         }
+
+        public override CommandPermissions GetPermissions() => CanMute;
     }
 
-    internal class RequestAutoDj : ICommand
+    internal class RequestAutoDj : LimitedCommand
     {
-        public void Execute(IEvent eEvent)
+        public override void Execute(IEvent eEvent)
         {
             Plugin.Instance.RequestAutoDjState(
                 (string) eEvent.Data == "toggle" ? StateAction.Toggle : StateAction.State);
         }
+
+        public override CommandPermissions GetPermissions() => ChangeShuffle;
     }
 }
