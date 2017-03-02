@@ -5,39 +5,40 @@ namespace MusicBeePlugin.AndroidRemote.Networking
     using System.Net.Sockets;
 
     /// <summary>
-    /// 
+    /// Essential information Of a socket connection with a client.
     /// </summary>
     public class SocketPacket
     {
-        // Constructor which takes a Socket and a client number
         /// <summary>
-        /// 
+        /// Constructor which takes a Socket and a client number
         /// </summary>
-        /// <param name="socket"></param>
-        /// <param name="clientId"> </param>
-        public SocketPacket(Socket socket, string clientId)
+        /// <param name="workerSocket"></param>
+        /// <param name="connectionId"> </param>
+        public SocketPacket(Socket workerSocket, string connectionId)
         {
-            MCurrentSocket = socket;
-            ClientId = clientId;
+            WorkerSocket = workerSocket;
+            ConnectionId = connectionId;
             Partial = new StringBuilder();
         }
 
         /// <summary>
-        /// 
+        /// The actual worker socket for this client connection
         /// </summary>
-        public Socket MCurrentSocket { get; }
+        public Socket WorkerSocket { get; }
 
         /// <summary>
-        /// 
+        /// The identifier of the current workerSocket connection
         /// </summary>
-        public string ClientId { get; }
+        public string ConnectionId { get; }
 
-        // Buffer to store the data sent by the client
         /// <summary>
-        /// 
+        /// Buffer to store the data sent by the client
         /// </summary>
         public byte[] DataBuffer { get; set; } = new byte[1024];
 
+        /// <summary>
+        /// Used to buffer requests from a client that are greter than the buffer size
+        /// </summary>
         public StringBuilder Partial { get; }
     }
 }

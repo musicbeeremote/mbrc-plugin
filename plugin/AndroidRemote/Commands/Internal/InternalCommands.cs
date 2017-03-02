@@ -62,7 +62,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
     {
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.KickClient(eEvent.ConnectionId);
+            SocketServer.Instance.DisconnectSocket(eEvent.ConnectionId);
         }
     }
 
