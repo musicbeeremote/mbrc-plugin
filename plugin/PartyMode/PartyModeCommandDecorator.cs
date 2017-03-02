@@ -1,6 +1,7 @@
 using MbrcPartyMode;
 using MbrcPartyMode.Helper;
 using MbrcPartyMode.Model;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
@@ -43,6 +44,11 @@ namespace MusicBeePlugin.PartyMode
             {
                 _cmd.Execute(eEvent);
                 return;
+            }
+
+            if (_cmd is ClientConnected)
+            {
+                _cmd.Execute(eEvent);
             }
 
             var mc = PartyModeCommandMapper.MapCommand(_cmd);
