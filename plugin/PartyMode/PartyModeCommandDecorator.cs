@@ -46,18 +46,11 @@ namespace MusicBeePlugin.PartyMode
             }
 
             var mc = PartyModeCommandMapper.MapCommand(_cmd);
-            var socketserver = SocketServer.Instance;
-            ConnectedClientAddress adr;
 
-            if (socketserver != null)
-            {
-                adr = _model.GetConnectedClientAdresss(Authenticator.ClientId(eEvent.ConnectionId),
-                    socketserver.GetIpAddress(eEvent.ConnectionId));
-            }
-            else
-            {
-                return;
-            }
+            var ipAddress = Authenticator.GetIpAddress(eEvent.ConnectionId);
+            var clientId = Authenticator.ClientId(eEvent.ConnectionId);
+            var adr = _model.GetConnectedClientAdresss(clientId, ipAddress);
+
 
             var partyModeCommandHandler = PartyModeCommandHandler.Instance;
             var isAllowed = partyModeCommandHandler.IsCommandAllowed(mc, adr);

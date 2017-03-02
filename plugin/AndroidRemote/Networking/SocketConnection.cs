@@ -1,4 +1,6 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Networking
+﻿using System.Net;
+
+namespace MusicBeePlugin.AndroidRemote.Networking
 {
     /// <summary>
     /// This class represents a socket client and keeps essential information abou the specific client.
@@ -49,7 +51,10 @@
         /// </summary>
         public string ClientId { get; set; }
 
-        //TODO: SocketConnection should also keep track of the IPaddress
+        /// <summary>
+        /// The address of the connected client
+        /// </summary>
+        public IPAddress IpAddress { get; set; }
 
         /// <summary>
         /// Function used to increase the number of packages received by the specific client.

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Net;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
@@ -65,14 +66,15 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// the new one.
         /// </summary>
         /// <param name="connectionId"> </param>
-        public static void AddClientOnConnect(string connectionId)
+        /// <param name="clientAddress"></param>
+        public static void AddClientOnConnect(string connectionId, IPAddress clientAddress)
         {
             SocketConnection connection;
             if (ActiveConnections.ContainsKey(connectionId))
             {
                 ActiveConnections.TryRemove(connectionId, out connection);
             }
-            connection = new SocketConnection(connectionId);
+            connection = new SocketConnection(connectionId) {IpAddress = clientAddress};
             ActiveConnections.TryAdd(connectionId, connection);
         }
 
@@ -114,6 +116,12 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var connection = GetConnection(connectionId);
             return connection?.ClientId ?? string.Empty;
+        }
+
+        public static IPAddress GetIpAddress(string connectionId)
+        {
+            var connection = GetConnection(connectionId);
+            return connection?.IpAddress;
         }
     }
 }

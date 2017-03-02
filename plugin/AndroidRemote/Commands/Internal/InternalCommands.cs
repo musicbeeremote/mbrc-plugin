@@ -1,3 +1,4 @@
+using System.Net;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
@@ -87,7 +88,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
     {
         public void Execute(IEvent eEvent)
         {
-            Authenticator.AddClientOnConnect(eEvent.ConnectionId);
+            var clientAddress = eEvent.Data as IPAddress;
+            Authenticator.AddClientOnConnect(eEvent.ConnectionId, clientAddress);
         }
     }
 
