@@ -110,7 +110,7 @@ namespace MbrcPartyMode.ViewModel
 
         #region text
 
-        public string CommandOverViewText => "command restrictions";
+        public string CommandOverViewText => "Client Restrictions";
 
         #endregion text
     }

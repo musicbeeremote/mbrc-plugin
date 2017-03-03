@@ -2,12 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:local="clr-namespace:MbrcPartyMode.View"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DesignHeight="300"
              d:DesignWidth="300"
              BorderBrush="Black"
-             mc:Ignorable="d">
+             mc:Ignorable="d" d:DataContext="{d:DesignData ClientViewModel}">
 
 
     <StackPanel>
@@ -24,10 +23,10 @@
                 <GridView>
                     <GridViewColumn Width="150"
                                     DisplayMemberBinding="{Binding IpAddress}"
-                                    Header="Ip Address" />
+                                    Header="IP Address" />
                     <GridViewColumn Width="50"
                                     DisplayMemberBinding="{Binding ClientId}"
-                                    Header="client" />
+                                    Header="Client Id" />
                 </GridView>
             </ListView.View>
         </ListView>
