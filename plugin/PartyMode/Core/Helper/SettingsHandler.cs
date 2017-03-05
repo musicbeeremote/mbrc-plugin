@@ -13,8 +13,9 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
 
         public SettingsHandler()
         {
+            //Todo find a proper way to get the path
             //filePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            _filePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\MusicBee\\mb_remote\\partyModeSettings.json";
+            _filePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\MusicBee\\mb_remote\\partymode_data.json";
 
             if (!File.Exists(_filePath))
             {
@@ -27,6 +28,7 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
 
             JsConfig<PhysicalAddress>.SerializeFn = phadr => phadr.ToString();
             JsConfig<PhysicalAddress>.DeSerializeFn = StrictParseAddress;
+            //todo serialize date to epoch
         }
 
         public Settings GetSettings()

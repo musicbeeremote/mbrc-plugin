@@ -28,6 +28,18 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         public CommandPermissions ClientPermissions { get; private set; } = None;
         public string ClientId { get; set; }
+        public uint ActiveConnections { get; private set; }
+
+        public virtual void AddConnection()
+        {
+            ActiveConnections++;
+        }
+
+        public virtual void RemoveConnection()
+        {
+            ActiveConnections--;
+        }
+
 
         public virtual bool HasPermission(CommandPermissions permissions)
         {

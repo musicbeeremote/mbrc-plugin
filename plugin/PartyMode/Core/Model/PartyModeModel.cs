@@ -19,6 +19,9 @@ namespace MusicBeePlugin.PartyMode.Core.Model
         private static PartyModeModel _instance;
         private readonly CycledList<PartyModeLogs> _logs;
 
+        //todo: 1 make sure that when some settings are changes the client permissions get updated
+        //todo: 2 count active connections for remote clients.
+
         #endregion vars
 
         public PartyModeModel()
@@ -66,7 +69,12 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
         private void ClientConnected(object sender, ClientEventArgs e)
         {
-            if (e.Client == null) return;
+            // Loopback connection should be excluded
+            if (e.Client == null || IPAddress.IsLoopback(e.Client.IpAddress))
+            {
+                return;
+            }
+
             if (KnownAddresses.All(x => x.MacAdress.ToString() != e.Client.MacAdress.ToString()))
             {
                 //to do: check if the Macadr is not null
@@ -75,10 +83,12 @@ namespace MusicBeePlugin.PartyMode.Core.Model
                 {
                     client.IpAddress = e.Client.IpAddress;
                     client.LastLogIn = DateTime.Now;
+                    e.Client.AddConnection();
                     KnownAddresses.Add(client);
                 }
                 else
                 {
+                    e.Client.AddConnection();
                     KnownAddresses.Add(e.Client);
                 }
             }
@@ -89,7 +99,12 @@ namespace MusicBeePlugin.PartyMode.Core.Model
         {
             if (KnownAddresses.Contains(e.Client))
             {
-      
+                var client = Settings.KnownAdresses
+                    .SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
+                if (client != null && client.ActiveConnections > 0)
+                {
+                    client.RemoveConnection();
+                }
             }
         }
 
