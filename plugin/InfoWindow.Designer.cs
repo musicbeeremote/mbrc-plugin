@@ -232,7 +232,7 @@ namespace MusicBeePlugin
             this.addressLabel.Name = "addressLabel";
             this.addressLabel.Size = new System.Drawing.Size(64, 17);
             this.addressLabel.TabIndex = 58;
-            this.addressLabel.Text = "Address:";
+            this.addressLabel.Text = "Client:";
             // 
             // ipAddressInputTextBox
             // 
@@ -285,7 +285,7 @@ namespace MusicBeePlugin
             this.addressFilteringCategoryLabel.Name = "addressFilteringCategoryLabel";
             this.addressFilteringCategoryLabel.Size = new System.Drawing.Size(114, 17);
             this.addressFilteringCategoryLabel.TabIndex = 53;
-            this.addressFilteringCategoryLabel.Text = "Address Filtering";
+            this.addressFilteringCategoryLabel.Text = "Client Filtering";
             // 
             // portNumericUpDown
             // 

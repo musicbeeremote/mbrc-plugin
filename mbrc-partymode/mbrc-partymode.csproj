@@ -59,88 +59,10 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AttachedCommandBehavior\CommandBehavior.cs" />
-    <Compile Include="AttachedCommandBehavior\CommandBehaviorBinding.cs" />
-    <Compile Include="AttachedCommandBehavior\EventHandlerGenerator.cs" />
-    <Compile Include="AttachedCommandBehavior\SimpleCommand.cs" />
-    <Compile Include="ClientEventArgs.cs" />
-    <Compile Include="Helper\ConnnectedClientAddress.cs" />
-    <Compile Include="Model\PartyModeModel.cs" />
-    <Compile Include="Helper\ClientAddress.cs" />
-    <Compile Include="Helper\Settings.cs" />
-    <Compile Include="Model\ServerMessage.cs" />
-    <Compile Include="PartyModeCommandHandler.cs" />
-    <Compile Include="ServerCommandEventArgs.cs" />
-    <Compile Include="Tools\NetworkTools.cs" />
-    <Compile Include="Helper\SettingsHandler.cs" />
-    <Compile Include="ViewModel\ClientDetailViewModel.cs" />
-    <Compile Include="ViewModel\ClientViewModel.cs" />
-    <Compile Include="ViewModel\Commands\SaveCommand.cs" />
-    <Compile Include="ViewModel\LogViewerViewModel.cs" />
-    <Compile Include="ViewModel\ModelBase.cs" />
-    <Compile Include="Helper\ObservableCollectionEx.cs" />
-    <Compile Include="Helper\CycledList.cs" />
-    <Compile Include="ViewModel\ServerMessageView.cs" />
-    <Compile Include="ViewModel\Commands\UnloadedCommand.cs" />
-    <Compile Include="View\ClientDetailView.xaml.cs">
-      <DependentUpon>ClientDetailView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="View\LogViewerView.xaml.cs">
-      <DependentUpon>LogViewerView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="View\ClientView.xaml.cs">
-      <DependentUpon>ClientView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="View\PartyModeView.xaml.cs">
-      <DependentUpon>PartyModeView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="ViewModel\PartyModeViewModel.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <EmbeddedResource Include="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-    </Compile>
     <None Include="packages.config" />
-    <None Include="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
-    <Compile Include="Properties\Settings.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Settings.settings</DependentUpon>
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Page Include="View\Style\StyleDictonary.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="View\ClientDetailView.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="View\LogViewerView.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="View\ClientView.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="View\PartyModeView.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

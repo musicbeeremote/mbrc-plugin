@@ -8,11 +8,11 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
+using MusicBeePlugin.PartyMode.Core.View;
+using MusicBeePlugin.PartyMode.Core.ViewModel;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
-using MbrcPartyMode.View;
-using MbrcPartyMode.ViewModel;
 
 namespace MusicBeePlugin
 {

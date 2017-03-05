@@ -1,12 +1,12 @@
 using System.Net;
-using MbrcPartyMode;
-using MbrcPartyMode.Helper;
-using MbrcPartyMode.Model;
+using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Commands.Requests;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using MusicBeePlugin.PartyMode.Core;
+using MusicBeePlugin.PartyMode.Core.Model;
 
 namespace MusicBeePlugin.PartyMode
 {
@@ -21,24 +21,6 @@ namespace MusicBeePlugin.PartyMode
             _model = PartyModeModel.Instance;
         }
 
-        public void BeforeExcute(MappingCommand mc, ConnectedClientAddress adr)
-        {
-            switch (mc)
-            {
-                case MappingCommand.ClientConnected:
-                    PartyModeCommandHandler.Instance.OnClientConnected(adr);
-                    break;
-
-                case MappingCommand.ClientDisconnected:
-                    PartyModeCommandHandler.Instance.OnClientDisconnected(adr);
-                    break;
-
-                case MappingCommand.StopServer:
-                    PartyModeModel.Instance.SaveSettings();
-                    break;
-            }
-        }
-
         public override void Execute(IEvent eEvent)
         {
             if (!_model.Settings.IsActive)
@@ -46,6 +28,8 @@ namespace MusicBeePlugin.PartyMode
                 _cmd.Execute(eEvent);
                 return;
             }
+
+            var partyModeCommandHandler = PartyModeCommandHandler.Instance;
 
             if (_cmd is ClientConnected)
             {
@@ -56,38 +40,52 @@ namespace MusicBeePlugin.PartyMode
                 {
                     return;
                 }
+                partyModeCommandHandler.OnClientConnected(GetRemoteClient(eEvent));
+            }
+            else if (_cmd is ClientDisconnected)
+            {
+                partyModeCommandHandler.OnClientDisconnected(GetRemoteClient(eEvent));
             }
 
-            var mc = PartyModeCommandMapper.MapCommand(_cmd);
-
-            var ipAddress = Authenticator.GetIpAddress(eEvent.ConnectionId);
-            var clientId = Authenticator.ClientId(eEvent.ConnectionId);
-            var adr = _model.GetConnectedClientAdresss(clientId, ipAddress);
-
-
-            var partyModeCommandHandler = PartyModeCommandHandler.Instance;
-            var isAllowed = partyModeCommandHandler.IsCommandAllowed(mc, adr);
-
-            if (_cmd is RequestNowplayingQueue && partyModeCommandHandler.ClientCanOnlyAdd(adr))
+            var client = GetRemoteClient(eEvent);
+            if (_cmd is RequestNowplayingQueue && partyModeCommandHandler.ClientCanOnlyAdd(client))
             {
                 var cmd = new RequestNowplayingPartyQueue();
                 cmd.Execute(eEvent);
-                partyModeCommandHandler.OnServerCommandExecuted(adr.ClientId, "add", true);
+                partyModeCommandHandler.OnServerCommandExecuted(client.ClientId, "add", true);
                 return;
             }
 
-            if (isAllowed)
+            var canExecute = true;
+            var limitedCommand = _cmd as LimitedCommand;
+            if (limitedCommand != null)
             {
-                BeforeExcute(mc, adr);
-                _cmd.Execute(eEvent);
+                var command = limitedCommand;
+                canExecute = client.HasPermission(command.GetPermissions());
+                if (canExecute)
+                {
+                    _cmd.Execute(eEvent);
+                }
+                else
+                {
+                    var rmcmd = new RequestedCommandNotAllowed();
+                    rmcmd.Execute(eEvent);
+                }
             }
             else
             {
-                var rmcmd = new RequestedCommandNotAllowed();
-                rmcmd.Execute(eEvent);
+                _cmd.Execute(eEvent);
             }
 
-            partyModeCommandHandler.OnServerCommandExecuted(adr.ClientId, eEvent.Type, isAllowed);
+            partyModeCommandHandler.OnServerCommandExecuted(client.ClientId, eEvent.Type, canExecute);
+        }
+
+        private RemoteClient GetRemoteClient(IEvent eEvent)
+        {
+            var ipAddress = Authenticator.GetIpAddress(eEvent.ConnectionId);
+            var clientId = Authenticator.ClientId(eEvent.ConnectionId);
+            var client = _model.GetClientAddress(clientId, ipAddress);
+            return client;
         }
     }
 }

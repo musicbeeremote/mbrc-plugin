@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.2.0.1488</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1496</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -158,6 +158,7 @@
     <Compile Include="AndroidRemote\Events\MessageEvent.cs" />
     <Compile Include="AndroidRemote\Interfaces\ICommand.cs" />
     <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
+    <Compile Include="AndroidRemote\Networking\RemoteClient.cs" />
     <Compile Include="AndroidRemote\Networking\Constants.cs" />
     <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
     <Compile Include="AndroidRemote\Networking\SocketTester.cs" />
@@ -173,9 +174,34 @@
     </Compile>
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="PartyMode\CommandDecorator.cs" />
+    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
+    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehaviorBinding.cs" />
+    <Compile Include="PartyMode\Core\AttachedCommandBehavior\EventHandlerGenerator.cs" />
+    <Compile Include="PartyMode\Core\AttachedCommandBehavior\SimpleCommand.cs" />
+    <Compile Include="PartyMode\Core\ClientEventArgs.cs" />
+    <Compile Include="PartyMode\Core\Helper\CycledList.cs" />
+    <Compile Include="PartyMode\Core\Helper\ObservableCollectionEx.cs" />
+    <Compile Include="PartyMode\Core\Helper\Settings.cs" />
+    <Compile Include="PartyMode\Core\Helper\SettingsHandler.cs" />
+    <Compile Include="PartyMode\Core\Model\PartyModeModel.cs" />
+    <Compile Include="PartyMode\Core\Model\PartyModeLogs.cs" />
+    <Compile Include="PartyMode\Core\PartyModeCommandHandler.cs" />
+    <Compile Include="PartyMode\Core\ServerCommandEventArgs.cs" />
+    <Compile Include="PartyMode\Core\Tools\NetworkTools.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\ClientDetailViewModel.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\ClientViewModel.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\Commands\SaveCommand.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\Commands\UnloadedCommand.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\LogViewerViewModel.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\ModelBase.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\PartyModeViewModel.cs" />
+    <Compile Include="PartyMode\Core\ViewModel\PartyModeLogsView.cs" />
+    <Compile Include="PartyMode\Core\View\ClientDetailView.xaml.cs" />
+    <Compile Include="PartyMode\Core\View\ClientView.xaml.cs" />
+    <Compile Include="PartyMode\Core\View\LogViewerView.xaml.cs" />
+    <Compile Include="PartyMode\Core\View\PartyModeView.xaml.cs" />
     <Compile Include="PartyMode\PartyModeBaseCommand.cs" />
     <Compile Include="PartyMode\PartyModeCommandDecorator.cs" />
-    <Compile Include="PartyMode\PartyModeCommandMapper.cs" />
     <Compile Include="PartyMode\RequestedCommandNotAllowed.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="AndroidRemote\Networking\SocketConnection.cs" />
@@ -242,6 +268,13 @@
       <Project>{86bd4fc8-0ff9-4cd6-ac5f-5fc15397df55}</Project>
       <Name>mbrc-partymode</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />
+    <Page Include="PartyMode\Core\View\ClientView.xaml" />
+    <Page Include="PartyMode\Core\View\LogViewerView.xaml" />
+    <Page Include="PartyMode\Core\View\PartyModeView.xaml" />
+    <Page Include="PartyMode\Core\View\Style\StyleDictonary.xaml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
