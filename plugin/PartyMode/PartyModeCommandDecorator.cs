@@ -34,18 +34,12 @@ namespace MusicBeePlugin.PartyMode
             if (_cmd is ClientConnected)
             {
                 _cmd.Execute(eEvent);
-
-                var clientAddress = eEvent.Data as IPAddress;
-                if (clientAddress != null && IPAddress.IsLoopback(clientAddress))
-                {
-                    return;
-                }
-                partyModeCommandHandler.OnClientConnected(GetRemoteClient(eEvent));
             }
             else if (_cmd is ClientDisconnected)
             {
                 partyModeCommandHandler.OnClientDisconnected(GetRemoteClient(eEvent));
             }
+
 
             var client = GetRemoteClient(eEvent);
             if (_cmd is RequestNowplayingQueue && partyModeCommandHandler.ClientCanOnlyAdd(client))

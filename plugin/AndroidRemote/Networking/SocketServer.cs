@@ -6,11 +6,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Timers;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
+using TinyIoC;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
@@ -37,6 +40,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         private bool _isRunning;
         private Timer _pingTimer;
+        private readonly ITinyMessengerHub _tinyMessengerHub;
         private const string NewLine = "\r\n";
 
         /// <summary>
@@ -52,6 +56,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             _handler = new ProtocolHandler();
             IsRunning = false;
             _availableWorkerSockets = new ConcurrentDictionary<string, Socket>();
+            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
+            _tinyMessengerHub.Subscribe<StopSocketServer>(eEvent => Stop());
+            _tinyMessengerHub.Subscribe<StartSocketServer>(eEvent => Start());
+            _tinyMessengerHub.Subscribe<RestartSocketEvent>(eEvent => RestartSocket());
+            _tinyMessengerHub.Subscribe<ForceClientDisconnect>(eEvent => DisconnectSocket(eEvent.ConnectionId));
+            _tinyMessengerHub.Subscribe<BroadcastEventAvailable>(eEvent => Broadcast(eEvent.BroadcastEvent));
+            _tinyMessengerHub.Subscribe<ReplayAvailable>(eEvent => Send(eEvent.Message, eEvent.ConnectionId));
         }
 
         /// <summary>
@@ -63,7 +74,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             private set
             {
                 _isRunning = value;
-                EventBus.FireEvent(new MessageEvent(EventType.SocketStatusChange, _isRunning));
+                _tinyMessengerHub.Publish(new SocketStatusChanged(_isRunning));
             }
         }
 
@@ -233,7 +244,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
                 if (!_availableWorkerSockets.TryAdd(connectionId, workerSocket)) return;
                 // Inform the the Protocol Handler that a new Client has been connected, prepare for handshake.
-                EventBus.FireEvent(new MessageEvent(EventType.ActionClientConnected, ipAddress, connectionId));
+                _tinyMessengerHub.Publish(new ClientConnected(ipAddress, connectionId));
 
                 // Let the worker Socket do the further processing
                 // for the just connected client.
@@ -292,8 +303,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 _logger.Debug(se, "On WaitForData");
                 if (se.ErrorCode == 10053)
                 {
-                    EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty,
-                        connectionId));
+                    _tinyMessengerHub.Publish(new ConnectionClosedEvent(connectionId));
                 }
             }
         }
@@ -349,7 +359,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
-                EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, connectionId));
+                _tinyMessengerHub.Publish(new ConnectionClosedEvent(connectionId));
                 _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
                               " : OnDataReceived: Socket has been closed\n");
             }
@@ -360,8 +370,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     Socket deadSocket;
                     if (_availableWorkerSockets.ContainsKey(connectionId))
                         _availableWorkerSockets.TryRemove(connectionId, out deadSocket);
-                    EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty,
-                        connectionId));
+                    _tinyMessengerHub.Publish(new ConnectionClosedEvent(connectionId));
                 }
                 else
                 {
@@ -420,7 +429,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (!isConnected)
                     {
                         RemoveDeadSocket(key);
-                        EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
+                        _tinyMessengerHub.Publish(new ConnectionClosedEvent(key));
                     }
 
                     if (!isConnected || !Authenticator.IsClientAuthenticated(key) ||
@@ -459,7 +468,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (!isConnected)
                     {
                         RemoveDeadSocket(key);
-                        EventBus.FireEvent(new MessageEvent(EventType.ActionClientDisconnected, string.Empty, key));
+                        _tinyMessengerHub.Publish(new ConnectionClosedEvent(key));
                     }
                     if (isConnected && Authenticator.IsClientAuthenticated(key) &&
                         Authenticator.IsClientBroadcastEnabled(key))
@@ -487,4 +496,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             _mainSocket.Dispose();
         }
     }
+
+
 }

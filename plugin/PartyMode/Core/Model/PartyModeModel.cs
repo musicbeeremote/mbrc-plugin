@@ -6,6 +6,7 @@ using System.Net;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.PartyMode.Core.Helper;
 using MusicBeePlugin.PartyMode.Core.ViewModel;
+using NLog;
 using static MusicBeePlugin.PartyMode.Core.Tools.PartyModeNetworkTools;
 
 namespace MusicBeePlugin.PartyMode.Core.Model
@@ -19,8 +20,7 @@ namespace MusicBeePlugin.PartyMode.Core.Model
         private static PartyModeModel _instance;
         private readonly CycledList<PartyModeLogs> _logs;
 
-        //todo: 1 make sure that when some settings are changes the client permissions get updated
-        //todo: 2 count active connections for remote clients.
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         #endregion vars
 
@@ -34,7 +34,9 @@ namespace MusicBeePlugin.PartyMode.Core.Model
             commandHandler.ClientConnected += ClientConnected;
             commandHandler.ClientDisconnected += ClientDisconnected;
             commandHandler.ServerCommandExecuted += ServerCommandExecuted;
-            KnownAddresses = new List<RemoteClient>();
+
+            // Load stored
+            KnownClients = Settings.KnownClients;
 
             _logs = new CycledList<PartyModeLogs>(10000);
 
@@ -49,23 +51,27 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
         public RemoteClient GetClientAddress(string clientId, IPAddress ipadress)
         {
-            if (KnownAddresses.Any())
-            {
-                var cadr = KnownAddresses.SingleOrDefault(x => x.ClientId == clientId);
-                if (cadr != null)
+            if (!KnownClients.Any())
+                return new RemoteClient(GetMacAddress(ipadress), ipadress)
                 {
-                    return cadr;
-                }
+                    ClientId = clientId
+                };
+            var cadr = KnownClients.SingleOrDefault(x => x.ClientId == clientId);
+            if (cadr != null)
+            {
+                return cadr;
             }
 
-            var macAddress = GetMacAddress(ipadress);
-            var client = new RemoteClient(macAddress, ipadress) {ClientId = clientId};
-            return client;
+
+            return new RemoteClient(GetMacAddress(ipadress), ipadress)
+            {
+                ClientId = clientId
+            };
         }
 
         public Settings Settings { get; }
 
-        public List<RemoteClient> KnownAddresses { get; }
+        public List<RemoteClient> KnownClients { get; }
 
         private void ClientConnected(object sender, ClientEventArgs e)
         {
@@ -75,36 +81,36 @@ namespace MusicBeePlugin.PartyMode.Core.Model
                 return;
             }
 
-            if (KnownAddresses.All(x => x.MacAdress.ToString() != e.Client.MacAdress.ToString()))
+            _logger.Debug($"client connected {e.Client}");
+
+            if (KnownClients.All(x => x.MacAdress.ToString() != e.Client.MacAdress.ToString()))
             {
                 //to do: check if the Macadr is not null
-                var client = Settings.KnownAdresses.SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
+                var client = Settings.KnownClients.SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
                 if (client != null)
                 {
                     client.IpAddress = e.Client.IpAddress;
                     client.LastLogIn = DateTime.Now;
-                    e.Client.AddConnection();
-                    KnownAddresses.Add(client);
+                    client.AddConnection();
+                    KnownClients.Add(client);
                 }
                 else
                 {
                     e.Client.AddConnection();
-                    KnownAddresses.Add(e.Client);
+                    KnownClients.Add(e.Client);
                 }
             }
-            OnPropertyChanged(nameof(KnownAddresses));
+            OnPropertyChanged(nameof(KnownClients));
         }
 
         private void ClientDisconnected(object sender, ClientEventArgs e)
         {
-            if (KnownAddresses.Contains(e.Client))
+            if (!KnownClients.Contains(e.Client)) return;
+            var client = Settings.KnownClients
+                .SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
+            if (client != null && client.ActiveConnections > 0)
             {
-                var client = Settings.KnownAdresses
-                    .SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
-                if (client != null && client.ActiveConnections > 0)
-                {
-                    client.RemoveConnection();
-                }
+                client.RemoveConnection();
             }
         }
 
@@ -125,14 +131,9 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
         public void SaveSettings()
         {
-            foreach (var adr in KnownAddresses)
+            foreach (var client in KnownClients)
             {
-                var kadr = Settings.KnownAdresses
-                    .SingleOrDefault(x => x.MacAdress.ToString() == adr.MacAdress.ToString());
-                if (kadr == null)
-                {
-                    Settings.KnownAdresses.Add(adr);
-                }
+                Settings.KnownClients.Add(client);
             }
 
             _handler.SaveSettings(Settings);

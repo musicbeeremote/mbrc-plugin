@@ -1,5 +1,8 @@
 ﻿using System.Diagnostics;
+using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.PartyMode;
+using TinyIoC;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
 {
@@ -10,11 +13,14 @@ namespace MusicBeePlugin.AndroidRemote.Controller
     internal class Controller
     {
         private readonly Dictionary<string, Type> _commandMap;
+        private ITinyMessengerHub _tinyMessengerHub;
         public static Controller Instance { get; } = new Controller();
 
         private Controller()
         {
             _commandMap = new Dictionary<string, Type>();
+            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
+            _tinyMessengerHub.Subscribe<MessageEvent>(CommandExecute);
         }
 
         public void AddCommand(string eventType, Type command)

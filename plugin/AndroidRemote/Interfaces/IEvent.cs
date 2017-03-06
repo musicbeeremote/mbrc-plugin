@@ -1,6 +1,8 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Interfaces
+﻿using TinyMessenger;
+
+namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
-    public interface IEvent
+    public interface IEvent : ITinyMessage
     {
         object Data { get; }
         string Type { get; }

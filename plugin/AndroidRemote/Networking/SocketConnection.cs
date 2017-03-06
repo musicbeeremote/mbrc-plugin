@@ -10,7 +10,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
     public class SocketConnection
     {
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="connectionId"></param>
         public SocketConnection(string connectionId)

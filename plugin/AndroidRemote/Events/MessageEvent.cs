@@ -47,5 +47,7 @@ namespace MusicBeePlugin.AndroidRemote.Events
         public string ConnectionId { get; }
 
         public string ExtraData { get; }
+
+        public object Sender { get; } = null;
     }
 }

@@ -9,15 +9,15 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
     {
         #region constructor
 
-        public Settings(List<RemoteClient> knownAdresses, uint addressStorageDays)
+        public Settings(List<RemoteClient> knownClients, uint addressStorageDays)
         {
-            _knownAdresses = knownAdresses;
+            _knownClients = knownClients;
             _addressStorageDays = addressStorageDays;
         }
 
         public Settings()
         {
-            _knownAdresses = new List<RemoteClient>();
+            _knownClients = new List<RemoteClient>();
             _addressStorageDays = 90;
         }
 
@@ -25,17 +25,17 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
 
         #region vars
 
-        private List<RemoteClient> _knownAdresses;
+        private List<RemoteClient> _knownClients;
         private uint _addressStorageDays;
         private bool _isActive;
 
         #endregion
 
 
-        public List<RemoteClient> KnownAdresses
+        public List<RemoteClient> KnownClients
         {
-            get { return _knownAdresses; }
-            set { _knownAdresses = value; }
+            get { return _knownClients; }
+            set { _knownClients = value; }
         }
 
         public uint AddressStoreDays

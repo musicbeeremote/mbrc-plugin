@@ -3,6 +3,7 @@
     internal class EventType
     {
         public const string ActionClientConnected = "ActionClientConnected";
+        public const string ClientReady = "ConnectionReadyEvent";
         public const string ActionClientDisconnected = "ActionClientDisconnected";
         public const string ActionForceClientDisconnect = "ActionForceClientDisconnect";
         public const string ActionDataAvailable = "ActionDataAvailable";
@@ -18,5 +19,6 @@
         public const string SocketStatusChange = "SocketStatusChange";
         public const string ShowFirstRunDialog = "ShowFirstRunDialog";
         public const string BroadcastEvent = "BroadcastEvent";
+
     }
 }

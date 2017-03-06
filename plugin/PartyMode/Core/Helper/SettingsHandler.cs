@@ -83,11 +83,11 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
         {
             var storageIsOverDate = DateTime.Now.AddDays(settings.AddressStoreDays * -1);
 
-            var validAddresses = settings.KnownAdresses
+            var validAddresses = settings.KnownClients
                 .Where(x => DateTime.Compare(x.LastLogIn, storageIsOverDate) > 1)
                 .ToList();
 
-            if (validAddresses.Any()) settings.KnownAdresses = validAddresses;
+            if (validAddresses.Any()) settings.KnownClients = validAddresses;
 
             return settings;
         }

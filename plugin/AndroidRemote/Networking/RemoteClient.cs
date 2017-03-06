@@ -40,7 +40,6 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             ActiveConnections--;
         }
 
-
         public virtual bool HasPermission(CommandPermissions permissions)
         {
             return ClientPermissions.HasFlag(permissions);
@@ -103,5 +102,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         }
 
         #endregion Equatable
+
+        public override string ToString()
+        {
+            return $"{nameof(ClientPermissions)}: {ClientPermissions}," +
+                   $" {nameof(ClientId)}: {ClientId}," +
+                   $" {nameof(ActiveConnections)}: {ActiveConnections}," +
+                   $" {nameof(MacAdress)}: {MacAdress}," +
+                   $" {nameof(IpAddress)}: {IpAddress}," +
+                   $" {nameof(LastLogIn)}: {LastLogIn}";
+        }
     }
 }

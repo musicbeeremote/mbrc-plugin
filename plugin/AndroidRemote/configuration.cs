@@ -3,7 +3,6 @@
     using Commands.InstaReplies;
     using Commands.Internal;
     using Commands.Requests;
-    using Commands.State;
     using Networking;
     using Events;
 
@@ -11,18 +10,6 @@
     {
         public static void Register(Controller.Controller controller)
         {
-            controller.AddCommand(EventType.ActionSocketStart, typeof (StartSocketServer));
-            controller.AddCommand(EventType.ActionSocketStop, typeof (StopSocketServer));
-            controller.AddCommand(EventType.ActionClientConnected, typeof (ClientConnected));
-            controller.AddCommand(EventType.ActionClientDisconnected, typeof (ClientDisconnected));
-            controller.AddCommand(EventType.ActionForceClientDisconnect, typeof (ForceClientDisconnect));
-            controller.AddCommand(EventType.InitializeModel, typeof(InitializeModelStateCommand));
-            controller.AddCommand(EventType.NowPlayingCoverChange, typeof(UpdateCoverCommand));
-            controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(UpdateLyricsCommand));
-            controller.AddCommand(EventType.StartServiceBroadcast, typeof(StartServiceBroadcast));
-            controller.AddCommand(EventType.SocketStatusChange, typeof(SocketStatusChanged));
-            controller.AddCommand(EventType.RestartSocket, typeof(RestartSocketCommand));
-            controller.AddCommand(EventType.ShowFirstRunDialog, typeof(ShowFirstRunDialogCommand));
             /** Protocol Related commands **/
             controller.AddCommand(Constants.Player, typeof (RequestPlayer));
             controller.AddCommand(Constants.Protocol, typeof (RequestProtocol));            

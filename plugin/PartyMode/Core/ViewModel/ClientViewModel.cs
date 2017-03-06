@@ -15,7 +15,7 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel
         public ClientViewModel(PartyModeModel model)
         {
             _model = model;
-            ConnectedClients = new ObservableCollection<RemoteClient>(model.KnownAddresses);
+            ConnectedClients = new ObservableCollection<RemoteClient>(model.KnownClients);
             model.PropertyChanged += ModelOnPropertyChangend;
         }
 
@@ -42,8 +42,8 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel
 
         public void ModelOnPropertyChangend(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(_model.KnownAddresses)) return;
-            ConnectedClients = new ObservableCollection<RemoteClient>(_model.KnownAddresses);
+            if (e.PropertyName != nameof(_model.KnownClients)) return;
+            ConnectedClients = new ObservableCollection<RemoteClient>(_model.KnownClients);
             OnPropertyChanged(nameof(SelectedClient));
         }
 

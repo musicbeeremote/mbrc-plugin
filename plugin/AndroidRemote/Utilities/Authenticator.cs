@@ -11,6 +11,8 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
     /// </summary>
     public static class Authenticator
     {
+
+        //todo handle events for client disconnection
         private static readonly ConcurrentDictionary<string, SocketConnection> ActiveConnections =
             new ConcurrentDictionary<string, SocketConnection>();
 

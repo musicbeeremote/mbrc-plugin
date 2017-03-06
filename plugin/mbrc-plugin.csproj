@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.2.0.1496</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1499</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -112,7 +112,7 @@
     <Compile Include="AndroidRemote\Commands\CommandPermissions.cs" />
     <Compile Include="AndroidRemote\Commands\CoverPayload.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\InstantReplyCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\InternalCommands.cs" />
+    <Compile Include="AndroidRemote\Commands\Internal\InternalEvents.cs" />
     <Compile Include="AndroidRemote\Commands\LimitedCommand.cs" />
     <Compile Include="AndroidRemote\Commands\LyricsPayload.cs" />
     <Compile Include="AndroidRemote\Commands\QueuePayload.cs" />
@@ -207,6 +207,7 @@
     <Compile Include="AndroidRemote\Networking\SocketConnection.cs" />
     <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
     <Compile Include="AndroidRemote\Model\LyricCoverModel.cs" />
+    <Compile Include="PluginBootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="AndroidRemote\Networking\ProtocolHandler.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -219,6 +220,8 @@
     <Compile Include="AndroidRemote\Utilities\Authenticator.cs" />
     <Compile Include="AndroidRemote\Utilities\StateAction.cs" />
     <Compile Include="SearchSource.cs" />
+    <Compile Include="TinyIoC.cs" />
+    <Compile Include="TinyMessenger.cs" />
     <Compile Include="Tools\NetworkTools.cs" />
   </ItemGroup>
   <ItemGroup>
