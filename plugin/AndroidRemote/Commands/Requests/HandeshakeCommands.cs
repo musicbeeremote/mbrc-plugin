@@ -1,12 +1,21 @@
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestProtocol : ICommand
     {
+        private readonly ITinyMessengerHub _messengerHub;
+
+        public RequestProtocol(ITinyMessengerHub messengerHub)
+        {
+            _messengerHub = messengerHub;
+        }
+
         public void Execute(IEvent eEvent)
         {
             int clientProtocolVersion;
@@ -18,17 +27,24 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                     connection.ClientProtocolVersion = clientProtocolVersion;
                 }
             }
-            SocketServer.Instance.Send(new SocketMessage(Constants.Protocol, Constants.ProtocolVersion).ToJsonString(),
-                eEvent.ConnectionId);
+            var message = new SocketMessage(Constants.Protocol, Constants.ProtocolVersion);
+            _messengerHub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
         }
     }
 
     internal class RequestPlayer : ICommand
     {
+        private readonly ITinyMessengerHub _messengerHub;
+
+        public RequestPlayer(ITinyMessengerHub messengerHub)
+        {
+            _messengerHub = messengerHub;
+        }
+
         public void Execute(IEvent eEvent)
         {
-            SocketServer.Instance.Send(new SocketMessage(Constants.Player, "MusicBee").ToJsonString(),
-                eEvent.ConnectionId);
+            var message = new SocketMessage(Constants.Player, "MusicBee");
+            _messengerHub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
         }
     }
 }

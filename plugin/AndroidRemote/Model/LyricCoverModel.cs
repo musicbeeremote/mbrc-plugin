@@ -1,4 +1,5 @@
 ﻿using NLog;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Model
 {
@@ -8,17 +9,17 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
     internal class LyricCoverModel
     {
+        private readonly ITinyMessengerHub _messengerHub;
+
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
 
         private string _xHash;
         private string _lyrics;
 
-        public static LyricCoverModel Instance { get; } = new LyricCoverModel();
-
-        private LyricCoverModel()
+        public LyricCoverModel(ITinyMessengerHub messengerHub)
         {
+            _messengerHub = messengerHub;
         }
 
         public void SetCover(string base64)
@@ -35,7 +36,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 : Utilities.Utilities.ImageResize(base64);
             _xHash = hash;
 
-            Plugin.BroadcastCover(Cover);
+            _messengerHub.Publish(new CoverDataReadyEvent(Cover));
         }
 
         public string Cover { get; private set; }
@@ -54,8 +55,6 @@ namespace MusicBeePlugin.AndroidRemote.Model
                         lStr = lStr.Replace("\r\r\n", " \n ");
                     }
                     lStr = lStr.Replace("\0", " ");
-                    //lStr = lStr.Replace("\r\n", "&lt;p&gt;");
-                    //lStr = lStr.Replace("\n", "&lt;br&gt;");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
                     var regEx = new Regex(pattern);
                     _lyrics = SecurityElement.Escape(regEx.Replace(lStr, string.Empty));
@@ -67,10 +66,34 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 }
                 finally
                 {
-                    Plugin.BroadcastLyrics(_lyrics);
+                    _messengerHub.Publish(new LyricsDataReadyEvent(_lyrics));
                 }
             }
             get { return _lyrics; }
         }
+    }
+
+    internal class LyricsDataReadyEvent : ITinyMessage
+    {
+        public string Lyrics { get; }
+
+        public LyricsDataReadyEvent(string lyrics)
+        {
+            Lyrics = lyrics;
+        }
+
+        public object Sender { get; } = null;
+    }
+
+    internal class CoverDataReadyEvent : ITinyMessage
+    {
+        public string Cover { get; }
+
+        public CoverDataReadyEvent(string cover)
+        {
+            Cover = cover;
+        }
+
+        public object Sender { get; } = null;
     }
 }

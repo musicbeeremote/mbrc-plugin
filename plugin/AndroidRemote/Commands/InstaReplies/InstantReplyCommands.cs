@@ -28,8 +28,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
         }
     }
 
-    internal class ProcessInitRequest : ICommand
-
+    internal class ProcessInitRequest : ICommand    
     {
         public void Execute(IEvent eEvent)
         {
