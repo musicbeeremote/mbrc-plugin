@@ -12,6 +12,7 @@ using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
+using ServiceStack.Text;
 using TinyIoC;
 using TinyMessenger;
 
@@ -58,11 +59,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             _availableWorkerSockets = new ConcurrentDictionary<string, Socket>();
             _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
             _tinyMessengerHub.Subscribe<StopSocketServer>(eEvent => Stop());
-            _tinyMessengerHub.Subscribe<StartSocketServer>(eEvent => Start());
+            _tinyMessengerHub.Subscribe<StartSocketServerEvent>(eEvent => Start());
             _tinyMessengerHub.Subscribe<RestartSocketEvent>(eEvent => RestartSocket());
             _tinyMessengerHub.Subscribe<ForceClientDisconnect>(eEvent => DisconnectSocket(eEvent.ConnectionId));
             _tinyMessengerHub.Subscribe<BroadcastEventAvailable>(eEvent => Broadcast(eEvent.BroadcastEvent));
-            _tinyMessengerHub.Subscribe<ReplayAvailable>(eEvent => Send(eEvent.Message, eEvent.ConnectionId));
+            _tinyMessengerHub.Subscribe<PluginResponseAvailableEvent>(eEvent => Send(eEvent.Message, eEvent.ConnectionId));
         }
 
         /// <summary>
@@ -384,18 +385,19 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="connectionId">The id of the connection that will receive the message</param>
-        public void Send(string message, string connectionId)
+        public void Send(SocketMessage message, string connectionId)
         {
             _logger.Debug($"sending-{connectionId}:{message}");
+            var serializedMessage = JsonSerializer.SerializeToString(message);
 
             if (connectionId.Equals("all"))
             {
-                Send(message);
+                Send(serializedMessage);
                 return;
             }
             try
             {
-                var data = Encoding.UTF8.GetBytes(message + NewLine);
+                var data = Encoding.UTF8.GetBytes(serializedMessage + NewLine);
                 Socket wSocket;
                 if (_availableWorkerSockets.TryGetValue(connectionId, out wSocket))
                 {

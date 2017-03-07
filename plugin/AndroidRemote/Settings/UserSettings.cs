@@ -4,7 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml;
-using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using TinyIoC;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Settings
 {
@@ -76,6 +78,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         private UserSettings()
         {
             // Private constructor to enforce singleton
+            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
         }
 
         /// <summary>
@@ -100,6 +103,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         public bool DebugLogEnabled { get; set; }
 
         public static string LogFilePath = "\\mbrc.log";
+        private ITinyMessengerHub _tinyMessengerHub;
 
         public string FullLogPath => StoragePath + LogFilePath;
         public bool UpdateFirewall { get; set; }
@@ -163,7 +167,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 if (string.IsNullOrEmpty(lastRun))
                 {
                     isFirst = true;
-                }    
+                }
             }
 
             if (isFirst)
@@ -190,7 +194,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
             document.Save(GetSettingsFile());
-            EventBus.FireEvent(new MessageEvent(EventType.RestartSocket));
+            _tinyMessengerHub.Publish(new RestartSocketEvent());
         }
 
         private void CreateEmptySettingsFile(string application)
@@ -241,8 +245,8 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 var document = new XmlDocument();
                 document.Load(GetSettingsFile());
                 _listeningPort = uint.TryParse(ReadNodeValue(document, PortNumber), out _listeningPort)
-                                                  ? _listeningPort
-                                                  : 3000;
+                    ? _listeningPort
+                    : 3000;
                 UpdateFilteringSelection(ReadNodeValue(document, Selection));
                 SetValues(ReadNodeValue(document, Values));
                 bool debugEnabled;
@@ -252,13 +256,11 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 bool updateFirewall;
                 bool.TryParse(ReadNodeValue(document, UpdateFirewallNode), out updateFirewall);
                 UpdateFirewall = updateFirewall;
-      
+
 
                 short source;
-                Source = (SearchSource) (short.TryParse(ReadNodeValue(document, LibrarySource), out source) ? source : 1);
-
-
-
+                Source =
+                    (SearchSource) (short.TryParse(ReadNodeValue(document, LibrarySource), out source) ? source : 1);
             }
         }
 

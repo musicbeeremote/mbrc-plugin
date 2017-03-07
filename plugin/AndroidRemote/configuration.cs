@@ -45,7 +45,6 @@
             controller.AddCommand(Constants.LibraryQueueArtist, typeof(RequestLibQueueArtist));
             controller.AddCommand(Constants.LibraryQueueGenre, typeof(RequestLibQueueGenre));
             controller.AddCommand(Constants.LibraryQueueTrack, typeof(RequestLibQueueTrack));
-            controller.AddCommand(EventType.ReplyAvailable, typeof(ReplayAvailable));
             controller.AddCommand(Constants.LibraryArtistAlbums, typeof(RequestLibArtistAlbums));
             controller.AddCommand(Constants.LibraryAlbumTracks, typeof(RequestLibAlbumTracks));
             controller.AddCommand(Constants.LibraryGenreArtists, typeof(RequestLibGenreArtists));
@@ -65,7 +64,6 @@
             controller.AddCommand(Constants.LibraryBrowseArtists, typeof(RequestBrowseArtists));
             controller.AddCommand(Constants.LibraryBrowseAlbums, typeof(RequestBrowseAlbums));
             controller.AddCommand(Constants.LibraryBrowseTracks, typeof(RequestBrowseTracks));
-            controller.AddCommand(EventType.BroadcastEvent, typeof(BroadcastEventAvailable));
             controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowplayingQueue));
             #endregion
 

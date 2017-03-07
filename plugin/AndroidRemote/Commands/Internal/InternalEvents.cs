@@ -1,38 +1,35 @@
 using System.Net;
 using MusicBeePlugin.AndroidRemote.Events;
 using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Internal
 {
-    internal class ReplayAvailable : ITinyMessage
+    internal class PluginResponseAvailableEvent : ITinyMessage
     {
-        public string Message { get; }
+        public SocketMessage Message { get; }
         public string ConnectionId { get; }
 
-        public ReplayAvailable(string message, string connectionId)
+        public PluginResponseAvailableEvent(SocketMessage message, string connectionId = "all")
         {
-            Message = message + "\r\n";
+            Message = message;
             ConnectionId = connectionId;
         }
 
         public object Sender { get; } = null;
     }
 
-    internal class StartSocketServer : ITinyMessage
+    internal class StartSocketServerEvent : ITinyMessage
     {
         public object Sender { get; } = null;
     }
 
-    internal class StartServiceBroadcast : ICommand
+    internal class StartServiceBroadcastEvent : ITinyMessage
     {
-        public void Execute(IEvent eEvent)
-        {
-            ServiceDiscovery.Instance.Start();
-        }
+        public object Sender { get; } = null;
     }
 
     internal class SocketStatusChanged : ITinyMessage
@@ -52,10 +49,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
     {
         public void Execute(IEvent eEvent)
         {
-            if (UserSettings.Instance.IsFirstRun())
-            {
-                Plugin.Instance.OpenInfoWindow();
-            }
+
         }
     }
 
@@ -74,16 +68,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         }
 
         public object Sender { get; } = null;
-    }
-
-    internal class InitializeModelStateCommand : ICommand
-    {
-        public void Execute(IEvent eEvent)
-        {
-            var plugin = Plugin.Instance;
-            plugin.RequestNowPlayingTrackCover();
-            plugin.RequestNowPlayingTrackLyrics();
-        }
     }
 
     internal class ClientDisconnected : ICommand
@@ -108,7 +92,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
             //Authenticator.AddClientOnConnect(eEvent.ConnectionId, clientAddress);
         }
 
-       public object Sender { get; } = null;
+        public object Sender { get; } = null;
     }
 
     internal class BroadcastEventAvailable : ITinyMessage
@@ -147,6 +131,30 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         public ConnectionClosedEvent(string connectionId)
         {
             ConnectionId = connectionId;
+        }
+
+        public object Sender { get; } = null;
+    }
+
+    internal class LyricsAvailable : ITinyMessage
+    {
+        public string Lyrics { get; }
+
+        public LyricsAvailable(string lyrics)
+        {
+            Lyrics = lyrics;
+        }
+
+        public object Sender { get; } = null;
+    }
+
+    internal class CoverAvailable : ITinyMessage
+    {
+        public string Cover { get; }
+
+        public CoverAvailable(string cover)
+        {
+            Cover = cover;
         }
 
         public object Sender { get; } = null;

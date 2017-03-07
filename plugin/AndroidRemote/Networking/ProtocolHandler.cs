@@ -59,7 +59,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (msg.Context == Constants.VerifyConnection)
                     {
                         var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
-                        _tinyMessengerHub.Publish(new ReplayAvailable(socketMessage.ToJsonString(), connectionId));
+                        _tinyMessengerHub.Publish(new PluginResponseAvailableEvent(socketMessage, connectionId));
                         return;
                     }
 
