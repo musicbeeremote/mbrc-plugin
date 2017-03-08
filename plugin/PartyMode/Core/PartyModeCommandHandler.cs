@@ -1,4 +1,5 @@
-﻿using MusicBeePlugin.AndroidRemote.Commands.Internal;
+﻿using MusicBeePlugin.AndroidRemote.Commands;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.PartyMode.Core.Model;
@@ -43,8 +44,16 @@ namespace MusicBeePlugin.PartyMode.Core
 
         public bool HasPermissions(ICommand command, IEvent @event)
         {
-            _partyModeModel.GetClient(@event.ClientId);
-            throw new System.NotImplementedException();
+            var limitedCommand = command as LimitedCommand;
+            if (limitedCommand == null)
+            {
+                return true;
+            }
+
+            var client = _partyModeModel.GetClient(@event.ClientId);
+            var hasPermissions = client.HasPermission(limitedCommand.GetPermissions());
+            LogActivity(@event.ClientId, @event.Type, hasPermissions);
+            return hasPermissions;
         }
     }
 }

@@ -22,7 +22,7 @@ namespace MusicBeePlugin
             var socket = container.Resolve<SocketServer>();
             var discovery = container.Resolve<ServiceDiscovery>();
             discovery.Start();
-            Configuration.Register(controller);
+            Configuration.Register(controller, container);
         }
     }
 }

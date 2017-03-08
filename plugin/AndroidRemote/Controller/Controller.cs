@@ -11,7 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
 
     internal class Controller
     {
-        private readonly Dictionary<string, Type> _commandMap;
+        private readonly Dictionary<string, ICommand> _commandMap;
         private readonly ITinyMessengerHub _hub;
         private readonly PartyModeCommandHandler _handler;
 
@@ -19,11 +19,11 @@ namespace MusicBeePlugin.AndroidRemote.Controller
         {
             _hub = hub;
             _handler = handler;
-            _commandMap = new Dictionary<string, Type>();
+            _commandMap = new Dictionary<string, ICommand>();
             _hub.Subscribe<MessageEvent>(CommandExecute);
         }
 
-        public void AddCommand(string eventType, Type command)
+        public void AddCommand(string eventType, ICommand command)
         {
             if (_commandMap.ContainsKey(eventType)) return;
             _commandMap.Add(eventType, command);
@@ -46,8 +46,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             }
 
             if (!_commandMap.ContainsKey(e.Type)) return;
-            var commandType = _commandMap[e.Type];
-            var command = (ICommand)Activator.CreateInstance(commandType);
+            var command = _commandMap[e.Type];
             try
             {
                 if (_handler.PartyModeActive)
@@ -61,17 +60,14 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                 {
                     command.Execute(e);
                 }
-
             }
             catch (Exception ex)
             {
 #if DEBUG
-                Debug.WriteLine(ex.Message+ "\n"+ ex.StackTrace);
+                Debug.WriteLine(ex.Message + "\n" + ex.StackTrace);
 #endif
                 // Oh noes something went wrong... let's ignore the exception?
             }
         }
-
-      
     }
 }
