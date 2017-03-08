@@ -13,6 +13,7 @@ using MusicBeePlugin.PartyMode.Core.ViewModel;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
+using TinyIoC;
 
 namespace MusicBeePlugin
 {
@@ -32,7 +33,8 @@ namespace MusicBeePlugin
         {
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
-            var partyModeView = new PartyModeView {DataContext = new PartyModeViewModel()};
+            var viewModel = TinyIoCContainer.Current.Resolve<PartyModeViewModel>();
+            var partyModeView = new PartyModeView {DataContext = viewModel};
             partyModeView.InitializeComponent();
             elementHost1.Dock = DockStyle.Fill;
             elementHost1.Child = partyModeView;
@@ -75,7 +77,7 @@ namespace MusicBeePlugin
             portNumericUpDown.Value = settings.ListeningPort;
             UpdateFilteringSelection(settings.FilterSelection);
 
-            UpdateSocketStatus(SocketServer.Instance.IsRunning);
+//            UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
             if (settings.Source == SearchSource.None)
@@ -88,7 +90,7 @@ namespace MusicBeePlugin
 
             _logger.Debug($"Selected source is -> {settings.Source}");
 
-            _socketTester = new SocketTester { ConnectionListener = this };
+            _socketTester = new SocketTester {ConnectionListener = this};
             _socketTester.VerifyConnection();
         }
 
@@ -153,7 +155,7 @@ namespace MusicBeePlugin
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            UserSettings.Instance.ListeningPort = (uint)portNumericUpDown.Value;
+            UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
 
             switch (selectionFilteringComboBox.SelectedIndex)
             {
@@ -161,7 +163,7 @@ namespace MusicBeePlugin
                     break;
                 case 1:
                     UserSettings.Instance.BaseIp = ipAddressInputTextBox.Text;
-                    UserSettings.Instance.LastOctetMax = (uint)rangeNumericUpDown.Value;
+                    UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
                     break;
                 case 2:
                     UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
@@ -227,7 +229,6 @@ namespace MusicBeePlugin
             {
                 MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
             }
-
         }
 
         public interface IOnDebugSelectionChanged

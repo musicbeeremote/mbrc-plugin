@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using MusicBeePlugin.AndroidRemote.Events;
-using MusicBeePlugin.PartyMode;
-using TinyIoC;
+using MusicBeePlugin.PartyMode.Core;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
@@ -13,14 +12,15 @@ namespace MusicBeePlugin.AndroidRemote.Controller
     internal class Controller
     {
         private readonly Dictionary<string, Type> _commandMap;
-        private ITinyMessengerHub _tinyMessengerHub;
-        public static Controller Instance { get; } = new Controller();
+        private readonly ITinyMessengerHub _hub;
+        private readonly PartyModeCommandHandler _handler;
 
-        private Controller()
+        public Controller(ITinyMessengerHub hub, PartyModeCommandHandler handler)
         {
+            _hub = hub;
+            _handler = handler;
             _commandMap = new Dictionary<string, Type>();
-            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
-            _tinyMessengerHub.Subscribe<MessageEvent>(CommandExecute);
+            _hub.Subscribe<MessageEvent>(CommandExecute);
         }
 
         public void AddCommand(string eventType, Type command)
@@ -50,8 +50,18 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             var command = (ICommand)Activator.CreateInstance(commandType);
             try
             {
-                var cmdDecorator = new PartyModeCommandDecorator(command);
-                cmdDecorator.Execute(e);
+                if (_handler.PartyModeActive)
+                {
+                    if (_handler.HasPermissions(command, e))
+                    {
+                        command.Execute(e);
+                    }
+                }
+                else
+                {
+                    command.Execute(e);
+                }
+
             }
             catch (Exception ex)
             {

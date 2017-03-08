@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using ServiceStack.Text;
+using TinyMessenger;
 using static MusicBeePlugin.AndroidRemote.Commands.CommandPermissions;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
@@ -21,6 +23,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     public class RequestNowplayingQueue : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+
+        public RequestNowplayingQueue(ITinyMessengerHub hub)
+        {
+            _hub = hub;
+        }
+
         public override CommandPermissions GetPermissions() => StartPlayback | AddTrack;
 
         public override void Execute(IEvent eEvent)
@@ -55,18 +64,18 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             SendResponse(eEvent.ConnectionId, success ? 200 : 500);
         }
 
-        private static void SendResponse(string clientId, int code)
+        private void SendResponse(string connectionId, int code)
         {
             var queueResponse = new QueueResponse
             {
                 Code = code
             };
-            var socketMessage = new SocketMessage
+            var message = new SocketMessage
             {
                 Data = queueResponse,
                 Context = Constants.NowPlayingQueue
             };
-            SocketServer.Instance.Send(socketMessage.SerializeToString(), clientId);
+            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
     }
 
@@ -94,6 +103,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     public class RequestNowplayingPartyQueue : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+
+        public RequestNowplayingPartyQueue(ITinyMessengerHub hub)
+        {
+            _hub = hub;
+        }
+
         public void Execute(IEvent eEvent)
         {
             var payload = eEvent.Data as JsonObject;
@@ -117,18 +133,19 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             }
         }
 
-        private static void SendResponse(string clientId, int code)
+        private void SendResponse(string connectionId, int code)
         {
             var queueResponse = new QueueResponse
             {
                 Code = code
             };
-            var socketMessage = new SocketMessage
+            var message = new SocketMessage
             {
                 Data = queueResponse,
                 Context = Constants.NowPlayingQueue
             };
-            SocketServer.Instance.Send(socketMessage.SerializeToString(), clientId);
+
+            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
     }
 
@@ -149,9 +166,16 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestNowPlayingList : ICommand
     {
+        private readonly Authenticator _auth;
+
+        public RequestNowPlayingList(Authenticator auth)
+        {
+            _auth = auth;
+        }
+
         public void Execute(IEvent eEvent)
         {
-            var socketClient = Authenticator.GetConnection(eEvent.ConnectionId);
+            var socketClient = _auth.GetConnection(eEvent.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
             var data = eEvent.Data as JsonObject;

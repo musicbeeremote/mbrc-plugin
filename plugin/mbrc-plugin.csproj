@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.2.0.1503</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1524</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -127,7 +127,6 @@
     <Compile Include="AndroidRemote\Commands\Requests\PlaylistCommands.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestRadioStations.cs" />
-    <Compile Include="AndroidRemote\Commands\State\StateCommands.cs" />
     <Compile Include="AndroidRemote\configuration.cs" />
     <Compile Include="AndroidRemote\Controller\Controller.cs" />
     <Compile Include="AndroidRemote\ControlRemoveExtension.cs" />
@@ -171,7 +170,6 @@
       <DependentUpon>InfoWindow.cs</DependentUpon>
     </Compile>
     <Compile Include="MusicBeeInterface.cs" />
-    <Compile Include="PartyMode\CommandDecorator.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehaviorBinding.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\EventHandlerGenerator.cs" />
@@ -198,9 +196,6 @@
     <Compile Include="PartyMode\Core\View\ClientView.xaml.cs" />
     <Compile Include="PartyMode\Core\View\LogViewerView.xaml.cs" />
     <Compile Include="PartyMode\Core\View\PartyModeView.xaml.cs" />
-    <Compile Include="PartyMode\PartyModeBaseCommand.cs" />
-    <Compile Include="PartyMode\PartyModeCommandDecorator.cs" />
-    <Compile Include="PartyMode\RequestedCommandNotAllowed.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="AndroidRemote\Networking\SocketConnection.cs" />
     <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
@@ -276,6 +271,9 @@
     <Page Include="PartyMode\Core\View\LogViewerView.xaml" />
     <Page Include="PartyMode\Core\View\PartyModeView.xaml" />
     <Page Include="PartyMode\Core\View\Style\StyleDictonary.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="AndroidRemote\Commands\State\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>

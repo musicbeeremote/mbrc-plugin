@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -24,97 +23,59 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
         #endregion vars
 
-        public PartyModeModel()
+        public PartyModeModel(SettingsHandler handler)
         {
-            _handler = new SettingsHandler();
+            _handler = handler;
             Settings = _handler.GetSettings();
-
-            var commandHandler = PartyModeCommandHandler.Instance;
-
-            commandHandler.ClientConnected += ClientConnected;
-            commandHandler.ClientDisconnected += ClientDisconnected;
-            commandHandler.ServerCommandExecuted += ServerCommandExecuted;
 
             // Load stored
             KnownClients = Settings.KnownClients;
 
             _logs = new CycledList<PartyModeLogs>(10000);
-
             ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>();
         }
 
-        #region constructor
-
-        #endregion constructor
-
-        public static PartyModeModel Instance => _instance ?? (_instance = new PartyModeModel());
-
-        public RemoteClient GetClientAddress(string clientId, IPAddress ipadress)
+        public void AddClientIfNotExists(SocketConnection connection)
         {
+            var ipadress = connection.IpAddress;
+            var clientId = connection.ClientId;
+
             if (!KnownClients.Any())
-                return new RemoteClient(GetMacAddress(ipadress), ipadress)
-                {
-                    ClientId = clientId
-                };
-            var cadr = KnownClients.SingleOrDefault(x => x.ClientId == clientId);
-            if (cadr != null)
             {
-                return cadr;
+                KnownClients.Add(CreateClient(ipadress, clientId));
+            }
+            else
+            {
+                var client = KnownClients.SingleOrDefault(x => x.ClientId == clientId);
+                if (client != null)
+                {
+                    client.AddConnection();
+                }
+                else
+                {
+                    KnownClients.Add(CreateClient(ipadress, clientId));
+                }
+
             }
 
+            OnPropertyChanged(nameof(KnownClients));
+        }
 
-            return new RemoteClient(GetMacAddress(ipadress), ipadress)
+        private static RemoteClient CreateClient(IPAddress ipadress, string clientId)
+        {
+            var client = new RemoteClient(GetMacAddress(ipadress), ipadress)
             {
                 ClientId = clientId
             };
+            client.AddConnection();
+            return client;
         }
 
         public Settings Settings { get; }
 
         public List<RemoteClient> KnownClients { get; }
 
-        private void ClientConnected(object sender, ClientEventArgs e)
-        {
-            // Loopback connection should be excluded
-            if (e.Client == null || IPAddress.IsLoopback(e.Client.IpAddress))
-            {
-                return;
-            }
-
-            _logger.Debug($"client connected {e.Client}");
-
-            if (KnownClients.All(x => x.MacAdress.ToString() != e.Client.MacAdress.ToString()))
-            {
-                //to do: check if the Macadr is not null
-                var client = Settings.KnownClients.SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
-                if (client != null)
-                {
-                    client.IpAddress = e.Client.IpAddress;
-                    client.LastLogIn = DateTime.Now;
-                    client.AddConnection();
-                    KnownClients.Add(client);
-                }
-                else
-                {
-                    e.Client.AddConnection();
-                    KnownClients.Add(e.Client);
-                }
-            }
-            OnPropertyChanged(nameof(KnownClients));
-        }
-
-        private void ClientDisconnected(object sender, ClientEventArgs e)
-        {
-            if (!KnownClients.Contains(e.Client)) return;
-            var client = Settings.KnownClients
-                .SingleOrDefault(x => Equals(x.MacAdress, e.Client.MacAdress));
-            if (client != null && client.ActiveConnections > 0)
-            {
-                client.RemoveConnection();
-            }
-        }
-
-        private void ServerCommandExecuted(object sender, ServerCommandEventArgs e)
+        public void LogCommand(ServerCommandEventArgs e)
         {
             if (e.Command == Constants.Ping || e.Command == Constants.Pong)
             {
@@ -143,6 +104,17 @@ namespace MusicBeePlugin.PartyMode.Core.Model
         {
             ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>(_logs);
             OnPropertyChanged(nameof(ServerMessagesQueue));
+        }
+
+        public void RemoveConnection(RemoteClient client)
+        {
+            var savedClient = KnownClients.SingleOrDefault(x => x.ClientId == client.ClientId);
+            savedClient?.RemoveConnection();
+        }
+
+        public RemoteClient GetClient(string clientId)
+        {
+            return KnownClients.SingleOrDefault(x => x.ClientId == clientId);
         }
     }
 }

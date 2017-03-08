@@ -1,9 +1,7 @@
 using System.Net;
 using MusicBeePlugin.AndroidRemote.Events;
-using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Utilities;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Internal
@@ -45,14 +43,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         public object Sender { get; } = null;
     }
 
-    internal class ShowFirstRunDialogCommand : ICommand
-    {
-        public void Execute(IEvent eEvent)
-        {
-
-        }
-    }
-
     internal class RestartSocketEvent : ITinyMessage
     {
         public object Sender { get; } = null;
@@ -70,26 +60,26 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         public object Sender { get; } = null;
     }
 
-    internal class ClientDisconnected : ICommand
+    internal class ClientDisconnectedEvent : ITinyMessage
     {
-        public void Execute(IEvent eEvent)
+        public ClientDisconnectedEvent(string connectionId)
         {
-            Authenticator.RemoveClientOnDisconnect(eEvent.ConnectionId);
+            ConnectionId = connectionId;
         }
+
+        public string ConnectionId { get; }
+        public object Sender { get; } = null;
     }
 
-    internal class ClientConnected : ITinyMessage
+    internal class ClientConnectedEvent : ITinyMessage
     {
         public IPAddress IpAddress { get; }
         public string ConnectionId { get; }
 
-        public ClientConnected(IPAddress ipAddress, string connectionId)
+        public ClientConnectedEvent(IPAddress ipAddress, string connectionId)
         {
             IpAddress = ipAddress;
             ConnectionId = connectionId;
-
-            //todo pass this to authenticator
-            //Authenticator.AddClientOnConnect(eEvent.ConnectionId, clientAddress);
         }
 
         public object Sender { get; } = null;

@@ -17,9 +17,9 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel
 
         #region constructor
 
-        public PartyModeViewModel()
+        public PartyModeViewModel(PartyModeModel model)
         {
-            _model = PartyModeModel.Instance;
+            _model = model;
             ClientViewModel = new ClientViewModel(_model);
             ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
             LogViewerViewModel = new LogViewerViewModel(_model);

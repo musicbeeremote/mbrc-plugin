@@ -7,7 +7,7 @@ namespace MusicBeePlugin.AndroidRemote.Interfaces
         object Data { get; }
         string Type { get; }
         string ConnectionId { get; }
-        string ExtraData { get; }
+        string ClientId { get; }
         string DataToString();
     }
 }

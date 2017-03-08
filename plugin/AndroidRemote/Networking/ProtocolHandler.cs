@@ -7,19 +7,20 @@ using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
 using ServiceStack.Text;
-using TinyIoC;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
-    internal class ProtocolHandler
+    public class ProtocolHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private ITinyMessengerHub _tinyMessengerHub;
+        private readonly ITinyMessengerHub _hub;
+        private readonly Authenticator _auth;
 
-        internal ProtocolHandler()
+        public ProtocolHandler(ITinyMessengerHub hub, Authenticator auth)
         {
-            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
+            _hub = hub;
+            _auth = auth;
         }
 
         /// <summary>
@@ -52,26 +53,26 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     _logger.Error(ex, $"while processing message -> {incomingMessage} from {connectionId}");
                 }
 
-                var connection = Authenticator.GetConnection(connectionId);
+                var connection = _auth.GetConnection(connectionId);
 
                 foreach (var msg in msgList)
                 {
                     if (msg.Context == Constants.VerifyConnection)
                     {
                         var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
-                        _tinyMessengerHub.Publish(new PluginResponseAvailableEvent(socketMessage, connectionId));
+                        _hub.Publish(new PluginResponseAvailableEvent(socketMessage, connectionId));
                         return;
                     }
 
                     if (connection.PacketNumber == 0 && msg.Context != Constants.Player)
                     {
-                        _tinyMessengerHub.Publish(new ForceClientDisconnect(connectionId));
+                        _hub.Publish(new ForceClientDisconnect(connectionId));
                         return;
                     }
 
                     if (connection.PacketNumber == 1 && msg.Context != Constants.Protocol)
                     {
-                        _tinyMessengerHub.Publish(new ForceClientDisconnect(connectionId));
+                        _hub.Publish(new ForceClientDisconnect(connectionId));
                         return;
                     }
 
@@ -87,10 +88,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                             _logger.Debug(msg.Data);
                         }
 
-                        _tinyMessengerHub.Publish(new ConnectionReadyEvent(connection));
+                        _hub.Publish(new ConnectionReadyEvent(connection));
                     }
 
-                    _tinyMessengerHub.Publish(new MessageEvent(msg.Context, msg.Data, connectionId));
+                    _hub.Publish(new MessageEvent(msg.Context, msg.Data, connectionId, connection.ClientId));
                 }
                 connection.IncreasePacketNumber();
             }

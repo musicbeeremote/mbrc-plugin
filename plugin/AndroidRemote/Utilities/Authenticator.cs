@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Net;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
@@ -9,23 +11,31 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
     /// <summary>
     /// Responsible for the client authentication. Keeps a list of the connected clients.
     /// </summary>
-    public static class Authenticator
+    public class Authenticator
     {
+        private readonly ITinyMessengerHub _hub;
+
+        public Authenticator(ITinyMessengerHub hub)
+        {
+            _hub = hub;
+            _hub.Subscribe<ClientConnectedEvent>(msg => AddConnection(msg.ConnectionId, msg.IpAddress));
+            _hub.Subscribe<ClientDisconnectedEvent>(msg => RemoveConnection(msg.ConnectionId));
+        }
 
         //todo handle events for client disconnection
-        private static readonly ConcurrentDictionary<string, SocketConnection> ActiveConnections =
+        private readonly ConcurrentDictionary<string, SocketConnection> _activeConnections =
             new ConcurrentDictionary<string, SocketConnection>();
 
         /// <summary>
         /// Returns if a clients has passed the authentication stage and thus can receive data.
         /// </summary>
-        /// <param name="clientId">Represents the connectionId of client</param>
+        /// <param name="connectionId">Represents the connectionId of client</param>
         /// <returns>true or false depending on the authentication state of the client</returns>
-        public static bool IsClientAuthenticated(string clientId)
+        public bool CanConnectionReceive(string connectionId)
         {
             var authenticated = false;
             SocketConnection connection;
-            if (ActiveConnections.TryGetValue(clientId, out connection))
+            if (_activeConnections.TryGetValue(connectionId, out connection))
             {
                 authenticated = connection.Authenticated;
             }
@@ -38,11 +48,11 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// </summary>
         /// <param name="connectionId">The id of the client that is used as an identification</param>
         /// <returns></returns>
-        public static bool IsClientBroadcastEnabled(string connectionId)
+        public bool IsConnectionBroadcastEnabled(string connectionId)
         {
             var enabled = true;
             SocketConnection connection;
-            if (ActiveConnections.TryGetValue(connectionId, out connection))
+            if (_activeConnections.TryGetValue(connectionId, out connection))
             {
                 enabled = connection.BroadcastsEnabled;
             }
@@ -53,10 +63,10 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         ///  Removes a client from the Connection List when the client disconnects from the server.
         /// </summary>
         /// <param name="connectionId"> </param>
-        public static void RemoveClientOnDisconnect(string connectionId)
+        public void RemoveConnection(string connectionId)
         {
             SocketConnection connection;
-            if (ActiveConnections.TryRemove(connectionId, out connection))
+            if (_activeConnections.TryRemove(connectionId, out connection))
             {
                 //?
             }
@@ -69,15 +79,15 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// </summary>
         /// <param name="connectionId"> </param>
         /// <param name="clientAddress"></param>
-        public static void AddClientOnConnect(string connectionId, IPAddress clientAddress)
+        public void AddConnection(string connectionId, IPAddress clientAddress)
         {
             SocketConnection connection;
-            if (ActiveConnections.ContainsKey(connectionId))
+            if (_activeConnections.ContainsKey(connectionId))
             {
-                ActiveConnections.TryRemove(connectionId, out connection);
+                _activeConnections.TryRemove(connectionId, out connection);
             }
             connection = new SocketConnection(connectionId) {IpAddress = clientAddress};
-            ActiveConnections.TryAdd(connectionId, connection);
+            _activeConnections.TryAdd(connectionId, connection);
         }
 
         /// <summary>
@@ -85,10 +95,10 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// </summary>
         /// <param name="connectionId">The client connectionId.</param>
         /// <returns>A SocketConnection object. or null</returns>
-        public static SocketConnection GetConnection(string connectionId)
+        public SocketConnection GetConnection(string connectionId)
         {
             SocketConnection connection;
-            ActiveConnections.TryGetValue(connectionId, out connection);
+            _activeConnections.TryGetValue(connectionId, out connection);
             return connection;
         }
 
@@ -99,7 +109,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// </summary>
         /// <param name="connectionId">The ide of the client</param>
         /// <returns>True if the version is different false if it is the same.</returns>
-        public static bool ClientProtocolMisMatch(string connectionId)
+        public bool ClientProtocolMisMatch(string connectionId)
         {
             var connection = GetConnection(connectionId);
             var clientProtocolVersion = connection?.ClientProtocolVersion
@@ -108,19 +118,19 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             return Math.Abs(clientProtocolVersion - Constants.ProtocolVersion) > 0;
         }
 
-        public static int ClientProtocolVersion(string connectionId)
+        public int ClientProtocolVersion(string connectionId)
         {
             var connection = GetConnection(connectionId);
             return connection?.ClientProtocolVersion ?? 2;
         }
 
-        public static string ClientId(string connectionId)
+        public string ClientId(string connectionId)
         {
             var connection = GetConnection(connectionId);
             return connection?.ClientId ?? string.Empty;
         }
 
-        public static IPAddress GetIpAddress(string connectionId)
+        public IPAddress GetIpAddress(string connectionId)
         {
             var connection = GetConnection(connectionId);
             return connection?.IpAddress;

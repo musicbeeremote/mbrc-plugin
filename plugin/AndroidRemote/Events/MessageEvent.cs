@@ -4,35 +4,12 @@ namespace MusicBeePlugin.AndroidRemote.Events
 {
     internal class MessageEvent : IEvent
     {
-        public MessageEvent(string type, object data)
-        {
-            Data = data;
-            Type = type;
-            ConnectionId = "all";
-            ExtraData = string.Empty;
-        }
-
-        public MessageEvent(string type, object data, string clientId)
+        public MessageEvent(string type, object data, string connectionId, string clientId)
         {
             Type = type;
             Data = data;
-            ConnectionId = clientId;
-            ExtraData = string.Empty;
-        }
-
-        public MessageEvent(string type)
-        {
-            Type = type;
-            Data = ExtraData = string.Empty;
-            ConnectionId = string.Empty;
-        }
-
-        public MessageEvent(string type, object data, string clientId, string extraData)
-        {
-            Type = type;
-            Data = data;
-            ConnectionId = clientId;
-            ExtraData = extraData;
+            ConnectionId = connectionId;
+            ClientId = clientId;
         }
 
         public string DataToString()
@@ -46,7 +23,7 @@ namespace MusicBeePlugin.AndroidRemote.Events
 
         public string ConnectionId { get; }
 
-        public string ExtraData { get; }
+        public string ClientId { get; }
 
         public object Sender { get; } = null;
     }

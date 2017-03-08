@@ -10,10 +10,12 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
     internal class RequestProtocol : ICommand
     {
         private readonly ITinyMessengerHub _messengerHub;
+        private readonly Authenticator _auth;
 
-        public RequestProtocol(ITinyMessengerHub messengerHub)
+        public RequestProtocol(ITinyMessengerHub messengerHub, Authenticator auth)
         {
             _messengerHub = messengerHub;
+            _auth = auth;
         }
 
         public void Execute(IEvent eEvent)
@@ -21,7 +23,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             int clientProtocolVersion;
             if (int.TryParse(eEvent.DataToString(), out clientProtocolVersion))
             {
-                var connection = Authenticator.GetConnection(eEvent.ConnectionId);
+                var connection = _auth.GetConnection(eEvent.ConnectionId);
                 if (connection != null)
                 {
                     connection.ClientProtocolVersion = clientProtocolVersion;

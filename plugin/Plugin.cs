@@ -76,6 +76,7 @@ namespace MusicBeePlugin
         private InfoWindow _mWindow;
         private bool _userChangingShuffle;
         private ITinyMessengerHub _tinyMessengerHub;
+        private Authenticator _auth;
 
 
         /// <summary>
@@ -87,7 +88,9 @@ namespace MusicBeePlugin
         {
             Instance = this;
             JsConfig.ExcludeTypeInfo = true;
-            Configuration.Register(Controller.Instance);
+            var container = TinyIoCContainer.Current;
+            PluginBootstrap.Initialize(container);
+      
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
@@ -125,7 +128,8 @@ namespace MusicBeePlugin
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
 
-            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
+            _tinyMessengerHub = container.Resolve<ITinyMessengerHub>();
+            _auth = container.Resolve<Authenticator>();
             StartPlayerStatusMonitoring();
 
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", "Information Panel of the MusicBee Remote",
@@ -1039,7 +1043,7 @@ namespace MusicBeePlugin
             {
                 [Constants.PlayerRepeat] = _api.Player_GetRepeat().ToString(),
                 [Constants.PlayerMute] = _api.Player_GetMute(),
-                [Constants.PlayerShuffle] = Authenticator.ClientProtocolMisMatch(connectionId)
+                [Constants.PlayerShuffle] = _auth.ClientProtocolMisMatch(connectionId)
                     ? (object) _api.Player_GetShuffle()
                     : GetShuffleState(),
                 [Constants.PlayerScrobble] = _api.Player_GetScrobbleEnabled(),
@@ -1058,7 +1062,7 @@ namespace MusicBeePlugin
         /// <param name="connectionId"></param>
         public void RequestTrackInfo(string connectionId)
         {
-            var protocolVersion = Authenticator.ClientProtocolVersion(connectionId);
+            var protocolVersion = _auth.ClientProtocolVersion(connectionId);
             var message = protocolVersion > 2
                 ? new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2())
                 : new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());

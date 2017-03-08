@@ -1,51 +1,50 @@
-﻿using MusicBeePlugin.AndroidRemote.Commands;
+﻿using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.PartyMode.Core.Model;
+using TinyMessenger;
 
 namespace MusicBeePlugin.PartyMode.Core
 {
-    public delegate void ClientConnectedEventHandler(object sender, ClientEventArgs e);
-
-    public delegate void ClientDisconnectedEventHandler(object sender, ClientEventArgs e);
-
-    public delegate void ServerCommandExecutedEventHandler(object sender, ServerCommandEventArgs e);
-
     public class PartyModeCommandHandler
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly PartyModeModel _partyModeModel;
+
         #region vars
 
         private static PartyModeCommandHandler _instance;
 
-        public event ClientConnectedEventHandler ClientConnected;
-        public event ClientDisconnectedEventHandler ClientDisconnected;
-        public event ServerCommandExecutedEventHandler ServerCommandExecuted;
-
         #endregion vars
 
-        private PartyModeCommandHandler()
+        public PartyModeCommandHandler(ITinyMessengerHub hub, PartyModeModel partyModeModel)
         {
+            _hub = hub;
+            _partyModeModel = partyModeModel;
+            _hub.Subscribe<ConnectionReadyEvent>(msg => OnClientConnected(msg.Client));
         }
 
+        public bool PartyModeActive => _partyModeModel.Settings.IsActive;
 
-        public static PartyModeCommandHandler Instance => _instance ?? (_instance = new PartyModeCommandHandler());
-
-        public bool ClientCanOnlyAdd(RemoteClient client)
+        private void OnClientConnected(SocketConnection client)
         {
-            return client.HasPermission(CommandPermissions.AddTrack | ~CommandPermissions.StartPlayback);
-        }
-
-        public void OnClientConnected(RemoteClient client)
-        {
-            ClientConnected?.Invoke(this, new ClientEventArgs(client));
+            _partyModeModel.AddClientIfNotExists(client);
         }
 
         public void OnClientDisconnected(RemoteClient client)
         {
-            ClientDisconnected?.Invoke(this, new ClientEventArgs(client));
+            _partyModeModel.RemoveConnection(client);
         }
 
-        public void OnServerCommandExecuted(string client, string command, bool isCmdAllowed)
+        public void LogActivity(string client, string command, bool isCmdAllowed)
         {
-            ServerCommandExecuted?.Invoke(this, new ServerCommandEventArgs(client, command, isCmdAllowed));
+            _partyModeModel.LogCommand(new ServerCommandEventArgs(client, command, isCmdAllowed));
+        }
+
+        public bool HasPermissions(ICommand command, IEvent @event)
+        {
+            _partyModeModel.GetClient(@event.ClientId);
+            throw new System.NotImplementedException();
         }
     }
 }

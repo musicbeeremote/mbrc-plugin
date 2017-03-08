@@ -54,13 +54,20 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestShuffle : LimitedCommand
     {
+        private readonly Authenticator _auth;
+
+        public RequestShuffle(Authenticator auth)
+        {
+            _auth = auth;
+        }
+
         public override void Execute(IEvent eEvent)
         {
             var stateAction = eEvent.Data.Equals("toggle")
                 ? StateAction.Toggle
                 : StateAction.State;
 
-            if (Authenticator.ClientProtocolMisMatch(eEvent.ConnectionId))
+            if (_auth.ClientProtocolMisMatch(eEvent.ConnectionId))
             {
                 Plugin.Instance.RequestShuffleState(stateAction);
             }

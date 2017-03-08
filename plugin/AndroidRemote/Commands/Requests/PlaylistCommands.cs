@@ -16,9 +16,16 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestPlaylistList : ICommand
     {
+        private readonly Authenticator _auth;
+
+        public RequestPlaylistList(Authenticator auth)
+        {
+            _auth = auth;
+        }
+
         public void Execute(IEvent eEvent)
         {
-            var socketClient = Authenticator.GetConnection(eEvent.ConnectionId);
+            var socketClient = _auth.GetConnection(eEvent.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
             var data = eEvent.Data as JsonObject;

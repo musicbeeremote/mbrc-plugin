@@ -3,13 +3,10 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.Tools;
 using NLog;
 using ServiceStack.Text;
-using TinyIoC;
-using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
 {
@@ -18,15 +15,12 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int Port = 45345;
         private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.1.5.10");
-        private ITinyMessengerHub _tinyMessengerHub;
 
 
-        public static ServiceDiscovery Instance { get; } = new ServiceDiscovery();
-
-        private ServiceDiscovery()
+        public ServiceDiscovery()
         {
-            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
-            _tinyMessengerHub.Subscribe<StartServiceBroadcastEvent>(msg => Start());
+
+
         }
 
         public void Start()
