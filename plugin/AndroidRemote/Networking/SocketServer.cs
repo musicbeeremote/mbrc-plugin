@@ -91,6 +91,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 if (!_availableWorkerSockets.TryRemove(connectionId, out workerSocket)) return;
                 workerSocket.Close();
                 workerSocket.Dispose();
+                _hub.Publish(new ClientDisconnectedEvent(connectionId));
             }
             catch (Exception ex)
             {
@@ -303,7 +304,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 _logger.Debug(se, "On WaitForData");
                 if (se.ErrorCode == 10053)
                 {
-                    _hub.Publish(new ConnectionClosedEvent(connectionId));
+                    _hub.Publish(new ClientDisconnectedEvent(connectionId));
                 }
             }
         }
@@ -359,7 +360,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             }
             catch (ObjectDisposedException)
             {
-                _hub.Publish(new ConnectionClosedEvent(connectionId));
+                _hub.Publish(new ClientDisconnectedEvent(connectionId));
                 _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
                               " : OnDataReceived: Socket has been closed\n");
             }
@@ -370,7 +371,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     Socket deadSocket;
                     if (_availableWorkerSockets.ContainsKey(connectionId))
                         _availableWorkerSockets.TryRemove(connectionId, out deadSocket);
-                    _hub.Publish(new ConnectionClosedEvent(connectionId));
+                    _hub.Publish(new ClientDisconnectedEvent(connectionId));
                 }
                 else
                 {
@@ -386,8 +387,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <param name="connectionId">The id of the connection that will receive the message</param>
         public void Send(SocketMessage message, string connectionId)
         {
-            _logger.Debug($"sending-{connectionId}:{message}");
             var serializedMessage = JsonSerializer.SerializeToString(message);
+            _logger.Debug($"sending-{connectionId}:{serializedMessage}");
 
             if (connectionId.Equals("all"))
             {
@@ -414,6 +415,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             Socket worker;
             _availableWorkerSockets.TryRemove(connectionId, out worker);
             worker?.Dispose();
+            _hub.Publish(new ClientDisconnectedEvent(connectionId));
         }
 
         public void Broadcast(BroadcastEvent broadcastEvent)
@@ -430,7 +432,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (!isConnected)
                     {
                         RemoveDeadSocket(key);
-                        _hub.Publish(new ConnectionClosedEvent(key));
+                        _hub.Publish(new ClientDisconnectedEvent(key));
                     }
 
                     if (!isConnected || !_auth.CanConnectionReceive(key) ||
@@ -469,7 +471,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     if (!isConnected)
                     {
                         RemoveDeadSocket(key);
-                        _hub.Publish(new ConnectionClosedEvent(key));
+                        _hub.Publish(new ClientDisconnectedEvent(key));
                     }
                     if (isConnected && _auth.CanConnectionReceive(key) && _auth.IsConnectionBroadcastEnabled(key))
                     {

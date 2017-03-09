@@ -1,4 +1,6 @@
-﻿using NLog;
+﻿using System.Windows.Interop;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using NLog;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Model
@@ -20,6 +22,8 @@ namespace MusicBeePlugin.AndroidRemote.Model
         public LyricCoverModel(ITinyMessengerHub messengerHub)
         {
             _messengerHub = messengerHub;
+            _messengerHub.Subscribe<CoverAvailable>(msg => SetCover(msg.Cover));
+            _messengerHub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
         }
 
         public void SetCover(string base64)

@@ -114,18 +114,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Internal
         public object Sender { get; } = null;
     }
 
-    internal class ConnectionClosedEvent : ITinyMessage
-    {
-        public string ConnectionId { get; }
-
-        public ConnectionClosedEvent(string connectionId)
-        {
-            ConnectionId = connectionId;
-        }
-
-        public object Sender { get; } = null;
-    }
-
     internal class LyricsAvailable : ITinyMessage
     {
         public string Lyrics { get; }

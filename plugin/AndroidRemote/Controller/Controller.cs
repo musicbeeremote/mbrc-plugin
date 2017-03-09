@@ -1,5 +1,8 @@
 ﻿using System.Diagnostics;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
 using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
+using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.PartyMode.Core;
 using TinyMessenger;
 
@@ -54,6 +57,11 @@ namespace MusicBeePlugin.AndroidRemote.Controller
                     if (_handler.HasPermissions(command, e))
                     {
                         command.Execute(e);
+                    }
+                    else
+                    {
+                        var message = new SocketMessage(Constants.CommandUnavailable);
+                        _hub.Publish(new PluginResponseAvailableEvent(message));
                     }
                 }
                 else

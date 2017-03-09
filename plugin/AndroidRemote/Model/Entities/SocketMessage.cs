@@ -6,7 +6,7 @@ namespace MusicBeePlugin.AndroidRemote.Model.Entities
     [DataContract]
     public class SocketMessage
     {
-        public SocketMessage(string context, object data)
+        public SocketMessage(string context, object data = null)
         {
             Context = context;
             Data = data;

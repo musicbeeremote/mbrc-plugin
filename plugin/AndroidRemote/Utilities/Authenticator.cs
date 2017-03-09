@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using NLog;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
@@ -13,18 +14,29 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
     /// </summary>
     public class Authenticator
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITinyMessengerHub _hub;
+        private readonly ConcurrentDictionary<string, SocketConnection> _connections =
+            new ConcurrentDictionary<string, SocketConnection>();
 
         public Authenticator(ITinyMessengerHub hub)
         {
             _hub = hub;
             _hub.Subscribe<ClientConnectedEvent>(msg => AddConnection(msg.ConnectionId, msg.IpAddress));
             _hub.Subscribe<ClientDisconnectedEvent>(msg => RemoveConnection(msg.ConnectionId));
+            _hub.Subscribe<ConnectionReadyEvent>(msg => UpdateConnection(msg.Client));
         }
 
-        //todo handle events for client disconnection
-        private readonly ConcurrentDictionary<string, SocketConnection> _activeConnections =
-            new ConcurrentDictionary<string, SocketConnection>();
+        private void UpdateConnection(SocketConnection connection)
+        {
+            var connectionId = connection.ConnectionId;
+            if (_connections.ContainsKey(connectionId))
+            {
+                SocketConnection oldConnection;
+                _connections.TryRemove(connectionId, out oldConnection);
+            }
+            _connections.TryAdd(connectionId, connection);
+        }
 
         /// <summary>
         /// Returns if a clients has passed the authentication stage and thus can receive data.
@@ -35,7 +47,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var authenticated = false;
             SocketConnection connection;
-            if (_activeConnections.TryGetValue(connectionId, out connection))
+            if (_connections.TryGetValue(connectionId, out connection))
             {
                 authenticated = connection.Authenticated;
             }
@@ -52,7 +64,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var enabled = true;
             SocketConnection connection;
-            if (_activeConnections.TryGetValue(connectionId, out connection))
+            if (_connections.TryGetValue(connectionId, out connection))
             {
                 enabled = connection.BroadcastsEnabled;
             }
@@ -66,9 +78,9 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public void RemoveConnection(string connectionId)
         {
             SocketConnection connection;
-            if (_activeConnections.TryRemove(connectionId, out connection))
+            if (_connections.TryRemove(connectionId, out connection))
             {
-                //?
+                _logger.Debug($"{connectionId} was removed.");
             }
         }
 
@@ -82,12 +94,12 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public void AddConnection(string connectionId, IPAddress clientAddress)
         {
             SocketConnection connection;
-            if (_activeConnections.ContainsKey(connectionId))
+            if (_connections.ContainsKey(connectionId))
             {
-                _activeConnections.TryRemove(connectionId, out connection);
+                _connections.TryRemove(connectionId, out connection);
             }
             connection = new SocketConnection(connectionId) {IpAddress = clientAddress};
-            _activeConnections.TryAdd(connectionId, connection);
+            _connections.TryAdd(connectionId, connection);
         }
 
         /// <summary>
@@ -98,7 +110,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public SocketConnection GetConnection(string connectionId)
         {
             SocketConnection connection;
-            _activeConnections.TryGetValue(connectionId, out connection);
+            _connections.TryGetValue(connectionId, out connection);
             return connection;
         }
 
