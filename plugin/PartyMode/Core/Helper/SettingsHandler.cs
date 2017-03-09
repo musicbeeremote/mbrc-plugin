@@ -34,7 +34,7 @@ namespace MusicBeePlugin.PartyMode.Core.Helper
         public Settings GetSettings()
         {
             var filestring = LoadJson(_filePath);
-            var settings = JsonSerializer.DeserializeFromString<Settings>(filestring) ?? new Settings();//.DeserializeObject<Settings>(filestring);
+            var settings = JsonSerializer.DeserializeFromString<Settings>(filestring) ?? new Settings();
 
             return ValidateSettings(settings);
         }

@@ -92,11 +92,7 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
         public void SaveSettings()
         {
-            foreach (var client in KnownClients)
-            {
-                Settings.KnownClients.Add(client);
-            }
-
+            Settings.KnownClients = KnownClients;
             _handler.SaveSettings(Settings);
         }
 
