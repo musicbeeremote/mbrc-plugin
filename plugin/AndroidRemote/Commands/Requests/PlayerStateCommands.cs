@@ -6,17 +6,17 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestPlayerStatus : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPlayerStatus(eEvent.ConnectionId);
+            Plugin.Instance.RequestPlayerStatus(@event.ConnectionId);
         }
     }
 
     internal class RequestPreviousTrack : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPreviousTrack(eEvent.ConnectionId);
+            Plugin.Instance.RequestPreviousTrack(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => PlayPrevious;
@@ -24,9 +24,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestNextTrack : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestNextTrack(eEvent.ConnectionId);
+            Plugin.Instance.RequestNextTrack(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => PlayNext;
@@ -34,9 +34,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestRepeat : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestRepeatState(eEvent.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
+            Plugin.Instance.RequestRepeatState(@event.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
         }
 
         public override CommandPermissions GetPermissions() => ChangeRepeat;
@@ -44,9 +44,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestScrobble : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestScrobblerState(eEvent.Data.Equals("toggle")
+            Plugin.Instance.RequestScrobblerState(@event.Data.Equals("toggle")
                 ? StateAction.Toggle
                 : StateAction.State);
         }
@@ -61,13 +61,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _auth = auth;
         }
 
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            var stateAction = eEvent.Data.Equals("toggle")
+            var stateAction = @event.Data.Equals("toggle")
                 ? StateAction.Toggle
                 : StateAction.State;
 
-            if (_auth.ClientProtocolMisMatch(eEvent.ConnectionId))
+            if (_auth.ClientProtocolMisMatch(@event.ConnectionId))
             {
                 Plugin.Instance.RequestShuffleState(stateAction);
             }
@@ -82,9 +82,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestPlay : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPlay(eEvent.ConnectionId);
+            Plugin.Instance.RequestPlay(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => StartPlayback;
@@ -92,9 +92,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestPause : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPausePlayback(eEvent.ConnectionId);
+            Plugin.Instance.RequestPausePlayback(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => StopPlayback;
@@ -102,9 +102,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestPlayPause : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPlayPauseTrack(eEvent.ConnectionId);
+            Plugin.Instance.RequestPlayPauseTrack(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => StartPlayback | StopPlayback;
@@ -112,9 +112,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestStop : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestStopPlayback(eEvent.ConnectionId);
+            Plugin.Instance.RequestStopPlayback(@event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => StopPlayback;
@@ -122,10 +122,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestVolume : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
             int iVolume;
-            if (!int.TryParse(eEvent.DataToString(), out iVolume)) return;
+            if (!int.TryParse(@event.DataToString(), out iVolume)) return;
 
             Plugin.Instance.RequestVolumeChange(iVolume);
         }
@@ -135,9 +135,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestMute : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestMuteState(eEvent.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
+            Plugin.Instance.RequestMuteState(@event.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
         }
 
         public override CommandPermissions GetPermissions() => CanMute;
@@ -145,10 +145,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestAutoDj : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
             Plugin.Instance.RequestAutoDjState(
-                (string) eEvent.Data == "toggle" ? StateAction.Toggle : StateAction.State);
+                (string) @event.Data == "toggle" ? StateAction.Toggle : StateAction.State);
         }
 
         public override CommandPermissions GetPermissions() => ChangeShuffle;

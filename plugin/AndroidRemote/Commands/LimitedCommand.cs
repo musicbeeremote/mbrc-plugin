@@ -8,7 +8,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands
     /// </summary>
     public abstract class LimitedCommand : ICommand
     {
-        public abstract void Execute(IEvent eEvent);
+        public abstract void Execute(IEvent @event);
         /// <summary>
         /// Permissions required by the command in order to run.
         /// </summary>

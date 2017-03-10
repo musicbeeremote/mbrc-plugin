@@ -14,7 +14,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             _logger.Debug($"Pong: {DateTime.UtcNow}");
         }
@@ -29,10 +29,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             _hub = hub;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.Pong, string.Empty);
-            _hub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
@@ -40,6 +40,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
     {
         private readonly LyricCoverModel _model;
         private readonly ITinyMessengerHub _hub;
+        private readonly Authenticator _auth;
 
         public ProcessInitRequest(LyricCoverModel model, ITinyMessengerHub hub)
         {
@@ -47,14 +48,30 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             _hub = hub;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestTrackInfo(eEvent.ConnectionId);
-            Plugin.Instance.RequestTrackRating("-1", eEvent.ConnectionId);
-            Plugin.Instance.RequestLoveStatus(eEvent.DataToString(), eEvent.ConnectionId);
-            Plugin.Instance.RequestPlayerStatus(eEvent.ConnectionId);
-            //Plugin.BroadcastCover(LyricCoverModel.Instance.Cover);
-            //Plugin.BroadcastLyrics(LyricCoverModel.Instance.Lyrics);
+            Plugin.Instance.RequestTrackInfo(@event.ConnectionId);
+            Plugin.Instance.RequestTrackRating("-1", @event.ConnectionId);
+            Plugin.Instance.RequestLoveStatus(@event.DataToString(), @event.ConnectionId);
+            Plugin.Instance.RequestPlayerStatus(@event.ConnectionId);
+            var clientProtocol = _auth.ClientProtocolVersion(@event.ConnectionId);
+
+            if (clientProtocol >= Constants.V3)
+            {
+                var coverPayload = new CoverPayload(_model.Cover, true);
+                var lyricsPayload = new LyricsPayload(_model.Lyrics);
+                var coverMessage = new SocketMessage(Constants.NowPlayingCover, coverPayload);
+                var lyricsMessage = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
+                _hub.Publish(new PluginResponseAvailableEvent(coverMessage, @event.ConnectionId));
+                _hub.Publish(new PluginResponseAvailableEvent(lyricsMessage, @event.ConnectionId));
+            }
+            else
+            {
+                var coverMessage = new SocketMessage(Constants.NowPlayingCover, _model.Cover);
+                var lyricsMessage = new SocketMessage(Constants.NowPlayingLyrics, _model.Lyrics);
+                _hub.Publish(new PluginResponseAvailableEvent(coverMessage, @event.ConnectionId));
+                _hub.Publish(new PluginResponseAvailableEvent(lyricsMessage, @event.ConnectionId));
+            }
         }
     }
 
@@ -71,11 +88,11 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             _auth = auth;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             SocketMessage message;
 
-            if (_auth.ClientProtocolVersion(eEvent.ConnectionId) > 2)
+            if (_auth.ClientProtocolVersion(@event.ConnectionId) > 2)
             {
                 var coverPayload = new CoverPayload(_model.Cover, true);
                 message = new SocketMessage(Constants.NowPlayingCover, coverPayload);
@@ -84,7 +101,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             {
                 message = new SocketMessage(Constants.NowPlayingCover, _model.Cover);
             }
-            _hub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
@@ -101,18 +118,18 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             _auth = auth;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            if (_auth.ClientProtocolVersion(eEvent.ConnectionId) > 2)
+            if (_auth.ClientProtocolVersion(@event.ConnectionId) > 2)
             {
                 var lyricsPayload = new LyricsPayload(_model.Lyrics);
                 var message = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
-                _hub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+                _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
             }
             else
             {
                 var message = new SocketMessage(Constants.NowPlayingLyrics, _model.Lyrics);
-                _hub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+                _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
             }
         }
     }

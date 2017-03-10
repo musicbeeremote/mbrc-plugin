@@ -2,6 +2,6 @@
 {
     public interface ICommand
     {
-        void Execute(IEvent eEvent);
+        void Execute(IEvent @event);
     }
 }

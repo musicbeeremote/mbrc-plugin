@@ -13,9 +13,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestNowPlayingSearch : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.NowPlayingSearch(eEvent.DataToString(), eEvent.ConnectionId);
+            Plugin.Instance.NowPlayingSearch(@event.DataToString(), @event.ConnectionId);
         }
 
         public override CommandPermissions GetPermissions() => StartPlayback;
@@ -32,9 +32,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public override CommandPermissions GetPermissions() => StartPlayback | AddTrack;
 
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            var payload = eEvent.Data as JsonObject;
+            var payload = @event.Data as JsonObject;
             var queueType = payload.Get<string>("queue");
             var data = payload.Get<List<string>>("data");
             var play = payload.Get<string>("play");
@@ -42,7 +42,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             if (data == null)
             {
                 const int code = 400;
-                SendResponse(eEvent.ConnectionId, code);
+                SendResponse(@event.ConnectionId, code);
                 return;
             }
             var queue = QueueType.PlayNow;
@@ -61,7 +61,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
             var success = Plugin.Instance.QueueFiles(queue, data.ToArray(), play);
 
-            SendResponse(eEvent.ConnectionId, success ? 200 : 500);
+            SendResponse(@event.ConnectionId, success ? 200 : 500);
         }
 
         private void SendResponse(string connectionId, int code)
@@ -81,20 +81,20 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestNowPlayingPlay : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.NowPlayingPlay(eEvent.DataToString());
+            Plugin.Instance.NowPlayingPlay(@event.DataToString());
         }
     }
 
     internal class RequestNowPlayingTrackRemoval : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
             int index;
-            if (int.TryParse(eEvent.DataToString(), out index))
+            if (int.TryParse(@event.DataToString(), out index))
             {
-                Plugin.Instance.NowPlayingListRemoveTrack(index, eEvent.ConnectionId);
+                Plugin.Instance.NowPlayingListRemoveTrack(index, @event.ConnectionId);
             }
         }
 
@@ -110,26 +110,26 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _hub = hub;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var payload = eEvent.Data as JsonObject;
+            var payload = @event.Data as JsonObject;
             var data = payload.Get<List<string>>("data");
 
             if (data == null)
             {
                 const int code = 400;
-                SendResponse(eEvent.ConnectionId, code);
+                SendResponse(@event.ConnectionId, code);
                 return;
             }
 
             if (data.Count > 1)
             {
-                SendResponse(eEvent.ConnectionId, 403);
+                SendResponse(@event.ConnectionId, 403);
             }
             else
             {
                 var success = Plugin.Instance.QueueFiles(QueueType.Last, data.ToArray());
-                SendResponse(eEvent.ConnectionId, success ? 200 : 500);
+                SendResponse(@event.ConnectionId, success ? 200 : 500);
             }
         }
 
@@ -151,16 +151,16 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestNowPlayingMoveTrack : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             int from, to;
             string sFrom, sTo;
 
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("from", out sFrom);
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("to", out sTo);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("from", out sFrom);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("to", out sTo);
             int.TryParse(sFrom, out from);
             int.TryParse(sTo, out to);
-            Plugin.Instance.RequestNowPlayingMove(eEvent.ConnectionId, from, to);
+            Plugin.Instance.RequestNowPlayingMove(@event.ConnectionId, from, to);
         }
     }
 
@@ -173,21 +173,21 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _auth = auth;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var socketClient = _auth.GetConnection(eEvent.ConnectionId);
+            var socketClient = _auth.GetConnection(@event.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (clientProtocol < 2.2 || data == null)
             {
-                Plugin.Instance.RequestNowPlayingList(eEvent.ConnectionId);
+                Plugin.Instance.RequestNowPlayingList(@event.ConnectionId);
             }
             else
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.RequestNowPlayingListPage(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.RequestNowPlayingListPage(@event.ConnectionId, offset, limit);
             }
         }
     }

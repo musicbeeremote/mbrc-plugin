@@ -16,10 +16,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _hub = hub;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.PluginVersion, UserSettings.Instance.CurrentVersion);
-            _hub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 }

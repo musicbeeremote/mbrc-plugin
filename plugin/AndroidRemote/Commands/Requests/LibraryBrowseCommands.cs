@@ -5,72 +5,72 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     public class RequestBrowseTracks : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (data != null)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.LibraryBrowseTracks(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.LibraryBrowseTracks(@event.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.LibraryBrowseTracks(eEvent.ConnectionId);
+                Plugin.Instance.LibraryBrowseTracks(@event.ConnectionId);
             }
         }
     }
 
     public class RequestBrowseGenres : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (data != null)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.LibraryBrowseGenres(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.LibraryBrowseGenres(@event.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.LibraryBrowseGenres(eEvent.ConnectionId);
+                Plugin.Instance.LibraryBrowseGenres(@event.ConnectionId);
             }
         }
     }
 
     public class RequestBrowseArtists : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (data != null)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.LibraryBrowseArtists(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.LibraryBrowseArtists(@event.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.LibraryBrowseArtists(eEvent.ConnectionId);
+                Plugin.Instance.LibraryBrowseArtists(@event.ConnectionId);
             }
         }
     }
 
     public class RequestBrowseAlbums : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (data != null)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.LibraryBrowseAlbums(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.LibraryBrowseAlbums(@event.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.LibraryBrowseAlbums(eEvent.ConnectionId);
+                Plugin.Instance.LibraryBrowseAlbums(@event.ConnectionId);
             }
         }
     }

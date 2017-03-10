@@ -8,36 +8,36 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestLibSearchGenre : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchGenres(eEvent.Data.ToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibrarySearchGenres(@event.Data.ToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibSearchArtist : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchArtist(eEvent.Data.ToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibrarySearchArtist(@event.Data.ToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibSearchAlbum : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchAlbums(eEvent.Data.ToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibrarySearchAlbums(@event.Data.ToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibQueueTrack : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             string type, query;
 
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("type", out type);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("query", out query);
             QueueType qType;
             switch (type)
             {
@@ -60,12 +60,12 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestLibQueueGenre : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             string type, query;
 
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("type", out type);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("query", out query);
             QueueType qType;
             switch (type)
             {
@@ -90,14 +90,14 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             try
             {
                 string type, query;
 
-                ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
-                ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
+                ((Dictionary<string, string>) @event.Data).TryGetValue("type", out type);
+                ((Dictionary<string, string>) @event.Data).TryGetValue("query", out query);
 
                 QueueType qType;
                 switch (type)
@@ -127,12 +127,12 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestLibQueueAlbum : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             string type, query;
 
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("type", out type);
+            ((Dictionary<string, string>) @event.Data).TryGetValue("query", out query);
             QueueType qType;
             switch (type)
             {
@@ -158,33 +158,33 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
     internal class RequestLibGenreArtists : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetGenreArtists(eEvent.DataToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibraryGetGenreArtists(@event.DataToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibArtistAlbums : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetArtistAlbums(eEvent.DataToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibraryGetArtistAlbums(@event.DataToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibAlbumTracks : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetAlbumTracks(eEvent.DataToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibraryGetAlbumTracks(@event.DataToString(), @event.ConnectionId);
         }
     }
 
     internal class RequestLibSearchTitle : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchTitle(eEvent.Data.ToString(), eEvent.ConnectionId);
+            Plugin.Instance.LibrarySearchTitle(@event.Data.ToString(), @event.ConnectionId);
         }
     }
 }

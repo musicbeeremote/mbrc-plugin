@@ -18,19 +18,19 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _auth = auth;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             int clientProtocolVersion;
-            if (int.TryParse(eEvent.DataToString(), out clientProtocolVersion))
+            if (int.TryParse(@event.DataToString(), out clientProtocolVersion))
             {
-                var connection = _auth.GetConnection(eEvent.ConnectionId);
+                var connection = _auth.GetConnection(@event.ConnectionId);
                 if (connection != null)
                 {
                     connection.ClientProtocolVersion = clientProtocolVersion;
                 }
             }
             var message = new SocketMessage(Constants.Protocol, Constants.ProtocolVersion);
-            _messengerHub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+            _messengerHub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
@@ -43,10 +43,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _messengerHub = messengerHub;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.Player, "MusicBee");
-            _messengerHub.Publish(new PluginResponseAvailableEvent(message, eEvent.ConnectionId));
+            _messengerHub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 }

@@ -6,9 +6,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestPlaylistPlay : LimitedCommand
     {
-        public override void Execute(IEvent eEvent)
+        public override void Execute(IEvent @event)
         {
-            Plugin.Instance.PlayPlaylist(eEvent.ConnectionId, eEvent.DataToString());
+            Plugin.Instance.PlayPlaylist(@event.ConnectionId, @event.DataToString());
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack;
@@ -23,22 +23,22 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             _auth = auth;
         }
 
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var socketClient = _auth.GetConnection(eEvent.ConnectionId);
+            var socketClient = _auth.GetConnection(@event.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (clientProtocol < 2.2 || data == null)
             {
-                Plugin.Instance.GetAvailablePlaylistUrls(eEvent.ConnectionId);
+                Plugin.Instance.GetAvailablePlaylistUrls(@event.ConnectionId);
             }
             else
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
 
-                Plugin.Instance.GetAvailablePlaylistUrls(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.GetAvailablePlaylistUrls(@event.ConnectionId, offset, limit);
             }
         }
     }

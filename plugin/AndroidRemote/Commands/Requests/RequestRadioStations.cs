@@ -5,18 +5,18 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestRadioStations : ICommand
     {
-        public void Execute(IEvent eEvent)
+        public void Execute(IEvent @event)
         {
-            var data = eEvent.Data as JsonObject;
+            var data = @event.Data as JsonObject;
             if (data != null)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.RequestRadioStations(eEvent.ConnectionId, offset, limit);
+                Plugin.Instance.RequestRadioStations(@event.ConnectionId, offset, limit);
             }
             else
             {
-                Plugin.Instance.RequestRadioStations(eEvent.ConnectionId);
+                Plugin.Instance.RequestRadioStations(@event.ConnectionId);
             }
         }
     }
