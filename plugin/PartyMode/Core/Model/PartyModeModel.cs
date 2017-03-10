@@ -58,6 +58,8 @@ namespace MusicBeePlugin.PartyMode.Core.Model
 
             }
 
+            LogCommand(new ServerCommandEventArgs(clientId, "New connection", true));
+
             OnPropertyChanged(nameof(KnownClients));
         }
 
@@ -106,6 +108,7 @@ namespace MusicBeePlugin.PartyMode.Core.Model
         {
             var savedClient = KnownClients.SingleOrDefault(x => x.ClientId == client.ClientId);
             savedClient?.RemoveConnection();
+            LogCommand(new ServerCommandEventArgs(client.ClientId, "connection closed", true));
         }
 
         public RemoteClient GetClient(string clientId)
