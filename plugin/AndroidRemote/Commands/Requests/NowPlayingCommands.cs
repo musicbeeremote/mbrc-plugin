@@ -79,12 +79,14 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
         }
     }
 
-    internal class RequestNowPlayingPlay : ICommand
+    internal class RequestNowPlayingPlay : LimitedCommand
     {
-        public void Execute(IEvent @event)
+        public override void Execute(IEvent @event)
         {
             Plugin.Instance.NowPlayingPlay(@event.DataToString());
         }
+
+        public override CommandPermissions GetPermissions() => StartPlayback;
     }
 
     internal class RequestNowPlayingTrackRemoval : LimitedCommand
