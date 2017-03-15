@@ -91,7 +91,7 @@ namespace MusicBeePlugin
             JsConfig.ExcludeTypeInfo = true;
             var container = TinyIoCContainer.Current;
             PluginBootstrap.Initialize(container);
-      
+
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
@@ -668,7 +668,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
@@ -1024,7 +1025,7 @@ namespace MusicBeePlugin
                 playlists.Add(playlist);
             }
 
-            var message = new SocketMessage(Constants.PlaylistList, playlists);
+            var message = new SocketMessage(Constants.PlaylistList, playlists) {NewLineTerminated = true};
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
@@ -1312,7 +1313,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
@@ -1342,7 +1344,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
@@ -1407,7 +1410,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
@@ -1415,6 +1419,7 @@ namespace MusicBeePlugin
 
         public void LibraryBrowseTracks(string connectionId, int offset = 0, int limit = 4000)
         {
+            _logger.Debug(DateTime.Now + "fetching data");
             var tracks = new List<Track>();
             if (_api.Library_QueryFiles(null))
             {
@@ -1455,9 +1460,10 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
-
+            _logger.Debug(DateTime.Now + "sending data");
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
@@ -1576,7 +1582,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
@@ -1799,7 +1806,8 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }
+                },
+                NewLineTerminated = true
             };
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }

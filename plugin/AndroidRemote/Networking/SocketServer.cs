@@ -390,6 +390,11 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             var serializedMessage = JsonSerializer.SerializeToString(message);
             _logger.Debug($"sending-{connectionId}:{serializedMessage}");
 
+            if (message.NewLineTerminated)
+            {
+                serializedMessage += NewLine;
+            }
+
             if (connectionId.Equals("all"))
             {
                 Send(serializedMessage);

@@ -36,7 +36,7 @@ namespace MusicBeePlugin.AndroidRemote.Model.Entities
 
         public SocketMessage()
         {
-            
+
         }
 
         [DataMember(Name = "context")]
@@ -44,6 +44,9 @@ namespace MusicBeePlugin.AndroidRemote.Model.Entities
 
         [DataMember(Name = "data")]
         public object Data { get; set; }
+
+        [IgnoreDataMember]
+        public bool NewLineTerminated { get; set; } = false;
 
         public string ToJsonString()
         {
