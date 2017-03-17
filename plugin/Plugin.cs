@@ -10,7 +10,6 @@ using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
-using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Events;
@@ -25,6 +24,7 @@ using NLog.Targets;
 using ServiceStack.Text;
 using TinyIoC;
 using TinyMessenger;
+using Logger = NLog.Logger;
 using Timer = System.Timers.Timer;
 
 namespace MusicBeePlugin
@@ -90,11 +90,10 @@ namespace MusicBeePlugin
             Instance = this;
             JsConfig.ExcludeTypeInfo = true;
             var container = TinyIoCContainer.Current;
-            PluginBootstrap.Initialize(container);
-
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
+            PluginBootstrap.Initialize(container,_api);
 
             UserSettings.Instance.SetStoragePath(_api.Setting_GetPersistentStoragePath());
             UserSettings.Instance.LoadSettings();
@@ -1419,6 +1418,7 @@ namespace MusicBeePlugin
 
         public void LibraryBrowseTracks(string connectionId, int offset = 0, int limit = 4000)
         {
+
             _logger.Debug(DateTime.Now + "fetching data");
             var tracks = new List<Track>();
             if (_api.Library_QueryFiles(null))
@@ -1806,8 +1806,7 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                },
-                NewLineTerminated = true
+                }, NewLineTerminated = true
             };
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }

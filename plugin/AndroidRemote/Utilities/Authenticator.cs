@@ -16,6 +16,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITinyMessengerHub _hub;
+
         private readonly ConcurrentDictionary<string, SocketConnection> _connections =
             new ConcurrentDictionary<string, SocketConnection>();
 
@@ -78,7 +79,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public void RemoveConnection(string connectionId)
         {
             SocketConnection connection;
-            if (_connections.TryRemove(connectionId, out connection))
+            if (_connections.ContainsKey(connectionId) && _connections.TryRemove(connectionId, out connection))
             {
                 _logger.Debug($"{connectionId} was removed.");
             }
