@@ -55,7 +55,7 @@ namespace MusicBeePlugin.AndroidRemote.Core
             using (var db = new LiteDatabase(_storageProvider.CacheLocation()))
             {
                 var collection = db.GetCollection<Track>("tracks");
-               
+                return collection.Find(Query.All(), offset, limit);
             }
         }
     }
