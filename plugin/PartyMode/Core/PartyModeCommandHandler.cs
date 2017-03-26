@@ -27,9 +27,17 @@ namespace MusicBeePlugin.PartyMode.Core
 
         public bool PartyModeActive => _partyModeModel.Settings.IsActive;
 
-        private void OnClientConnected(SocketConnection client)
+        private void OnClientConnected(SocketConnection connection)
         {
-            _partyModeModel.AddClientIfNotExists(client);
+            // A connection where broadcast is disabled is from a secondary connection of an existing client.
+            // Each client should only have one active broadcast enabled connection that is the main communication
+            // channel.
+            if (!connection.BroadcastsEnabled)
+            {
+                return;
+            }
+
+            _partyModeModel.AddClientIfNotExists(connection);
         }
 
         public void OnClientDisconnected(RemoteClient client)
