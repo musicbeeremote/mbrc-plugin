@@ -12,15 +12,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 {
     internal class ServiceDiscovery
     {
+        private readonly UserSettings _settings;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int Port = 45345;
         private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.1.5.10");
 
 
-        public ServiceDiscovery()
+        public ServiceDiscovery(UserSettings settings)
         {
-
-
+            _settings = settings;
         }
 
         public void Start()
@@ -103,14 +103,14 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             return notify;
         }
 
-        private static Dictionary<string, object> DiscoveryResponse(string interfaceAddress)
+        private Dictionary<string, object> DiscoveryResponse(string interfaceAddress)
         {
             var notify = new Dictionary<string, object>
             {
                 {"context", "notify"},
                 {"address", interfaceAddress},
                 {"name", Environment.GetEnvironmentVariable("COMPUTERNAME")},
-                {"port", UserSettings.Instance.ListeningPort}
+                {"port", _settings.ListeningPort}
             };
             return notify;
         }

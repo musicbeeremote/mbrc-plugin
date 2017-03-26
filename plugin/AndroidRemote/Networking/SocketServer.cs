@@ -13,7 +13,6 @@ using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
 using ServiceStack.Text;
-using TinyIoC;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Networking
@@ -43,6 +42,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         private Timer _pingTimer;
         private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;
+        private readonly UserSettings _settings;
         private const string NewLine = "\r\n";
 
         ///  <summary>
@@ -51,11 +51,12 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <param name="handler"></param>
         /// <param name="hub"></param>
         /// <param name="auth"></param>
-        public SocketServer(ProtocolHandler handler, ITinyMessengerHub hub, Authenticator auth)
+        public SocketServer(ProtocolHandler handler, ITinyMessengerHub hub, Authenticator auth, UserSettings settings)
         {
             _handler = handler;
             _hub = hub;
             _auth = auth;
+            _settings = settings;
             _availableWorkerSockets = new ConcurrentDictionary<string, Socket>();
             _hub.Subscribe<StopSocketServer>(eEvent => Stop());
             _hub.Subscribe<StartSocketServerEvent>(eEvent => Start());
@@ -134,12 +135,12 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         /// <returns></returns>
         public void Start()
         {
-            _logger.Debug($"Socket starts listening on port: {UserSettings.Instance.ListeningPort}");
+            _logger.Debug($"Socket starts listening on port: {_settings.ListeningPort}");
             try
             {
                 _mainSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 // Create the listening socket.
-                var ipLocal = new IPEndPoint(IPAddress.Any, Convert.ToInt32(UserSettings.Instance.ListeningPort));
+                var ipLocal = new IPEndPoint(IPAddress.Any, Convert.ToInt32(_settings.ListeningPort));
                 // Bind to local IP address.
                 _mainSocket.Bind(ipLocal);
                 // Start Listening.
@@ -189,10 +190,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 var ipString = ipAddress.ToString();
 
                 var isAllowed = false;
-                switch (UserSettings.Instance.FilterSelection)
+                switch (_settings.FilterSelection)
                 {
                     case FilteringSelection.Specific:
-                        foreach (var source in UserSettings.Instance.IpAddressList)
+                        foreach (var source in _settings.IpAddressList)
                         {
                             if (string.Compare(ipString, source, StringComparison.Ordinal) == 0)
                             {
@@ -204,7 +205,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                     case FilteringSelection.Range:
                         var connectingAddress = ipString.Split(".".ToCharArray(),
                             StringSplitOptions.RemoveEmptyEntries);
-                        var baseIp = UserSettings.Instance.BaseIp.Split(".".ToCharArray(),
+                        var baseIp = _settings.BaseIp.Split(".".ToCharArray(),
                             StringSplitOptions.RemoveEmptyEntries);
                         if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
                             connectingAddress[2] == baseIp[2])
@@ -214,7 +215,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                             int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
                             int.TryParse(baseIp[3], out baseIpAddressLowOctet);
                             if (connectingAddressLowOctet >= baseIpAddressLowOctet && baseIpAddressLowOctet <=
-                                UserSettings.Instance.LastOctetMax)
+                                _settings.LastOctetMax)
                             {
                                 isAllowed = true;
                             }

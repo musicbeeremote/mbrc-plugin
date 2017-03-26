@@ -13,7 +13,6 @@ using MusicBeePlugin.PartyMode.Core.ViewModel;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Tools;
 using NLog;
-using TinyIoC;
 
 namespace MusicBeePlugin
 {
@@ -22,6 +21,7 @@ namespace MusicBeePlugin
     /// </summary>
     public partial class InfoWindow : Form, SocketTester.IConnectionListener
     {
+        private readonly UserSettings _settings;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
         private IOnDebugSelectionChanged _listener;
@@ -29,11 +29,11 @@ namespace MusicBeePlugin
 
         /// <summary>
         /// </summary>
-        public InfoWindow()
+        public InfoWindow(UserSettings settings, PartyModeViewModel viewModel)
         {
+            _settings = settings;
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
-            var viewModel = TinyIoCContainer.Current.Resolve<PartyModeViewModel>();
             var partyModeView = new PartyModeView {DataContext = viewModel};
             partyModeView.InitializeComponent();
             elementHost1.Dock = DockStyle.Fill;
@@ -71,26 +71,25 @@ namespace MusicBeePlugin
 
         private void InfoWindowLoad(object sender, EventArgs e)
         {
-            var settings = UserSettings.Instance;
             internalIPList.DataSource = NetworkTools.GetPrivateAddressList();
-            versionLabel.Text = settings.CurrentVersion;
-            portNumericUpDown.Value = settings.ListeningPort;
-            UpdateFilteringSelection(settings.FilterSelection);
+            versionLabel.Text = _settings.CurrentVersion;
+            portNumericUpDown.Value = _settings.ListeningPort;
+            UpdateFilteringSelection(_settings.FilterSelection);
 
 //            UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
-            if (settings.Source == SearchSource.None)
+            if (_settings.Source == SearchSource.None)
             {
-                settings.Source |= SearchSource.Library;
+                _settings.Source |= SearchSource.Library;
             }
 
-            debugEnabled.Checked = settings.DebugLogEnabled;
-            firewallCheckbox.Checked = settings.UpdateFirewall;
+            debugEnabled.Checked = _settings.DebugLogEnabled;
+            firewallCheckbox.Checked = _settings.UpdateFirewall;
 
-            _logger.Debug($"Selected source is -> {settings.Source}");
+            _logger.Debug($"Selected source is -> {_settings.Source}");
 
-            _socketTester = new SocketTester {ConnectionListener = this};
+            _socketTester = new SocketTester(_settings) {ConnectionListener = this};
             _socketTester.VerifyConnection();
         }
 
@@ -106,7 +105,7 @@ namespace MusicBeePlugin
                     removeAddressButton.Enabled = false;
                     allowedAddressesComboBox.Enabled = false;
                     allowedLabel.Enabled = false;
-                    UserSettings.Instance.FilterSelection = FilteringSelection.All;
+                    _settings.FilterSelection = FilteringSelection.All;
                     break;
                 case 1:
                     addressLabel.Enabled = true;
@@ -116,7 +115,7 @@ namespace MusicBeePlugin
                     removeAddressButton.Enabled = false;
                     allowedAddressesComboBox.Enabled = false;
                     allowedLabel.Enabled = false;
-                    UserSettings.Instance.FilterSelection = FilteringSelection.Range;
+                    _settings.FilterSelection = FilteringSelection.Range;
                     break;
                 case 2:
                     addressLabel.Enabled = true;
@@ -126,7 +125,7 @@ namespace MusicBeePlugin
                     removeAddressButton.Enabled = true;
                     allowedAddressesComboBox.Enabled = true;
                     allowedLabel.Enabled = true;
-                    UserSettings.Instance.FilterSelection = FilteringSelection.Specific;
+                    _settings.FilterSelection = FilteringSelection.Specific;
                     break;
             }
         }
@@ -139,12 +138,12 @@ namespace MusicBeePlugin
                     selectionFilteringComboBox.SelectedIndex = 0;
                     break;
                 case FilteringSelection.Range:
-                    ipAddressInputTextBox.Text = UserSettings.Instance.BaseIp;
-                    rangeNumericUpDown.Value = UserSettings.Instance.LastOctetMax;
+                    ipAddressInputTextBox.Text = _settings.BaseIp;
+                    rangeNumericUpDown.Value = _settings.LastOctetMax;
                     selectionFilteringComboBox.SelectedIndex = 1;
                     break;
                 case FilteringSelection.Specific:
-                    _ipAddressBinding = new BindingList<string>(UserSettings.Instance.IpAddressList);
+                    _ipAddressBinding = new BindingList<string>(_settings.IpAddressList);
                     selectionFilteringComboBox.SelectedIndex = 2;
                     break;
                 default:
@@ -155,27 +154,27 @@ namespace MusicBeePlugin
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
+            _settings.ListeningPort = (uint) portNumericUpDown.Value;
 
             switch (selectionFilteringComboBox.SelectedIndex)
             {
                 case 0:
                     break;
                 case 1:
-                    UserSettings.Instance.BaseIp = ipAddressInputTextBox.Text;
-                    UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
+                    _settings.BaseIp = ipAddressInputTextBox.Text;
+                    _settings.LastOctetMax = (uint) rangeNumericUpDown.Value;
                     break;
                 case 2:
-                    UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
+                    _settings.IpAddressList = new List<string>(_ipAddressBinding);
                     break;
             }
 
-            UserSettings.Instance.UpdateFirewall = firewallCheckbox.Checked;
-            UserSettings.Instance.SaveSettings();
+            _settings.UpdateFirewall = firewallCheckbox.Checked;
+            _settings.SaveSettings();
 
             if (firewallCheckbox.Checked)
             {
-                UpdateFirewallRules(UserSettings.Instance.ListeningPort);
+                UpdateFirewallRules(_settings.ListeningPort);
             }
 
             _socketTester.VerifyConnection();
@@ -214,16 +213,16 @@ namespace MusicBeePlugin
 
         private void DebugCheckboxCheckedChanged(object sender, EventArgs e)
         {
-            var settings = UserSettings.Instance;
+            var settings = _settings;
             settings.DebugLogEnabled = debugEnabled.Checked;
             _listener?.SelectionChanged(settings.DebugLogEnabled);
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
         {
-            if (File.Exists(UserSettings.Instance.FullLogPath))
+            if (File.Exists(_settings.FullLogPath))
             {
-                Process.Start(UserSettings.Instance.FullLogPath);
+                Process.Start(_settings.FullLogPath);
             }
             else
             {

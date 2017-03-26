@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
-using TinyIoC;
 using TinyMessenger;
 
 namespace MusicBeePlugin.AndroidRemote.Settings
@@ -75,16 +74,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// </summary>
         public List<string> IpAddressList { get; set; }
 
-        private UserSettings()
+        private UserSettings(ITinyMessengerHub hub)
         {
-            // Private constructor to enforce singleton
-            _tinyMessengerHub = TinyIoCContainer.Current.Resolve<ITinyMessengerHub>();
+            _hub = hub;
         }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public static UserSettings Instance { get; } = new UserSettings();
 
         /// <summary>
         /// 
@@ -103,7 +96,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         public bool DebugLogEnabled { get; set; }
 
         public static string LogFilePath = "\\mbrc.log";
-        private ITinyMessengerHub _tinyMessengerHub;
+        private ITinyMessengerHub _hub;
 
         public string FullLogPath => StoragePath + LogFilePath;
         public bool UpdateFirewall { get; set; }
@@ -194,7 +187,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
             document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
             document.Save(GetSettingsFile());
-            _tinyMessengerHub.Publish(new RestartSocketEvent());
+            _hub.Publish(new RestartSocketEvent());
         }
 
         private void CreateEmptySettingsFile(string application)

@@ -10,6 +10,7 @@ using System.Xml.Linq;
 using MusicBeePlugin.AndroidRemote;
 using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using MusicBeePlugin.AndroidRemote.Core.Monitor;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Events;
@@ -22,7 +23,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using ServiceStack.Text;
-using TinyIoC;
+using StructureMap;
 using TinyMessenger;
 using Logger = NLog.Logger;
 using Timer = System.Timers.Timer;
@@ -79,6 +80,8 @@ namespace MusicBeePlugin
         private ITinyMessengerHub _hub;
         private Authenticator _auth;
 
+        private UserSettings _settings;
+
 
         /// <summary>
         /// This function initialized the Plugin.
@@ -89,14 +92,15 @@ namespace MusicBeePlugin
         {
             Instance = this;
             JsConfig.ExcludeTypeInfo = true;
-            var container = TinyIoCContainer.Current;
+            var container = new Container();
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
             PluginBootstrap.Initialize(container,_api);
 
-            UserSettings.Instance.SetStoragePath(_api.Setting_GetPersistentStoragePath());
-            UserSettings.Instance.LoadSettings();
+            _settings = container.GetInstance<UserSettings>();
+            _settings.SetStoragePath(_api.Setting_GetPersistentStoragePath());
+            _settings.LoadSettings();
 
             _about.PluginInfoVersion = PluginInfoVersion;
             _about.Name = "MusicBee Remote: Plugin";
@@ -105,7 +109,7 @@ namespace MusicBeePlugin
             _about.TargetApplication = "MusicBee Remote";
 
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            UserSettings.Instance.CurrentVersion = version.ToString();
+            _settings.CurrentVersion = version.ToString();
 
             // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.General;
@@ -122,15 +126,17 @@ namespace MusicBeePlugin
             }
 
 #if DEBUG
-            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, LogLevel.Debug);
+            InitializeLoggingConfiguration(_settings.FullLogPath, LogLevel.Debug);
 #else
             var logLevel = UserSettings.Instance.DebugLogEnabled ? LogLevel.Debug : LogLevel.Error;
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
 
-            _hub = container.Resolve<ITinyMessengerHub>();
-            _auth = container.Resolve<Authenticator>();
+            _hub = container.GetInstance<ITinyMessengerHub>();
+            _auth = container.GetInstance<Authenticator>();
             StartPlayerStatusMonitoring();
+
+            container.GetInstance<ILibraryScanner>().Start();
 
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", "Information Panel of the MusicBee Remote",
                 MenuItemClicked);
@@ -154,7 +160,7 @@ namespace MusicBeePlugin
 
         private void ShowDialogIfRequired()
         {
-            if (UserSettings.Instance.IsFirstRun())
+            if (_settings.IsFirstRun())
             {
                 OpenInfoWindow();
             }
@@ -251,7 +257,7 @@ namespace MusicBeePlugin
         private void DisplayInfoWindow()
         {
             if (_mWindow == null || !_mWindow.Visible)
-            {
+            {               
                 _mWindow = new InfoWindow();
                 _mWindow.SetOnDebugSelectionListener(this);
             }
@@ -1103,7 +1109,7 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        private static string XmlFilter(string[] tags, string query, bool isStrict,
+        private string XmlFilter(string[] tags, string query, bool isStrict,
             SearchSource source = SearchSource.None)
         {
             short src;
@@ -1113,10 +1119,10 @@ namespace MusicBeePlugin
             }
             else
             {
-                var userDefaults = UserSettings.Instance.Source != SearchSource.None;
+                var userDefaults = _settings.Source != SearchSource.None;
                 src = (short)
                 (userDefaults
-                    ? UserSettings.Instance.Source
+                    ? _settings.Source
                     : SearchSource.Library);
             }
 
@@ -1762,7 +1768,7 @@ namespace MusicBeePlugin
 
         public void SelectionChanged(bool enabled)
         {
-            InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath,
+            InitializeLoggingConfiguration(_settings.FullLogPath,
                 enabled ? LogLevel.Debug : LogLevel.Error);
         }
 

@@ -13,6 +13,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
     {
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private UserSettings _settings;
+
+        public SocketTester(UserSettings _settings)
+        {
+            this._settings = _settings;
+        }
+
         // State object for receiving data from remote device.
         public class StateObject
         {
@@ -35,7 +42,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             try
             {
-                var port = UserSettings.Instance.ListeningPort;
+                var port = _settings.ListeningPort;
                 var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int) port);
                 var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 client.BeginConnect(ipEndpoint, ConnectCallback, client);

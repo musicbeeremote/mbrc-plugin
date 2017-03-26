@@ -5,7 +5,7 @@ using MusicBeePlugin.AndroidRemote.Settings;
 
 namespace MusicBeePlugin.AndroidRemote.Core
 {
-    public interface IRepository<T>
+    internal interface IRepository<T>
     {
         void AddAll(IEnumerable<T> items);
         void RemoveAll();
@@ -16,7 +16,7 @@ namespace MusicBeePlugin.AndroidRemote.Core
     {
     }
 
-    class TrackRepository : ITrackRepository
+    internal class TrackRepository : ITrackRepository
     {
         private readonly IStorageLocationProvider _storageProvider;
 

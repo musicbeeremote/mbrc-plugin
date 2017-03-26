@@ -1,7 +1,6 @@
 using System;
 using System.Windows.Input;
 using MusicBeePlugin.PartyMode.Core.Model;
-using TinyIoC;
 
 namespace MusicBeePlugin.PartyMode.Core.ViewModel.Commands
 {

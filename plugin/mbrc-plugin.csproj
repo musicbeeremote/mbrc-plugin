@@ -44,7 +44,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.2.0.1527</AssemblyVersion>
+    <AssemblyVersion>1.2.0.1534</AssemblyVersion>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Prefer32bit>true</Prefer32bit>
     <LangVersion>6</LangVersion>
@@ -83,13 +83,13 @@
     </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LiteDB, Version=3.1.0.0, Culture=neutral, PublicKeyToken=4ee40123013c9f27">
+    <Reference Include="LiteDB, Version=3.1.0.0, Culture=neutral, PublicKeyToken=4ee40123013c9f27, processorArchitecture=MSIL">
       <HintPath>..\packages\LiteDB.3.1.0\lib\net35\LiteDB.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <HintPath>..\packages\NLog.4.3.7\lib\net40\NLog.dll</HintPath>
-      <Private>False</Private>
-      <EmbedAssembly>true</EmbedAssembly>
+      <HintPath>..\packages\NLog.4.4.4\lib\net40\NLog.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -97,6 +97,12 @@
       <HintPath>..\packages\ServiceStack.Text.3.9.71\lib\net35\ServiceStack.Text.dll</HintPath>
       <EmbedAssembly>true</EmbedAssembly>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="StructureMap, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
+      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.dll</HintPath>
+    </Reference>
+    <Reference Include="StructureMap.Net4, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
+      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.Net4.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
@@ -136,6 +142,8 @@
     <Compile Include="AndroidRemote\Core\IApiAdapter.cs" />
     <Compile Include="AndroidRemote\Core\IRepository.cs" />
     <Compile Include="AndroidRemote\Core\LibraryApiAdapter.cs" />
+    <Compile Include="AndroidRemote\Core\Monitor\FileAddedEvent.cs" />
+    <Compile Include="AndroidRemote\Core\Monitor\ILibraryScanner.cs" />
     <Compile Include="AndroidRemote\Entities\RadioStation.cs" />
     <Compile Include="AndroidRemote\Events\BroadcastEvent.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Album.cs" />
@@ -220,7 +228,6 @@
     <Compile Include="AndroidRemote\Utilities\Authenticator.cs" />
     <Compile Include="AndroidRemote\Utilities\StateAction.cs" />
     <Compile Include="SearchSource.cs" />
-    <Compile Include="TinyIoC.cs" />
     <Compile Include="TinyMessenger.cs" />
     <Compile Include="Tools\NetworkTools.cs" />
   </ItemGroup>
@@ -265,12 +272,6 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\mbrc-partymode\mbrc-partymode.csproj">
-      <Project>{86bd4fc8-0ff9-4cd6-ac5f-5fc15397df55}</Project>
-      <Name>mbrc-partymode</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />
