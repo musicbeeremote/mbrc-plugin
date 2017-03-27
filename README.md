@@ -13,20 +13,35 @@ Protocol
 -------
 All the protocol messages have the following format ``{"context":"command","type":"type","data":"data"}`` you can find all the available commands at the [Constants.cs](https://github.com/kelsos/mbrc-plugin/blob/development/AndroidRemote/Networking/Constants.cs) file. The type can be has one of the following values **req** for request, **rep** for reply and **msg** for message, but they are currently ignored. The data contains the data part of the Protocol. In requests it contains data send to the server for example during the volume change it contains the integer of the new volume e.g. `` {"context":"playervolume","type":"req","data":10}``. In the replies it may contain more complex data like Arrays of tracks etc.
 
-Credits
+Thirdparty dependencies
 -------
-The plugin uses ServiceStack.Text to parse the JSON messages.
+
 
 *   [ServiceStack.Text](https://github.com/ServiceStack/ServiceStack.Text)
     
     [GNU Affero General Public License v3](http://www.gnu.org/licenses/agpl-3.0.html)
 
+*   [NLog](https://github.com/NLog/NLog)
+
+    [BSD](https://github.com/NLog/NLog/blob/master/LICENSE.txt)
+
+*   [TinyMessenger](https://github.com/grumpydev/TinyMessenger)
+
+    [MS-PL](https://github.com/grumpydev/TinyMessenger/blob/master/licence.txt)
+
+*   [LiteDB](https://github.com/mbdavid/LiteDB)
+
+    [MIT](https://github.com/mbdavid/LiteDB/blob/master/LICENSE)
+
+*   [StructureMap](https://github.com/structuremap/structuremap/)
+
+    [Apache 2.0](https://github.com/structuremap/structuremap/blob/master/LICENSE.TXT)
+
 License
 ------
 
-
     MusicBee Remote (Plugin for MusicBee)
-    Copyright (C) 2013  Konstantinos Paparas
+    Copyright (C) 2017  Konstantinos Paparas
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
