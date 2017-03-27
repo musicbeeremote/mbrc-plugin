@@ -4,38 +4,25 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Timers;
 using System.Windows.Forms;
 using System.Xml.Linq;
-using MusicBeePlugin.AndroidRemote;
-using MusicBeePlugin.AndroidRemote.Commands;
-using MusicBeePlugin.AndroidRemote.Commands.Internal;
-using MusicBeePlugin.AndroidRemote.Core.Monitor;
-using MusicBeePlugin.AndroidRemote.Entities;
-using MusicBeePlugin.AndroidRemote.Enumerations;
-using MusicBeePlugin.AndroidRemote.Events;
-using MusicBeePlugin.AndroidRemote.Model;
-using MusicBeePlugin.AndroidRemote.Model.Entities;
-using MusicBeePlugin.AndroidRemote.Networking;
-using MusicBeePlugin.AndroidRemote.Settings;
-using MusicBeePlugin.AndroidRemote.Utilities;
-using NLog;
-using NLog.Config;
-using NLog.Targets;
-using ServiceStack.Text;
-using StructureMap;
-using TinyMessenger;
-using Logger = NLog.Logger;
-using Timer = System.Timers.Timer;
+using MusicBeeRemoteCore;
+using MusicBeeRemoteCore.Remote;
+using MusicBeeRemoteCore.Remote.Commands;
+using MusicBeeRemoteCore.Remote.Entities;
+using MusicBeeRemoteCore.Remote.Enumerations;
+using MusicBeeRemoteCore.Remote.Events;
+using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemoteCore.Remote.Settings;
+using MusicBeeRemoteCore.Remote.Utilities;
 
 namespace MusicBeePlugin
 {
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
-    public partial class Plugin : InfoWindow.IOnDebugSelectionChanged
+    public partial class Plugin
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// The mb api interface.
@@ -47,41 +34,10 @@ namespace MusicBeePlugin
         /// </summary>
         private readonly PluginInfo _about = new PluginInfo();
 
-        /// <summary>
-        /// The timer.
-        /// </summary>
-        private Timer _timer;
 
-        private Timer _positionUpdateTimer;
-
-        /// <summary>
-        /// The shuffle.
-        /// </summary>
-        private ShuffleState _shuffleState;
-
-        /// <summary>
-        /// Represents the current repeat mode.
-        /// </summary>
-        private RepeatMode _repeat;
-
-        /// <summary>
-        /// The scrobble.
-        /// </summary>
-        private bool _scrobble;
-
-        /// <summary>
-        /// Returns the plugin instance (Singleton);
-        /// </summary>
-        public static Plugin
-            Instance { get; private set; }
 
         private InfoWindow _mWindow;
-        private bool _userChangingShuffle;
-        private ITinyMessengerHub _hub;
-        private Authenticator _auth;
 
-        private UserSettings _settings;
-        private Container _container;
 
 
         /// <summary>
@@ -91,7 +47,6 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            Instance = this;
             JsConfig.ExcludeTypeInfo = true;
             _container = new Container();
 
@@ -135,7 +90,7 @@ namespace MusicBeePlugin
 
             _hub = _container.GetInstance<ITinyMessengerHub>();
             _auth = _container.GetInstance<Authenticator>();
-            StartPlayerStatusMonitoring();
+
 
             _container.GetInstance<ILibraryScanner>().Start();
 
@@ -152,9 +107,7 @@ namespace MusicBeePlugin
 
             ShowDialogIfRequired();
 
-            _positionUpdateTimer = new Timer(20000);
-            _positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
-            _positionUpdateTimer.Enabled = true;
+
 
             return _about;
         }
@@ -167,13 +120,7 @@ namespace MusicBeePlugin
             }
         }
 
-        private void PositionUpdateTimerOnElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
-        {
-            if (_api.Player_GetPlayState() == PlayState.Playing)
-            {
-                RequestPlayPosition("status");
-            }
-        }
+
 
         /// <summary>
         /// Menu Item click handler. It handles the Tools -> MusicBee Remote entry click and opens the respective info panel.
@@ -194,57 +141,6 @@ namespace MusicBeePlugin
             if (_mWindow != null && _mWindow.Visible)
             {
                 _mWindow.UpdateSocketStatus(status);
-            }
-        }
-
-        /// <summary>
-        /// The function populates the local player status variables and then
-        /// starts the Monitoring of the player status every 1000 ms to retrieve
-        /// any changes.
-        /// </summary>
-        private void StartPlayerStatusMonitoring()
-        {
-            _scrobble = _api.Player_GetScrobbleEnabled();
-            _repeat = _api.Player_GetRepeat();
-            _shuffleState = GetShuffleState();
-            _timer = new Timer {Interval = 1000};
-            _timer.Elapsed += HandleTimerElapsed;
-            _timer.Enabled = true;
-        }
-
-        /// <summary>
-        /// This function runs periodically every 1000 ms as the timer ticks and
-        /// checks for changes on the player status.  If a change is detected on
-        /// one of the monitored variables the function will fire an event with
-        /// the new status.
-        /// </summary>
-        /// <param name="sender">
-        /// The sender.
-        /// </param>
-        /// <param name="args">
-        /// The event arguments.
-        /// </param>
-        private void HandleTimerElapsed(object sender, ElapsedEventArgs args)
-        {
-            if (GetShuffleState() != _shuffleState && !_userChangingShuffle)
-            {
-                _shuffleState = GetShuffleState();
-                var message = new SocketMessage(Constants.PlayerShuffle, _shuffleState);
-                _hub.Publish(new PluginResponseAvailableEvent(message));
-            }
-
-            if (_api.Player_GetScrobbleEnabled() != _scrobble)
-            {
-                _scrobble = _api.Player_GetScrobbleEnabled();
-                var message = new SocketMessage(Constants.PlayerScrobble, _scrobble);
-                _hub.Publish(new PluginResponseAvailableEvent(message));
-            }
-
-            if (_api.Player_GetRepeat() != _repeat)
-            {
-                _repeat = _api.Player_GetRepeat();
-                var message = new SocketMessage(Constants.PlayerRepeat, _repeat);
-                _hub.Publish(new PluginResponseAvailableEvent(message));
             }
         }
 
@@ -555,23 +451,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        private ShuffleState GetShuffleState()
-        {
-            var shuffleEnabled = _api.Player_GetShuffle();
-            var autoDjEnabled = _api.Player_GetAutoDjEnabled();
-            var state = ShuffleState.off;
-            if (shuffleEnabled && !autoDjEnabled)
-            {
-                state = ShuffleState.shuffle;
-            }
-            else if (autoDjEnabled)
-            {
-                state = ShuffleState.autodj;
-            }
-
-            return state;
-        }
-
         /// <summary>
         /// Changes the player mute state. If the StateAction is Toggle then the current state is switched with it's opposite,
         /// if it is State the current state is dispatched with an Event.
@@ -717,19 +596,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        public void RequestOutputDevice(string connectionId)
-        {
-            string[] deviceNames;
-            string activeDeviceName;
-
-            _api.Player_GetOutputDevices(out deviceNames, out activeDeviceName);
-
-            var currentDevices = new OutputDevice(deviceNames, activeDeviceName);
-
-            var message = new SocketMessage(Constants.PlayerOutput, currentDevices);
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
         /// <summary>
         /// If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
         /// the function will set the new rating as the current track's new track rating. In any other case it will
@@ -815,33 +681,6 @@ namespace MusicBeePlugin
             }
 
             _hub.Publish(new CoverAvailable(cover));
-        }
-
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="request"></param>
-        public void RequestPlayPosition(string request)
-        {
-            if (!request.Contains("status"))
-            {
-                int newPosition;
-                if (int.TryParse(request, out newPosition))
-                {
-                    _api.Player_SetPosition(newPosition);
-                }
-            }
-            var currentPosition = _api.Player_GetPosition();
-            var totalDuration = _api.NowPlaying_GetDuration();
-
-            var position = new
-            {
-                current = currentPosition,
-                total = totalDuration
-            };
-
-            var message = new SocketMessage(Constants.NowPlayingPosition, position);
-            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         /// <summary>
@@ -1708,65 +1547,6 @@ namespace MusicBeePlugin
             }
         }
 
-        /// <summary>
-        ///     Initializes the logging configuration.
-        /// </summary>
-        /// <param name="logFilePath"></param>
-        public static void InitializeLoggingConfiguration(string logFilePath, LogLevel logLevel)
-        {
-            var config = new LoggingConfiguration();
-
-            var fileTarget = new FileTarget
-            {
-                ArchiveAboveSize = 2097152,
-                ArchiveEvery = FileArchivePeriod.Day,
-                ArchiveNumbering = ArchiveNumberingMode.Rolling,
-                MaxArchiveFiles = 5,
-                EnableArchiveFileCompression = true,
-                FileName = logFilePath,
-                Layout = "${longdate} [${level:uppercase=true}]${newline}" +
-                         "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
-                         "${message}${newline}" +
-                         "${when:when=length('${exception}') > 0: ${exception}${newline}}"
-            };
-
-
-#if DEBUG
-            var consoleTarget = new ColoredConsoleTarget();
-            var debugger = new DebuggerTarget();
-            var sentinalTarget = new NLogViewerTarget()
-            {
-                Name = "sentinel",
-                Address = "udp://127.0.0.1:9999",
-                IncludeNLogData = true,
-                IncludeSourceInfo = true
-            };
-
-            var sentinelRule = new LoggingRule("*", LogLevel.Trace, sentinalTarget);
-            config.AddTarget("sentinel", sentinalTarget);
-            config.LoggingRules.Add(sentinelRule);
-            config.AddTarget("console", consoleTarget);
-            config.AddTarget("debugger", debugger);
-            consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} ${message} ${exception}";
-
-            debugger.Layout = fileTarget.Layout;
-
-            var consoleRule = new LoggingRule("*", LogLevel.Debug, consoleTarget);
-            config.LoggingRules.Add(consoleRule);
-
-            var debuggerRule = new LoggingRule("*", LogLevel.Debug, debugger);
-            config.LoggingRules.Add(debuggerRule);
-#endif
-            config.AddTarget("file", fileTarget);
-
-            var fileRule = new LoggingRule("*", logLevel, fileTarget);
-
-            config.LoggingRules.Add(fileRule);
-
-            LogManager.Configuration = config;
-            LogManager.ReconfigExistingLoggers();
-        }
-
         public void SelectionChanged(bool enabled)
         {
             InitializeLoggingConfiguration(_settings.FullLogPath,
@@ -1837,12 +1617,6 @@ namespace MusicBeePlugin
                 default:
                     return false;
             }
-        }
-
-        public void SwitchOutputDevice(string outputDevice, string connectionId)
-        {
-            _api.Player_SetOutputDevice(outputDevice);
-            RequestOutputDevice(connectionId);
         }
     }
 }

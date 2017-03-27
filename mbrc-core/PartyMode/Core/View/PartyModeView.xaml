@@ -1,0 +1,91 @@
+﻿<UserControl x:Class="MusicBeeRemoteCore.PartyMode.Core.View.PartyModeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:attachedCommandBehavior="clr-namespace:MusicBeeRemoteCore.PartyMode.Core.AttachedCommandBehavior"
+             xmlns:view="clr-namespace:MusicBeeRemoteCore.PartyMode.Core.View"
+             Width="Auto"
+             Height="Auto"
+             HorizontalContentAlignment="Stretch"
+             attachedCommandBehavior:CommandBehavior.Command="{Binding UnloadedCmd}"
+             attachedCommandBehavior:CommandBehavior.Event="Unloaded"
+             d:DesignHeight="309"
+             d:DesignWidth="470"
+             d:DataContext="{d:DesignInstance viewModel:PartyModeViewModel}"
+             mc:Ignorable="d">
+
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="ClientViewTemplate">
+            <view:ClientView />
+        </DataTemplate>
+        <DataTemplate x:Key="ClientDetailViewTemplate">
+            <view:ClientDetailView />
+        </DataTemplate>
+        <DataTemplate x:Key="LogViewerViewTemplate">
+            <view:LogViewerView />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Width="Auto" Height="Auto">
+
+        <Label Width="Auto"
+               Height="Auto"
+               Margin="1,1,1,1"
+               Background="Lavender"
+               Content="Party Mode extension"
+               DockPanel.Dock="top"
+               FontStyle="Italic"
+               FontWeight="Bold" />
+        <StackPanel Width="250"
+                    Height="Auto"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    DockPanel.Dock="left">
+
+
+            <TextBlock Margin="5"
+                       FontSize="10"
+                       Foreground="black">
+                this extension allows you to control the access rights/ executable commands of the connected clients
+            </TextBlock>
+
+            <CheckBox Content="active" IsChecked="{Binding IsActive}" />
+            <view:ClientView MinHeight="50"
+                             MaxHeight="150"
+                             Margin="1"
+                             BorderBrush="Gray"
+                             BorderThickness="0.7"
+                             Content="{Binding ClientViewModel}"
+                             ContentTemplate="{StaticResource ClientViewTemplate}"
+                             IsEnabled="{Binding IsActive}" />
+            <view:ClientDetailView MinHeight="150"
+                                   MaxHeight="300"
+                                   Margin="1"
+                                   BorderBrush="Gray"
+                                   BorderThickness="0.7"
+                                   Content="{Binding ClientDetailViewModel}"
+                                   ContentTemplate="{StaticResource ClientDetailViewTemplate}"
+                                   IsEnabled="{Binding IsActive}" />
+
+            <Button Name="BtnSave"
+                    Height="20"
+                    Command="{Binding Path=SaveCommand}"
+                    Content="Save Changes" />
+        </StackPanel>
+        <DockPanel Width="Auto"
+                   Height="Auto"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch"
+                   DockPanel.Dock="Right">
+            <view:LogViewerView MinHeight="50"
+                                Margin="1"
+                                BorderBrush="Gray"
+                                BorderThickness="0.7"
+                                Content="{Binding LogViewerViewModel}"
+                                ContentTemplate="{StaticResource LogViewerViewTemplate}"
+                                IsEnabled="{Binding IsActive}" />
+        </DockPanel>
+    </DockPanel>
+</UserControl>

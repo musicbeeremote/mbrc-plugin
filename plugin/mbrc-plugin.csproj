@@ -83,27 +83,6 @@
     </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LiteDB, Version=3.1.0.0, Culture=neutral, PublicKeyToken=4ee40123013c9f27, processorArchitecture=MSIL">
-      <HintPath>..\packages\LiteDB.3.1.0\lib\net35\LiteDB.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <HintPath>..\packages\NLog.4.4.4\lib\net40\NLog.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="ServiceStack.Text">
-      <HintPath>..\packages\ServiceStack.Text.3.9.71\lib\net35\ServiceStack.Text.dll</HintPath>
-      <EmbedAssembly>true</EmbedAssembly>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="StructureMap, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.dll</HintPath>
-    </Reference>
-    <Reference Include="StructureMap.Net4, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.Net4.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Serialization" />
@@ -118,124 +97,20 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AndroidRemote\Commands\CommandPermissions.cs" />
-    <Compile Include="AndroidRemote\Commands\CoverPayload.cs" />
-    <Compile Include="AndroidRemote\Commands\InstaReplies\InstantReplyCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Internal\InternalEvents.cs" />
-    <Compile Include="AndroidRemote\Commands\LimitedCommand.cs" />
-    <Compile Include="AndroidRemote\Commands\LyricsPayload.cs" />
-    <Compile Include="AndroidRemote\Commands\QueuePayload.cs" />
-    <Compile Include="AndroidRemote\Commands\QueueResponse.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\HandeshakeCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\LegacySearchCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\LibraryBrowseCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\NowPlayingCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\OutputCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\PlayerStateCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\PlayingTrackCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\PlaylistCommands.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestPluginVersion.cs" />
-    <Compile Include="AndroidRemote\Commands\Requests\RequestRadioStations.cs" />
-    <Compile Include="AndroidRemote\configuration.cs" />
-    <Compile Include="AndroidRemote\Controller\Controller.cs" />
-    <Compile Include="AndroidRemote\ControlRemoveExtension.cs" />
-    <Compile Include="AndroidRemote\Core\IApiAdapter.cs" />
-    <Compile Include="AndroidRemote\Core\IRepository.cs" />
-    <Compile Include="AndroidRemote\Core\LibraryApiAdapter.cs" />
-    <Compile Include="AndroidRemote\Core\Monitor\FileAddedEvent.cs" />
-    <Compile Include="AndroidRemote\Core\Monitor\ILibraryScanner.cs" />
-    <Compile Include="AndroidRemote\Entities\RadioStation.cs" />
-    <Compile Include="AndroidRemote\Events\BroadcastEvent.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Album.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Artist.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Genre.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\MetaData.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\NowPlaying.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\NowPlayingListTrack.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackBase.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrackV2.cs" />
-    <Compile Include="AndroidRemote\Entities\OutputDevice.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Page.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Playlist.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\SocketMessage.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\Track.cs" />
-    <Compile Include="AndroidRemote\Model\Entities\NowPlayingTrack.cs" />
-    <Compile Include="AndroidRemote\Enumerations\ShuffleState.cs" />
-    <Compile Include="AndroidRemote\Enumerations\MetaTag.cs" />
-    <Compile Include="AndroidRemote\Enumerations\LastfmStatus.cs" />
-    <Compile Include="AndroidRemote\Enumerations\PlayerState.cs" />
-    <Compile Include="AndroidRemote\Enumerations\QueueType.cs" />
-    <Compile Include="AndroidRemote\Enumerations\Repeat.cs" />
-    <Compile Include="AndroidRemote\Events\MessageEvent.cs" />
-    <Compile Include="AndroidRemote\Interfaces\ICommand.cs" />
-    <Compile Include="AndroidRemote\Interfaces\IEvent.cs" />
-    <Compile Include="AndroidRemote\Networking\RemoteClient.cs" />
-    <Compile Include="AndroidRemote\Networking\Constants.cs" />
-    <Compile Include="AndroidRemote\Networking\ServiceDiscovery.cs" />
-    <Compile Include="AndroidRemote\Networking\SocketTester.cs" />
-    <Compile Include="AndroidRemote\Settings\IStorageLocationProvider.cs" />
-    <Compile Include="AndroidRemote\Utilities\IdGenerator.cs" />
-    <Compile Include="AndroidRemote\Utilities\Utilities.cs" />
-    <Compile Include="CheckboxExtension.cs" />
-    <Compile Include="FilteringSelection.cs" />
-    <Compile Include="InfoWindow.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="InfoWindow.Designer.cs">
-      <DependentUpon>InfoWindow.cs</DependentUpon>
-    </Compile>
+    <Compile Include="ApiAdapters\OutputApiAdapter.cs" />
+    <Compile Include="ApiAdapters\PlayerStateAdapter.cs" />
+    <Compile Include="ApiAdapters\TrackApiAdapter.cs" />
     <Compile Include="MusicBeeInterface.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehaviorBinding.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\EventHandlerGenerator.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\SimpleCommand.cs" />
-    <Compile Include="PartyMode\Core\ClientEventArgs.cs" />
-    <Compile Include="PartyMode\Core\Helper\CycledList.cs" />
-    <Compile Include="PartyMode\Core\Helper\ObservableCollectionEx.cs" />
-    <Compile Include="PartyMode\Core\Helper\Settings.cs" />
-    <Compile Include="PartyMode\Core\Helper\SettingsHandler.cs" />
-    <Compile Include="PartyMode\Core\Model\PartyModeModel.cs" />
-    <Compile Include="PartyMode\Core\Model\PartyModeLogs.cs" />
-    <Compile Include="PartyMode\Core\PartyModeCommandHandler.cs" />
-    <Compile Include="PartyMode\Core\ServerCommandEventArgs.cs" />
-    <Compile Include="PartyMode\Core\Tools\NetworkTools.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\ClientDetailViewModel.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\ClientViewModel.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\Commands\SaveCommand.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\Commands\UnloadedCommand.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\LogViewerViewModel.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\ModelBase.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\PartyModeViewModel.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\PartyModeLogsView.cs" />
-    <Compile Include="PartyMode\Core\View\ClientDetailView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\ClientView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\LogViewerView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\PartyModeView.xaml.cs" />
     <Compile Include="Plugin.cs" />
-    <Compile Include="AndroidRemote\Networking\SocketConnection.cs" />
-    <Compile Include="AndroidRemote\Networking\SocketPacket.cs" />
-    <Compile Include="AndroidRemote\Model\LyricCoverModel.cs" />
-    <Compile Include="PluginBootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="AndroidRemote\Networking\ProtocolHandler.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="AndroidRemote\Settings\UserSettings.cs" />
-    <Compile Include="AndroidRemote\Networking\SocketServer.cs" />
-    <Compile Include="AndroidRemote\Utilities\Authenticator.cs" />
-    <Compile Include="AndroidRemote\Utilities\StateAction.cs" />
-    <Compile Include="SearchSource.cs" />
-    <Compile Include="TinyMessenger.cs" />
-    <Compile Include="Tools\NetworkTools.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config">
-      <SubType>Designer</SubType>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
@@ -265,24 +140,16 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="InfoWindow.resx">
-      <DependentUpon>InfoWindow.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />
-    <Page Include="PartyMode\Core\View\ClientView.xaml" />
-    <Page Include="PartyMode\Core\View\LogViewerView.xaml" />
-    <Page Include="PartyMode\Core\View\PartyModeView.xaml" />
-    <Page Include="PartyMode\Core\View\Style\StyleDictonary.xaml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="AndroidRemote\Commands\State\" />
-    <Folder Include="Cache\" />
+    <ProjectReference Include="..\mbrc-core\mbrc-core.csproj">
+      <Project>{ee2d4d2e-21aa-44e5-ab58-b2fe5bc1050e}</Project>
+      <Name>mbrc-core</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
