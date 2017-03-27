@@ -1,17 +1,21 @@
-MusicBee Remote - Plugin
-------------------------
-© 2013 Konstantinos Paparas
+#Dependencies
 
-This plugin is freely available for download through [kelsos.net](http://kelsos.net/musicbeeremote/download/)
+*   [ServiceStack.Text](https://github.com/ServiceStack/ServiceStack.Text)
+    
+    [GNU Affero General Public License v3](http://www.gnu.org/licenses/agpl-3.0.html)
 
-This program is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](https://www.gnu.org/licenses/gpl.html) as published by the Free Software Foundation on version 3 of the License.
+*   [NLog](https://github.com/NLog/NLog)
 
-Credits
------------
+    [BSD](https://github.com/NLog/NLog/blob/master/LICENSE.txt)
 
+*   [TinyMessenger](https://github.com/grumpydev/TinyMessenger)
 
-###Dependencies
+    [MS-PL](https://github.com/grumpydev/TinyMessenger/blob/master/licence.txt)
 
-* [ServiceStack.Text](https://github.com/ServiceStack/ServiceStack.Text)
+*   [LiteDB](https://github.com/mbdavid/LiteDB)
 
-    Licence: [3 Clause BSD](https://github.com/ServiceStack/ServiceStack.Text/blob/master/LICENSE)
+    [MIT](https://github.com/mbdavid/LiteDB/blob/master/LICENSE)
+
+*   [StructureMap](https://github.com/structuremap/structuremap/)
+
+    [Apache 2.0](https://github.com/structuremap/structuremap/blob/master/LICENSE.TXT)
