@@ -12,14 +12,17 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel
         #region vars
 
         private readonly PartyModeModel _model;
+        private readonly SaveCommand _saveCommand;
 
         #endregion vars
 
         #region constructor
 
-        public PartyModeViewModel(PartyModeModel model)
+        public PartyModeViewModel(PartyModeModel model, SaveCommand saveCommand)
         {
+
             _model = model;
+            _saveCommand = saveCommand;
             ClientViewModel = new ClientViewModel(_model);
             ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
             LogViewerViewModel = new LogViewerViewModel(_model);
@@ -47,7 +50,7 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel
 
         public ICommand SaveCommand
         {
-            get { return new SaveCommand(); }
+            get { return _saveCommand; }
         }
 
         #endregion Commands

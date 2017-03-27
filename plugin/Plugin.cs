@@ -81,6 +81,7 @@ namespace MusicBeePlugin
         private Authenticator _auth;
 
         private UserSettings _settings;
+        private Container _container;
 
 
         /// <summary>
@@ -92,13 +93,13 @@ namespace MusicBeePlugin
         {
             Instance = this;
             JsConfig.ExcludeTypeInfo = true;
-            var container = new Container();
+            _container = new Container();
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
-            PluginBootstrap.Initialize(container,_api);
+            PluginBootstrap.Initialize(_container,_api);
 
-            _settings = container.GetInstance<UserSettings>();
+            _settings = _container.GetInstance<UserSettings>();
             _settings.SetStoragePath(_api.Setting_GetPersistentStoragePath());
             _settings.LoadSettings();
 
@@ -132,11 +133,11 @@ namespace MusicBeePlugin
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
 
-            _hub = container.GetInstance<ITinyMessengerHub>();
-            _auth = container.GetInstance<Authenticator>();
+            _hub = _container.GetInstance<ITinyMessengerHub>();
+            _auth = _container.GetInstance<Authenticator>();
             StartPlayerStatusMonitoring();
 
-            container.GetInstance<ILibraryScanner>().Start();
+            _container.GetInstance<ILibraryScanner>().Start();
 
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", "Information Panel of the MusicBee Remote",
                 MenuItemClicked);
@@ -258,7 +259,7 @@ namespace MusicBeePlugin
         {
             if (_mWindow == null || !_mWindow.Visible)
             {               
-                _mWindow = new InfoWindow();
+                _mWindow = _container.GetInstance<InfoWindow>();
                 _mWindow.SetOnDebugSelectionListener(this);
             }
 

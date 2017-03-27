@@ -7,9 +7,9 @@ namespace MusicBeePlugin.PartyMode.Core.ViewModel.Commands
     public class SaveCommand : ICommand
     {
         private readonly PartyModeModel _model;
-        public SaveCommand()
+        public SaveCommand(PartyModeModel model)
         {
-            _model = TinyIoCContainer.Current.Resolve<PartyModeModel>();
+            _model = model;
         }
 
         public event EventHandler CanExecuteChanged;

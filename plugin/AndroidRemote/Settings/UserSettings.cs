@@ -74,7 +74,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         /// </summary>
         public List<string> IpAddressList { get; set; }
 
-        private UserSettings(ITinyMessengerHub hub)
+        public UserSettings(ITinyMessengerHub hub)
         {
             _hub = hub;
         }
