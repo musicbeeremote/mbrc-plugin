@@ -5,6 +5,7 @@ using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using static MusicBeePlugin.Plugin.MetaDataType;
+using Genre = MusicBeeRemoteCore.Remote.Model.Entities.Genre;
 
 namespace MusicBeePlugin.ApiAdapters
 {
@@ -63,56 +64,66 @@ namespace MusicBeePlugin.ApiAdapters
             return files;
         }
 
-        public string GetNextFile()
+        public IEnumerable<Genre> GetGenres(string filter)
         {
-            return _api.Library_QueryGetNextFile();
-        }
+            IEnumerable<Genre> genres = new List<Genre>();
 
-        public bool LookupGenres()
-        {
-            return _api.Library_QueryLookupTable("genre", "count", null);
-        }
+            var query = string.IsNullOrEmpty(filter) ? null : filter;
 
-        public bool LookupArtists()
-        {
-            return _api.Library_QueryLookupTable("artist", "count", null);
-        }
+            if (_api.Library_QueryLookupTable("genre", "count", query))
+            {
+                genres = _api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
+                    .Select(genreInfo => new Genre(genreInfo[0].Cleanup(), int.Parse(genreInfo[1])))
+                    .ToList();
+            }
 
-        public bool LookupAlbums()
-        {
-            return _api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null);
-        }
-
-        public IEnumerable<Genre> GetGenres()
-        {
-            return _api.Library_QueryGetLookupTableValue(null)
-                .Split(new[] {"\0\0"}, StringSplitOptions.None)
-                .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
-                .Select(genreInfo => new Genre(genreInfo[0].Cleanup(), int.Parse(genreInfo[1])));
-        }
-
-        public IEnumerable<Artist> GetArtists()
-        {
-            return _api.Library_QueryGetLookupTableValue(null)
-                .Split(new[] {"\0\0"}, StringSplitOptions.None)
-                .Select(entry => entry.Split('\0'))
-                .Select(artistInfo => new Artist(artistInfo[0].Cleanup(), int.Parse(artistInfo[1])));
-        }
-
-        public IEnumerable<Album> GetAlbums()
-        {
-            return _api.Library_QueryGetLookupTableValue(null)
-                .Split(new[] {"\0\0"}, StringSplitOptions.None)
-                .Where(s => !string.IsNullOrEmpty(s))
-                .Select(s => s.Trim())
-                .Select(CreateAlbum)
-                .Distinct()
-                .ToList();
-        }
-
-        public void CleanLookup()
-        {
             _api.Library_QueryLookupTable(null, null, null);
+
+            return genres;
+        }
+
+        public IEnumerable<Artist> GetArtists(string filter)
+        {
+            IEnumerable<Artist> artists = new List<Artist>();
+
+            var query = string.IsNullOrEmpty(filter) ? null : filter;
+
+            if (_api.Library_QueryLookupTable("artist", "count", query))
+            {
+                artists = _api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Select(entry => entry.Split('\0'))
+                    .Select(artistInfo => new Artist(artistInfo[0].Cleanup(), int.Parse(artistInfo[1])))
+                    .ToList();
+            }
+
+            _api.Library_QueryLookupTable(null, null, null);
+
+            return artists;
+        }
+
+        public IEnumerable<Album> GetAlbums(string filter = "")
+        {
+            IEnumerable<Album> albums = new List<Album>();
+
+            var query = string.IsNullOrEmpty(filter) ? null : filter;
+
+            if (_api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", query))
+            {
+                albums = _api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Select(s => s.Trim())
+                    .Select(CreateAlbum)
+                    .Distinct()
+                    .ToList();
+            }
+
+            _api.Library_QueryLookupTable(null, null, null);
+
+            return albums;
         }
 
         public string GetYearForTrack(string currentTrack)

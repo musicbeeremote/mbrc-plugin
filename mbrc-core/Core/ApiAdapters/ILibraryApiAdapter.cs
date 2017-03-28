@@ -21,21 +21,11 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
 
         string[] QueryFiles(string filter = "");
 
-        string GetNextFile();
+        IEnumerable<Genre> GetGenres(string filter = "");
 
-        IEnumerable<Genre> GetGenres();
+        IEnumerable<Album> GetAlbums(string filter = "");
 
-        IEnumerable<Album> GetAlbums();
-
-        IEnumerable<Artist> GetArtists();
-
-        bool LookupGenres();
-
-        bool LookupArtists();
-
-        bool LookupAlbums();
-
-        void CleanLookup();
+        IEnumerable<Artist> GetArtists(string filter = "");
 
         string GetYearForTrack(string currentTrack);
     }

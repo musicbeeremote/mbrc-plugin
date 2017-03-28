@@ -13,29 +13,62 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
     internal class RequestLibSearchGenre : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibSearchGenre(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchGenres(@event.Data.ToString(), @event.ConnectionId);
+            var results = _searchApi.LibrarySearchGenres(@event.Data.ToString());
+            var message = new SocketMessage(Constants.LibrarySearchGenre, results);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestLibSearchArtist : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibSearchArtist(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchArtist(@event.Data.ToString(), @event.ConnectionId);
+            var result = _searchApi.LibrarySearchArtist(@event.Data.ToString());
+            var message = new SocketMessage(Constants.LibrarySearchArtist, result);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestLibSearchAlbum : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibSearchAlbum(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchAlbums(@event.Data.ToString(), @event.ConnectionId);
+            var results = _searchApi.LibrarySearchAlbums(@event.Data.ToString());
+            var message = new SocketMessage(Constants.LibrarySearchAlbum, results);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
-    internal class RequestLibQueueTrack : ICommand
+    internal class RequestLibQueueTrack : LimitedCommand
     {
         private readonly ISearchQueue _searchQueue;
 
@@ -44,7 +77,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             _searchQueue = searchQueue;
         }
 
-        public void Execute(IEvent @event)
+        public override void Execute(IEvent @event)
         {
             string type, query;
 
@@ -69,9 +102,12 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
             _searchQueue.RequestQueueFiles(qType, MetaTag.title, query);
         }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+                                                               CommandPermissions.StartPlayback;
     }
 
-    internal class RequestLibQueueGenre : ICommand
+    internal class RequestLibQueueGenre : LimitedCommand
     {
         private readonly ISearchQueue _searchQueue;
 
@@ -80,7 +116,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             _searchQueue = searchQueue;
         }
 
-        public void Execute(IEvent @event)
+        public override void Execute(IEvent @event)
         {
             string type, query;
 
@@ -104,9 +140,12 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             }
             _searchQueue.RequestQueueFiles(qType, MetaTag.genre, query);
         }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+                                                               CommandPermissions.StartPlayback;
     }
 
-    internal class RequestLibQueueArtist : ICommand
+    internal class RequestLibQueueArtist : LimitedCommand
     {
         private readonly ISearchQueue _searchQueue;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -116,7 +155,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             _searchQueue = searchQueue;
         }
 
-        public void Execute(IEvent @event)
+        public override void Execute(IEvent @event)
         {
             try
             {
@@ -149,9 +188,12 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                 _logger.Error(e, "Failed to queue artist");
             }
         }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+                                                               CommandPermissions.StartPlayback;
     }
 
-    internal class RequestLibQueueAlbum : ICommand
+    internal class RequestLibQueueAlbum : LimitedCommand
     {
         private readonly ISearchQueue _searchQueue;
 
@@ -160,7 +202,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             _searchQueue = searchQueue;
         }
 
-        public void Execute(IEvent @event)
+        public override void Execute(IEvent @event)
         {
             string type, query;
 
@@ -187,29 +229,65 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             }
             _searchQueue.RequestQueueFiles(qType, MetaTag.album, query);
         }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+                                                               CommandPermissions.StartPlayback;
     }
 
     internal class RequestLibGenreArtists : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibGenreArtists(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetGenreArtists(@event.DataToString(), @event.ConnectionId);
+            var result = _searchApi.LibraryGetGenreArtists(@event.DataToString());
+            var message = new SocketMessage(Constants.LibraryGenreArtists, result);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestLibArtistAlbums : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibArtistAlbums(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetArtistAlbums(@event.DataToString(), @event.ConnectionId);
+            var result = _searchApi.LibraryGetArtistAlbums(@event.DataToString());
+            var message = new SocketMessage(Constants.LibraryArtistAlbums, result);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestLibAlbumTracks : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibAlbumTracks(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibraryGetAlbumTracks(@event.DataToString(), @event.ConnectionId);
+            var results = _searchApi.LibraryGetAlbumTracks(@event.DataToString());
+            var message = new SocketMessage(Constants.LibraryAlbumTracks, results);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
