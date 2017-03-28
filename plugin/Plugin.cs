@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using MusicBeeRemoteCore;
 using MusicBeeRemoteCore.Remote;
 using MusicBeeRemoteCore.Remote.Commands;
@@ -15,6 +15,7 @@ using MusicBeeRemoteCore.Remote.Events;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Remote.Utilities;
+using TinyMessenger;
 
 namespace MusicBeePlugin
 {
@@ -305,71 +306,6 @@ namespace MusicBeePlugin
             };
             nowPlayingTrack.SetTitle(GetNowPlayingTrackTitle(), fileUrl);
             return nowPlayingTrack;
-        }
-
-        private string GetNowPlayingFileUrl()
-        {
-            return _api.NowPlaying_GetFileUrl();
-        }
-
-        private string GetNowPlayingArtist()
-        {
-            return _api.NowPlaying_GetFileTag(MetaDataType.Artist);
-        }
-
-        private string GetNowPlayingTrackTitle()
-        {
-            return _api.NowPlaying_GetFileTag(MetaDataType.TrackTitle);
-        }
-
-        private string GetNowPlayingYear()
-        {
-            return _api.NowPlaying_GetFileTag(MetaDataType.Year);
-        }
-
-        private string GetNowPlayingAlbum()
-        {
-            return _api.NowPlaying_GetFileTag(MetaDataType.Album);
-        }
-
-        /// <summary>
-        /// When called plays the next track.
-        /// </summary>
-        /// <returns></returns>
-        public void RequestNextTrack(string connectionId)
-        {
-            var message = new SocketMessage(Constants.PlayerNext, _api.Player_PlayNextTrack());
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        /// <summary>
-        /// When called stops the playback.
-        /// </summary>
-        /// <returns></returns>
-        public void RequestStopPlayback(string connectionId)
-        {
-            var message = new SocketMessage(Constants.PlayerStop, _api.Player_Stop());
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        /// <summary>
-        /// When called changes the play/pause state or starts playing a track if the status is stopped.
-        /// </summary>
-        /// <returns></returns>
-        public void RequestPlayPauseTrack(string connectionId)
-        {
-            var message = new SocketMessage(Constants.PlayerPlayPause, _api.Player_PlayPause());
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        /// <summary>
-        /// When called plays the previous track.
-        /// </summary>
-        /// <returns></returns>
-        public void RequestPreviousTrack(string connectionId)
-        {
-            var message = new SocketMessage(Constants.PlayerPrevious, _api.Player_PlayPreviousTrack());
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
         /// <summary>
@@ -1273,30 +1209,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        private string GetGenreForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, MetaDataType.Genre).Cleanup();
-        }
-
-        private string GetAlbumArtistForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, MetaDataType.AlbumArtist).Cleanup();
-        }
-
-        private string GetAlbumForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, MetaDataType.Album).Cleanup();
-        }
-
-        private string GetTitleForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle).Cleanup();
-        }
-
-        private string GetArtistForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, MetaDataType.Artist).Cleanup();
-        }
 
         /// <summary>
         /// 

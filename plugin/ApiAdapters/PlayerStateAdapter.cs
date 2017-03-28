@@ -1,5 +1,5 @@
 ﻿using System;
-using MusicBeeRemoteCore.ApiAdapters;
+using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Enumerations;
 using static MusicBeePlugin.Plugin;
 
@@ -56,6 +56,26 @@ namespace MusicBeePlugin.ApiAdapters
         public bool ScrobblingEnabled()
         {
             return _api.Player_GetScrobbleEnabled();
+        }
+
+        public bool PlayNext()
+        {
+            return _api.Player_PlayNextTrack();
+        }
+
+        public bool PlayPrevious()
+        {
+            return _api.Player_PlayPreviousTrack();
+        }
+
+        public bool StopPlayback()
+        {
+            return _api.Player_Stop();
+        }
+
+        public bool PlayPause()
+        {
+            return _api.Player_PlayPause();
         }
     }
 }

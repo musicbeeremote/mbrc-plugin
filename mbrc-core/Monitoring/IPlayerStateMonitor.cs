@@ -1,5 +1,6 @@
 ﻿using System.Timers;
 using MusicBeeRemoteCore.ApiAdapters;
+using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;

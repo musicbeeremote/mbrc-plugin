@@ -1,5 +1,10 @@
+using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Interfaces;
+using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemoteCore.Remote.Networking;
 using MusicBeeRemoteCore.Remote.Utilities;
+using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
@@ -13,9 +18,19 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPreviousTrack : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerStateAdapter _stateAdapter;
+
+        public RequestPreviousTrack(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        {
+            _hub = hub;
+            _stateAdapter = stateAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPreviousTrack(@event.ConnectionId);
+            var message = new SocketMessage(Constants.PlayerPrevious, _stateAdapter.PlayPrevious());
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.PlayPrevious;
@@ -23,9 +38,19 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestNextTrack : LimitedCommand
     {
+        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly ITinyMessengerHub _hub;
+
+        public RequestNextTrack(IPlayerStateAdapter stateAdapter, ITinyMessengerHub hub)
+        {
+            _stateAdapter = stateAdapter;
+            _hub = hub;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestNextTrack(@event.ConnectionId);
+            var message = new SocketMessage(Constants.PlayerNext, _stateAdapter.PlayNext());
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.PlayNext;
@@ -101,19 +126,40 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPlayPause : LimitedCommand
     {
-        public override void Execute(IEvent @event)
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerStateAdapter _stateAdapter;
+
+        public RequestPlayPause(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
         {
-            Plugin.Instance.RequestPlayPauseTrack(@event.ConnectionId);
+            _hub = hub;
+            _stateAdapter = stateAdapter;
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback | CommandPermissions.StopPlayback;
+        public override void Execute(IEvent @event)
+        {
+            var message = new SocketMessage(Constants.PlayerPause, _stateAdapter.PlayPause());
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
+        }
+
+        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
+                                                               CommandPermissions.StopPlayback;
     }
 
     internal class RequestStop : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerStateAdapter _stateAdapter;
+
+        public RequestStop(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        {
+            _hub = hub;
+            _stateAdapter = stateAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestStopPlayback(@event.ConnectionId);
+            var message = new SocketMessage(Constants.PlayerStop, _stateAdapter.StopPlayback());
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
