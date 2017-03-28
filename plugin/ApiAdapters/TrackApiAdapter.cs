@@ -1,4 +1,4 @@
-﻿using MusicBeeRemoteCore.ApiAdapters;
+﻿using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Monitoring;
 using static MusicBeePlugin.Plugin;
 

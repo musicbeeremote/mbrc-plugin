@@ -1,6 +1,6 @@
 ﻿using MusicBeeRemoteCore.Monitoring;
 
-namespace MusicBeeRemoteCore.ApiAdapters
+namespace MusicBeeRemoteCore.Core.ApiAdapters
 {
     public interface ITrackApiAdapter
     {

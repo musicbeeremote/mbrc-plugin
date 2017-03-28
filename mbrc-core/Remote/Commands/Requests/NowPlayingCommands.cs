@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using MusicBeeRemoteCore.ApiAdapters;
+using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Enumerations;
 using MusicBeeRemoteCore.Remote.Interfaces;

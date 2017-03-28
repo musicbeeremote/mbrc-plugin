@@ -66,12 +66,17 @@
     <Compile Include="Core\Support\FilterHelper.cs" />
     <Compile Include="Core\Support\ISearchApi.cs" />
     <Compile Include="Core\Support\ISearchQueue.cs" />
+    <Compile Include="Core\Support\SearchApi.cs" />
+    <Compile Include="Core\Support\SearchQueue.cs" />
     <Compile Include="FilteringSelection.cs" />
     <Compile Include="InfoWindow.cs" />
     <Compile Include="InfoWindow.Designer.cs" />
     <Compile Include="Logging\IPluginLogManager.cs" />
+    <Compile Include="Logging\PluginLogManager.cs" />
     <Compile Include="Monitoring\IPlayerStateMonitor.cs" />
+    <Compile Include="Monitoring\IStateMonitor.cs" />
     <Compile Include="Monitoring\ITrackStateMonitor.cs" />
+    <Compile Include="Monitoring\PlayerPlayerStateMonitor.cs" />
     <Compile Include="Monitoring\PlayerStateModel.cs" />
     <Compile Include="Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
