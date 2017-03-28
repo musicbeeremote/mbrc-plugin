@@ -1,50 +1,18 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.Remote;
 using MusicBeeRemoteCore.Remote.Model.Entities;
+using static MusicBeePlugin.Plugin.MetaDataType;
 
-namespace MusicBeeRemoteCore.Remote.Core
+namespace MusicBeePlugin.ApiAdapters
 {
-    internal interface IApiAdapter
-    {
-        int GetTrackNumber(string currentTrack);
-
-        int GetDiskNumber(string currentTrack);
-
-        string GetGenreForTrack(string currentTrack);
-
-        string GetAlbumArtistForTrack(string currentTrack);
-
-        string GetAlbumForTrack(string currentTrack);
-
-        string GetTitleForTrack(string currentTrack);
-
-        string GetArtistForTrack(string currentTrack);
-
-        bool QueryFiles();
-
-        string GetNextFile();
-
-        IEnumerable<Genre> GetGenres();
-
-        IEnumerable<Album> GetAlbums();
-
-        IEnumerable<Artist> GetArtists();
-
-        bool LookupGenres();
-
-        bool LookupArtists();
-
-        bool LookupAlbums();
-
-        void CleanLookup();
-    }
-
-    class ApiAdapter : IApiAdapter
+    class LibraryApiAdapter : ILibraryApiAdapter
     {
         private readonly Plugin.MusicBeeApiInterface _api;
 
-        public ApiAdapter(Plugin.MusicBeeApiInterface api)
+        public LibraryApiAdapter(Plugin.MusicBeeApiInterface api)
         {
             _api = api;
         }
@@ -88,9 +56,11 @@ namespace MusicBeeRemoteCore.Remote.Core
             return _api.Library_GetFileTag(currentTrack, Plugin.MetaDataType.Artist).Cleanup();
         }
 
-        public bool QueryFiles()
+        public string[] QueryFiles(string filter = "")
         {
-            return _api.Library_QueryFiles(null);
+            string[] files = { };
+            _api.Library_QueryFilesEx(filter, ref files);
+            return files;
         }
 
         public string GetNextFile()
@@ -143,6 +113,11 @@ namespace MusicBeeRemoteCore.Remote.Core
         public void CleanLookup()
         {
             _api.Library_QueryLookupTable(null, null, null);
+        }
+
+        public string GetYearForTrack(string currentTrack)
+        {
+            return _api.Library_GetFileTag(currentTrack, Year);
         }
 
         private static Album CreateAlbum(string queryResult)

@@ -1,7 +1,7 @@
 ﻿namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]
-    internal class Artist
+    public class Artist
     {
         [DataMember(Name = "artist")]
         public string Name { get; set; }

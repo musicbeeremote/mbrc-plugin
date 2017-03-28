@@ -57,10 +57,15 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ApiAdapters\IOutputApiAdapter.cs" />
-    <Compile Include="ApiAdapters\IPlayerStateAdapter.cs" />
-    <Compile Include="ApiAdapters\ITrackApiAdapter.cs" />
     <Compile Include="CheckboxExtension.cs" />
+    <Compile Include="Core\ApiAdapters\ILibraryApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IOutputApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IPlayerStateAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Support\FilterHelper.cs" />
+    <Compile Include="Core\Support\ISearchApi.cs" />
+    <Compile Include="Core\Support\ISearchQueue.cs" />
     <Compile Include="FilteringSelection.cs" />
     <Compile Include="InfoWindow.cs" />
     <Compile Include="InfoWindow.Designer.cs" />
@@ -106,7 +111,7 @@
     <Compile Include="Remote\Commands\QueuePayload.cs" />
     <Compile Include="Remote\Commands\QueueResponse.cs" />
     <Compile Include="Remote\Commands\Requests\HandeshakeCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\LegacySearchCommands.cs" />
+    <Compile Include="Remote\Commands\Requests\SupportSearchCommands.cs" />
     <Compile Include="Remote\Commands\Requests\LibraryBrowseCommands.cs" />
     <Compile Include="Remote\Commands\Requests\NowPlayingCommands.cs" />
     <Compile Include="Remote\Commands\Requests\OutputCommands.cs" />
@@ -118,9 +123,9 @@
     <Compile Include="Remote\configuration.cs" />
     <Compile Include="Remote\Controller\Controller.cs" />
     <Compile Include="Remote\ControlRemoveExtension.cs" />
-    <Compile Include="Remote\Core\IApiAdapter.cs" />
     <Compile Include="Remote\Core\IRepository.cs" />
-    <Compile Include="Remote\Core\LibraryApiAdapter.cs" />
+    <Compile Include="Remote\Core\ILibraryDataAdapter.cs" />
+    <Compile Include="Remote\Core\LibraryDataAdapter.cs" />
     <Compile Include="Remote\Core\Monitor\FileAddedEvent.cs" />
     <Compile Include="Remote\Core\Monitor\ILibraryScanner.cs" />
     <Compile Include="Remote\Entities\OutputDevice.cs" />

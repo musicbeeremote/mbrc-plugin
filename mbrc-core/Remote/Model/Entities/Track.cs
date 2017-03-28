@@ -3,7 +3,7 @@
 namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]
-    internal class Track :IEquatable<Track>, IComparable<Track>
+    public class Track :IEquatable<Track>, IComparable<Track>
     {
         public Track()
         {

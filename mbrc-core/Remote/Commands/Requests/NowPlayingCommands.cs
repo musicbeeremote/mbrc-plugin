@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MusicBeeRemoteCore.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Enumerations;
 using MusicBeeRemoteCore.Remote.Interfaces;
@@ -22,10 +23,12 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     public class RequestNowplayingQueue : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
+        private readonly IQueueAdapter _queueAdapter;
 
-        public RequestNowplayingQueue(ITinyMessengerHub hub)
+        public RequestNowplayingQueue(ITinyMessengerHub hub, IQueueAdapter queueAdapter)
         {
             _hub = hub;
+            _queueAdapter = queueAdapter;
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback | CommandPermissions.AddTrack;
@@ -57,7 +60,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                 queue = QueueType.AddAndPlay;
             }
 
-            var success = Plugin.Instance.QueueFiles(queue, data.ToArray(), play);
+            var success = _queueAdapter.QueueFiles(queue, data.ToArray(), play);
 
             SendResponse(@event.ConnectionId, success ? 200 : 500);
         }

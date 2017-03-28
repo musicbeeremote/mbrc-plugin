@@ -23,7 +23,6 @@ namespace MusicBeePlugin
     /// </summary>
     public partial class Plugin
     {
-
         /// <summary>
         /// The mb api interface.
         /// </summary>
@@ -35,9 +34,7 @@ namespace MusicBeePlugin
         private readonly PluginInfo _about = new PluginInfo();
 
 
-
         private InfoWindow _mWindow;
-
 
 
         /// <summary>
@@ -52,7 +49,7 @@ namespace MusicBeePlugin
 
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
-            PluginBootstrap.Initialize(_container,_api);
+            PluginBootstrap.Initialize(_container, _api);
 
             _settings = _container.GetInstance<UserSettings>();
             _settings.SetStoragePath(_api.Setting_GetPersistentStoragePath());
@@ -108,7 +105,6 @@ namespace MusicBeePlugin
             ShowDialogIfRequired();
 
 
-
             return _about;
         }
 
@@ -119,7 +115,6 @@ namespace MusicBeePlugin
                 OpenInfoWindow();
             }
         }
-
 
 
         /// <summary>
@@ -154,7 +149,7 @@ namespace MusicBeePlugin
         private void DisplayInfoWindow()
         {
             if (_mWindow == null || !_mWindow.Visible)
-            {               
+            {
                 _mWindow = _container.GetInstance<InfoWindow>();
                 _mWindow.SetOnDebugSelectionListener(this);
             }
@@ -949,41 +944,7 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        private string XmlFilter(string[] tags, string query, bool isStrict,
-            SearchSource source = SearchSource.None)
-        {
-            short src;
-            if (source != SearchSource.None)
-            {
-                src = (short) source;
-            }
-            else
-            {
-                var userDefaults = _settings.Source != SearchSource.None;
-                src = (short)
-                (userDefaults
-                    ? _settings.Source
-                    : SearchSource.Library);
-            }
 
-
-            var filter = new XElement("Source",
-                new XAttribute("Type", src));
-
-            var conditions = new XElement("Conditions",
-                new XAttribute("CombineMethod", "Any"));
-            foreach (var tag in tags)
-            {
-                var condition = new XElement("Condition",
-                    new XAttribute("Field", tag),
-                    new XAttribute("Comparison", isStrict ? "Is" : "Contains"),
-                    new XAttribute("Value", query));
-                conditions.Add(condition);
-            }
-            filter.Add(conditions);
-
-            return filter.ToString();
-        }
 
         /// <summary>
         /// Calls the API to get albums matching the specified parameter. Fires an event with the message in JSON format.
@@ -1264,7 +1225,6 @@ namespace MusicBeePlugin
 
         public void LibraryBrowseTracks(string connectionId, int offset = 0, int limit = 4000)
         {
-
             _logger.Debug(DateTime.Now + "fetching data");
             var tracks = new List<Track>();
             if (_api.Library_QueryFiles(null))
@@ -1341,37 +1301,6 @@ namespace MusicBeePlugin
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="title"></param>
-        /// <param name="connectionId"></param>
-        public void LibrarySearchTitle(string title, string connectionId)
-        {
-            var tracks = new List<Track>();
-            if (_api.Library_QueryFiles(XmlFilter(new[] {"Title"}, title, false)))
-            {
-                while (true)
-                {
-                    var currentTrack = _api.Library_QueryGetNextFile();
-                    if (string.IsNullOrEmpty(currentTrack)) break;
-
-                    int trackNumber;
-                    int.TryParse(_api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
-                    var src = currentTrack;
-
-                    tracks.Add(new Track(_api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
-                        _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
-                        trackNumber, src));
-                }
-            }
-
-            _api.Library_QueryLookupTable(null, null, null);
-
-            var message = new SocketMessage(Constants.LibrarySearchTitle, tracks);
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         /// <param name="album"></param>
         /// <param name="connectionId"></param>
         public void LibraryGetAlbumTracks(string album, string connectionId)
@@ -1435,26 +1364,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="queue"></param>
-        /// <param name="tag"></param>
-        /// <param name="query"></param>
-        public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
-        {
-            string[] trackList;
-            if (tag == MetaTag.title && queue == QueueType.PlayNow)
-            {
-                trackList = new[] {query};
-            }
-            else
-            {
-                trackList = GetUrlsForTag(tag, query);
-            }
-
-            QueueFiles(queue, trackList, query);
-        }
 
         /// <summary>
         /// Takes a given query string and searches the Now Playing list for any track with a matching title or artist.
@@ -1484,48 +1393,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        public string[] GetUrlsForTag(MetaTag tag, string query)
-        {
-            var filter = string.Empty;
-            string[] tracks = { };
-            switch (tag)
-            {
-                case MetaTag.artist:
-                    filter = XmlFilter(new[] {"ArtistPeople"}, query, true);
-                    break;
-                case MetaTag.album:
-                    filter = XmlFilter(new[] {"Album"}, query, true);
-                    break;
-                case MetaTag.genre:
-                    filter = XmlFilter(new[] {"Genre"}, query, true);
-                    break;
-                case MetaTag.title:
-                    filter = "";
-                    break;
-            }
-
-
-            _api.Library_QueryFilesEx(filter, ref tracks);
-
-            var list = tracks.Select(file => new MetaData
-                {
-                    File = file,
-                    Artist = _api.Library_GetFileTag(file, MetaDataType.Artist),
-                    AlbumArtist = _api.Library_GetFileTag(file, MetaDataType.AlbumArtist),
-                    Album = _api.Library_GetFileTag(file, MetaDataType.Album),
-                    Title = _api.Library_GetFileTag(file, MetaDataType.TrackTitle),
-                    Genre = _api.Library_GetFileTag(file, MetaDataType.Genre),
-                    Year = _api.Library_GetFileTag(file, MetaDataType.Year),
-                    TrackNo = _api.Library_GetFileTag(file, MetaDataType.TrackNo),
-                    Disc = _api.Library_GetFileTag(file, MetaDataType.DiscNo)
-                })
-                .ToList();
-            list.Sort();
-            tracks = list.Select(r => r.File)
-                .ToArray();
-
-            return tracks;
-        }
 
         public void RequestPlay(string connectionId)
         {
@@ -1593,30 +1460,10 @@ namespace MusicBeePlugin
                     Offset = offset,
                     Limit = limit,
                     Total = total
-                }, NewLineTerminated = true
+                },
+                NewLineTerminated = true
             };
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        public bool QueueFiles(QueueType queue, string[] data, string query = "")
-        {
-            switch (queue)
-            {
-                case QueueType.Next:
-                    return _api.NowPlayingList_QueueFilesNext(data);
-                case QueueType.Last:
-                    return _api.NowPlayingList_QueueFilesLast(data);
-                case QueueType.PlayNow:
-                    _api.NowPlayingList_Clear();
-                    _api.NowPlayingList_QueueFilesLast(data);
-                    return _api.NowPlayingList_PlayNow(data[0]);
-                case QueueType.AddAndPlay:
-                    _api.NowPlayingList_Clear();
-                    _api.NowPlayingList_QueueFilesLast(data);
-                    return _api.NowPlayingList_PlayNow(query);
-                default:
-                    return false;
-            }
         }
     }
 }

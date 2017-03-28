@@ -44,7 +44,7 @@ namespace MusicBeeRemoteCore.Remote.Model.Entities
 
         public string Year { get; set; }
 
-        public string TrackNo { get; set; }
+        public int TrackNo { get; set; }
 
         public string Hash { get; set; }
 
@@ -56,7 +56,7 @@ namespace MusicBeeRemoteCore.Remote.Model.Entities
 
         public string AlbumArtist { get; set; }
 
-        public string Disc { get; set; }
+        public int Disc { get; set; }
 
         public int CompareTo(MetaData other)
         {

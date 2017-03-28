@@ -97,8 +97,10 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ApiAdapters\LibraryApiAdapter.cs" />
     <Compile Include="ApiAdapters\OutputApiAdapter.cs" />
     <Compile Include="ApiAdapters\PlayerStateAdapter.cs" />
+    <Compile Include="ApiAdapters\QueueAdapter.cs" />
     <Compile Include="ApiAdapters\TrackApiAdapter.cs" />
     <Compile Include="MusicBeeInterface.cs" />
     <Compile Include="Plugin.cs" />

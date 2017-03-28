@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
+using MusicBeeRemoteCore.Core.Support;
+using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Enumerations;
 using MusicBeeRemoteCore.Remote.Interfaces;
+using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemoteCore.Remote.Networking;
 using NLog;
+using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
@@ -32,6 +37,13 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestLibQueueTrack : ICommand
     {
+        private readonly ISearchQueue _searchQueue;
+
+        public RequestLibQueueTrack(ISearchQueue searchQueue)
+        {
+            _searchQueue = searchQueue;
+        }
+
         public void Execute(IEvent @event)
         {
             string type, query;
@@ -54,12 +66,20 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            Plugin.Instance.RequestQueueFiles(qType, MetaTag.title, query);
+
+            _searchQueue.RequestQueueFiles(qType, MetaTag.title, query);
         }
     }
 
     internal class RequestLibQueueGenre : ICommand
     {
+        private readonly ISearchQueue _searchQueue;
+
+        public RequestLibQueueGenre(ISearchQueue searchQueue)
+        {
+            _searchQueue = searchQueue;
+        }
+
         public void Execute(IEvent @event)
         {
             string type, query;
@@ -82,13 +102,19 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            Plugin.Instance.RequestQueueFiles(qType, MetaTag.genre, query);
+            _searchQueue.RequestQueueFiles(qType, MetaTag.genre, query);
         }
     }
 
     internal class RequestLibQueueArtist : ICommand
     {
+        private readonly ISearchQueue _searchQueue;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+        public RequestLibQueueArtist(ISearchQueue searchQueue)
+        {
+            _searchQueue = searchQueue;
+        }
 
         public void Execute(IEvent @event)
         {
@@ -116,7 +142,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                         break;
                 }
 
-                Plugin.Instance.RequestQueueFiles(qType, MetaTag.artist, query);
+                _searchQueue.RequestQueueFiles(qType, MetaTag.artist, query);
             }
             catch (Exception e)
             {
@@ -127,6 +153,13 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestLibQueueAlbum : ICommand
     {
+        private readonly ISearchQueue _searchQueue;
+
+        public RequestLibQueueAlbum(ISearchQueue searchQueue)
+        {
+            _searchQueue = searchQueue;
+        }
+
         public void Execute(IEvent @event)
         {
             string type, query;
@@ -152,7 +185,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            Plugin.Instance.RequestQueueFiles(qType, MetaTag.album, query);
+            _searchQueue.RequestQueueFiles(qType, MetaTag.album, query);
         }
     }
 
@@ -182,9 +215,20 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestLibSearchTitle : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ISearchApi _searchApi;
+
+        public RequestLibSearchTitle(ITinyMessengerHub hub, ISearchApi searchApi)
+        {
+            _hub = hub;
+            _searchApi = searchApi;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.LibrarySearchTitle(@event.Data.ToString(), @event.ConnectionId);
+            var searchResults = _searchApi.LibrarySearchTitle(@event.DataToString());
+            var message = new SocketMessage(Constants.LibrarySearchTitle, searchResults);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 }

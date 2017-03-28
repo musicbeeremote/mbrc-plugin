@@ -10,17 +10,17 @@
     {
 
         private readonly TrackRepository _repository;
-        private readonly LibraryApiAdapter _apiAdapter;
+        private readonly LibraryDataAdapter _dataAdapter;
 
-        public LibraryScanner(LibraryApiAdapter apiAdapter, TrackRepository repository)
+        public LibraryScanner(LibraryDataAdapter dataAdapter, TrackRepository repository)
         {
-            _apiAdapter = apiAdapter;
+            _dataAdapter = dataAdapter;
             _repository = repository;
         }
 
         public void Start()
         {
-            _repository.AddAll(_apiAdapter.GetTracks());
+            _repository.AddAll(_dataAdapter.GetTracks());
         }
 
         public void Stop()

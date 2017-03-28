@@ -3,7 +3,7 @@
 namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]
-    internal class Album : IEquatable<Album>
+    public class Album : IEquatable<Album>
     {
 
         public Album(string artist, string name)

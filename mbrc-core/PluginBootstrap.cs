@@ -1,4 +1,5 @@
-﻿using MusicBeeRemoteCore.PartyMode.Core;
+﻿using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.PartyMode.Core;
 using MusicBeeRemoteCore.PartyMode.Core.Model;
 using MusicBeeRemoteCore.Remote;
 using MusicBeeRemoteCore.Remote.Controller;
@@ -19,8 +20,8 @@ namespace MusicBeeRemoteCore
         {
             container.Configure(c =>
             {
-                c.For<IApiAdapter>().Use<ApiAdapter>().Singleton();
                 c.For<ILibraryApiAdapter>().Use<LibraryApiAdapter>().Singleton();
+                c.For<ILibraryDataAdapter>().Use<LibraryDataAdapter>().Singleton();
                 c.For<Controller>().Use<Controller>().Singleton();
 
                 c.For<SocketServer>().Use<SocketServer>().Singleton();
