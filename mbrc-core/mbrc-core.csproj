@@ -69,6 +69,13 @@
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
     <Compile Include="Core\Events\InternalEvents.cs" />
+    <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
+    <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
+    <Compile Include="Core\Events\Notifications\NowPlayingListChanged.cs" />
+    <Compile Include="Core\Events\Notifications\PlayStateChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\TrackChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\VolumeLevelChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\VolumeMuteChangedEvent.cs" />
     <Compile Include="Core\IMusicBeeRemote.cs" />
     <Compile Include="Core\Model\PlayerStatus.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
@@ -91,6 +98,7 @@
     <Compile Include="Monitoring\IStateMonitor.cs" />
     <Compile Include="Monitoring\ITrackStateMonitor.cs" />
     <Compile Include="Monitoring\PlayerStateModel.cs" />
+    <Compile Include="Monitoring\PlayerStateMonitor.cs" />
     <Compile Include="Monitoring\TrackStateMonitor.cs" />
     <Compile Include="Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />

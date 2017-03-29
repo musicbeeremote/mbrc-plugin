@@ -4,9 +4,6 @@ using System.Reflection;
 using MusicBeePlugin.ApiAdapters;
 using MusicBeeRemoteCore;
 using MusicBeeRemoteCore.Core;
-using MusicBeeRemoteCore.Remote.Commands;
-using MusicBeeRemoteCore.Remote.Events;
-using MusicBeeRemoteCore.Remote.Model.Entities;
 
 namespace MusicBeePlugin
 {
@@ -73,18 +70,10 @@ namespace MusicBeePlugin
             var remoteBootstrap = new RemoteBootstrap();
             _musicBeeRemote = remoteBootstrap.RegisterDependencies(dependencies);
 
-            _api.MB_AddMenuItem("mnuTools/MusicBee Remote", "Information Panel of the MusicBee Remote",
-                MenuItemClicked);
+            var menuItemDescription = "Information Panel of the MusicBee Remote";
+            _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);
 
             _musicBeeRemote.Start();
-
-
-            _hub.Subscribe<CoverDataReadyEvent>(msg => BroadcastCover(msg.Cover));
-            _hub.Subscribe<LyricsDataReadyEvent>(msg => BroadcastLyrics(msg.Lyrics));
-
-            RequestNowPlayingTrackCover();
-            RequestNowPlayingTrackLyrics();
-
 
             return _about;
         }
@@ -124,29 +113,7 @@ namespace MusicBeePlugin
         /// </summary>
         public void SaveSettings()
         {
-            //UserSettings.SettingsModel = SettingsController.SettingsModel;
-            //UserSettings.SaveSettings("mbremote");
-        }
-
-        public void BroadcastCover(string cover)
-        {
-            var payload = new CoverPayload(cover, false);
-            var broadcastEvent = new BroadcastEvent(Constants.NowPlayingCover);
-            broadcastEvent.AddPayload(Constants.V2, cover);
-            broadcastEvent.AddPayload(Constants.V3, payload);
-            _hub.Publish(new BroadcastEventAvailable(broadcastEvent));
-        }
-
-        public void BroadcastLyrics(string lyrics)
-        {
-            var versionTwoData = !string.IsNullOrEmpty(lyrics) ? lyrics : "Lyrics Not Found";
-
-            var lyricsPayload = new LyricsPayload(lyrics);
-
-            var broadcastEvent = new BroadcastEvent(Constants.NowPlayingLyrics);
-            broadcastEvent.AddPayload(Constants.V2, versionTwoData);
-            broadcastEvent.AddPayload(Constants.V3, lyricsPayload);
-            _hub.Publish(new BroadcastEventAvailable(broadcastEvent));
+            // This method is not used, the plugin has it's own save button
         }
 
         /// <summary>
@@ -161,33 +128,15 @@ namespace MusicBeePlugin
             {
                 case NotificationType.TrackChanged:
                     _musicBeeRemote.NotifyTrackChanged();
-
-                    RequestNowPlayingTrackCover();
-                    RequestTrackRating(string.Empty, string.Empty);
-                    RequestLoveStatus("status", "all");
-                    RequestNowPlayingTrackLyrics();
-                    RequestPlayPosition("status");
-                    var broadcastEvent = new BroadcastEvent(Constants.NowPlayingTrack);
-                    broadcastEvent.AddPayload(Constants.V2, GetTrackInfo());
-                    broadcastEvent.AddPayload(Constants.V3, GetTrackInfoV2());
-                    _hub.Publish(new BroadcastEventAvailable(broadcastEvent));
                     break;
                 case NotificationType.VolumeLevelChanged:
                     _musicBeeRemote.NotifyVolumeLevelChanged();
-
-                    var volume = (int) Math.Round(_api.Player_GetVolume() * 100, 1);
-                    var playerMessage = new SocketMessage(Constants.PlayerVolume, volume);
-                    _hub.Publish(new PluginResponseAvailableEvent(playerMessage));
                     break;
                 case NotificationType.VolumeMuteChanged:
                     _musicBeeRemote.NotifyVolumeMuteChanged();
-                    var muteMessages = new SocketMessage(Constants.PlayerMute, _api.Player_GetMute());
-                    _hub.Publish(new PluginResponseAvailableEvent(muteMessages));
                     break;
                 case NotificationType.PlayStateChanged:
                     _musicBeeRemote.NotifyPlayStateChanged();
-                    var stateMessage = new SocketMessage(Constants.PlayerState, _api.Player_GetPlayState());
-                    _hub.Publish(new PluginResponseAvailableEvent(stateMessage));
                     break;
                 case NotificationType.NowPlayingLyricsReady:
                     _musicBeeRemote.NotifyLyricsReady();
@@ -197,11 +146,8 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.NowPlayingListChanged:
                     _musicBeeRemote.NotifyNowPlayingListChanged();
-                    var playlistChangeMessages = new SocketMessage(Constants.NowPlayingListChanged, true);
-                    _hub.Publish(new PluginResponseAvailableEvent(playlistChangeMessages));
                     break;
             }
         }
-
     }
 }

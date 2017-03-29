@@ -1,4 +1,5 @@
-﻿using MusicBeeRemoteCore.Core.Windows;
+﻿using MusicBeeRemoteCore.Core.Events.Notifications;
+using MusicBeeRemoteCore.Core.Windows;
 using MusicBeeRemoteCore.Remote.Networking;
 using TinyMessenger;
 
@@ -44,37 +45,37 @@ namespace MusicBeeRemoteCore.Core
 
         public void NotifyTrackChanged()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new TrackChangedEvent());
         }
 
         public void NotifyVolumeLevelChanged()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new VolumeLevelChangedEvent());
         }
 
         public void NotifyVolumeMuteChanged()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new VolumeMuteChangedEvent());
         }
 
         public void NotifyPlayStateChanged()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new PlayStateChangedEvent());
         }
 
         public void NotifyLyricsReady()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new LyricsReadyEvent());
         }
 
         public void NotifyArtworkReady()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new ArtworkReadyEvent());
         }
 
         public void NotifyNowPlayingListChanged()
         {
-            throw new System.NotImplementedException();
+            _hub.Publish(new NowPlayingListChanged());
         }
     }
 }
