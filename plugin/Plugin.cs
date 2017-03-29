@@ -1058,42 +1058,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-        public void RequestRadioStations(string connectionId, int offset = 0, int limit = 4000)
-        {
-            var radioStations = new string[] { };
-            var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
-            List<RadioStation> stations;
-            if (success)
-            {
-                stations = radioStations.Select(s => new RadioStation
-                    {
-                        Url = s,
-                        Name = _api.Library_GetFileTag(s, MetaDataType.TrackTitle)
-                    })
-                    .ToList();
-            }
-            else
-            {
-                stations = new List<RadioStation>();
-            }
-
-            var total = stations.Count;
-            var realLimit = offset + limit > total ? total - offset : limit;
-            var message = new SocketMessage
-            {
-                Context = Constants.RadioStations,
-                Data = new Page<RadioStation>
-                {
-                    Data = offset > total ? new List<RadioStation>() : stations.GetRange(offset, realLimit),
-                    Offset = offset,
-                    Limit = limit,
-                    Total = total
-                },
-                NewLineTerminated = true
-            };
-
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
 
 
         /// <summary>
@@ -1124,77 +1088,10 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
-
-        public void RequestPlay(string connectionId)
-        {
-            var state = _api.Player_GetPlayState();
-
-            if (state != PlayState.Playing)
-            {
-                _api.Player_PlayPause();
-            }
-        }
-
-        public void RequestPausePlayback(string connectionId)
-        {
-            var state = _api.Player_GetPlayState();
-
-            if (state == PlayState.Playing)
-            {
-                _api.Player_PlayPause();
-            }
-        }
-
         public void SelectionChanged(bool enabled)
         {
             InitializeLoggingConfiguration(_settings.FullLogPath,
                 enabled ? LogLevel.Debug : LogLevel.Error);
-        }
-
-        /// <summary>
-        /// Gets a Page of playlists from the plugin api and sends it to the connectionId that requested it.
-        /// </summary>
-        /// <param name="connectionId">The id of the connectionId performing the request</param>
-        /// <param name="offset">The starting position (zero based) of the dataset</param>
-        /// <param name="limit">The number of elements in the dataset</param>
-        public void GetAvailablePlaylistUrls(string connectionId, int offset, int limit)
-        {
-            _api.Playlist_QueryPlaylists();
-            var playlists = new List<Playlist>();
-            while (true)
-            {
-                var url = _api.Playlist_QueryGetNextPlaylist();
-
-                if (string.IsNullOrEmpty(url))
-                {
-                    break;
-                }
-
-                var name = _api.Playlist_GetName(url);
-
-                var playlist = new Playlist
-                {
-                    Name = name,
-                    Url = url
-                };
-                playlists.Add(playlist);
-            }
-
-            var total = playlists.Count;
-            var realLimit = offset + limit > total ? total - offset : limit;
-            var message = new SocketMessage
-            {
-                Context = Constants.PlaylistList,
-                Data = new Page<Playlist>
-                {
-                    Data = offset > total ? new List<Playlist>() : playlists.GetRange(offset, realLimit),
-                    Offset = offset,
-                    Limit = limit,
-                    Total = total
-                },
-                NewLineTerminated = true
-            };
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
     }
 }

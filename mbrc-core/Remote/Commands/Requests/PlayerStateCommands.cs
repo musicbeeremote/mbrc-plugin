@@ -106,9 +106,16 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPlay : LimitedCommand
     {
+        private readonly IPlayerStateAdapter _playerStateAdapter;
+
+        public RequestPlay(IPlayerStateAdapter playerStateAdapter)
+        {
+            _playerStateAdapter = playerStateAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPlay(@event.ConnectionId);
+            _playerStateAdapter.Play();
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
@@ -116,9 +123,15 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPause : LimitedCommand
     {
+        private readonly IPlayerStateAdapter _playerStateAdapter;
+        public RequestPause(IPlayerStateAdapter playerStateAdapter)
+        {
+            _playerStateAdapter = playerStateAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPausePlayback(@event.ConnectionId);
+            _playerStateAdapter.Pause();
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;

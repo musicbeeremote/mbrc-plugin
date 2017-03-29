@@ -17,5 +17,9 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         bool StopPlayback();
 
         bool PlayPause();
+
+        bool Play();
+
+        bool Pause();
     }
 }

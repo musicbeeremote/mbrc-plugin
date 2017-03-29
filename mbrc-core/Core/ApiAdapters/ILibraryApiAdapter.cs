@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using MusicBeeRemoteCore.Remote.Entities;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 
 namespace MusicBeeRemoteCore.Core.ApiAdapters
@@ -26,6 +27,10 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         IEnumerable<Album> GetAlbums(string filter = "");
 
         IEnumerable<Artist> GetArtists(string filter = "");
+
+        IEnumerable<RadioStation> GetRadioStations();
+
+        IEnumerable<Playlist> GetPlaylists();
 
         string GetYearForTrack(string currentTrack);
     }

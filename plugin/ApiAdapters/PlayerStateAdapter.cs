@@ -77,5 +77,15 @@ namespace MusicBeePlugin.ApiAdapters
         {
             return _api.Player_PlayPause();
         }
+
+        public bool Play()
+        {
+            return _api.Player_GetPlayState() != PlayState.Playing && _api.Player_PlayPause();
+        }
+
+        public bool Pause()
+        {
+            return _api.Player_GetPlayState() == PlayState.Playing && _api.Player_PlayPause();
+        }
     }
 }

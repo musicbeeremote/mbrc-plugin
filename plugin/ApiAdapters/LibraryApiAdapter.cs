@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote;
+using MusicBeeRemoteCore.Remote.Entities;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using static MusicBeePlugin.Plugin.MetaDataType;
 using Genre = MusicBeeRemoteCore.Remote.Model.Entities.Genre;
@@ -102,6 +103,52 @@ namespace MusicBeePlugin.ApiAdapters
             _api.Library_QueryLookupTable(null, null, null);
 
             return artists;
+        }
+
+        public IEnumerable<RadioStation> GetRadioStations()
+        {
+            var radioStations = new string[] { };
+            var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
+            List<RadioStation> stations;
+            if (success)
+            {
+                stations = radioStations.Select(s => new RadioStation
+                    {
+                        Url = s,
+                        Name = _api.Library_GetFileTag(s, TrackTitle)
+                    })
+                    .ToList();
+            }
+            else
+            {
+                stations = new List<RadioStation>();
+            }
+            return stations;
+        }
+
+        public IEnumerable<Playlist> GetPlaylists()
+        {
+            _api.Playlist_QueryPlaylists();
+            var playlists = new List<Playlist>();
+            while (true)
+            {
+                var url = _api.Playlist_QueryGetNextPlaylist();
+
+                if (string.IsNullOrEmpty(url))
+                {
+                    break;
+                }
+
+                var name = _api.Playlist_GetName(url);
+
+                var playlist = new Playlist
+                {
+                    Name = name,
+                    Url = url
+                };
+                playlists.Add(playlist);
+            }
+            return playlists;
         }
 
         public IEnumerable<Album> GetAlbums(string filter = "")

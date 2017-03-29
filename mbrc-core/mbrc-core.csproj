@@ -59,24 +59,25 @@
   <ItemGroup>
     <Compile Include="CheckboxExtension.cs" />
     <Compile Include="Core\ApiAdapters\ILibraryApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\INowPlayingApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IOutputApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IPlayerStateAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Events\InternalEvents.cs" />
     <Compile Include="Core\Support\FilterHelper.cs" />
     <Compile Include="Core\Support\ISearchApi.cs" />
     <Compile Include="Core\Support\ISearchQueue.cs" />
     <Compile Include="Core\Support\SearchApi.cs" />
     <Compile Include="Core\Support\SearchQueue.cs" />
     <Compile Include="FilteringSelection.cs" />
-    <Compile Include="InfoWindow.cs" />
+    <Compile Include="InfoWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="InfoWindow.Designer.cs" />
     <Compile Include="Logging\IPluginLogManager.cs" />
-    <Compile Include="Logging\PluginLogManager.cs" />
     <Compile Include="Monitoring\IPlayerStateMonitor.cs" />
-    <Compile Include="Monitoring\IStateMonitor.cs" />
     <Compile Include="Monitoring\ITrackStateMonitor.cs" />
-    <Compile Include="Monitoring\PlayerPlayerStateMonitor.cs" />
     <Compile Include="Monitoring\PlayerStateModel.cs" />
     <Compile Include="Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
@@ -110,13 +111,11 @@
     <Compile Include="Remote\Commands\CommandPermissions.cs" />
     <Compile Include="Remote\Commands\CoverPayload.cs" />
     <Compile Include="Remote\Commands\InstaReplies\InstantReplyCommands.cs" />
-    <Compile Include="Remote\Commands\Internal\InternalEvents.cs" />
     <Compile Include="Remote\Commands\LimitedCommand.cs" />
     <Compile Include="Remote\Commands\LyricsPayload.cs" />
     <Compile Include="Remote\Commands\QueuePayload.cs" />
     <Compile Include="Remote\Commands\QueueResponse.cs" />
     <Compile Include="Remote\Commands\Requests\HandeshakeCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\SupportSearchCommands.cs" />
     <Compile Include="Remote\Commands\Requests\LibraryBrowseCommands.cs" />
     <Compile Include="Remote\Commands\Requests\NowPlayingCommands.cs" />
     <Compile Include="Remote\Commands\Requests\OutputCommands.cs" />
@@ -125,12 +124,11 @@
     <Compile Include="Remote\Commands\Requests\PlaylistCommands.cs" />
     <Compile Include="Remote\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="Remote\Commands\Requests\RequestRadioStations.cs" />
+    <Compile Include="Remote\Commands\Requests\SupportSearchCommands.cs" />
     <Compile Include="Remote\configuration.cs" />
     <Compile Include="Remote\Controller\Controller.cs" />
     <Compile Include="Remote\ControlRemoveExtension.cs" />
     <Compile Include="Remote\Core\IRepository.cs" />
-    <Compile Include="Remote\Core\ILibraryDataAdapter.cs" />
-    <Compile Include="Remote\Core\LibraryDataAdapter.cs" />
     <Compile Include="Remote\Core\Monitor\FileAddedEvent.cs" />
     <Compile Include="Remote\Core\Monitor\ILibraryScanner.cs" />
     <Compile Include="Remote\Entities\OutputDevice.cs" />
