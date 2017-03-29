@@ -1,7 +1,7 @@
 ﻿namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]
-    internal class NowPlayingListTrack
+    public class NowPlayingListTrack
     {
         public NowPlayingListTrack(string artist, string title, int position)
         {

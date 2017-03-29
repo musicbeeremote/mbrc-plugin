@@ -17,6 +17,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     {
         private readonly ITinyMessengerHub _hub;
         private readonly INowPlayingApiAdapter _apiAdapter;
+
         public RequestNowPlayingSearch(INowPlayingApiAdapter apiAdapter, ITinyMessengerHub hub)
         {
             _apiAdapter = apiAdapter;
@@ -46,7 +47,8 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             _queueAdapter = queueAdapter;
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback | CommandPermissions.AddTrack;
+        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
+                                                               CommandPermissions.AddTrack;
 
         public override void Execute(IEvent @event)
         {
@@ -57,7 +59,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                 return;
             }
             var queueType = (string) payload["queue"];
-            var data = (JArray)payload["data"];
+            var data = (JArray) payload["data"];
             var play = (string) payload["play"];
 
             if (data == null)
@@ -102,9 +104,27 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestNowPlayingPlay : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
+
+        public RequestNowPlayingPlay(ITinyMessengerHub hub, INowPlayingApiAdapter nowPlayingApiAdapter)
+        {
+            _hub = hub;
+            _nowPlayingApiAdapter = nowPlayingApiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.NowPlayingPlay(@event.DataToString());
+            var result = false;
+
+            int trackIndex;
+            if (int.TryParse(@event.DataToString(), out trackIndex))
+            {
+                result = _nowPlayingApiAdapter.PlayIndex(trackIndex);
+            }
+
+            var message = new SocketMessage(Constants.NowPlayingListPlay, result);
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
@@ -112,13 +132,32 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestNowPlayingTrackRemoval : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
+
+        public RequestNowPlayingTrackRemoval(ITinyMessengerHub hub, INowPlayingApiAdapter nowPlayingApiAdapter)
+        {
+            _hub = hub;
+            _nowPlayingApiAdapter = nowPlayingApiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
+            var success = false;
             int index;
             if (int.TryParse(@event.DataToString(), out index))
             {
-                Plugin.Instance.NowPlayingListRemoveTrack(index, @event.ConnectionId);
+                success = _nowPlayingApiAdapter.RemoveIndex(index);
             }
+
+            var reply = new
+            {
+                success,
+                index
+            };
+
+            var message = new SocketMessage(Constants.NowPlayingListRemove, reply);
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.RemoveTrack;
@@ -127,16 +166,25 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     public class RequestNowplayingPartyQueue : ICommand
     {
         private readonly ITinyMessengerHub _hub;
+        private readonly IQueueAdapter _queueAdapter;
 
-        public RequestNowplayingPartyQueue(ITinyMessengerHub hub)
+        public RequestNowplayingPartyQueue(ITinyMessengerHub hub, IQueueAdapter queueAdapter)
         {
             _hub = hub;
+            _queueAdapter = queueAdapter;
         }
 
         public void Execute(IEvent @event)
         {
-            var payload = @event.Data as JsonObject;
-            var data = payload.Get<List<string>>("data");
+            var payload = @event.Data as JObject;
+            if (payload == null)
+            {
+                const int code = 400;
+                SendResponse(@event.ConnectionId, code);
+                return;
+            }
+
+            var data = (JArray) payload["data"];
 
             if (data == null)
             {
@@ -151,7 +199,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             }
             else
             {
-                var success = Plugin.Instance.QueueFiles(QueueType.Last, data.ToArray());
+                var success = _queueAdapter.QueueFiles(QueueType.Last, data.Select(c => (string) c).ToArray());
                 SendResponse(@event.ConnectionId, success ? 200 : 500);
             }
         }
@@ -174,6 +222,15 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestNowPlayingMoveTrack : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
+
+        public RequestNowPlayingMoveTrack(ITinyMessengerHub hub, INowPlayingApiAdapter nowPlayingApiAdapter)
+        {
+            _hub = hub;
+            _nowPlayingApiAdapter = nowPlayingApiAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
             int from, to;
@@ -183,17 +240,32 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             ((Dictionary<string, string>) @event.Data).TryGetValue("to", out sTo);
             int.TryParse(sFrom, out from);
             int.TryParse(sTo, out to);
-            Plugin.Instance.RequestNowPlayingMove(@event.ConnectionId, from, to);
+
+            var reply = new
+            {
+                success = _nowPlayingApiAdapter.MoveTrack(from, to),
+                from,
+                to
+            };
+
+            var message = new SocketMessage(Constants.NowPlayingListMove, reply);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestNowPlayingList : ICommand
     {
         private readonly Authenticator _auth;
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
 
-        public RequestNowPlayingList(Authenticator auth)
+        public RequestNowPlayingList(Authenticator auth,
+            ITinyMessengerHub hub,
+            INowPlayingApiAdapter nowPlayingApiAdapter)
         {
             _auth = auth;
+            _hub = hub;
+            _nowPlayingApiAdapter = nowPlayingApiAdapter;
         }
 
         public void Execute(IEvent @event)
@@ -204,13 +276,31 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             var data = @event.Data as JObject;
             if (clientProtocol < 2.2 || data == null)
             {
-                Plugin.Instance.RequestNowPlayingList(@event.ConnectionId);
+                var tracks = _nowPlayingApiAdapter.GetTracksLegacy().ToList();
+                var message = new SocketMessage(Constants.NowPlayingList, tracks);
+                _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
             }
             else
             {
                 var offset = (int) data["offset"];
                 var limit = (int) data["limit"];
-                Plugin.Instance.RequestNowPlayingListPage(@event.ConnectionId, offset, limit);
+                var tracks = _nowPlayingApiAdapter.GetTracks(offset, limit).ToList();
+                var total = tracks.Count;
+                var realLimit = offset + limit > total ? total - offset : limit;
+                var message = new SocketMessage
+                {
+                    Context = Constants.NowPlayingList,
+                    Data = new Page<NowPlaying>
+                    {
+                        Data = offset > total ? new List<NowPlaying>() : tracks.GetRange(offset, realLimit),
+                        Offset = offset,
+                        Limit = limit,
+                        Total = total
+                    },
+                    NewLineTerminated = true
+                };
+
+                _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
             }
         }
     }

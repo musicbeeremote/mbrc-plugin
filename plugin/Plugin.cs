@@ -440,92 +440,6 @@ namespace MusicBeePlugin
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public void RequestNowPlayingListPage(string connectionId, int offset = 0, int limit = 4000)
-        {
-            _api.NowPlayingList_QueryFiles(null);
-
-            var tracks = new List<NowPlaying>();
-            var position = 1;
-            while (true)
-            {
-                var trackPath = _api.NowPlayingList_QueryGetNextFile();
-                if (string.IsNullOrEmpty(trackPath))
-                    break;
-
-                var artist = _api.Library_GetFileTag(trackPath, MetaDataType.Artist);
-                var title = _api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
-
-                if (string.IsNullOrEmpty(title))
-                {
-                    var index = trackPath.LastIndexOf('\\');
-                    title = trackPath.Substring(index + 1);
-                }
-
-                var track = new NowPlaying
-                {
-                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
-                    Title = title,
-                    Position = position,
-                    Path = trackPath
-                };
-
-                tracks.Add(track);
-                position++;
-            }
-
-            var total = tracks.Count;
-            var realLimit = offset + limit > total ? total - offset : limit;
-            var message = new SocketMessage
-            {
-                Context = Constants.NowPlayingList,
-                Data = new Page<NowPlaying>
-                {
-                    Data = offset > total ? new List<NowPlaying>() : tracks.GetRange(offset, realLimit),
-                    Offset = offset,
-                    Limit = limit,
-                    Total = total
-                },
-                NewLineTerminated = true
-            };
-
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-        public void RequestNowPlayingList(string connectionId)
-        {
-            _api.NowPlayingList_QueryFiles(null);
-
-            var trackList = new List<NowPlayingListTrack>();
-            var position = 1;
-            while (position <= 5000)
-            {
-                var trackPath = _api.NowPlayingList_QueryGetNextFile();
-                if (string.IsNullOrEmpty(trackPath))
-                    break;
-
-                var artist = _api.Library_GetFileTag(trackPath, MetaDataType.Artist);
-                var title = _api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
-
-                if (string.IsNullOrEmpty(title))
-                {
-                    var index = trackPath.LastIndexOf('\\');
-                    title = trackPath.Substring(index + 1);
-                }
-
-                var track = new NowPlayingListTrack
-                {
-                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
-                    Title = title,
-                    Position = position,
-                    Path = trackPath
-                };
-                trackList.Add(track);
-                position++;
-            }
-
-            var message = new SocketMessage(Constants.NowPlayingList, trackList);
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
 
         /// <summary>
         /// If the given rating string is not null or empty and the value of the string is a float number in the [0,5]
@@ -612,50 +526,6 @@ namespace MusicBeePlugin
             }
 
             _hub.Publish(new CoverAvailable(cover));
-        }
-
-        /// <summary>
-        /// Searches in the Now playing list for the track specified and plays it.
-        /// </summary>
-        /// <param name="index">The track to play</param>
-        /// <returns></returns>
-        public void NowPlayingPlay(string index)
-        {
-            var result = false;
-            int trackIndex;
-            if (int.TryParse(index, out trackIndex))
-            {
-                _api.NowPlayingList_QueryFiles(null);
-                var trackToPlay = string.Empty;
-                var lTrackIndex = 0;
-                while (trackIndex != lTrackIndex)
-                {
-                    trackToPlay = _api.NowPlayingList_QueryGetNextFile();
-                    lTrackIndex++;
-                }
-                if (!string.IsNullOrEmpty(trackToPlay))
-                    result = _api.NowPlayingList_PlayNow(trackToPlay);
-            }
-
-            var message = new SocketMessage(Constants.NowPlayingListPlay, result);
-            _hub.Publish(new PluginResponseAvailableEvent(message));
-        }
-
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="index"></param>
-        /// <param name="connectionId"></param>
-        public void NowPlayingListRemoveTrack(int index, string connectionId)
-        {
-            var reply = new
-            {
-                success = _api.NowPlayingList_RemoveAt(index),
-                index
-            };
-
-            var message = new SocketMessage(Constants.NowPlayingListRemove, reply);
-            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         /// <summary>
@@ -785,37 +655,6 @@ namespace MusicBeePlugin
                 ? new SocketMessage(Constants.NowPlayingTrack, GetTrackInfoV2())
                 : new SocketMessage(Constants.NowPlayingTrack, GetTrackInfo());
 
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-
-        /// <summary>
-        /// Moves a track of the now playing list to a new position.
-        /// </summary>
-        /// <param name="connectionId">The Id of the connectionId that initiated the request</param>
-        /// <param name="from">The initial position</param>
-        /// <param name="to">The final position</param>
-        public void RequestNowPlayingMove(string connectionId, int from, int to)
-        {
-            int[] aFrom = {from};
-            int dIn;
-            if (from > to)
-            {
-                dIn = to - 1;
-            }
-            else
-            {
-                dIn = to;
-            }
-            var result = _api.NowPlayingList_MoveFiles(aFrom, dIn);
-
-            var reply = new
-            {
-                success = result,
-                from,
-                to
-            };
-            var message = new SocketMessage(Constants.NowPlayingListMove, reply);
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 
