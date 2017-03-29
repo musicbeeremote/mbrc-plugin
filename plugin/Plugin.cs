@@ -775,67 +775,6 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        /// The function checks the MusicBee api and gets all the available playlist urls.
-        /// </summary>
-        /// <param name="connectionId"></param>
-        public void GetAvailablePlaylistUrls(string connectionId)
-        {
-            _api.Playlist_QueryPlaylists();
-            var playlists = new List<Playlist>();
-            while (true)
-            {
-                var url = _api.Playlist_QueryGetNextPlaylist();
-
-                if (string.IsNullOrEmpty(url))
-                {
-                    break;
-                }
-
-                var name = _api.Playlist_GetName(url);
-
-                var playlist = new Playlist
-                {
-                    Name = name,
-                    Url = url
-                };
-                playlists.Add(playlist);
-            }
-
-            var message = new SocketMessage(Constants.PlaylistList, playlists) {NewLineTerminated = true};
-            _hub.Publish(new PluginResponseAvailableEvent(message));
-        }
-
-        public void PlayPlaylist(string connectionId, string url)
-        {
-            var success = _api.Playlist_PlayNow(url);
-            var message = new SocketMessage(Constants.PlaylistPlay, success);
-            _hub.Publish(new PluginResponseAvailableEvent(message));
-        }
-
-        /// <summary>
-        ///
-        /// </summary>ea
-        /// <param name="connectionId"></param>
-        public void RequestPlayerStatus(string connectionId)
-        {
-            var status = new Dictionary<string, object>
-            {
-                [Constants.PlayerRepeat] = _api.Player_GetRepeat().ToString(),
-                [Constants.PlayerMute] = _api.Player_GetMute(),
-                [Constants.PlayerShuffle] = _auth.ClientProtocolMisMatch(connectionId)
-                    ? (object) _api.Player_GetShuffle()
-                    : GetShuffleState(),
-                [Constants.PlayerScrobble] = _api.Player_GetScrobbleEnabled(),
-                [Constants.PlayerState] = _api.Player_GetPlayState().ToString(),
-                [Constants.PlayerVolume] = ((int) Math.Round(_api.Player_GetVolume() * 100, 1)).ToString(
-                    CultureInfo.InvariantCulture)
-            };
-
-            var message = new SocketMessage(Constants.PlayerStatus, status);
-            _hub.Publish(new PluginResponseAvailableEvent(message));
-        }
-
-        /// <summary>
         ///
         /// </summary>
         /// <param name="connectionId"></param>
@@ -1055,36 +994,6 @@ namespace MusicBeePlugin
                 NewLineTerminated = true
             };
             _logger.Debug(DateTime.Now + "sending data");
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
-
-
-
-        /// <summary>
-        /// Takes a given query string and searches the Now Playing list for any track with a matching title or artist.
-        /// The title is checked first.
-        /// </summary>
-        /// <param name="query">The string representing the query</param>
-        /// <param name="connectionId">Connection</param>
-        public void NowPlayingSearch(string query, string connectionId)
-        {
-            var result = false;
-            _api.NowPlayingList_QueryFiles(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false));
-
-            while (true)
-            {
-                var currentTrack = _api.NowPlayingList_QueryGetNextFile();
-                if (string.IsNullOrEmpty(currentTrack)) break;
-                var artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist);
-                var title = _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle);
-
-                if (title.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0 &&
-                    artist.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                result = _api.NowPlayingList_PlayNow(currentTrack);
-                break;
-            }
-
-            var message = new SocketMessage(Constants.NowPlayingListSearch, result);
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
 

@@ -5,6 +5,7 @@ using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Events;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Utilities;
+using Newtonsoft.Json.Linq;
 using NLog;
 using TinyMessenger;
 
@@ -45,7 +46,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
                             .Split(new[] {"\r\n"},
                                 StringSplitOptions.RemoveEmptyEntries)
                         where !msg.Equals("\n")
-                        select new SocketMessage(JsonObject.Parse(msg)));
+                        select new SocketMessage(JObject.Parse(msg)));
                 }
                 catch (Exception ex)
                 {
@@ -75,12 +76,12 @@ namespace MusicBeeRemoteCore.Remote.Networking
                         return;
                     }
 
-                    if (msg.Context == Constants.Protocol && msg.Data is JsonObject)
+                    if (msg.Context == Constants.Protocol && msg.Data is JObject)
                     {
-                        var data = (JsonObject) msg.Data;
-                        connection.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
-                        connection.ClientProtocolVersion = data.Get<int>("protocol_version");
-                        connection.ClientId = data.Get<string>("client_id");
+                        var data = (JObject) msg.Data;
+                        connection.BroadcastsEnabled = !(bool) data["no_broadcast"];
+                        connection.ClientProtocolVersion = (int) data["protocol_version"];
+                        connection.ClientId = (string) data["client_id"];
 
                         if (string.IsNullOrEmpty(connection.ClientId))
                         {

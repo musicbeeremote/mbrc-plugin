@@ -178,6 +178,11 @@ namespace MusicBeePlugin.ApiAdapters
             return _api.Library_GetFileTag(currentTrack, Year);
         }
 
+        public bool PlayPlaylist(string url)
+        {
+            return _api.Playlist_PlayNow(url);
+        }
+
         private static Album CreateAlbum(string queryResult)
         {
             var albumInfo = queryResult.Split('\0');

@@ -12,9 +12,20 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
     internal class RequestPlaylistPlay : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ILibraryApiAdapter _libraryApiAdapter;
+
+        public RequestPlaylistPlay(ITinyMessengerHub hub, ILibraryApiAdapter libraryApiAdapter)
+        {
+            _hub = hub;
+            _libraryApiAdapter = libraryApiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.PlayPlaylist(@event.ConnectionId, @event.DataToString());
+            var success = _libraryApiAdapter.PlayPlaylist(@event.DataToString());
+            var message = new SocketMessage(Constants.PlaylistPlay, success);
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack;

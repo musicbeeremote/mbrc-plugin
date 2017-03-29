@@ -1,5 +1,6 @@
 ﻿using System;
 using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.Core.Model;
 using MusicBeeRemoteCore.Remote.Enumerations;
 using static MusicBeePlugin.Plugin;
 
@@ -86,6 +87,30 @@ namespace MusicBeePlugin.ApiAdapters
         public bool Pause()
         {
             return _api.Player_GetPlayState() == PlayState.Playing && _api.Player_PlayPause();
+        }
+
+        public PlayerStatus GetStatus()
+        {
+            throw new NotImplementedException();
+        }
+
+        public PlayerState GetState()
+        {
+            switch (_api.Player_GetPlayState())
+            {
+                case PlayState.Undefined:
+                    return PlayerState.Undefined;
+                case PlayState.Loading:
+                    return PlayerState.Loading;
+                case PlayState.Playing:
+                    return PlayerState.Playing;
+                case PlayState.Paused:
+                    return PlayerState.Paused;
+                case PlayState.Stopped:
+                    return PlayerState.Paused;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
     }
 }

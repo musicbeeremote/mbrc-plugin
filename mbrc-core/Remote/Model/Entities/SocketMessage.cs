@@ -1,4 +1,9 @@
-﻿namespace MusicBeeRemoteCore.Remote.Model.Entities
+﻿using System.Linq;
+using System.Runtime.Serialization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]
     public class SocketMessage
@@ -9,11 +14,11 @@
             Data = data;
         }
 
-        public SocketMessage(JsonObject jsonObject)
+        public SocketMessage(JObject jsonObject)
         {
-            Context = jsonObject.Get("context");
+            Context = (string) jsonObject["context"];
 
-            var messageData = jsonObject.Get("data");
+            var messageData = jsonObject["data"];
             if (messageData == null)
             {
                 Data = "";
@@ -22,7 +27,7 @@
             {
                 if (messageData.Contains("{") && messageData.Contains("}"))
                 {
-                    Data = jsonObject.Object("data");
+                    Data = jsonObject["data"];
                 }
                 else
                 {
@@ -33,7 +38,6 @@
 
         public SocketMessage()
         {
-
         }
 
         [DataMember(Name = "context")]
@@ -47,12 +51,12 @@
 
         public string ToJsonString()
         {
-            return JsonSerializer.SerializeToString(this);
+            return JsonConvert.SerializeObject(this);
         }
 
         public override string ToString()
         {
-            return JsonSerializer.SerializeToString(this);
+            return JsonConvert.SerializeObject(this);
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using MusicBeeRemoteCore.Remote.Enumerations;
+﻿using MusicBeeRemoteCore.Core.Model;
+using MusicBeeRemoteCore.Remote.Enumerations;
 
 namespace MusicBeeRemoteCore.Core.ApiAdapters
 {
@@ -21,5 +22,9 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         bool Play();
 
         bool Pause();
+
+        PlayerStatus GetStatus();
+
+        PlayerState GetState();
     }
 }

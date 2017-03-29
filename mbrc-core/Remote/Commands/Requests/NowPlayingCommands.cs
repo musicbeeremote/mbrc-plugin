@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Enumerations;
@@ -6,15 +7,27 @@ using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;
 using MusicBeeRemoteCore.Remote.Utilities;
+using Newtonsoft.Json.Linq;
+using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
     internal class RequestNowPlayingSearch : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _apiAdapter;
+        public RequestNowPlayingSearch(INowPlayingApiAdapter apiAdapter, ITinyMessengerHub hub)
+        {
+            _apiAdapter = apiAdapter;
+            _hub = hub;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.NowPlayingSearch(@event.DataToString(), @event.ConnectionId);
+            var result = _apiAdapter.PlayMatchingTrack(@event.DataToString());
+            var message = new SocketMessage(Constants.NowPlayingListSearch, result);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
@@ -22,6 +35,8 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     public class RequestNowplayingQueue : LimitedCommand
     {
+        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
         private readonly ITinyMessengerHub _hub;
         private readonly IQueueAdapter _queueAdapter;
 
@@ -35,10 +50,15 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var payload = @event.Data as JsonObject;
-            var queueType = payload.Get<string>("queue");
-            var data = payload.Get<List<string>>("data");
-            var play = payload.Get<string>("play");
+            var payload = @event.Data as JObject;
+            if (payload == null)
+            {
+                Logger.Debug("there was no payload in the request");
+                return;
+            }
+            var queueType = (string) payload["queue"];
+            var data = (JArray)payload["data"];
+            var play = (string) payload["play"];
 
             if (data == null)
             {
@@ -60,7 +80,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
                 queue = QueueType.AddAndPlay;
             }
 
-            var success = _queueAdapter.QueueFiles(queue, data.ToArray(), play);
+            var success = _queueAdapter.QueueFiles(queue, data.Select(c => (string) c).ToArray(), play);
 
             SendResponse(@event.ConnectionId, success ? 200 : 500);
         }
@@ -181,15 +201,15 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
             var socketClient = _auth.GetConnection(@event.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
-            var data = @event.Data as JsonObject;
+            var data = @event.Data as JObject;
             if (clientProtocol < 2.2 || data == null)
             {
                 Plugin.Instance.RequestNowPlayingList(@event.ConnectionId);
             }
             else
             {
-                var offset = data.Get<int>("offset");
-                var limit = data.Get<int>("limit");
+                var offset = (int) data["offset"];
+                var limit = (int) data["limit"];
                 Plugin.Instance.RequestNowPlayingListPage(@event.ConnectionId, offset, limit);
             }
         }

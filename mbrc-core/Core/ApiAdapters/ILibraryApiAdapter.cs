@@ -33,5 +33,7 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         IEnumerable<Playlist> GetPlaylists();
 
         string GetYearForTrack(string currentTrack);
+
+        bool PlayPlaylist(string url);
     }
 }

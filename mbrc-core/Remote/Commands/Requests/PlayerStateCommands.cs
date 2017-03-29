@@ -10,9 +10,19 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
     internal class RequestPlayerStatus : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerStateAdapter _stateAdapter;
+
+        public RequestPlayerStatus(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        {
+            _hub = hub;
+            _stateAdapter = stateAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestPlayerStatus(@event.ConnectionId);
+            var statusMessage = new SocketMessage(Constants.PlayerStatus, _stateAdapter.GetStatus());
+            _hub.Publish(new PluginResponseAvailableEvent(statusMessage, @event.ConnectionId));
         }
     }
 

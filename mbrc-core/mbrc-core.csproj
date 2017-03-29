@@ -33,6 +33,9 @@
     <Reference Include="LiteDB, Version=3.1.0.0, Culture=neutral, PublicKeyToken=4ee40123013c9f27">
       <HintPath>..\packages\LiteDB.3.1.0\lib\net35\LiteDB.dll</HintPath>
     </Reference>
+    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed">
+      <HintPath>..\packages\Newtonsoft.Json.10.0.1\lib\net40\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c">
       <HintPath>..\packages\NLog.4.4.4\lib\net40\NLog.dll</HintPath>
     </Reference>
@@ -65,6 +68,7 @@
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
     <Compile Include="Core\Events\InternalEvents.cs" />
+    <Compile Include="Core\Model\PlayerStatus.cs" />
     <Compile Include="Core\Support\FilterHelper.cs" />
     <Compile Include="Core\Support\ISearchApi.cs" />
     <Compile Include="Core\Support\ISearchQueue.cs" />

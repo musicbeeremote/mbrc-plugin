@@ -1,9 +1,13 @@
 ﻿using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using NLog;
+using Encoder = System.Text.Encoder;
 
 namespace MusicBeeRemoteCore.Remote.Utilities
 {

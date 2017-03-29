@@ -1,4 +1,5 @@
 using System;
+using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model;
@@ -40,12 +41,14 @@ namespace MusicBeeRemoteCore.Remote.Commands.InstaReplies
     {
         private readonly LyricCoverModel _model;
         private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerStateAdapter _stateAdapter;
         private readonly Authenticator _auth;
 
-        public ProcessInitRequest(LyricCoverModel model, ITinyMessengerHub hub)
+        public ProcessInitRequest(LyricCoverModel model, ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
         {
             _model = model;
             _hub = hub;
+            _stateAdapter = stateAdapter;
         }
 
         public void Execute(IEvent @event)
@@ -53,7 +56,10 @@ namespace MusicBeeRemoteCore.Remote.Commands.InstaReplies
             Plugin.Instance.RequestTrackInfo(@event.ConnectionId);
             Plugin.Instance.RequestTrackRating("-1", @event.ConnectionId);
             Plugin.Instance.RequestLoveStatus(@event.DataToString(), @event.ConnectionId);
-            Plugin.Instance.RequestPlayerStatus(@event.ConnectionId);
+
+            var statusMessage = new SocketMessage(Constants.PlayerStatus, _stateAdapter.GetStatus());
+            _hub.Publish(new PluginResponseAvailableEvent(statusMessage, @event.ConnectionId));
+
             var clientProtocol = _auth.ClientProtocolVersion(@event.ConnectionId);
 
             if (clientProtocol >= Constants.V3)
