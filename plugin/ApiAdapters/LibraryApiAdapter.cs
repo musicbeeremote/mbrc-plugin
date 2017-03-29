@@ -65,6 +65,24 @@ namespace MusicBeePlugin.ApiAdapters
             return files;
         }
 
+        public IEnumerable<Track> GetTracks()
+        {
+            string[] files = { };
+            _api.Library_QueryFilesEx(null, ref files);
+
+            return files.Select(currentTrack => new Track
+            {
+                Artist = GetArtistForTrack(currentTrack),
+                Title = GetTitleForTrack(currentTrack),
+                Album = GetAlbumForTrack(currentTrack),
+                AlbumArtist = GetAlbumArtistForTrack(currentTrack),
+                Genre = GetGenreForTrack(currentTrack),
+                Disc = GetDiskNumber(currentTrack),
+                Trackno = GetTrackNumber(currentTrack),
+                Src = currentTrack
+            });
+        }
+
         public IEnumerable<Genre> GetGenres(string filter)
         {
             IEnumerable<Genre> genres = new List<Genre>();

@@ -22,6 +22,8 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
 
         string[] QueryFiles(string filter = "");
 
+        IEnumerable<Track> GetTracks();
+
         IEnumerable<Genre> GetGenres(string filter = "");
 
         IEnumerable<Album> GetAlbums(string filter = "");
