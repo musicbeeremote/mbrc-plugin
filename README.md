@@ -5,9 +5,16 @@ About
 -------
 This is a plugin for [MusicBee](http://getmusicbee.com/) that is required for [MusicBee Remote](https://github.com/kelsos/mbrc) android application to function. The plugin acts as a socket server (TCP) that listens for incoming connections. The plugin implements a JSON based protocol functionality that is translated to calls to the MusicBee API.
 
+This project is a split from the main repository as the development branch is now a completely different project.
+Since the legacy (v1.x) plugin will receive some updates I am working on some major refactoring in order to be able to properly support
+any new features before migrating to the v2.0 code base.
+
+As soon as I find a way to embed resources I will be migrating to Visual Studio 2017. 
+
 Building
 -------
-To build the plugin you have to open it with Visual Studio 2012. After opening the project you will probably have to restore the required packages with NuGet.
+To build the plugin you have to open it with Visual Studio 2015. 
+After opening the project you will probably have to restore the required packages with NuGet.
 
 Protocol
 -------
@@ -17,9 +24,9 @@ Thirdparty dependencies
 -------
 
 
-*   [ServiceStack.Text](https://github.com/ServiceStack/ServiceStack.Text)
+*   [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json)
     
-    [GNU Affero General Public License v3](http://www.gnu.org/licenses/agpl-3.0.html)
+    [MIT](https://github.com/JamesNK/Newtonsoft.Json/blob/master/LICENSE.md)
 
 *   [NLog](https://github.com/NLog/NLog)
 
