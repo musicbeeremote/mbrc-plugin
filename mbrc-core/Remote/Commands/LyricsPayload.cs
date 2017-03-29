@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemoteCore.Remote.Commands
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeeRemoteCore.Remote.Commands
 {
     [DataContract]
     public class LyricsPayload

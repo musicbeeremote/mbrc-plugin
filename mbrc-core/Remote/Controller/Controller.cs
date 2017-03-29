@@ -11,7 +11,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Controller
 {
-    internal class Controller
+    public class Controller
     {
         private readonly Dictionary<string, ICommand> _commandMap;
         private readonly ITinyMessengerHub _hub;

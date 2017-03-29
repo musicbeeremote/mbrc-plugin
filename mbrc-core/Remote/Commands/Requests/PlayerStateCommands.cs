@@ -1,5 +1,6 @@
 using MusicBeeRemoteCore.Core.ApiAdapters;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
+using MusicBeeRemoteCore.Remote.Enumerations;
 using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;
@@ -11,17 +12,17 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestPlayerStatus : ICommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPlayerStatus(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        public RequestPlayerStatus(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
-            _stateAdapter = stateAdapter;
+            _apiAdapter = apiAdapter;
         }
 
         public void Execute(IEvent @event)
         {
-            var statusMessage = new SocketMessage(Constants.PlayerStatus, _stateAdapter.GetStatus());
+            var statusMessage = new SocketMessage(Constants.PlayerStatus, _apiAdapter.GetStatus());
             _hub.Publish(new PluginResponseAvailableEvent(statusMessage, @event.ConnectionId));
         }
     }
@@ -29,17 +30,17 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestPreviousTrack : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPreviousTrack(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        public RequestPreviousTrack(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
-            _stateAdapter = stateAdapter;
+            _apiAdapter = apiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PlayerPrevious, _stateAdapter.PlayPrevious());
+            var message = new SocketMessage(Constants.PlayerPrevious, _apiAdapter.PlayPrevious());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
@@ -48,18 +49,18 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestNextTrack : LimitedCommand
     {
-        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
         private readonly ITinyMessengerHub _hub;
 
-        public RequestNextTrack(IPlayerStateAdapter stateAdapter, ITinyMessengerHub hub)
+        public RequestNextTrack(IPlayerApiAdapter apiAdapter, ITinyMessengerHub hub)
         {
-            _stateAdapter = stateAdapter;
+            _apiAdapter = apiAdapter;
             _hub = hub;
         }
 
         public override void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PlayerNext, _stateAdapter.PlayNext());
+            var message = new SocketMessage(Constants.PlayerNext, _apiAdapter.PlayNext());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
@@ -68,9 +69,24 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestRepeat : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
+
+        public RequestRepeat(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestRepeatState(@event.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
+            if (@event.Data.Equals("toggle"))
+            {
+                _apiAdapter.ToggleRepeatMode();
+            }
+
+            var message = new SocketMessage(Constants.PlayerRepeat, _apiAdapter.GetRepeatMode());
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.ChangeRepeat;
@@ -78,37 +94,59 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestScrobble : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
+
+        public RequestScrobble(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestScrobblerState(@event.Data.Equals("toggle")
-                ? StateAction.Toggle
-                : StateAction.State);
+            if (@event.Data.Equals("toggle"))
+            {
+                _apiAdapter.ToggleScrobbling();
+            }
+            var message = new SocketMessage(Constants.PlayerScrobble, _apiAdapter.ScrobblingEnabled());
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
     }
 
     internal class RequestShuffle : LimitedCommand
     {
         private readonly Authenticator _auth;
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestShuffle(Authenticator auth)
+        public RequestShuffle(Authenticator auth, ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _auth = auth;
+            _hub = hub;
+            _apiAdapter = apiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            var stateAction = @event.Data.Equals("toggle")
-                ? StateAction.Toggle
-                : StateAction.State;
+            var isToggle = @event.Data.Equals("toggle");
 
+            SocketMessage message;
             if (_auth.ClientProtocolMisMatch(@event.ConnectionId))
             {
-                Plugin.Instance.RequestShuffleState(stateAction);
+                if (isToggle)
+                {
+                    _apiAdapter.ToggleShuffleLegacy();
+                }
+                message = new SocketMessage(Constants.PlayerShuffle, _apiAdapter.GetShuffleLegacy());
             }
             else
             {
-                Plugin.Instance.RequestAutoDjShuffleState(stateAction);
+                var shuffleState = isToggle ? _apiAdapter.SwitchShuffle() : _apiAdapter.GetShuffleState();
+                message = new SocketMessage(Constants.PlayerShuffle, shuffleState);
             }
+
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
@@ -116,16 +154,16 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPlay : LimitedCommand
     {
-        private readonly IPlayerStateAdapter _playerStateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPlay(IPlayerStateAdapter playerStateAdapter)
+        public RequestPlay(IPlayerApiAdapter playerApiAdapter)
         {
-            _playerStateAdapter = playerStateAdapter;
+            _apiAdapter = playerApiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            _playerStateAdapter.Play();
+            _apiAdapter.Play();
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
@@ -133,15 +171,15 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestPause : LimitedCommand
     {
-        private readonly IPlayerStateAdapter _playerStateAdapter;
-        public RequestPause(IPlayerStateAdapter playerStateAdapter)
+        private readonly IPlayerApiAdapter _apiAdapter;
+        public RequestPause(IPlayerApiAdapter playerApiAdapter)
         {
-            _playerStateAdapter = playerStateAdapter;
+            _apiAdapter = playerApiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            _playerStateAdapter.Pause();
+            _apiAdapter.Pause();
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
@@ -150,17 +188,17 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestPlayPause : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPlayPause(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        public RequestPlayPause(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
-            _stateAdapter = stateAdapter;
+            _apiAdapter = apiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PlayerPause, _stateAdapter.PlayPause());
+            var message = new SocketMessage(Constants.PlayerPause, _apiAdapter.PlayPause());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
@@ -171,17 +209,17 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestStop : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly IPlayerStateAdapter _stateAdapter;
+        private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestStop(ITinyMessengerHub hub, IPlayerStateAdapter stateAdapter)
+        public RequestStop(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
-            _stateAdapter = stateAdapter;
+            _apiAdapter = apiAdapter;
         }
 
         public override void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PlayerStop, _stateAdapter.StopPlayback());
+            var message = new SocketMessage(Constants.PlayerStop, _apiAdapter.StopPlayback());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
@@ -190,12 +228,24 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestVolume : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
+
+        public RequestVolume(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            int iVolume;
-            if (!int.TryParse(@event.DataToString(), out iVolume)) return;
+            int newVolume;
+            if (!int.TryParse(@event.DataToString(), out newVolume)) return;
 
-            Plugin.Instance.RequestVolumeChange(iVolume);
+            _apiAdapter.SetVolume(newVolume);
+
+            var message = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.ChangeVolume;
@@ -203,9 +253,26 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestMute : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
+
+        public RequestMute(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestMuteState(@event.Data.Equals("toggle") ? StateAction.Toggle : StateAction.State);
+            var isToggle = @event.Data.Equals("toggle");
+
+            if (isToggle)
+            {
+                _apiAdapter.ToggleMute();
+            }
+
+            var message = new SocketMessage(Constants.PlayerMute, _apiAdapter.IsMuted());
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.CanMute;
@@ -213,10 +280,27 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestAutoDj : LimitedCommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly IPlayerApiAdapter _apiAdapter;
+
+        public RequestAutoDj(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public override void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestAutoDjState(
-                (string) @event.Data == "toggle" ? StateAction.Toggle : StateAction.State);
+            var isToggle = @event.Data.Equals("toggle");
+
+            if (isToggle)
+            {
+                _apiAdapter.ToggleAutoDjLegacy();
+            }
+
+            var message = new SocketMessage(Constants.PlayerAutoDj, _apiAdapter.IsAutoDjEnabledLegacy());
+            _hub.Publish(new PluginResponseAvailableEvent(message));
+
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;

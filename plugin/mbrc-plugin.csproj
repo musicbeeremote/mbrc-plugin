@@ -97,10 +97,11 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ApiAdapters\INowPlayingApiAdapter.cs" />
+    <Compile Include="ApiAdapters\InvokeHandler.cs" />
+    <Compile Include="ApiAdapters\NowPlayingApiAdapter.cs" />
     <Compile Include="ApiAdapters\LibraryApiAdapter.cs" />
     <Compile Include="ApiAdapters\OutputApiAdapter.cs" />
-    <Compile Include="ApiAdapters\PlayerStateAdapter.cs" />
+    <Compile Include="ApiAdapters\PlayerApiAdapter.cs" />
     <Compile Include="ApiAdapters\QueueAdapter.cs" />
     <Compile Include="ApiAdapters\TrackApiAdapter.cs" />
     <Compile Include="MusicBeeInterface.cs" />

@@ -7,6 +7,8 @@ namespace MusicBeeRemoteCore.Logging
 {
     class PluginLogManager : IPluginLogManager
     {
+
+        //todo Work on bootstrapping the logger (work on new switching mechanism)
         private readonly IStorageLocationProvider _storageLocationProvider;
 
         public PluginLogManager(IStorageLocationProvider storageLocationProvider)

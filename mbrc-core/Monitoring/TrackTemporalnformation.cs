@@ -1,9 +1,14 @@
-﻿namespace MusicBeeRemoteCore.Monitoring
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeeRemoteCore.Monitoring
 {
-    //todo make serializable
+    [DataContract]
     public class TrackTemporalnformation
     {
+        [DataMember(Name = "position")]
         public int Position { get; }
+
+        [DataMember(Name = "duration")]
         public int Duration { get; }
 
         public TrackTemporalnformation(int position, int duration)

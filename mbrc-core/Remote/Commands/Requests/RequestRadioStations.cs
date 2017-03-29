@@ -6,6 +6,7 @@ using MusicBeeRemoteCore.Remote.Entities;
 using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;
+using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
@@ -23,11 +24,11 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var data = @event.Data as JsonObject;
+            var data = @event.Data as JObject;
             if (data != null)
             {
-                var offset = data.Get<int>("offset");
-                var limit = data.Get<int>("limit");
+                var offset = (int) data["offset"];
+                var limit = (int) data["limit"];
                 GetPage(@event.ConnectionId, offset, limit);
             }
             else

@@ -9,7 +9,7 @@ using NLog;
 
 namespace MusicBeeRemoteCore.Remote.Networking
 {
-    internal class ServiceDiscovery
+    public class ServiceDiscovery
     {
         private readonly UserSettings _settings;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -130,6 +130,11 @@ namespace MusicBeeRemoteCore.Remote.Networking
                 break;
             }
             return interfaceAddress;
+        }
+
+        public void Stop()
+        {
+            throw new NotImplementedException();
         }
     }
 }

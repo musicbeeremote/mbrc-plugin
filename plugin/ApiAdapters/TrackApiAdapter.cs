@@ -24,5 +24,30 @@ namespace MusicBeePlugin.ApiAdapters
         {
             return _api.Player_SetPosition(position);
         }
-    }
+
+        public string GetLyrics()
+        {
+            var embeddedLyrics = _api.NowPlaying_GetLyrics();
+            if (!string.IsNullOrEmpty(embeddedLyrics))
+            {
+                return embeddedLyrics;
+            }
+
+            return _api.ApiRevision >= 17 ? _api.NowPlaying_GetDownloadedLyrics() : string.Empty;
+        }
+
+        public string GetCover()
+        {
+            var embeddedArtwork = _api.NowPlaying_GetArtwork();
+
+            if (!string.IsNullOrEmpty(embeddedArtwork))
+            {
+                return embeddedArtwork;
+            }
+
+            if (_api.ApiRevision < 17) return string.Empty;
+
+            var apiData = _api.NowPlaying_GetDownloadedArtwork();
+            return !string.IsNullOrEmpty(apiData) ? apiData : string.Empty;
+        }
 }

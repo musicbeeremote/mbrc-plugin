@@ -1,6 +1,6 @@
 ﻿namespace MusicBeeRemoteCore.Remote.Enumerations
 {
-    enum LastfmStatus
+    public enum LastfmStatus
     {
         Normal,
         Love,

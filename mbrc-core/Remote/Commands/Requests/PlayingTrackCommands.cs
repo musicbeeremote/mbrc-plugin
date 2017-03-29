@@ -3,15 +3,27 @@ using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemoteCore.Remote.Utilities;
 using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
 {
     internal class RequestLfmLoveRating : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _apiAdapter;
+
+        public RequestLfmLoveRating(ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestLoveStatus(@event.DataToString(), @event.ConnectionId);
+            var lfmStatus = _apiAdapter.ChangeStatus(@event.DataToString());
+            var message = new SocketMessage(Constants.NowPlayingLfmRating, lfmStatus);
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
     }
 
@@ -40,17 +52,45 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
     internal class RequestRating : ICommand
     {
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _apiAdapter;
+
+        public RequestRating(ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestTrackRating(@event.DataToString(), @event.ConnectionId);
+            var message = new SocketMessage(Constants.NowPlayingRating, _apiAdapter.SetRating(@event.DataToString()));
+            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
     }
 
     internal class RequestSongInfo : ICommand
     {
+        private readonly Authenticator _auth;
+        private readonly ITinyMessengerHub _hub;
+        private readonly INowPlayingApiAdapter _apiAdapter;
+
+        public RequestSongInfo(Authenticator auth, ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        {
+            _auth = auth;
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
         public void Execute(IEvent @event)
         {
-            Plugin.Instance.RequestTrackInfo(@event.ConnectionId);
+            var connectionId = @event.ConnectionId;
+
+            var protocolVersion = _auth.ClientProtocolVersion(connectionId);
+            var message = protocolVersion > 2
+                ? new SocketMessage(Constants.NowPlayingTrack, _apiAdapter.GetPlayingTrackInfo())
+                : new SocketMessage(Constants.NowPlayingTrack, _apiAdapter.GetPlayingTrackInfoLegacy());
+
+            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
     }
 }

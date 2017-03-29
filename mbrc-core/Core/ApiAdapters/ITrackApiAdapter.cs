@@ -7,5 +7,9 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         TrackTemporalnformation GetTemporalInformation();
 
         bool SeekTo(int position);
+
+        string GetLyrics();
+
+        string GetCover();
     }
 }
