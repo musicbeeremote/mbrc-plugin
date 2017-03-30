@@ -16,7 +16,6 @@ namespace MusicBeeRemoteCore.PartyMode.Core.Model
 
         private readonly SettingsHandler _handler;
 
-        private static PartyModeModel _instance;
         private readonly CycledList<PartyModeLogs> _logs;
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();

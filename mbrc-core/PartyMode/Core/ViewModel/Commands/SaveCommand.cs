@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Input;
 using MusicBeeRemoteCore.PartyMode.Core.Model;
 
 namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel.Commands

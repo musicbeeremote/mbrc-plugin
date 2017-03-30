@@ -7,7 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using NLog;
-using Encoder = System.Text.Encoder;
+using Encoder = System.Drawing.Imaging.Encoder;
 
 namespace MusicBeeRemoteCore.Remote.Utilities
 {

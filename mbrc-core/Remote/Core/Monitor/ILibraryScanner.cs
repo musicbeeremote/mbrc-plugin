@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemoteCore.Remote.Core.Monitor
+﻿using MusicBeeRemoteCore.Core.ApiAdapters;
+
+namespace MusicBeeRemoteCore.Remote.Core.Monitor
 {
     internal interface ILibraryScanner
     {
@@ -9,18 +11,18 @@
     internal class LibraryScanner : ILibraryScanner
     {
 
-        private readonly TrackRepository _repository;
-        private readonly LibraryDataAdapter _dataAdapter;
+        private readonly ITrackRepository _trackRepository;
+        private readonly ILibraryApiAdapter _apiAdapter;
 
-        public LibraryScanner(LibraryDataAdapter dataAdapter, TrackRepository repository)
+        public LibraryScanner(ILibraryApiAdapter apiAdapter, ITrackRepository trackRepository)
         {
-            _dataAdapter = dataAdapter;
-            _repository = repository;
+            _apiAdapter = apiAdapter;
+            _trackRepository = trackRepository;
         }
 
         public void Start()
         {
-            _repository.AddAll(_dataAdapter.GetTracks());
+            _trackRepository.AddAll(_apiAdapter.GetTracks());
         }
 
         public void Stop()

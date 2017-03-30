@@ -11,6 +11,7 @@ using MusicBeeRemoteCore.Remote.Events;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Remote.Utilities;
+using Newtonsoft.Json;
 using NLog;
 using TinyMessenger;
 
@@ -387,7 +388,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
         /// <param name="connectionId">The id of the connection that will receive the message</param>
         public void Send(SocketMessage message, string connectionId)
         {
-            var serializedMessage = JsonSerializer.SerializeToString(message);
+            var serializedMessage = JsonConvert.SerializeObject(message);
             _logger.Debug($"sending-{connectionId}:{serializedMessage}");
 
             if (message.NewLineTerminated)

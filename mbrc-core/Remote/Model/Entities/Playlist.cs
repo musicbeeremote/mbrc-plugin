@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemoteCore.Remote.Model.Entities
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
   [DataContract]
   public class Playlist

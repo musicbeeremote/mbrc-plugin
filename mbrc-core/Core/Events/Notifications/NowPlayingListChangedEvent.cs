@@ -2,7 +2,7 @@
 
 namespace MusicBeeRemoteCore.Core.Events.Notifications
 {
-    public class NowPlayingListChanged: ITinyMessage
+    public class NowPlayingListChangedEvent: ITinyMessage
     {
         public object Sender { get; } = null;
     }

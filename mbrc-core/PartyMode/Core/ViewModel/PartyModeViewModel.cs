@@ -1,5 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Windows.Input;
+using System.Windows.Threading;
 using MusicBeeRemoteCore.PartyMode.Core.Model;
 using MusicBeeRemoteCore.PartyMode.Core.ViewModel.Commands;
 

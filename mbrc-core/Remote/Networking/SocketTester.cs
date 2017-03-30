@@ -4,19 +4,19 @@ using System.Net.Sockets;
 using System.Text;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Settings;
+using Newtonsoft.Json.Linq;
 using NLog;
 
 namespace MusicBeeRemoteCore.Remote.Networking
 {
     public class SocketTester
     {
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private UserSettings _settings;
+        private readonly UserSettings _settings;
 
-        public SocketTester(UserSettings _settings)
+        public SocketTester(UserSettings settings)
         {
-            this._settings = _settings;
+            _settings = settings;
         }
 
         // State object for receiving data from remote device.
@@ -64,8 +64,8 @@ namespace MusicBeeRemoteCore.Remote.Networking
                 var decoder = Encoding.UTF8.GetDecoder();
                 decoder.GetChars(state.Buffer, 0, received, chars, 0);
                 var message = new string(chars);
-                var json = JsonObject.Parse(message);
-                var verified = json.Get("context") == Constants.VerifyConnection;
+                var json = JObject.Parse(message);
+                var verified = (string) json["context"] == Constants.VerifyConnection;
 
                 _logger.Log(LogLevel.Info, $"Connection verified: {verified}");
                 ConnectionListener?.OnConnectionResult(verified);

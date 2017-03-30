@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using MusicBeeRemoteCore.Remote.Enumerations;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 
 namespace MusicBeeRemoteCore.Core.ApiAdapters
@@ -29,15 +28,5 @@ namespace MusicBeeRemoteCore.Core.ApiAdapters
         IEnumerable<NowPlaying> GetTracks(int offset = 0, int limit = 5000);
 
         IEnumerable<NowPlayingListTrack> GetTracksLegacy(int offset = 0, int limit = 5000);
-
-        NowPlayingTrack GetPlayingTrackInfoLegacy();
-
-        NowPlayingTrackV2 GetPlayingTrackInfo();
-
-        string SetRating(string rating);
-
-        LastfmStatus ChangeStatus(string action);
-
-        LastfmStatus GetLfmStatus();
     }
 }

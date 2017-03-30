@@ -11,9 +11,9 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestLfmLoveRating : ICommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly INowPlayingApiAdapter _apiAdapter;
+        private readonly ITrackApiAdapter _apiAdapter;
 
-        public RequestLfmLoveRating(ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        public RequestLfmLoveRating(ITinyMessengerHub hub, ITrackApiAdapter apiAdapter)
         {
             _hub = hub;
             _apiAdapter = apiAdapter;
@@ -53,9 +53,9 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestRating : ICommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly INowPlayingApiAdapter _apiAdapter;
+        private readonly ITrackApiAdapter _apiAdapter;
 
-        public RequestRating(ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        public RequestRating(ITinyMessengerHub hub, ITrackApiAdapter apiAdapter)
         {
             _hub = hub;
             _apiAdapter = apiAdapter;
@@ -72,9 +72,9 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     {
         private readonly Authenticator _auth;
         private readonly ITinyMessengerHub _hub;
-        private readonly INowPlayingApiAdapter _apiAdapter;
+        private readonly ITrackApiAdapter _apiAdapter;
 
-        public RequestSongInfo(Authenticator auth, ITinyMessengerHub hub, INowPlayingApiAdapter apiAdapter)
+        public RequestSongInfo(Authenticator auth, ITinyMessengerHub hub, ITrackApiAdapter apiAdapter)
         {
             _auth = auth;
             _hub = hub;

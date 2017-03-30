@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemoteCore.Remote.Entities
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeeRemoteCore.Remote.Entities
 {
     [DataContract]
     public class RadioStation

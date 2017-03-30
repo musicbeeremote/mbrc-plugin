@@ -11,13 +11,7 @@ namespace MusicBeeRemoteCore.PartyMode.Core
     {
         private readonly ITinyMessengerHub _hub;
         private readonly PartyModeModel _partyModeModel;
-
-        #region vars
-
-        private static PartyModeCommandHandler _instance;
-
-        #endregion vars
-
+          
         public PartyModeCommandHandler(ITinyMessengerHub hub, PartyModeModel partyModeModel)
         {
             _hub = hub;

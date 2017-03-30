@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemoteCore.PartyMode.Core.View
+﻿using System.Windows.Controls;
+
+namespace MusicBeeRemoteCore.PartyMode.Core.View
 {
     /// <summary>
     /// Interaction logic for PartyModeView.xaml
@@ -7,10 +9,6 @@
     {
         public PartyModeView()
         {
-          
         }
-
-
-       
     }
 }

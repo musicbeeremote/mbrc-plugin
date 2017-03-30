@@ -1,5 +1,6 @@
 ﻿using MusicBeeRemoteCore.Core.Events.Notifications;
 using MusicBeeRemoteCore.Core.Windows;
+using MusicBeeRemoteCore.Monitoring;
 using MusicBeeRemoteCore.Remote.Networking;
 using TinyMessenger;
 
@@ -9,6 +10,8 @@ namespace MusicBeeRemoteCore.Core
     {
         private readonly SocketServer _socketServer;
         private readonly ServiceDiscovery _serviceDiscovery;
+        private readonly ITrackStateMonitor _trackStateMonitor;
+        private readonly IPlayerStateMonitor _playerStateMonitor;
         private readonly IWindowManager _windowManager;
         private readonly ITinyMessengerHub _hub;
 
@@ -16,18 +19,24 @@ namespace MusicBeeRemoteCore.Core
         public MusicBeeRemote(
             SocketServer socketServer,
             ServiceDiscovery serviceDiscovery,
+            ITrackStateMonitor trackStateMonitor,
+            IPlayerStateMonitor playerStateMonitor,
             IWindowManager windowManager,
             ITinyMessengerHub hub
         )
         {
             _socketServer = socketServer;
             _serviceDiscovery = serviceDiscovery;
+            _trackStateMonitor = trackStateMonitor;
+            _playerStateMonitor = playerStateMonitor;
             _windowManager = windowManager;
             _hub = hub;
         }
 
         public void Start()
         {
+            _trackStateMonitor.Start();
+            _playerStateMonitor.Start();
             _serviceDiscovery.Start();
             _socketServer.Start();
         }
@@ -36,6 +45,8 @@ namespace MusicBeeRemoteCore.Core
         {
             _socketServer.Stop();
             _serviceDiscovery.Stop();
+            _trackStateMonitor.Stop();
+            _playerStateMonitor.Stop();
         }
 
         public void DisplayInfoWindow()
@@ -75,7 +86,7 @@ namespace MusicBeeRemoteCore.Core
 
         public void NotifyNowPlayingListChanged()
         {
-            _hub.Publish(new NowPlayingListChanged());
+            _hub.Publish(new NowPlayingListChangedEvent());
         }
     }
 }

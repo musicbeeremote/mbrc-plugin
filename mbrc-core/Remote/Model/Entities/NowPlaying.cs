@@ -1,3 +1,5 @@
+using System.Runtime.Serialization;
+
 namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
     [DataContract]

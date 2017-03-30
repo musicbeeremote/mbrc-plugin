@@ -1,4 +1,7 @@
-﻿namespace MusicBeeRemoteCore.PartyMode.Core.AttachedCommandBehavior
+﻿using System.Windows;
+using System.Windows.Input;
+
+namespace MusicBeeRemoteCore.PartyMode.Core.AttachedCommandBehavior
 {
     /// <summary>
     /// Defines the attached properties to create a CommandBehaviorBinding

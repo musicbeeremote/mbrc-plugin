@@ -5,6 +5,8 @@ using System.Net.Sockets;
 using System.Text;
 using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Tools;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NLog;
 
 namespace MusicBeeRemoteCore.Remote.Networking
@@ -57,15 +59,15 @@ namespace MusicBeeRemoteCore.Remote.Networking
         private void HandleDiscovery(byte[] request, IPEndPoint mEndPoint, UdpClient udpClient)
         {
             var mRequest = Encoding.UTF8.GetString(request);
-            var incoming = JsonObject.Parse(mRequest);
+            var incoming = JObject.Parse(mRequest);
 
             _logger.Debug($"Discovery incoming message {mRequest}");
 
-            var discovery = incoming.Get("context")?.Contains("discovery") ?? false;
+            var discovery = ((string)incoming["context"])?.Contains("discovery") ?? false;
             if (discovery)
             {
                 var addresses = NetworkTools.GetPrivateAddressList();
-                var ipString = incoming.Get("address");
+                var ipString = (string)incoming["address"];
                 if (string.IsNullOrEmpty(ipString))
                 {
                     var notify = ErrorMessage("missing address");
@@ -88,7 +90,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
 
         private void SendResponse(Dictionary<string, object> notify, IPEndPoint mEndPoint, UdpClient udpClient)
         {
-            var response = Encoding.UTF8.GetBytes(JsonSerializer.SerializeToString(notify));
+            var response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(notify));
             udpClient.Send(response, response.Length, mEndPoint);
         }
 

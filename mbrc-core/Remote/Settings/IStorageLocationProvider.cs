@@ -1,6 +1,8 @@
-﻿namespace MusicBeeRemoteCore.Remote.Settings
+﻿using System.IO;
+
+namespace MusicBeeRemoteCore.Remote.Settings
 {
-    internal interface IStorageLocationProvider
+    public interface IStorageLocationProvider
     {
         string StorageLocation();
         string CacheLocation();
@@ -10,10 +12,13 @@
     class StorageLocationProvider : IStorageLocationProvider
     {
         private readonly string _location;
+        private const string RemoteDataDirectory = "mb_remote";
+        private const string CacheSubDir = "cache";
+        private const string LogFileName = "mbrc.log";
 
         public StorageLocationProvider(string location)
         {
-            _location = location;
+            _location = $"{location}{Path.DirectorySeparatorChar}{RemoteDataDirectory}";
         }
 
         public string StorageLocation()
@@ -23,12 +28,12 @@
 
         public string CacheLocation()
         {
-            return $"{_location}\\cache";
+            return $"{_location}{Path.DirectorySeparatorChar}{CacheSubDir}";
         }
 
         public string LogFile
         {
-            get { return $"{_location}\\mbrc.log"; }
+            get { return $"{_location}{Path.DirectorySeparatorChar}{LogFileName}"; }
         }
     }
 }

@@ -1,20 +1,22 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
+using MusicBeeRemoteCore.Remote.Settings;
+using Newtonsoft.Json;
 
 namespace MusicBeeRemoteCore.PartyMode.Core.Helper
 {
     public class SettingsHandler
     {
         private readonly string _filePath;
+        private const string PartySettingsFile = "partymode_data.json";
 
-        public SettingsHandler()
+        public SettingsHandler(IStorageLocationProvider storageLocationProvider)
         {
-            //Todo find a proper way to get the path
-            //filePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            _filePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\MusicBee\\mb_remote\\partymode_data.json";
+
+            _filePath = $"{storageLocationProvider.StorageLocation()}{Path.DirectorySeparatorChar}{PartySettingsFile}";
+
 
             if (!File.Exists(_filePath))
             {
@@ -22,18 +24,19 @@ namespace MusicBeeRemoteCore.PartyMode.Core.Helper
                 stream.Close();
             }
 
-            JsConfig<IPAddress>.SerializeFn = ipadr => ipadr.ToString();
-            JsConfig<IPAddress>.DeSerializeFn = IPAddress.Parse;
-
-            JsConfig<PhysicalAddress>.SerializeFn = phadr => phadr.ToString();
-            JsConfig<PhysicalAddress>.DeSerializeFn = StrictParseAddress;
+            //todo figure out how this customization would work with
+//            JsConfig<IPAddress>.SerializeFn = ipadr => ipadr.ToString();
+//            JsConfig<IPAddress>.DeSerializeFn = IPAddress.Parse;
+//
+//            JsConfig<PhysicalAddress>.SerializeFn = phadr => phadr.ToString();
+//            JsConfig<PhysicalAddress>.DeSerializeFn = StrictParseAddress;
             //todo serialize date to epoch
         }
 
         public Settings GetSettings()
         {
             var filestring = LoadJson(_filePath);
-            var settings = JsonSerializer.DeserializeFromString<Settings>(filestring) ?? new Settings();
+            var settings = JsonConvert.DeserializeObject<Settings>(filestring) ?? new Settings();
 
             return ValidateSettings(settings);
         }
@@ -57,7 +60,7 @@ namespace MusicBeeRemoteCore.PartyMode.Core.Helper
 
         private static void SaveJson(string path, Settings settings)
         {
-            var fileString = JsonSerializer.SerializeToString(settings);
+            var fileString = JsonConvert.SerializeObject(settings);
 
             using (var sw = new StreamWriter(path))
             {

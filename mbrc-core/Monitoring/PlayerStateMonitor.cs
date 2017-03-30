@@ -25,27 +25,34 @@ namespace MusicBeeRemoteCore.Monitoring
 
         public void Start()
         {
-            _hub.Subscribe<VolumeLevelChangedEvent>(_ =>
-            {
-                var playerMessage = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
-                _hub.Publish(new PluginResponseAvailableEvent(playerMessage));
-            });
+            _hub.Subscribe<VolumeLevelChangedEvent>(_ => { SendVolume(); });
+            _hub.Subscribe<VolumeMuteChangedEvent>(_ => { SendMuteState(); });
+            _hub.Subscribe<PlayStateChangedEvent>(_ => { SendPlayState(); });
 
-            _hub.Subscribe<VolumeMuteChangedEvent>(_ =>
-            {
-                var muteMessages = new SocketMessage(Constants.PlayerMute, _apiAdapter.IsMuted());
-                _hub.Publish(new PluginResponseAvailableEvent(muteMessages));
-            })
-
-            _hub.Subscribe<PlayStateChangedEvent>(_ =>
-            {
-                var stateMessage = new SocketMessage(Constants.PlayerState, _apiAdapter.GetState());
-                _hub.Publish(new PluginResponseAvailableEvent(stateMessage));
-            })
+            _hub.Subscribe<NowPlayingListChangedEvent>(_ => { });
 
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
+        }
+
+
+        private void SendVolume()
+        {
+            var playerMessage = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
+            _hub.Publish(new PluginResponseAvailableEvent(playerMessage));
+        }
+
+        private void SendMuteState()
+        {
+            var muteMessages = new SocketMessage(Constants.PlayerMute, _apiAdapter.IsMuted());
+            _hub.Publish(new PluginResponseAvailableEvent(muteMessages));
+        }
+
+        private void SendPlayState()
+        {
+            var stateMessage = new SocketMessage(Constants.PlayerState, _apiAdapter.GetState());
+            _hub.Publish(new PluginResponseAvailableEvent(stateMessage));
         }
 
         public void Stop()
@@ -79,3 +86,4 @@ namespace MusicBeeRemoteCore.Monitoring
             }
         }
     }
+}

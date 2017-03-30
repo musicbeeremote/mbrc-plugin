@@ -1,4 +1,5 @@
-﻿using MusicBeeRemoteCore.Remote.Commands;
+﻿using System.Windows;
+using MusicBeeRemoteCore.Remote.Commands;
 using MusicBeeRemoteCore.Remote.Networking;
 
 namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel

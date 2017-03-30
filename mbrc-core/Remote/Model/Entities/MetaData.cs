@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.Serialization;
 
 namespace MusicBeeRemoteCore.Remote.Model.Entities
 {
@@ -68,20 +69,12 @@ namespace MusicBeeRemoteCore.Remote.Model.Entities
             {
                 return string.Compare(Album, other.Album, StringComparison.OrdinalIgnoreCase);
             }
-            if (!string.IsNullOrEmpty(Disc) && other.Disc != Disc)
+            if (other.Disc != Disc)
             {
-                int thisDisc;
-                int otherDisc;
-                int.TryParse(Disc, out thisDisc);
-                int.TryParse(other.Disc, out otherDisc);
-                return thisDisc - otherDisc;
+                return Disc - other.Disc;
             }
 
-            int thisTrack;
-            int otherTrack;
-            int.TryParse(TrackNo, out thisTrack);
-            int.TryParse(other.TrackNo, out otherTrack);
-            return thisTrack - otherTrack;
+            return TrackNo - other.TrackNo;
 
         }
     }
