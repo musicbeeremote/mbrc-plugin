@@ -177,6 +177,7 @@ namespace MusicBeeRemoteCore
                 UpdateFirewallRules(_settings.ListeningPort);
             }
 
+            _socketTester = new SocketTester(_settings) { ConnectionListener = this };
             _socketTester.VerifyConnection();
         }
 

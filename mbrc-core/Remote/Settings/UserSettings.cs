@@ -24,8 +24,6 @@ namespace MusicBeeRemoteCore.Remote.Settings
 
         private const string SFilename = "settings.xml";
 
-        private const string SFolder = "mb_remote\\";
-
         private const string LastRunVersion = "lastrunversion";
 
         private const string LibrarySource = "source";
@@ -36,14 +34,13 @@ namespace MusicBeeRemoteCore.Remote.Settings
 
         private uint _listeningPort;
 
-
         public SearchSource Source { get; set; }
 
 
         /// <summary>
         /// 
         /// </summary>
-        public string StoragePath { get; private set; }
+        public string StoragePath { get; }
 
         /// <summary>
         /// 
@@ -74,9 +71,11 @@ namespace MusicBeeRemoteCore.Remote.Settings
         /// </summary>
         public List<string> IpAddressList { get; set; }
 
-        public UserSettings(ITinyMessengerHub hub)
+        public UserSettings(ITinyMessengerHub hub, IStorageLocationProvider storageLocationProvider)
         {
             _hub = hub;
+            _storageLocationProvider = storageLocationProvider;
+            StoragePath = storageLocationProvider.StorageLocation();
         }
 
         /// <summary>
@@ -97,18 +96,10 @@ namespace MusicBeeRemoteCore.Remote.Settings
 
         public static string LogFilePath = "\\mbrc.log";
         private ITinyMessengerHub _hub;
+        private readonly IStorageLocationProvider _storageLocationProvider;
 
         public string FullLogPath => StoragePath + LogFilePath;
         public bool UpdateFirewall { get; set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="path"></param>
-        public void SetStoragePath(string path)
-        {
-            StoragePath = path + SFolder;
-        }
 
         private string GetSettingsFile()
         {

@@ -1,5 +1,9 @@
 ﻿using MusicBeeRemoteCore.Core;
 using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.Core.Support;
+using MusicBeeRemoteCore.Core.Windows;
+using MusicBeeRemoteCore.Logging;
+using MusicBeeRemoteCore.Monitoring;
 using MusicBeeRemoteCore.PartyMode.Core;
 using MusicBeeRemoteCore.PartyMode.Core.Model;
 using MusicBeeRemoteCore.Remote;
@@ -10,6 +14,7 @@ using MusicBeeRemoteCore.Remote.Model;
 using MusicBeeRemoteCore.Remote.Networking;
 using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Remote.Utilities;
+using NLog;
 using StructureMap;
 using TinyMessenger;
 
@@ -36,6 +41,15 @@ namespace MusicBeeRemoteCore
                 c.For<ITrackApiAdapter>().Use(() => dependencies.TrackAdapter).Singleton();
                 c.For<IInvokeHandler>().Use(() => dependencies.InvokeHandler).Singleton();
 
+                c.For<ISearchApi>().Use<SearchApi>().Singleton();
+                c.For<ISearchQueue>().Use<SearchQueue>().Singleton();
+
+                c.For<IWindowManager>().Use<WindowManager>().Singleton();
+
+                c.For<IPluginLogManager>().Use<PluginLogManager>().Singleton();
+                c.For<IPlayerStateMonitor>().Use<PlayerStateMonitor>().Singleton();
+                c.For<ITrackStateMonitor>().Use<TrackStateMonitor>().Singleton();
+
                 c.For<Controller>().Use<Controller>().Singleton();
 
                 c.For<SocketServer>().Use<SocketServer>().Singleton();
@@ -58,6 +72,13 @@ namespace MusicBeeRemoteCore
 
             var controller = _container.GetInstance<Controller>();
             Configuration.Register(controller, _container);
+
+            var logManager = _container.GetInstance<IPluginLogManager>();
+#if DEBUG
+            logManager.Initialize(LogLevel.Debug);
+#else
+            logManager.Initialize(LogLevel.Error);
+#endif
 
             return _container.GetInstance<IMusicBeeRemote>();
         }
