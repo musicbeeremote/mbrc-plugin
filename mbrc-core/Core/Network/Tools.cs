@@ -5,29 +5,36 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
-namespace MusicBeeRemoteCore.Tools
+namespace MusicBeeRemoteCore.Core.Network
 {
-    public class NetworkTools
+    public class Tools
     {
         public static List<string> GetPrivateAddressList()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
 
-            return (from address in host.AddressList where address.AddressFamily == AddressFamily.InterNetwork select address.ToString()).ToList();
-
+            return (from address in host.AddressList
+                where address.AddressFamily == AddressFamily.InterNetwork
+                select address.ToString()).ToList();
         }
 
         public static List<IPAddress> GetAddressList()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
-            return (from address in host.AddressList where address.AddressFamily == AddressFamily.InterNetwork select address).ToList();
-
+            return (from address in host.AddressList
+                where address.AddressFamily == AddressFamily.InterNetwork
+                select address).ToList();
         }
 
         public static IPAddress GetSubnetMask(string ipaddress)
         {
             var address = IPAddress.Parse(ipaddress);
-            foreach (var information in from adapter in NetworkInterface.GetAllNetworkInterfaces() from information in adapter.GetIPProperties().UnicastAddresses where information.Address.AddressFamily == AddressFamily.InterNetwork where address.Equals(information.Address) select information)
+            foreach (var information in
+                from adapter in NetworkInterface.GetAllNetworkInterfaces()
+                from information in adapter.GetIPProperties().UnicastAddresses
+                where information.Address.AddressFamily == AddressFamily.InterNetwork
+                where address.Equals(information.Address)
+                select information)
             {
                 return information.IPv4Mask;
             }
@@ -42,8 +49,8 @@ namespace MusicBeeRemoteCore.Tools
             if (addressBytes.Length != maskBytes.Length)
             {
                 throw new ArgumentException("ip and mask lengths don't match");
-            } 
-            
+            }
+
             var broadcastBytes = new byte[addressBytes.Length];
             for (var i = 0; i < broadcastBytes.Length; i++)
             {

@@ -82,6 +82,7 @@
     <Compile Include="Core\Model\PlayerStatus.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
     <Compile Include="Core\MusicBeeRemote.cs" />
+    <Compile Include="Core\Network\Tools.cs" />
     <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
     <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
@@ -200,9 +201,7 @@
     <Compile Include="Remote\Utilities\IdGenerator.cs" />
     <Compile Include="Remote\Utilities\StateAction.cs" />
     <Compile Include="Remote\Utilities\Utilities.cs" />
-    <Compile Include="SearchSource.cs" />
     <Compile Include="TinyMessenger.cs" />
-    <Compile Include="Tools\NetworkTools.cs" />
   </ItemGroup>
   <ItemGroup>
     <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />

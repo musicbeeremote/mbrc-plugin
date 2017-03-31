@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using MusicBeeRemoteCore.Core.Network;
 using MusicBeeRemoteCore.Core.Settings;
-using MusicBeeRemoteCore.Tools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NLog;
@@ -26,7 +26,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
 
         public void Start()
         {
-            var ips = NetworkTools.GetAddressList();
+            var ips = Tools.GetAddressList();
 
             ips.ForEach(address =>
             {
@@ -66,7 +66,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
             var discovery = ((string)incoming["context"])?.Contains("discovery") ?? false;
             if (discovery)
             {
-                var addresses = NetworkTools.GetPrivateAddressList();
+                var addresses = Tools.GetPrivateAddressList();
                 var ipString = (string)incoming["address"];
                 if (string.IsNullOrEmpty(ipString))
                 {
@@ -123,10 +123,10 @@ namespace MusicBeeRemoteCore.Remote.Networking
             foreach (var address in addresses)
             {
                 var ifAddress = IPAddress.Parse(address);
-                var subnetMask = NetworkTools.GetSubnetMask(address);
+                var subnetMask = Tools.GetSubnetMask(address);
 
-                var firstNetwork = NetworkTools.GetNetworkAddress(ifAddress, subnetMask);
-                var secondNetwork = NetworkTools.GetNetworkAddress(clientAddress, subnetMask);
+                var firstNetwork = Tools.GetNetworkAddress(ifAddress, subnetMask);
+                var secondNetwork = Tools.GetNetworkAddress(clientAddress, subnetMask);
                 if (!firstNetwork.Equals(secondNetwork)) continue;
                 interfaceAddress = ifAddress.ToString();
                 break;

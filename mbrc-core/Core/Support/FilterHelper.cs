@@ -4,22 +4,9 @@ namespace MusicBeeRemoteCore.Core.Support
 {
     public class FilterHelper
     {
-        public static string XmlFilter(string[] tags,
-            string query,
-            bool isStrict,
-            SearchSource source = SearchSource.Library)
+        public static string XmlFilter(string[] tags, string query, bool isStrict)
         {
-            short src;
-            if (source != SearchSource.None)
-            {
-                src = (short) source;
-            }
-            else
-            {
-                src = (short) SearchSource.Library;
-            }
-
-            var filter = new XElement("Source", new XAttribute("Type", src));
+            var filter = new XElement("Source", new XAttribute("Type", 1));
             var conditions = new XElement("Conditions", new XAttribute("CombineMethod", "Any"));
 
             foreach (var tag in tags)

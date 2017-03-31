@@ -8,12 +8,6 @@ namespace MusicBeeRemoteCore.Core.Settings
     public class UserSettingsModel
     {
         /// <summary>
-        /// Indicated the default search data source. This was temporarily added but never actually used.
-        /// </summary>
-        [Obsolete("This was added temporarily to support service data from other sources before v1.0")]
-        public SearchSource Source { get; set; } = SearchSource.Library;
-
-        /// <summary>
         /// The listening port for the incoming connections of the socket server.
         /// </summary>
         [DataMember(Name = "port")]

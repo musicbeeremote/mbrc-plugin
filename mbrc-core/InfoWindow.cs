@@ -3,15 +3,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
-using MusicBeePlugin.Properties;
+using MusicBeeRemoteCore.Core.Network;
 using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.PartyMode.Core.View;
 using MusicBeeRemoteCore.PartyMode.Core.ViewModel;
 using MusicBeeRemoteCore.Remote.Networking;
-using MusicBeeRemoteCore.Tools;
 using NLog;
 
 namespace MusicBeeRemoteCore
@@ -71,7 +69,7 @@ namespace MusicBeeRemoteCore
 
         private void InfoWindowLoad(object sender, EventArgs e)
         {
-            internalIPList.DataSource = NetworkTools.GetPrivateAddressList();
+            internalIPList.DataSource = Tools.GetPrivateAddressList();
             versionLabel.Text = _settings.UserSettingsModel.CurrentVersion;
             portNumericUpDown.Value = _settings.UserSettingsModel.ListeningPort;
             UpdateFilteringSelection(_settings.UserSettingsModel.FilterSelection);
@@ -81,7 +79,6 @@ namespace MusicBeeRemoteCore
 
             debugEnabled.Checked = _settings.UserSettingsModel.DebugLogEnabled;
             firewallCheckbox.Checked = _settings.UserSettingsModel.UpdateFirewall;
-
 
 
             _socketTester = new SocketTester(_settings) {ConnectionListener = this};
@@ -172,7 +169,7 @@ namespace MusicBeeRemoteCore
                 UpdateFirewallRules(_settings.UserSettingsModel.ListeningPort);
             }
 
-            _socketTester = new SocketTester(_settings) { ConnectionListener = this };
+            _socketTester = new SocketTester(_settings) {ConnectionListener = this};
             _socketTester.VerifyConnection();
         }
 
