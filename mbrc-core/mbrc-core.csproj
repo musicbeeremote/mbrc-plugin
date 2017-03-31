@@ -82,6 +82,13 @@
     <Compile Include="Core\Model\PlayerStatus.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
     <Compile Include="Core\MusicBeeRemote.cs" />
+    <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
+    <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
+    <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
+    <Compile Include="Core\Settings\JsonSettingsFileManager.cs" />
+    <Compile Include="Core\Settings\LegacySettingsMigration.cs" />
+    <Compile Include="Core\Settings\PersistanceManager.cs" />
+    <Compile Include="Core\Settings\UserSettingsModel.cs" />
     <Compile Include="Core\Support\FilterHelper.cs" />
     <Compile Include="Core\Support\ISearchApi.cs" />
     <Compile Include="Core\Support\ISearchQueue.cs" />
@@ -189,8 +196,6 @@
     <Compile Include="Remote\Networking\SocketPacket.cs" />
     <Compile Include="Remote\Networking\SocketServer.cs" />
     <Compile Include="Remote\Networking\SocketTester.cs" />
-    <Compile Include="Remote\Settings\IStorageLocationProvider.cs" />
-    <Compile Include="Remote\Settings\UserSettings.cs" />
     <Compile Include="Remote\Utilities\Authenticator.cs" />
     <Compile Include="Remote\Utilities\IdGenerator.cs" />
     <Compile Include="Remote\Utilities\StateAction.cs" />
@@ -212,6 +217,9 @@
   <ItemGroup>
     <EmbeddedResource Include="InfoWindow.resx" />
     <EmbeddedResource Include="Properties\Resources.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Remote\Settings\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

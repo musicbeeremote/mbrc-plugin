@@ -1,8 +1,8 @@
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.Remote.Commands.Internal;
 using MusicBeeRemoteCore.Remote.Interfaces;
 using MusicBeeRemoteCore.Remote.Model.Entities;
 using MusicBeeRemoteCore.Remote.Networking;
-using MusicBeeRemoteCore.Remote.Settings;
 using TinyMessenger;
 
 namespace MusicBeeRemoteCore.Remote.Commands.Requests
@@ -10,9 +10,9 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
     internal class RequestPluginVersion : ICommand
     {
         private readonly ITinyMessengerHub _hub;
-        private readonly UserSettings _settings;
+        private readonly PersistanceManager _settings;
 
-        public RequestPluginVersion(ITinyMessengerHub hub, UserSettings settings)
+        public RequestPluginVersion(ITinyMessengerHub hub, PersistanceManager settings)
         {
             _hub = hub;
             _settings = settings;
@@ -20,7 +20,7 @@ namespace MusicBeeRemoteCore.Remote.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PluginVersion, _settings.CurrentVersion);
+            var message = new SocketMessage(Constants.PluginVersion, _settings.UserSettingsModel.CurrentVersion);
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }

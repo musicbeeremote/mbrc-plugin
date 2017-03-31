@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using MusicBeeRemoteCore.Remote.Settings;
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.Tools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -13,13 +13,13 @@ namespace MusicBeeRemoteCore.Remote.Networking
 {
     public class ServiceDiscovery
     {
-        private readonly UserSettings _settings;
+        private readonly PersistanceManager _settings;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int Port = 45345;
         private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.1.5.10");
 
 
-        public ServiceDiscovery(UserSettings settings)
+        public ServiceDiscovery(PersistanceManager settings)
         {
             _settings = settings;
         }
@@ -111,7 +111,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
                 {"context", "notify"},
                 {"address", interfaceAddress},
                 {"name", Environment.GetEnvironmentVariable("COMPUTERNAME")},
-                {"port", _settings.ListeningPort}
+                {"port", _settings.UserSettingsModel.ListeningPort}
             };
             return notify;
         }

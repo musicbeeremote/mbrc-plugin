@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using LiteDB;
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.Remote.Model.Entities;
-using MusicBeeRemoteCore.Remote.Settings;
 
 namespace MusicBeeRemoteCore.Remote.Core
 {

@@ -2,7 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
-using MusicBeeRemoteCore.Remote.Settings;
+using MusicBeeRemoteCore.Core.Settings;
 using Newtonsoft.Json;
 
 namespace MusicBeeRemoteCore.PartyMode.Core.Helper

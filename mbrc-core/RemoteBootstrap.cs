@@ -1,5 +1,6 @@
 ﻿using MusicBeeRemoteCore.Core;
 using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.Core.Support;
 using MusicBeeRemoteCore.Core.Windows;
 using MusicBeeRemoteCore.Logging;
@@ -12,7 +13,6 @@ using MusicBeeRemoteCore.Remote.Core;
 using MusicBeeRemoteCore.Remote.Core.Monitor;
 using MusicBeeRemoteCore.Remote.Model;
 using MusicBeeRemoteCore.Remote.Networking;
-using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Remote.Utilities;
 using NLog;
 using StructureMap;
@@ -55,7 +55,11 @@ namespace MusicBeeRemoteCore
                 c.For<SocketServer>().Use<SocketServer>().Singleton();
                 c.For<LyricCoverModel>().Use<LyricCoverModel>().Singleton();
                 c.For<ServiceDiscovery>().Use<ServiceDiscovery>().Singleton();
-                c.For<UserSettings>().Use<UserSettings>().Singleton();
+
+                c.For<PersistanceManager>().Use<PersistanceManager>().Singleton();
+                c.For<IJsonSettingsFileManager>().Use<JsonSettingsFileManager>().Singleton();
+                c.For<ILegacySettingsMigration>().Use<LegacySettingsMigration>().Singleton();
+
                 c.For<IStorageLocationProvider>()
                     .Use<StorageLocationProvider>()
                     .Ctor<string>()

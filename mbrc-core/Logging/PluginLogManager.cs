@@ -1,4 +1,4 @@
-using MusicBeeRemoteCore.Remote.Settings;
+using MusicBeeRemoteCore.Core.Settings;
 using NLog;
 using NLog.Config;
 using NLog.Targets;

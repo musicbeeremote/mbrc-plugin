@@ -1,10 +1,12 @@
 ﻿using System.IO;
 
-namespace MusicBeeRemoteCore.Remote.Settings
+namespace MusicBeeRemoteCore.Core.Settings
 {
     public interface IStorageLocationProvider
     {
         string StorageLocation();
+        string SettingsFile { get; }
+        string LegacySettingsFile { get; }
         string CacheLocation();
         string LogFile { get; }
     }
@@ -15,6 +17,8 @@ namespace MusicBeeRemoteCore.Remote.Settings
         private const string RemoteDataDirectory = "mb_remote";
         private const string CacheSubDir = "cache";
         private const string LogFileName = "mbrc.log";
+        private const string SettingsFileName = "settings.json";
+        private const string LegacySettingsFilename = "settings.json";
 
         public StorageLocationProvider(string location)
         {
@@ -24,6 +28,16 @@ namespace MusicBeeRemoteCore.Remote.Settings
         public string StorageLocation()
         {
             return _location;
+        }
+
+        public string SettingsFile
+        {
+            get { return $"{_location}{Path.DirectorySeparatorChar}{SettingsFileName}"; }
+        }
+
+        public string LegacySettingsFile
+        {
+            get { return $"{_location}{Path.DirectorySeparatorChar}{LegacySettingsFilename}"; }
         }
 
         public string CacheLocation()

@@ -7,10 +7,10 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using MusicBeePlugin.Properties;
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.PartyMode.Core.View;
 using MusicBeeRemoteCore.PartyMode.Core.ViewModel;
 using MusicBeeRemoteCore.Remote.Networking;
-using MusicBeeRemoteCore.Remote.Settings;
 using MusicBeeRemoteCore.Tools;
 using NLog;
 
@@ -21,7 +21,7 @@ namespace MusicBeeRemoteCore
     /// </summary>
     public partial class InfoWindow : Form, SocketTester.IConnectionListener
     {
-        private readonly UserSettings _settings;
+        private readonly PersistanceManager _settings;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
         private IOnDebugSelectionChanged _listener;
@@ -29,7 +29,7 @@ namespace MusicBeeRemoteCore
 
         /// <summary>
         /// </summary>
-        public InfoWindow(UserSettings settings, PartyModeViewModel viewModel)
+        public InfoWindow(PersistanceManager settings, PartyModeViewModel viewModel)
         {
             _settings = settings;
             InitializeComponent();
@@ -72,22 +72,17 @@ namespace MusicBeeRemoteCore
         private void InfoWindowLoad(object sender, EventArgs e)
         {
             internalIPList.DataSource = NetworkTools.GetPrivateAddressList();
-            versionLabel.Text = _settings.CurrentVersion;
-            portNumericUpDown.Value = _settings.ListeningPort;
-            UpdateFilteringSelection(_settings.FilterSelection);
+            versionLabel.Text = _settings.UserSettingsModel.CurrentVersion;
+            portNumericUpDown.Value = _settings.UserSettingsModel.ListeningPort;
+            UpdateFilteringSelection(_settings.UserSettingsModel.FilterSelection);
 
-//            UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
-            if (_settings.Source == SearchSource.None)
-            {
-                _settings.Source |= SearchSource.Library;
-            }
 
-            debugEnabled.Checked = _settings.DebugLogEnabled;
-            firewallCheckbox.Checked = _settings.UpdateFirewall;
+            debugEnabled.Checked = _settings.UserSettingsModel.DebugLogEnabled;
+            firewallCheckbox.Checked = _settings.UserSettingsModel.UpdateFirewall;
 
-            _logger.Debug($"Selected source is -> {_settings.Source}");
+
 
             _socketTester = new SocketTester(_settings) {ConnectionListener = this};
             _socketTester.VerifyConnection();
@@ -105,7 +100,7 @@ namespace MusicBeeRemoteCore
                     removeAddressButton.Enabled = false;
                     allowedAddressesComboBox.Enabled = false;
                     allowedLabel.Enabled = false;
-                    _settings.FilterSelection = FilteringSelection.All;
+                    _settings.UserSettingsModel.FilterSelection = FilteringSelection.All;
                     break;
                 case 1:
                     addressLabel.Enabled = true;
@@ -115,7 +110,7 @@ namespace MusicBeeRemoteCore
                     removeAddressButton.Enabled = false;
                     allowedAddressesComboBox.Enabled = false;
                     allowedLabel.Enabled = false;
-                    _settings.FilterSelection = FilteringSelection.Range;
+                    _settings.UserSettingsModel.FilterSelection = FilteringSelection.Range;
                     break;
                 case 2:
                     addressLabel.Enabled = true;
@@ -125,7 +120,7 @@ namespace MusicBeeRemoteCore
                     removeAddressButton.Enabled = true;
                     allowedAddressesComboBox.Enabled = true;
                     allowedLabel.Enabled = true;
-                    _settings.FilterSelection = FilteringSelection.Specific;
+                    _settings.UserSettingsModel.FilterSelection = FilteringSelection.Specific;
                     break;
             }
         }
@@ -138,12 +133,12 @@ namespace MusicBeeRemoteCore
                     selectionFilteringComboBox.SelectedIndex = 0;
                     break;
                 case FilteringSelection.Range:
-                    ipAddressInputTextBox.Text = _settings.BaseIp;
-                    rangeNumericUpDown.Value = _settings.LastOctetMax;
+                    ipAddressInputTextBox.Text = _settings.UserSettingsModel.BaseIp;
+                    rangeNumericUpDown.Value = _settings.UserSettingsModel.LastOctetMax;
                     selectionFilteringComboBox.SelectedIndex = 1;
                     break;
                 case FilteringSelection.Specific:
-                    _ipAddressBinding = new BindingList<string>(_settings.IpAddressList);
+                    _ipAddressBinding = new BindingList<string>(_settings.UserSettingsModel.IpAddressList);
                     selectionFilteringComboBox.SelectedIndex = 2;
                     break;
                 default:
@@ -154,27 +149,27 @@ namespace MusicBeeRemoteCore
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            _settings.ListeningPort = (uint) portNumericUpDown.Value;
+            _settings.UserSettingsModel.ListeningPort = (uint) portNumericUpDown.Value;
 
             switch (selectionFilteringComboBox.SelectedIndex)
             {
                 case 0:
                     break;
                 case 1:
-                    _settings.BaseIp = ipAddressInputTextBox.Text;
-                    _settings.LastOctetMax = (uint) rangeNumericUpDown.Value;
+                    _settings.UserSettingsModel.BaseIp = ipAddressInputTextBox.Text;
+                    _settings.UserSettingsModel.LastOctetMax = (uint) rangeNumericUpDown.Value;
                     break;
                 case 2:
-                    _settings.IpAddressList = new List<string>(_ipAddressBinding);
+                    _settings.UserSettingsModel.IpAddressList = new List<string>(_ipAddressBinding);
                     break;
             }
 
-            _settings.UpdateFirewall = firewallCheckbox.Checked;
+            _settings.UserSettingsModel.UpdateFirewall = firewallCheckbox.Checked;
             _settings.SaveSettings();
 
             if (firewallCheckbox.Checked)
             {
-                UpdateFirewallRules(_settings.ListeningPort);
+                UpdateFirewallRules(_settings.UserSettingsModel.ListeningPort);
             }
 
             _socketTester = new SocketTester(_settings) { ConnectionListener = this };
@@ -215,20 +210,20 @@ namespace MusicBeeRemoteCore
         private void DebugCheckboxCheckedChanged(object sender, EventArgs e)
         {
             var settings = _settings;
-            settings.DebugLogEnabled = debugEnabled.Checked;
-            _listener?.SelectionChanged(settings.DebugLogEnabled);
+            settings.UserSettingsModel.DebugLogEnabled = debugEnabled.Checked;
+            _listener?.SelectionChanged(settings.UserSettingsModel.DebugLogEnabled);
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
         {
-            if (File.Exists(_settings.FullLogPath))
-            {
-                Process.Start(_settings.FullLogPath);
-            }
-            else
-            {
-                MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
-            }
+//            if (File.Exists(_settings.FullLogPath))
+//            {
+//                //Process.Start(_settings.FullLogPath);
+//            }
+//            else
+//            {
+//                MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
+//            }
         }
 
         public interface IOnDebugSelectionChanged

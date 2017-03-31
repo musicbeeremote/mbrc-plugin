@@ -2,8 +2,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using MusicBeeRemoteCore.Core.Settings;
 using MusicBeeRemoteCore.Remote.Model.Entities;
-using MusicBeeRemoteCore.Remote.Settings;
 using Newtonsoft.Json.Linq;
 using NLog;
 
@@ -12,9 +12,9 @@ namespace MusicBeeRemoteCore.Remote.Networking
     public class SocketTester
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly UserSettings _settings;
+        private readonly PersistanceManager _settings;
 
-        public SocketTester(UserSettings settings)
+        public SocketTester(PersistanceManager settings)
         {
             _settings = settings;
         }
@@ -41,7 +41,7 @@ namespace MusicBeeRemoteCore.Remote.Networking
         {
             try
             {
-                var port = _settings.ListeningPort;
+                var port = _settings.UserSettingsModel.ListeningPort;
                 var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int) port);
                 var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 client.BeginConnect(ipEndpoint, ConnectCallback, client);
