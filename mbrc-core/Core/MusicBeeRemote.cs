@@ -1,10 +1,10 @@
-﻿using MusicBeeRemoteCore.Core.Events.Notifications;
-using MusicBeeRemoteCore.Core.Windows;
-using MusicBeeRemoteCore.Monitoring;
-using MusicBeeRemoteCore.Remote.Networking;
+﻿using MusicBeeRemote.Core.Events.Notifications;
+using MusicBeeRemote.Core.Monitoring;
+using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Windows;
 using TinyMessenger;
 
-namespace MusicBeeRemoteCore.Core
+namespace MusicBeeRemote.Core
 {
     public class MusicBeeRemote : IMusicBeeRemote
     {

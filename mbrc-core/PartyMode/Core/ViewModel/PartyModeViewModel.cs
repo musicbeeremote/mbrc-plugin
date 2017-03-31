@@ -2,10 +2,10 @@
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Threading;
-using MusicBeeRemoteCore.PartyMode.Core.Model;
-using MusicBeeRemoteCore.PartyMode.Core.ViewModel.Commands;
+using MusicBeeRemote.PartyMode.Core.Model;
+using MusicBeeRemote.PartyMode.Core.ViewModel.Commands;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public class PartyModeViewModel : ModelBase, IDisposable
     {

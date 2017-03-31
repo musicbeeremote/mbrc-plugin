@@ -1,7 +1,7 @@
 using System;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Network;
 
-namespace MusicBeeRemoteCore.PartyMode.Core
+namespace MusicBeeRemote.PartyMode.Core
 {
     public class ClientEventArgs : EventArgs
     {

@@ -1,7 +1,8 @@
-using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Settings.Dialog;
 using StructureMap;
 
-namespace MusicBeeRemoteCore.Core.Windows
+namespace MusicBeeRemote.Core.Windows
 {
     class WindowManager : IWindowManager
     {

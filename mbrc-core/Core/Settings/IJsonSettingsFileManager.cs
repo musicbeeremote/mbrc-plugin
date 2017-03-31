@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemoteCore.Core.Settings
+﻿namespace MusicBeeRemote.Core.Settings
 {
     public interface IJsonSettingsFileManager
     {

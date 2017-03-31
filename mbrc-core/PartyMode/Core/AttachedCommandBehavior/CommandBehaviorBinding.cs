@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.AttachedCommandBehavior
+namespace MusicBeeRemote.PartyMode.Core.AttachedCommandBehavior
 {
     /// <summary>
     /// Defines the command behavior binding

@@ -1,9 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
-using MusicBeeRemoteCore.PartyMode.Core.Helper;
-using MusicBeeRemoteCore.PartyMode.Core.Model;
+using MusicBeeRemote.PartyMode.Core.Helper;
+using MusicBeeRemote.PartyMode.Core.Model;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public class LogViewerViewModel : ModelBase, IDisposable
     {

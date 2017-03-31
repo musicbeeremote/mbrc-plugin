@@ -1,7 +1,7 @@
 ﻿using System.Runtime.Serialization;
-using MusicBeeRemoteCore.Remote.Enumerations;
+using MusicBeeRemote.Core.Enumerations;
 
-namespace MusicBeeRemoteCore.Core.Model
+namespace MusicBeeRemote.Core.Model
 {
     [DataContract]
     public class PlayerStatus

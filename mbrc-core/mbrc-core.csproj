@@ -7,7 +7,7 @@
     <ProjectGuid>{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>MusicBeeRemoteCore</RootNamespace>
+    <RootNamespace>MusicBeeRemote</RootNamespace>
     <AssemblyName>mbrc-core</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -62,7 +62,6 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CheckboxExtension.cs" />
     <Compile Include="Core\ApiAdapters\IInvokeHandler.cs" />
     <Compile Include="Core\ApiAdapters\ILibraryApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\INowPlayingApiAdapter.cs" />
@@ -70,7 +69,35 @@
     <Compile Include="Core\ApiAdapters\IPlayerApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Caching\IRepository.cs" />
+    <Compile Include="Core\Caching\Monitor\FileAddedEvent.cs" />
+    <Compile Include="Core\Caching\Monitor\ILibraryScanner.cs" />
+    <Compile Include="Core\Commands\CommandExecutor.cs" />
+    <Compile Include="Core\Commands\CommandPermissions.cs" />
+    <Compile Include="Core\Commands\configuration.cs" />
+    <Compile Include="Core\Commands\ICommand.cs" />
+    <Compile Include="Core\Commands\InstaReplies\InstantReplyCommands.cs" />
+    <Compile Include="Core\Commands\LimitedCommand.cs" />
+    <Compile Include="Core\Commands\Requests\HandeshakeCommands.cs" />
+    <Compile Include="Core\Commands\Requests\LibraryBrowseCommands.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands.cs" />
+    <Compile Include="Core\Commands\Requests\OutputCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerStateCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrackCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PlaylistCommands.cs" />
+    <Compile Include="Core\Commands\Requests\RequestPluginVersion.cs" />
+    <Compile Include="Core\Commands\Requests\RequestRadioStations.cs" />
+    <Compile Include="Core\Commands\Requests\SupportSearchCommands.cs" />
+    <Compile Include="Core\Enumerations\LastfmStatus.cs" />
+    <Compile Include="Core\Enumerations\MetaTag.cs" />
+    <Compile Include="Core\Enumerations\PlayerState.cs" />
+    <Compile Include="Core\Enumerations\QueueType.cs" />
+    <Compile Include="Core\Enumerations\Repeat.cs" />
+    <Compile Include="Core\Enumerations\ShuffleState.cs" />
+    <Compile Include="Core\Events\BroadcastEvent.cs" />
+    <Compile Include="Core\Events\IEvent.cs" />
     <Compile Include="Core\Events\InternalEvents.cs" />
+    <Compile Include="Core\Events\MessageEvent.cs" />
     <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
     <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
     <Compile Include="Core\Events\Notifications\NowPlayingListChangedEvent.cs" />
@@ -79,10 +106,54 @@
     <Compile Include="Core\Events\Notifications\VolumeLevelChangedEvent.cs" />
     <Compile Include="Core\Events\Notifications\VolumeMuteChangedEvent.cs" />
     <Compile Include="Core\IMusicBeeRemote.cs" />
+    <Compile Include="Core\Logging\IPluginLogManager.cs" />
+    <Compile Include="Core\Logging\PluginLogManager.cs" />
+    <Compile Include="Core\Model\CoverPayload.cs" />
+    <Compile Include="Core\Model\Entities\Album.cs" />
+    <Compile Include="Core\Model\Entities\Artist.cs" />
+    <Compile Include="Core\Model\Entities\Genre.cs" />
+    <Compile Include="Core\Model\Entities\MetaData.cs" />
+    <Compile Include="Core\Model\Entities\NowPlaying.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingListTrack.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrack.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrackBase.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrackV2.cs" />
+    <Compile Include="Core\Model\Entities\Page.cs" />
+    <Compile Include="Core\Model\Entities\Playlist.cs" />
+    <Compile Include="Core\Model\Entities\SocketMessage.cs" />
+    <Compile Include="Core\Model\Entities\Track.cs" />
+    <Compile Include="Core\Model\LyricCoverModel.cs" />
+    <Compile Include="Core\Model\LyricsPayload.cs" />
+    <Compile Include="Core\Model\OutputDevice.cs" />
     <Compile Include="Core\Model\PlayerStatus.cs" />
+    <Compile Include="Core\Model\QueuePayload.cs" />
+    <Compile Include="Core\Model\QueueResponse.cs" />
+    <Compile Include="Core\Model\RadioStation.cs" />
+    <Compile Include="Core\Monitoring\IPlayerStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\IStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\ITrackStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\PlayerStateModel.cs" />
+    <Compile Include="Core\Monitoring\PlayerStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\TrackStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
     <Compile Include="Core\MusicBeeRemote.cs" />
+    <Compile Include="Core\Network\Constants.cs" />
+    <Compile Include="Core\Network\ProtocolHandler.cs" />
+    <Compile Include="Core\Network\RemoteClient.cs" />
+    <Compile Include="Core\Network\ServiceDiscovery.cs" />
+    <Compile Include="Core\Network\SocketConnection.cs" />
+    <Compile Include="Core\Network\SocketPacket.cs" />
+    <Compile Include="Core\Network\SocketServer.cs" />
+    <Compile Include="Core\Network\SocketTester.cs" />
     <Compile Include="Core\Network\Tools.cs" />
+    <Compile Include="Core\RemoteBootstrap.cs" />
+    <Compile Include="Core\Settings\Dialog\CheckboxExtension.cs" />
+    <Compile Include="Core\Settings\Dialog\InfoWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\InfoWindow.Designer.cs" />
+    <Compile Include="Core\Settings\FilteringSelection.cs" />
     <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
     <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
@@ -95,22 +166,13 @@
     <Compile Include="Core\Support\ISearchQueue.cs" />
     <Compile Include="Core\Support\SearchApi.cs" />
     <Compile Include="Core\Support\SearchQueue.cs" />
+    <Compile Include="Core\Utilities\Authenticator.cs" />
+    <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
+    <Compile Include="Core\Utilities\IdGenerator.cs" />
+    <Compile Include="Core\Utilities\StateAction.cs" />
+    <Compile Include="Core\Utilities\Utilities.cs" />
     <Compile Include="Core\Windows\iWindowManager.cs" />
     <Compile Include="Core\Windows\WindowManager.cs" />
-    <Compile Include="FilteringSelection.cs" />
-    <Compile Include="InfoWindow.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="InfoWindow.Designer.cs" />
-    <Compile Include="Logging\IPluginLogManager.cs" />
-    <Compile Include="Logging\PluginLogManager.cs" />
-    <Compile Include="Monitoring\IPlayerStateMonitor.cs" />
-    <Compile Include="Monitoring\IStateMonitor.cs" />
-    <Compile Include="Monitoring\ITrackStateMonitor.cs" />
-    <Compile Include="Monitoring\PlayerStateModel.cs" />
-    <Compile Include="Monitoring\PlayerStateMonitor.cs" />
-    <Compile Include="Monitoring\TrackStateMonitor.cs" />
-    <Compile Include="Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehaviorBinding.cs" />
     <Compile Include="PartyMode\Core\AttachedCommandBehavior\EventHandlerGenerator.cs" />
@@ -138,69 +200,7 @@
     <Compile Include="PartyMode\Core\View\LogViewerView.xaml.cs" />
     <Compile Include="PartyMode\Core\View\PartyModeView.xaml.cs" />
     <Compile Include="Properties\Resources.Designer.cs" />
-    <Compile Include="RemoteBootstrap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Remote\Commands\CommandPermissions.cs" />
-    <Compile Include="Remote\Commands\CoverPayload.cs" />
-    <Compile Include="Remote\Commands\InstaReplies\InstantReplyCommands.cs" />
-    <Compile Include="Remote\Commands\LimitedCommand.cs" />
-    <Compile Include="Remote\Commands\LyricsPayload.cs" />
-    <Compile Include="Remote\Commands\QueuePayload.cs" />
-    <Compile Include="Remote\Commands\QueueResponse.cs" />
-    <Compile Include="Remote\Commands\Requests\HandeshakeCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\LibraryBrowseCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\NowPlayingCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\OutputCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\PlayerStateCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\PlayingTrackCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\PlaylistCommands.cs" />
-    <Compile Include="Remote\Commands\Requests\RequestPluginVersion.cs" />
-    <Compile Include="Remote\Commands\Requests\RequestRadioStations.cs" />
-    <Compile Include="Remote\Commands\Requests\SupportSearchCommands.cs" />
-    <Compile Include="Remote\configuration.cs" />
-    <Compile Include="Remote\Controller\Controller.cs" />
-    <Compile Include="Remote\ControlRemoveExtension.cs" />
-    <Compile Include="Remote\Core\IRepository.cs" />
-    <Compile Include="Remote\Core\Monitor\FileAddedEvent.cs" />
-    <Compile Include="Remote\Core\Monitor\ILibraryScanner.cs" />
-    <Compile Include="Remote\Entities\OutputDevice.cs" />
-    <Compile Include="Remote\Entities\RadioStation.cs" />
-    <Compile Include="Remote\Enumerations\LastfmStatus.cs" />
-    <Compile Include="Remote\Enumerations\MetaTag.cs" />
-    <Compile Include="Remote\Enumerations\PlayerState.cs" />
-    <Compile Include="Remote\Enumerations\QueueType.cs" />
-    <Compile Include="Remote\Enumerations\Repeat.cs" />
-    <Compile Include="Remote\Enumerations\ShuffleState.cs" />
-    <Compile Include="Remote\Events\BroadcastEvent.cs" />
-    <Compile Include="Remote\Events\MessageEvent.cs" />
-    <Compile Include="Remote\Interfaces\ICommand.cs" />
-    <Compile Include="Remote\Interfaces\IEvent.cs" />
-    <Compile Include="Remote\Model\Entities\Album.cs" />
-    <Compile Include="Remote\Model\Entities\Artist.cs" />
-    <Compile Include="Remote\Model\Entities\Genre.cs" />
-    <Compile Include="Remote\Model\Entities\MetaData.cs" />
-    <Compile Include="Remote\Model\Entities\NowPlaying.cs" />
-    <Compile Include="Remote\Model\Entities\NowPlayingListTrack.cs" />
-    <Compile Include="Remote\Model\Entities\NowPlayingTrack.cs" />
-    <Compile Include="Remote\Model\Entities\NowPlayingTrackBase.cs" />
-    <Compile Include="Remote\Model\Entities\NowPlayingTrackV2.cs" />
-    <Compile Include="Remote\Model\Entities\Page.cs" />
-    <Compile Include="Remote\Model\Entities\Playlist.cs" />
-    <Compile Include="Remote\Model\Entities\SocketMessage.cs" />
-    <Compile Include="Remote\Model\Entities\Track.cs" />
-    <Compile Include="Remote\Model\LyricCoverModel.cs" />
-    <Compile Include="Remote\Networking\Constants.cs" />
-    <Compile Include="Remote\Networking\ProtocolHandler.cs" />
-    <Compile Include="Remote\Networking\RemoteClient.cs" />
-    <Compile Include="Remote\Networking\ServiceDiscovery.cs" />
-    <Compile Include="Remote\Networking\SocketConnection.cs" />
-    <Compile Include="Remote\Networking\SocketPacket.cs" />
-    <Compile Include="Remote\Networking\SocketServer.cs" />
-    <Compile Include="Remote\Networking\SocketTester.cs" />
-    <Compile Include="Remote\Utilities\Authenticator.cs" />
-    <Compile Include="Remote\Utilities\IdGenerator.cs" />
-    <Compile Include="Remote\Utilities\StateAction.cs" />
-    <Compile Include="Remote\Utilities\Utilities.cs" />
     <Compile Include="TinyMessenger.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -214,11 +214,8 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="InfoWindow.resx" />
+    <EmbeddedResource Include="Core\Settings\Dialog\InfoWindow.resx" />
     <EmbeddedResource Include="Properties\Resources.resx" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Remote\Settings\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

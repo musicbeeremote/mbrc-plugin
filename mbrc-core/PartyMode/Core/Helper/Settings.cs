@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Network;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.Helper
+namespace MusicBeeRemote.PartyMode.Core.Helper
 {
     [Serializable]
     public class Settings

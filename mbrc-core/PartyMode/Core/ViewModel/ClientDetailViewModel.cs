@@ -1,8 +1,8 @@
 ﻿using System.Windows;
-using MusicBeeRemoteCore.Remote.Commands;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Commands;
+using MusicBeeRemote.Core.Network;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public sealed class ClientDetailViewModel : ModelBase
     {

@@ -1,8 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
+using MusicBeeRemote.Core.Settings.Dialog;
 
-namespace MusicBeeRemoteCore.Core.Settings
+namespace MusicBeeRemote.Core.Settings
 {
     [DataContract]
     public class UserSettingsModel

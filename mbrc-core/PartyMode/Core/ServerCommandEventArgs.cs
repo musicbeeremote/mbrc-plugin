@@ -1,6 +1,6 @@
 using System;
 
-namespace MusicBeeRemoteCore.PartyMode.Core
+namespace MusicBeeRemote.PartyMode.Core
 {
     public class ServerCommandEventArgs : EventArgs
     {

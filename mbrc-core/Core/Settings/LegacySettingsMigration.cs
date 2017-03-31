@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 
-namespace MusicBeeRemoteCore.Core.Settings
+namespace MusicBeeRemote.Core.Settings
 {
     class LegacySettingsMigration : ILegacySettingsMigration
     {

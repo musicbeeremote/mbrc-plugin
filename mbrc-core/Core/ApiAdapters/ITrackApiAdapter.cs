@@ -1,8 +1,8 @@
-﻿using MusicBeeRemoteCore.Monitoring;
-using MusicBeeRemoteCore.Remote.Enumerations;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+﻿using MusicBeeRemote.Core.Enumerations;
+using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Monitoring;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface ITrackApiAdapter
     {

@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemoteCore.Core
+﻿namespace MusicBeeRemote.Core
 {
     public interface IMusicBeeRemote
     {

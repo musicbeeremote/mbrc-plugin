@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using MusicBeeRemoteCore.PartyMode.Core.Helper;
-using MusicBeeRemoteCore.PartyMode.Core.Tools;
-using MusicBeeRemoteCore.PartyMode.Core.ViewModel;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.PartyMode.Core.Helper;
+using MusicBeeRemote.PartyMode.Core.Tools;
+using MusicBeeRemote.PartyMode.Core.ViewModel;
 using NLog;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.Model
+namespace MusicBeeRemote.PartyMode.Core.Model
 {
     public class PartyModeModel : ModelBase
     {

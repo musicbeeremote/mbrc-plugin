@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Globalization;
 using System.Windows.Forms;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Monitoring;
-using MusicBeeRemoteCore.Remote;
-using MusicBeeRemoteCore.Remote.Enumerations;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Enumerations;
+using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Monitoring;
+using MusicBeeRemote.Core.Utilities;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin.ApiAdapters

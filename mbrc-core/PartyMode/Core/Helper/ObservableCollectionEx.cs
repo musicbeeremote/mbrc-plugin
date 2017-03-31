@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows.Threading;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.Helper
+namespace MusicBeeRemote.PartyMode.Core.Helper
 {
     /// <summary>
     /// http://geekswithblogs.net/NewThingsILearned/archive/2008/01/16/have-worker-thread-update-observablecollection-that-is-bound-to-a.aspx

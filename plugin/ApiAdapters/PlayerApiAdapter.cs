@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Windows.Forms;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Core.Model;
-using MusicBeeRemoteCore.Remote.Enumerations;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Enumerations;
+using MusicBeeRemote.Core.Model;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin.ApiAdapters

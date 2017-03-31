@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.Helper
+namespace MusicBeeRemote.PartyMode.Core.Helper
 {
     public class CycledList<T> : IList<T>
     {

@@ -1,6 +1,6 @@
 ﻿using System.Windows.Controls;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.View
+namespace MusicBeeRemote.PartyMode.Core.View
 {
     /// <summary>
     /// Interaction logic for ClientView.xaml

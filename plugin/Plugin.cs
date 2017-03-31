@@ -2,8 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using MusicBeePlugin.ApiAdapters;
-using MusicBeeRemoteCore;
-using MusicBeeRemoteCore.Core;
+using MusicBeeRemote.Core;
 
 namespace MusicBeePlugin
 {

@@ -1,6 +1,6 @@
 ﻿using System.Windows.Forms;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface IInvokeHandler
     {

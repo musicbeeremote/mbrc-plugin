@@ -1,6 +1,6 @@
 ﻿using System.IO;
 
-namespace MusicBeeRemoteCore.Core.Settings
+namespace MusicBeeRemote.Core.Settings
 {
     public interface IStorageLocationProvider
     {

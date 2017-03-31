@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using MusicBeeRemoteCore.PartyMode.Core.Model;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.PartyMode.Core.Model;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public class ClientViewModel : ModelBase, IDisposable
     {

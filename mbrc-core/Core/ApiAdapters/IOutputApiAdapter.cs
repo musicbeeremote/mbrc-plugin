@@ -1,6 +1,6 @@
-﻿using MusicBeeRemoteCore.Remote.Entities;
+﻿using MusicBeeRemote.Core.Model;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface IOutputApiAdapter
     {

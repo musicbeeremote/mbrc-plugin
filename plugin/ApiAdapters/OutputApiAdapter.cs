@@ -1,5 +1,5 @@
-﻿using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Remote.Entities;
+﻿using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Model;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin.ApiAdapters

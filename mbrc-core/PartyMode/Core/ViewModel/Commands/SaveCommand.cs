@@ -1,8 +1,8 @@
 using System;
 using System.Windows.Input;
-using MusicBeeRemoteCore.PartyMode.Core.Model;
+using MusicBeeRemote.PartyMode.Core.Model;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel.Commands
+namespace MusicBeeRemote.PartyMode.Core.ViewModel.Commands
 {
     public class SaveCommand : ICommand
     {

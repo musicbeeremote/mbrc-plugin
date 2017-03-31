@@ -1,7 +1,7 @@
 using System.IO;
 using Newtonsoft.Json;
 
-namespace MusicBeeRemoteCore.Core.Settings
+namespace MusicBeeRemote.Core.Settings
 {
     class JsonSettingsFileManager : IJsonSettingsFileManager
     {

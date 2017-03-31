@@ -1,7 +1,7 @@
-﻿using MusicBeeRemoteCore.Core.Model;
-using MusicBeeRemoteCore.Remote.Enumerations;
+﻿using MusicBeeRemote.Core.Enumerations;
+using MusicBeeRemote.Core.Model;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface IPlayerApiAdapter
     {

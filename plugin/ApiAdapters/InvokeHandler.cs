@@ -1,5 +1,5 @@
 ﻿using System.Windows.Forms;
-using MusicBeeRemoteCore.Core.ApiAdapters;
+using MusicBeeRemote.Core.ApiAdapters;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin.ApiAdapters

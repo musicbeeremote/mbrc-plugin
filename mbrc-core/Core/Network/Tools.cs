@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
-namespace MusicBeeRemoteCore.Core.Network
+namespace MusicBeeRemote.Core.Network
 {
     public class Tools
     {

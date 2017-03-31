@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public abstract class ModelBase : INotifyPropertyChanged
     {

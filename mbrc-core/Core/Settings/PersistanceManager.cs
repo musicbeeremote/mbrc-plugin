@@ -1,9 +1,9 @@
 using System;
 using System.Diagnostics;
-using MusicBeeRemoteCore.Remote.Commands.Internal;
+using MusicBeeRemote.Core.Events;
 using TinyMessenger;
 
-namespace MusicBeeRemoteCore.Core.Settings
+namespace MusicBeeRemote.Core.Settings
 {
     /// <summary>
     /// Represents the settings along with all the settings related functionality

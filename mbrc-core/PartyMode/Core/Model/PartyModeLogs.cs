@@ -1,4 +1,4 @@
-namespace MusicBeeRemoteCore.PartyMode.Core.Model
+namespace MusicBeeRemote.PartyMode.Core.Model
 {
     public class PartyModeLogs
     {

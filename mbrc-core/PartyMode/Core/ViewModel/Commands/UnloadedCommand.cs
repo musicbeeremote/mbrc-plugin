@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Input;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel.Commands
+namespace MusicBeeRemote.PartyMode.Core.ViewModel.Commands
 {
     public class UnloadedCommand : ICommand
     {

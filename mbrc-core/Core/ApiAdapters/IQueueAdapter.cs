@@ -1,6 +1,6 @@
-﻿using MusicBeeRemoteCore.Remote.Enumerations;
+﻿using MusicBeeRemote.Core.Enumerations;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface IQueueAdapter
     {

@@ -1,6 +1,6 @@
 ﻿using System.Xml.Linq;
 
-namespace MusicBeeRemoteCore.Core.Support
+namespace MusicBeeRemote.Core.Support
 {
     public class FilterHelper
     {

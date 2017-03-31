@@ -1,9 +1,9 @@
 using System.Linq;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Remote.Enumerations;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Enumerations;
+using MusicBeeRemote.Core.Model.Entities;
 
-namespace MusicBeeRemoteCore.Core.Support
+namespace MusicBeeRemote.Core.Support
 {
     class SearchQueue : ISearchQueue
     {

@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.Tools
+namespace MusicBeeRemote.PartyMode.Core.Tools
 {
     public class PartyModeNetworkTools
     {

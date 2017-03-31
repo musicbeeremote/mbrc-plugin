@@ -1,6 +1,6 @@
-﻿using MusicBeeRemoteCore.Remote.Enumerations;
+﻿using MusicBeeRemote.Core.Enumerations;
 
-namespace MusicBeeRemoteCore.Core.Support
+namespace MusicBeeRemote.Core.Support
 {
     public interface ISearchQueue
     {

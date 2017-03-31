@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
-using MusicBeeRemoteCore.Remote.Entities;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.Model;
+using MusicBeeRemote.Core.Model.Entities;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface ILibraryApiAdapter
     {

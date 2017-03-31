@@ -1,6 +1,6 @@
-using MusicBeeRemoteCore.PartyMode.Core.Model;
+using MusicBeeRemote.PartyMode.Core.Model;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
     public class PartyModeLogsView : PartyModeLogs
     {

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Remote;
-using MusicBeeRemoteCore.Remote.Entities;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Model;
+using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Utilities;
 using static MusicBeePlugin.Plugin.MetaDataType;
-using Genre = MusicBeeRemoteCore.Remote.Model.Entities.Genre;
+using Genre = MusicBeeRemote.Core.Model.Entities.Genre;
 
 namespace MusicBeePlugin.ApiAdapters
 {

@@ -1,11 +1,10 @@
-﻿using MusicBeeRemoteCore.PartyMode.Core.Model;
-using MusicBeeRemoteCore.Remote.Commands;
-using MusicBeeRemoteCore.Remote.Commands.Internal;
-using MusicBeeRemoteCore.Remote.Interfaces;
-using MusicBeeRemoteCore.Remote.Networking;
+﻿using MusicBeeRemote.Core.Commands;
+using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.PartyMode.Core.Model;
 using TinyMessenger;
 
-namespace MusicBeeRemoteCore.PartyMode.Core
+namespace MusicBeeRemote.PartyMode.Core
 {
     public class PartyModeCommandHandler
     {

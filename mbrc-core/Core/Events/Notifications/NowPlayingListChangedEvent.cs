@@ -1,6 +1,6 @@
 ﻿using TinyMessenger;
 
-namespace MusicBeeRemoteCore.Core.Events.Notifications
+namespace MusicBeeRemote.Core.Events.Notifications
 {
     public class NowPlayingListChangedEvent: ITinyMessage
     {

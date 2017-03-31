@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemoteCore.Core.Windows
+﻿namespace MusicBeeRemote.Core.Windows
 {
     public interface IWindowManager
     {

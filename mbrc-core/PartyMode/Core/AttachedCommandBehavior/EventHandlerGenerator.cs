@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 
-namespace MusicBeeRemoteCore.PartyMode.Core.AttachedCommandBehavior
+namespace MusicBeeRemote.PartyMode.Core.AttachedCommandBehavior
 {
     /// <summary>
     /// Generates delegates according to the specified signature on runtime

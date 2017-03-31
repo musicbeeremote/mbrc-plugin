@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Remote;
-using MusicBeeRemoteCore.Remote.Enumerations;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Model.Entities;
 using static MusicBeePlugin.Plugin;
-using static MusicBeeRemoteCore.Core.Support.FilterHelper;
+using static MusicBeeRemote.Core.Support.FilterHelper;
 
 namespace MusicBeePlugin.ApiAdapters
 {

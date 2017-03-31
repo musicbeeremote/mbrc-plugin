@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using MusicBeeRemoteCore.Remote.Model.Entities;
+using MusicBeeRemote.Core.Model.Entities;
 
-namespace MusicBeeRemoteCore.Core.ApiAdapters
+namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface INowPlayingApiAdapter
     {

@@ -1,6 +1,6 @@
-﻿using MusicBeeRemoteCore.Core.ApiAdapters;
+﻿using MusicBeeRemote.Core.ApiAdapters;
 
-namespace MusicBeeRemoteCore.Core
+namespace MusicBeeRemote.Core
 {
     public class MusicBeeDependencies
     {

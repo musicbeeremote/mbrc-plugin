@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using MusicBeeRemoteCore.Core.ApiAdapters;
-using MusicBeeRemoteCore.Remote.Model.Entities;
-using static MusicBeeRemoteCore.Core.Support.FilterHelper;
+using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Model.Entities;
 
-namespace MusicBeeRemoteCore.Core.Support
+namespace MusicBeeRemote.Core.Support
 {
     class SearchApi : ISearchApi
     {
@@ -17,7 +16,7 @@ namespace MusicBeeRemoteCore.Core.Support
 
         public List<Track> LibrarySearchTitle(string title)
         {
-            var tracks = _apiAdapter.QueryFiles(XmlFilter(new[] {"Title"}, title, false));
+            var tracks = _apiAdapter.QueryFiles(FilterHelper.XmlFilter(new[] {"Title"}, title, false));
             return tracks.ToList().Select(CreateTrackForPath).ToList();
         }
 
@@ -32,7 +31,7 @@ namespace MusicBeeRemoteCore.Core.Support
 
         public List<Track> LibraryGetAlbumTracks(string album)
         {
-            var paths = _apiAdapter.QueryFiles(XmlFilter(new[] {"Album"}, album, true));
+            var paths = _apiAdapter.QueryFiles(FilterHelper.XmlFilter(new[] {"Album"}, album, true));
             var tracks = paths.ToList().Select(CreateTrackForPath).ToList();
             tracks.Sort();
             return tracks;
@@ -40,27 +39,27 @@ namespace MusicBeeRemoteCore.Core.Support
 
         public List<Genre> LibrarySearchGenres(string genre)
         {
-            return _apiAdapter.GetGenres(XmlFilter(new[] {"Genre"}, genre, false)).ToList();
+            return _apiAdapter.GetGenres(FilterHelper.XmlFilter(new[] {"Genre"}, genre, false)).ToList();
         }
 
         public List<Album> LibrarySearchAlbums(string albumName)
         {
-            return _apiAdapter.GetAlbums(XmlFilter(new[] {"Album"}, albumName, false)).ToList();
+            return _apiAdapter.GetAlbums(FilterHelper.XmlFilter(new[] {"Album"}, albumName, false)).ToList();
         }
 
         public List<Album> LibraryGetArtistAlbums(string artist)
         {
-            return _apiAdapter.GetAlbums(XmlFilter(new[] {"ArtistPeople"}, artist, true)).ToList();
+            return _apiAdapter.GetAlbums(FilterHelper.XmlFilter(new[] {"ArtistPeople"}, artist, true)).ToList();
         }
 
         public List<Artist> LibrarySearchArtist(string artist)
         {
-            return _apiAdapter.GetArtists(XmlFilter(new[] {"ArtistPeople"}, artist, false)).ToList();
+            return _apiAdapter.GetArtists(FilterHelper.XmlFilter(new[] {"ArtistPeople"}, artist, false)).ToList();
         }
 
         public List<Artist> LibraryGetGenreArtists(string genre)
         {
-            return _apiAdapter.GetArtists(XmlFilter(new[] {"Genre"}, genre, true)).ToList();
+            return _apiAdapter.GetArtists(FilterHelper.XmlFilter(new[] {"Genre"}, genre, true)).ToList();
         }
     }
 }

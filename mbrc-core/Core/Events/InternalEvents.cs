@@ -1,10 +1,9 @@
 using System.Net;
-using MusicBeeRemoteCore.Remote.Events;
-using MusicBeeRemoteCore.Remote.Model.Entities;
-using MusicBeeRemoteCore.Remote.Networking;
+using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Network;
 using TinyMessenger;
 
-namespace MusicBeeRemoteCore.Remote.Commands.Internal
+namespace MusicBeeRemote.Core.Events
 {
     internal class PluginResponseAvailableEvent : ITinyMessage
     {
