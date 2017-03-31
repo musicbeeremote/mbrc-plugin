@@ -3,6 +3,7 @@ using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
+using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
@@ -237,9 +238,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            int newVolume;
-            if (!int.TryParse(@event.DataToString(), out newVolume)) return;
-
+            var token = (@event.Data as JToken);
+            if (token == null || token.Type != JTokenType.Integer)
+            {
+                return;
+            }
+            var newVolume = token.Value<int>();
+                               
             _apiAdapter.SetVolume(newVolume);
 
             var message = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
