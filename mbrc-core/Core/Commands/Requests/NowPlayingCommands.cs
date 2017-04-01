@@ -26,7 +26,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var result = _apiAdapter.PlayMatchingTrack(@event.DataToString());
+            var result = false;
+            var token = @event.Data as JToken;
+
+            if (token != null)
+            {
+                var query = (string) token;
+                result = _apiAdapter.PlayMatchingTrack(query);
+            }
+
             var message = new SocketMessage(Constants.NowPlayingListSearch, result);
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
@@ -117,10 +125,10 @@ namespace MusicBeeRemote.Core.Commands.Requests
         {
             var result = false;
 
-            int trackIndex;
-            if (int.TryParse(@event.DataToString(), out trackIndex))
+            var token = @event.Data as JToken;
+            if (token != null && token.Type == JTokenType.Integer)
             {
-                result = _nowPlayingApiAdapter.PlayIndex(trackIndex);
+                result = _nowPlayingApiAdapter.PlayIndex((int) token);
             }
 
             var message = new SocketMessage(Constants.NowPlayingListPlay, result);
@@ -144,9 +152,12 @@ namespace MusicBeeRemote.Core.Commands.Requests
         public override void Execute(IEvent @event)
         {
             var success = false;
-            int index;
-            if (int.TryParse(@event.DataToString(), out index))
+            var token = @event.Data as JToken;
+            var index = -1;
+
+            if (token != null && token.Type == JTokenType.Integer)
             {
+                index = (int) token;
                 success = _nowPlayingApiAdapter.RemoveIndex(index);
             }
 
@@ -233,17 +244,22 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            int from, to;
-            string sFrom, sTo;
+            var from = -1;
+            var to = -1;
 
-            ((Dictionary<string, string>) @event.Data).TryGetValue("from", out sFrom);
-            ((Dictionary<string, string>) @event.Data).TryGetValue("to", out sTo);
-            int.TryParse(sFrom, out from);
-            int.TryParse(sTo, out to);
+            var success = false;
+            var token = @event.Data as JToken;
+
+            if (token != null && token.Type == JTokenType.Object)
+            {
+                from = (int) token["from"];
+                to = (int) token["to"];
+                success = _nowPlayingApiAdapter.MoveTrack(from, to);
+            }
 
             var reply = new
             {
-                success = _nowPlayingApiAdapter.MoveTrack(from, to),
+                success,
                 from,
                 to
             };

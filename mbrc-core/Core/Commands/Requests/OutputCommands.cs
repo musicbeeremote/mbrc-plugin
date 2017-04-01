@@ -2,6 +2,7 @@ using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
+using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
@@ -38,7 +39,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            _apiAdapter.SetOutputDevice(@event.DataToString());
+            var token = @event.Data as JToken;
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var device = (string) token;
+                var outputDevice = _apiAdapter.SetOutputDevice(device);
+            }
+
             var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }

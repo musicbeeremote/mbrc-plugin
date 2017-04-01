@@ -1,8 +1,10 @@
 using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Enumerations;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
+using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
@@ -20,7 +22,18 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var lfmStatus = _apiAdapter.ChangeStatus(@event.DataToString());
+            var token = @event.DataToken();
+            LastfmStatus lfmStatus;
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var action = token.Value<string>();
+                lfmStatus = _apiAdapter.ChangeStatus(action);
+            }
+            else
+            {
+                lfmStatus = _apiAdapter.GetLfmStatus();
+            }
+                       
             var message = new SocketMessage(Constants.NowPlayingLfmRating, lfmStatus);
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
@@ -39,11 +52,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            int position;
-            if (int.TryParse(@event.DataToString(), out position))
+            var token = @event.DataToken();
+            if (token != null && token.Type == JTokenType.Integer)
             {
+                var position = token.Value<int>();
                 _apiAdapter.SeekTo(position);
             }
+            
             var message = new SocketMessage(Constants.NowPlayingPosition, _apiAdapter.GetTemporalInformation());
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
@@ -62,7 +77,18 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.NowPlayingRating, _apiAdapter.SetRating(@event.DataToString()));
+            string result;
+            var token = @event.DataToken();
+            if (token != null)
+            {
+                var rating = token.Value<string>();
+                result = _apiAdapter.SetRating(rating);
+            }
+            else
+            {
+                result = _apiAdapter.GetRating();
+            }
+            var message = new SocketMessage(Constants.NowPlayingRating, result);
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
     }

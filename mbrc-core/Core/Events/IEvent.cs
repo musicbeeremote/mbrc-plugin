@@ -1,4 +1,5 @@
-﻿using TinyMessenger;
+﻿using Newtonsoft.Json.Linq;
+using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events
 {
@@ -8,6 +9,6 @@ namespace MusicBeeRemote.Core.Events
         string Type { get; }
         string ConnectionId { get; }
         string ClientId { get; }
-        string DataToString();
+        JToken DataToken();
     }
 }

@@ -2,6 +2,7 @@ using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
+using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
@@ -19,15 +20,32 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            int clientProtocolVersion;
-            if (int.TryParse(@event.DataToString(), out clientProtocolVersion))
+            var data = @event.Data as JToken;
+            if (data != null)
             {
-                var connection = _auth.GetConnection(@event.ConnectionId);
-                if (connection != null)
+                int clientProtocolVersion;
+                switch (data.Type)
                 {
-                    connection.ClientProtocolVersion = clientProtocolVersion;
+                    case JTokenType.Integer:
+                    case JTokenType.Float:
+                        clientProtocolVersion = (int) data;
+                        break;
+                    case JTokenType.Object:
+                        clientProtocolVersion = (int) data["protocol_version"];
+                        break;
+                    default:
+                        clientProtocolVersion = Constants.V2;
+                        break;
+                }
+
+                var socketConnection = _auth.GetConnection(@event.ConnectionId);
+                if (socketConnection != null)
+                {
+                    socketConnection.ClientProtocolVersion = clientProtocolVersion;
                 }
             }
+
+
             var message = new SocketMessage(Constants.Protocol, Constants.ProtocolVersion);
             _messengerHub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }

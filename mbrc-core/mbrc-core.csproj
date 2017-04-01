@@ -134,6 +134,7 @@
     <Compile Include="Core\Monitoring\ITrackStateMonitor.cs" />
     <Compile Include="Core\Monitoring\PlayerStateModel.cs" />
     <Compile Include="Core\Monitoring\PlayerStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\SupportTrackTemporalnformation.cs" />
     <Compile Include="Core\Monitoring\TrackStateMonitor.cs" />
     <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />

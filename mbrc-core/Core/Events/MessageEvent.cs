@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemote.Core.Events
+﻿using Newtonsoft.Json.Linq;
+
+namespace MusicBeeRemote.Core.Events
 {
     internal class MessageEvent : IEvent
     {
@@ -10,9 +12,9 @@
             ClientId = clientId;
         }
 
-        public string DataToString()
+        public JToken DataToken()
         {
-            return (string) (Data is string ? Data : string.Empty);
+            return Data as JToken;
         }
 
         public object Data { get; }

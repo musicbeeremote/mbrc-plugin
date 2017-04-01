@@ -5,6 +5,7 @@ using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Support;
+using Newtonsoft.Json.Linq;
 using NLog;
 using TinyMessenger;
 
@@ -246,8 +247,16 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var result = _searchApi.LibraryGetGenreArtists(@event.DataToString());
-            var message = new SocketMessage(Constants.LibraryGenreArtists, result);
+            var token = @event.DataToken();
+
+            List<Artist> result = null;
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var query = token.Value<string>();
+                result = _searchApi.LibraryGetGenreArtists(query);
+            }
+            
+            var message = new SocketMessage(Constants.LibraryGenreArtists, result ?? new List<Artist>());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
@@ -265,8 +274,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var result = _searchApi.LibraryGetArtistAlbums(@event.DataToString());
-            var message = new SocketMessage(Constants.LibraryArtistAlbums, result);
+            var token = @event.DataToken();
+            List<Album> result = null;
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var query = token.Value<string>();
+                result = _searchApi.LibraryGetArtistAlbums(query);
+            }
+                      
+            var message = new SocketMessage(Constants.LibraryArtistAlbums, result ?? new List<Album>());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
@@ -284,8 +300,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var results = _searchApi.LibraryGetAlbumTracks(@event.DataToString());
-            var message = new SocketMessage(Constants.LibraryAlbumTracks, results);
+            var token = @event.DataToken();
+            List<Track> results = null; 
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var query = token.Value<string>();
+                results = _searchApi.LibraryGetAlbumTracks(query);
+            }
+
+            var message = new SocketMessage(Constants.LibraryAlbumTracks, results ?? new List<Track>());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
@@ -303,8 +326,16 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var searchResults = _searchApi.LibrarySearchTitle(@event.DataToString());
-            var message = new SocketMessage(Constants.LibrarySearchTitle, searchResults);
+            var token = @event.DataToken();
+            List<Track> searchResults = null;
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var query = token.Value<string>();
+                searchResults = _searchApi.LibrarySearchTitle(query);
+            }
+            
+
+            var message = new SocketMessage(Constants.LibrarySearchTitle, searchResults ?? new List<Track>());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }

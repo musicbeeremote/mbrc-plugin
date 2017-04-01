@@ -23,7 +23,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var success = _libraryApiAdapter.PlayPlaylist(@event.DataToString());
+            var success = false;
+            var token = @event.DataToken();
+            if (token != null && token.Type == JTokenType.String)
+            {
+                var url = token.Value<string>();
+                success = _libraryApiAdapter.PlayPlaylist(url);
+            }                       
             var message = new SocketMessage(Constants.PlaylistPlay, success);
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }

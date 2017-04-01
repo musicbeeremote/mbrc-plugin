@@ -79,7 +79,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            if (@event.Data.Equals("toggle"))
+            var token = @event.Data as JToken;
+            if (token != null && ((string) token).Equals("toggle"))
             {
                 _apiAdapter.ToggleRepeatMode();
             }
@@ -104,7 +105,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            if (@event.Data.Equals("toggle"))
+            var token = @event.Data as JToken;
+            if (token != null && ((string) token).Equals("toggle"))
             {
                 _apiAdapter.ToggleScrobbling();
             }
@@ -128,7 +130,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var isToggle = @event.Data.Equals("toggle");
+            var isToggle = false;
+            var token = @event.Data as JToken;
+            if (token != null && ((string) token).Equals("toggle"))
+            {
+                isToggle = true;
+
+            }
 
             SocketMessage message;
             if (_auth.ClientProtocolMisMatch(@event.ConnectionId))
@@ -171,6 +179,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
     internal class RequestPause : LimitedCommand
     {
         private readonly IPlayerApiAdapter _apiAdapter;
+
         public RequestPause(IPlayerApiAdapter playerApiAdapter)
         {
             _apiAdapter = playerApiAdapter;
@@ -238,13 +247,14 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var token = (@event.Data as JToken);
+            var token = @event.Data as JToken;
             if (token == null || token.Type != JTokenType.Integer)
             {
                 return;
             }
+
             var newVolume = token.Value<int>();
-                               
+
             _apiAdapter.SetVolume(newVolume);
 
             var message = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
@@ -267,7 +277,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var isToggle = @event.Data.Equals("toggle");
+            var isToggle = false;
+            var token = @event.Data as JToken;
+            if (token != null && ((string) token).Equals("toggle"))
+            {
+                isToggle = true;
+
+            }
 
             if (isToggle)
             {
@@ -294,7 +310,13 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var isToggle = @event.Data.Equals("toggle");
+            var isToggle = false;
+            var token = @event.Data as JToken;
+            if (token != null && ((string) token).Equals("toggle"))
+            {
+                isToggle = true;
+
+            }
 
             if (isToggle)
             {
@@ -303,7 +325,6 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
             var message = new SocketMessage(Constants.PlayerAutoDj, _apiAdapter.IsAutoDjEnabledLegacy());
             _hub.Publish(new PluginResponseAvailableEvent(message));
-
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
