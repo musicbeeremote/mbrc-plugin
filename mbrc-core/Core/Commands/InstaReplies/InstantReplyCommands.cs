@@ -3,6 +3,7 @@ using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Model.Generators;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
 using NLog;
@@ -71,10 +72,9 @@ namespace MusicBeeRemote.Core.Commands.InstaReplies
             _hub.Publish(new PluginResponseAvailableEvent(statusMessage, connectionId));
 
 
-
             if (clientProtocol >= Constants.V3)
             {
-                var coverPayload = new CoverPayload(_model.Cover, true);
+                var coverPayload = CoverPayloadGenerator.Create(_model.Cover, true);
                 var lyricsPayload = new LyricsPayload(_model.Lyrics);
                 var coverMessage = new SocketMessage(Constants.NowPlayingCover, coverPayload);
                 var lyricsMessage = new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload);
@@ -140,12 +140,12 @@ namespace MusicBeeRemote.Core.Commands.InstaReplies
 
             if (_auth.ClientProtocolVersion(@event.ConnectionId) > 2)
             {
-                var coverPayload = new CoverPayload(_model.Cover, true);
-                message = new SocketMessage(Constants.NowPlayingCover, coverPayload);
+                var coverPayload = CoverPayloadGenerator.Create(_model.Cover, true);
+                message = new SocketMessage(Constants.NowPlayingCover, coverPayload){NewLineTerminated = true};
             }
             else
             {
-                message = new SocketMessage(Constants.NowPlayingCover, _model.Cover);
+                message = new SocketMessage(Constants.NowPlayingCover, _model.Cover) {NewLineTerminated = true};
             }
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }

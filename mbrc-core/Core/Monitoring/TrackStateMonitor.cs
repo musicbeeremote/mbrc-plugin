@@ -4,6 +4,7 @@ using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Notifications;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Model.Generators;
 using MusicBeeRemote.Core.Network;
 using TinyMessenger;
 
@@ -92,7 +93,7 @@ namespace MusicBeeRemote.Core.Monitoring
 
         private void BroadcastCover(string cover)
         {
-            var payload = new CoverPayload(cover, false);
+            var payload = CoverPayloadGenerator.Create(cover, false);
             var broadcastEvent = new BroadcastEvent(Constants.NowPlayingCover);
             broadcastEvent.AddPayload(Constants.V2, cover);
             broadcastEvent.AddPayload(Constants.V3, payload);

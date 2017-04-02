@@ -109,6 +109,7 @@
     <Compile Include="Core\Logging\IPluginLogManager.cs" />
     <Compile Include="Core\Logging\PluginLogManager.cs" />
     <Compile Include="Core\Model\CoverPayload.cs" />
+    <Compile Include="Core\Model\CoverStatusCodes.cs" />
     <Compile Include="Core\Model\Entities\Album.cs" />
     <Compile Include="Core\Model\Entities\Artist.cs" />
     <Compile Include="Core\Model\Entities\Genre.cs" />
@@ -122,6 +123,7 @@
     <Compile Include="Core\Model\Entities\Playlist.cs" />
     <Compile Include="Core\Model\Entities\SocketMessage.cs" />
     <Compile Include="Core\Model\Entities\Track.cs" />
+    <Compile Include="Core\Model\Generators\CoverPayloadGenerator.cs" />
     <Compile Include="Core\Model\LyricCoverModel.cs" />
     <Compile Include="Core\Model\LyricsPayload.cs" />
     <Compile Include="Core\Model\OutputDevice.cs" />
