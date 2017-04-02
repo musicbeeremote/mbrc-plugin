@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -16,6 +18,7 @@ namespace MusicBeeRemote.Core.Network
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int Port = 45345;
         private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.1.5.10");
+        private readonly ConcurrentDictionary<IPAddress, UdpClient> _udpClients = new ConcurrentDictionary<IPAddress, UdpClient>();
 
 
         public ServiceDiscovery(PersistanceManager settings)
@@ -35,16 +38,17 @@ namespace MusicBeeRemote.Core.Network
                 udpClient.Client.Bind(new IPEndPoint(address, Port));
                 udpClient.JoinMulticastGroup(MulticastAddress, address);
                 udpClient.BeginReceive(OnDataReceived, udpClient);
+                _udpClients.TryAdd(address, udpClient);
             });
         }
 
         private void OnDataReceived(IAsyncResult ar)
         {
-            var udpClient = (UdpClient) ar.AsyncState;
-            var mEndPoint = new IPEndPoint(IPAddress.Any, Port);
-            var request = udpClient.EndReceive(ar, ref mEndPoint);
+            var udpClient = (UdpClient) ar.AsyncState;            
             try
             {
+                var mEndPoint = new IPEndPoint(IPAddress.Any, Port);
+                var request = udpClient.EndReceive(ar, ref mEndPoint);
                 HandleDiscovery(request, mEndPoint, udpClient);
             }
             catch (Exception e)
@@ -135,7 +139,15 @@ namespace MusicBeeRemote.Core.Network
 
         public void Stop()
         {
-            throw new NotImplementedException();
+            foreach (var address in _udpClients.Keys)
+            {
+                UdpClient client;
+                if (_udpClients.TryRemove(address, out client))
+                {
+                    client.DropMulticastGroup(MulticastAddress);
+                    client.Close();                    
+                }
+            }            
         }
     }
 }
