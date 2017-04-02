@@ -67,7 +67,7 @@ namespace MusicBeeRemote.Core.Monitoring
             if (_apiAdapter.GetShuffleState() != _stateModel.Shuffle)
             {
                 _stateModel.Shuffle = _apiAdapter.GetShuffleState();
-                var message = new SocketMessage(Constants.PlayerShuffle, _stateModel.Shuffle);
+                var message = new SocketMessage(Constants.PlayerShuffle, _stateModel.Shuffle.ToString().ToLowerInvariant());
                 _hub.Publish(new PluginResponseAvailableEvent(message));
             }
 
@@ -81,7 +81,7 @@ namespace MusicBeeRemote.Core.Monitoring
             if (_apiAdapter.GetRepeatMode() != _stateModel.RepeatMode)
             {
                 _stateModel.RepeatMode = _apiAdapter.GetRepeatMode();
-                var message = new SocketMessage(Constants.PlayerRepeat, _stateModel.RepeatMode);
+                var message = new SocketMessage(Constants.PlayerRepeat, _stateModel.RepeatMode.ToString().ToLowerInvariant());
                 _hub.Publish(new PluginResponseAvailableEvent(message));
             }
         }

@@ -85,7 +85,7 @@ namespace MusicBeeRemote.Core
             JsonConvert.DefaultSettings = () => new JsonSerializerSettings
             {
                 DateTimeZoneHandling = DateTimeZoneHandling.Local,
-                NullValueHandling = NullValueHandling.Ignore,
+                NullValueHandling = NullValueHandling.Ignore
             };
 
             return _container.GetInstance<IMusicBeeRemote>();

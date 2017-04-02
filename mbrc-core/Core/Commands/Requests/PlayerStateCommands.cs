@@ -85,7 +85,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
                 _apiAdapter.ToggleRepeatMode();
             }
 
-            var message = new SocketMessage(Constants.PlayerRepeat, _apiAdapter.GetRepeatMode());
+            var message = new SocketMessage(Constants.PlayerRepeat, _apiAdapter.GetRepeatMode().ToString().ToLowerInvariant());
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
@@ -150,7 +150,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             else
             {
                 var shuffleState = isToggle ? _apiAdapter.SwitchShuffle() : _apiAdapter.GetShuffleState();
-                message = new SocketMessage(Constants.PlayerShuffle, shuffleState);
+                message = new SocketMessage(Constants.PlayerShuffle, shuffleState.ToString().ToLowerInvariant());
             }
 
             _hub.Publish(new PluginResponseAvailableEvent(message));

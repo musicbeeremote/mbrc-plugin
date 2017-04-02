@@ -20,14 +20,14 @@ namespace MusicBeePlugin.ApiAdapters
         {
             var shuffleEnabled = _api.Player_GetShuffle();
             var autoDjEnabled = _api.Player_GetAutoDjEnabled();
-            var state = ShuffleState.off;
+            var state = ShuffleState.Off;
             if (shuffleEnabled && !autoDjEnabled)
             {
-                state = ShuffleState.shuffle;
+                state = ShuffleState.Shuffle;
             }
             else if (autoDjEnabled)
             {
-                state = ShuffleState.autodj;
+                state = ShuffleState.Autodj;
             }
 
             return state;
@@ -185,7 +185,7 @@ namespace MusicBeePlugin.ApiAdapters
                 var success = _api.Player_StartAutoDj();
                 if (success)
                 {
-                    shuffleState = ShuffleState.autodj;
+                    shuffleState = ShuffleState.Autodj;
                 }
             }
             else if (autoDjEnabled)
@@ -197,7 +197,7 @@ namespace MusicBeePlugin.ApiAdapters
                 var success = _api.Player_SetShuffle(true);
                 if (success)
                 {
-                    shuffleState = ShuffleState.shuffle;
+                    shuffleState = ShuffleState.Shuffle;
                 }
             }
 

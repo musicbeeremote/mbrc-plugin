@@ -115,7 +115,7 @@ namespace MusicBeeRemote.Core.Network
             return notify;
         }
 
-        private static string InterfaceAddress(string ipString, List<string> addresses)
+        private static string InterfaceAddress(string ipString, IEnumerable<string> addresses)
         {
             var clientAddress = IPAddress.Parse(ipString);
             var interfaceAddress = string.Empty;
