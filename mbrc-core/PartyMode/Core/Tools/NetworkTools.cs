@@ -11,20 +11,20 @@ namespace MusicBeeRemote.PartyMode.Core.Tools
         [DllImport("iphlpapi.dll")]
         private static extern long SendARP(int destIp, int scrIp, [Out] byte[] pMacAddr, ref int phyAddr);
 
-        public static PhysicalAddress GetMacAddress(IPAddress ipadress)
+        public static PhysicalAddress GetMacAddress(IPAddress ipAddress)
         {
-            if (ipadress == null) return null;
+            if (ipAddress == null) return null;
             try
             {
                 var bpMacAddr = new byte[6];
                 var len = bpMacAddr.Length;
-                var res = SendARP(ipadress.GetHashCode(), 0, bpMacAddr, ref len);
+                var res = SendARP(ipAddress.GetHashCode(), 0, bpMacAddr, ref len);
                 var adr = new PhysicalAddress(bpMacAddr);
                 return adr;
             }
             catch (Exception e)
             {
-                Debug.WriteLine("Get MAC address failed IP: " + ipadress.Address + "\n" + e.Message + " \n" + e.StackTrace);
+                Debug.WriteLine("Get MAC address failed IP: " + ipAddress + "\n" + e.Message + " \n" + e.StackTrace);
                 throw e;
             }
         }
