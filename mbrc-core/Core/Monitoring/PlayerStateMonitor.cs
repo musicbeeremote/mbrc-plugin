@@ -51,7 +51,7 @@ namespace MusicBeeRemote.Core.Monitoring
 
         private void SendPlayState()
         {
-            var stateMessage = new SocketMessage(Constants.PlayerState, _apiAdapter.GetState());
+            var stateMessage = new SocketMessage(Constants.PlayerState, _apiAdapter.GetState().ToString().ToLowerInvariant());
             _hub.Publish(new PluginResponseAvailableEvent(stateMessage));
         }
 
