@@ -15,6 +15,10 @@ namespace MusicBeeRemote.Core.Monitoring
         private readonly IPlayerApiAdapter _apiAdapter;
 
         private Timer _timer;
+        private TinyMessageSubscriptionToken _volumeSubscriptionToken;
+        private TinyMessageSubscriptionToken _muteSubscriptionToken;
+        private TinyMessageSubscriptionToken _playStateSubscriptionToken;
+        private TinyMessageSubscriptionToken _playingListSubscriptionToken;
 
         public PlayerStateMonitor(PlayerStateModel stateModel, ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
@@ -25,11 +29,10 @@ namespace MusicBeeRemote.Core.Monitoring
 
         public void Start()
         {
-            _hub.Subscribe<VolumeLevelChangedEvent>(_ => { SendVolume(); });
-            _hub.Subscribe<VolumeMuteChangedEvent>(_ => { SendMuteState(); });
-            _hub.Subscribe<PlayStateChangedEvent>(_ => { SendPlayState(); });
-
-            _hub.Subscribe<NowPlayingListChangedEvent>(_ => { });
+            _volumeSubscriptionToken = _hub.Subscribe<VolumeLevelChangedEvent>(_ => { SendVolume(); });
+            _muteSubscriptionToken = _hub.Subscribe<VolumeMuteChangedEvent>(_ => { SendMuteState(); });
+            _playStateSubscriptionToken = _hub.Subscribe<PlayStateChangedEvent>(_ => { SendPlayState(); });
+            _playingListSubscriptionToken = _hub.Subscribe<NowPlayingListChangedEvent>(_ => { });
 
             _timer = new Timer {Interval = 1000};
             _timer.Elapsed += HandleTimerElapsed;
@@ -60,6 +63,10 @@ namespace MusicBeeRemote.Core.Monitoring
             _timer.Enabled = false;
             _timer.Stop();
             _timer.Close();
+            _hub.Unsubscribe<VolumeLevelChangedEvent>(_volumeSubscriptionToken);
+            _hub.Unsubscribe<VolumeMuteChangedEvent>(_muteSubscriptionToken);
+            _hub.Unsubscribe<PlayStateChangedEvent>(_playStateSubscriptionToken);
+            _hub.Unsubscribe<NowPlayingListChangedEvent>(_playingListSubscriptionToken);
         }
 
         private void HandleTimerElapsed(object sender, ElapsedEventArgs args)
