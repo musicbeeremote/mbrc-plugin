@@ -13,6 +13,7 @@ using MusicBeeRemote.Core.Windows;
 using MusicBeeRemote.PartyMode.Core;
 using MusicBeeRemote.PartyMode.Core.Model;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using NLog;
 using StructureMap;
 using TinyMessenger;
@@ -82,10 +83,16 @@ namespace MusicBeeRemote.Core
 #else
             logManager.Initialize(LogLevel.Error);
 #endif
-            JsonConvert.DefaultSettings = () => new JsonSerializerSettings
+            JsonConvert.DefaultSettings = () =>
             {
-                DateTimeZoneHandling = DateTimeZoneHandling.Local,
-                NullValueHandling = NullValueHandling.Ignore
+                var settings = new JsonSerializerSettings
+                {
+                    DateTimeZoneHandling = DateTimeZoneHandling.Local,
+                    NullValueHandling = NullValueHandling.Ignore
+                };
+
+                settings.Converters.Add(new StringEnumConverter {CamelCaseText = false});
+                return settings;
             };
 
             return _container.GetInstance<IMusicBeeRemote>();

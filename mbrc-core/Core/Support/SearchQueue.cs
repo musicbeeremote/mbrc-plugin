@@ -18,7 +18,7 @@ namespace MusicBeeRemote.Core.Support
 
         public void RequestQueueFiles(QueueType queue, MetaTag tag, string query)
         {
-            var trackList = tag == MetaTag.title && queue == QueueType.PlayNow
+            var trackList = tag == MetaTag.Title && queue == QueueType.PlayNow
                 ? new[] {query}
                 : GetUrlsForTag(tag, query);
 
@@ -30,16 +30,16 @@ namespace MusicBeeRemote.Core.Support
             var filter = string.Empty;
             switch (tag)
             {
-                case MetaTag.artist:
+                case MetaTag.Artist:
                     filter = FilterHelper.XmlFilter(new[] {"ArtistPeople"}, query, true);
                     break;
-                case MetaTag.album:
+                case MetaTag.Album:
                     filter = FilterHelper.XmlFilter(new[] {"Album"}, query, true);
                     break;
-                case MetaTag.genre:
+                case MetaTag.Genre:
                     filter = FilterHelper.XmlFilter(new[] {"Genre"}, query, true);
                     break;
-                case MetaTag.title:
+                case MetaTag.Title:
                     filter = "";
                     break;
             }

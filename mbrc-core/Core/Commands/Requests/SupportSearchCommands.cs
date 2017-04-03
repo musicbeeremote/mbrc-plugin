@@ -100,7 +100,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
                     break;
             }
 
-            _searchQueue.RequestQueueFiles(qType, MetaTag.title, query);
+            _searchQueue.RequestQueueFiles(qType, MetaTag.Title, query);
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
@@ -138,7 +138,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            _searchQueue.RequestQueueFiles(qType, MetaTag.genre, query);
+            _searchQueue.RequestQueueFiles(qType, MetaTag.Genre, query);
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
@@ -181,7 +181,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
                         break;
                 }
 
-                _searchQueue.RequestQueueFiles(qType, MetaTag.artist, query);
+                _searchQueue.RequestQueueFiles(qType, MetaTag.Artist, query);
             }
             catch (Exception e)
             {
@@ -227,7 +227,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            _searchQueue.RequestQueueFiles(qType, MetaTag.album, query);
+            _searchQueue.RequestQueueFiles(qType, MetaTag.Album, query);
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
