@@ -5,10 +5,10 @@ namespace MusicBeeRemote.Core.Monitoring
     [DataContract]
     public class TrackTemporalnformation
     {
-        [DataMember(Name = "position")]
+        [DataMember(Name = "current")]
         public int Position { get; }
 
-        [DataMember(Name = "duration")]
+        [DataMember(Name = "total")]
         public int Duration { get; }
 
         public TrackTemporalnformation(int position, int duration)

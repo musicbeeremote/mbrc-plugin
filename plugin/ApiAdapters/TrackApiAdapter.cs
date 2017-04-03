@@ -26,13 +26,6 @@ namespace MusicBeePlugin.ApiAdapters
             return new TrackTemporalnformation(position, duration);
         }
 
-        public SupportTrackTemporalnformation GetSupportTemporalInformation()
-        {
-            var position = _api.Player_GetPosition();
-            var duration = _api.NowPlaying_GetDuration();
-            return new SupportTrackTemporalnformation(position, duration);
-        }
-
         public bool SeekTo(int position)
         {
             return _api.Player_SetPosition(position);

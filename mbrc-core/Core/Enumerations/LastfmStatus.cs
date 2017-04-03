@@ -6,9 +6,9 @@ namespace MusicBeeRemote.Core.Enumerations
     {
         [EnumMember(Value = "normal")]
         Normal,
-        [EnumMember(Value = "love")]
+        [EnumMember(Value = "Love")]
         Love,
-        [EnumMember(Value = "ban")]
+        [EnumMember(Value = "Ban")]
         Ban
     }
 }

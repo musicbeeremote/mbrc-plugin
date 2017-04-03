@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.16</AssemblyVersion>
+    <AssemblyVersion>1.0.0.29</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -143,7 +143,6 @@
     <Compile Include="Core\Monitoring\ITrackStateMonitor.cs" />
     <Compile Include="Core\Monitoring\PlayerStateModel.cs" />
     <Compile Include="Core\Monitoring\PlayerStateMonitor.cs" />
-    <Compile Include="Core\Monitoring\SupportTrackTemporalnformation.cs" />
     <Compile Include="Core\Monitoring\TrackStateMonitor.cs" />
     <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
