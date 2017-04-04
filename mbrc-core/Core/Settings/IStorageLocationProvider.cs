@@ -18,7 +18,7 @@ namespace MusicBeeRemote.Core.Settings
         private const string CacheSubDir = "cache";
         private const string LogFileName = "mbrc.log";
         private const string SettingsFileName = "settings.json";
-        private const string LegacySettingsFilename = "settings.json";
+        private const string LegacySettingsFilename = "settings.xml";
 
         public StorageLocationProvider(string location)
         {
@@ -30,24 +30,33 @@ namespace MusicBeeRemote.Core.Settings
             return _location;
         }
 
-        public string SettingsFile
-        {
-            get { return $"{_location}{Path.DirectorySeparatorChar}{SettingsFileName}"; }
-        }
+        /// <summary>
+        /// Gets the settings file location.
+        /// </summary>
+        /// <value>
+        /// The settings file location.
+        /// </value>
+        public string SettingsFile => $"{_location}{Path.DirectorySeparatorChar}{SettingsFileName}";
 
-        public string LegacySettingsFile
-        {
-            get { return $"{_location}{Path.DirectorySeparatorChar}{LegacySettingsFilename}"; }
-        }
+        /// <summary>
+        /// Gets the legacy settings file full path.
+        /// </summary>
+        /// <value>
+        /// The legacy settings file path.
+        /// </value>
+        public string LegacySettingsFile => $"{_location}{Path.DirectorySeparatorChar}{LegacySettingsFilename}";
 
         public string CacheLocation()
         {
             return $"{_location}{Path.DirectorySeparatorChar}{CacheSubDir}";
         }
 
-        public string LogFile
-        {
-            get { return $"{_location}{Path.DirectorySeparatorChar}{LogFileName}"; }
-        }
+        /// <summary>
+        /// Gets the log file location.
+        /// </summary>
+        /// <value>
+        /// The log file location.
+        /// </value>
+        public string LogFile => $"{_location}{Path.DirectorySeparatorChar}{LogFileName}";
     }
 }
