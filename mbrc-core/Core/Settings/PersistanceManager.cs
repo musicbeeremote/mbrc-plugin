@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Logging;
+using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Settings
@@ -18,12 +20,15 @@ namespace MusicBeeRemote.Core.Settings
 
         public PersistanceManager(ITinyMessengerHub hub,
             ILegacySettingsMigration legacySettingsMigration,
-            IJsonSettingsFileManager jsonSettingsFileManager)
+            IJsonSettingsFileManager jsonSettingsFileManager,
+            IPluginLogManager pluginLogManager)
         {
             _hub = hub;
             _jsonSettingsFileManager = jsonSettingsFileManager;
             UserSettingsModel = _jsonSettingsFileManager.Load();
             legacySettingsMigration.MigrateLegacySettings(UserSettingsModel);
+            
+            pluginLogManager.Initialize(UserSettingsModel.DebugLogEnabled ? LogLevel.Debug : LogLevel.Error);
         }
 
         public void SaveSettings()

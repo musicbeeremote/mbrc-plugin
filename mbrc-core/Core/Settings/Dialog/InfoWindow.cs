@@ -5,10 +5,12 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using MusicBeeRemote.Core.Logging;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.PartyMode.Core.View;
 using MusicBeeRemote.PartyMode.Core.ViewModel;
 using NLog;
+using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Settings.Dialog
 {
@@ -18,16 +20,17 @@ namespace MusicBeeRemote.Core.Settings.Dialog
     public partial class InfoWindow : Form, SocketTester.IConnectionListener
     {
         private readonly PersistanceManager _settings;
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ITinyMessengerHub _hub;       
         private BindingList<string> _ipAddressBinding;
-        private IOnDebugSelectionChanged _listener;
+
         private SocketTester _socketTester;
 
         /// <summary>
         /// </summary>
-        public InfoWindow(PersistanceManager settings, PartyModeViewModel viewModel)
+        public InfoWindow(PersistanceManager settings, PartyModeViewModel viewModel, ITinyMessengerHub hub)
         {
             _settings = settings;
+            _hub = hub;
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
             var partyModeView = new PartyModeView {DataContext = viewModel};
@@ -195,10 +198,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         private void HandleIpAddressInputTextBoxTextChanged(object sender, EventArgs e)
         {
             var isAddressValid = IsAddressValid();
+
             ipAddressInputTextBox.BackColor = isAddressValid ? Color.LightGreen : Color.Red;
-            if (!isAddressValid || selectionFilteringComboBox.SelectedIndex != 1) return;
-            var addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(),
-                StringSplitOptions.RemoveEmptyEntries);
+
+            if (!isAddressValid || selectionFilteringComboBox.SelectedIndex != 1)
+            {
+                return;
+            }
+            var addressSplit = ipAddressInputTextBox.Text.Split(".".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             rangeNumericUpDown.Minimum = int.Parse(addressSplit[3]);
         }
 
@@ -206,7 +213,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         {
             var settings = _settings;
             settings.UserSettingsModel.DebugLogEnabled = debugEnabled.Checked;
-            _listener?.SelectionChanged(settings.UserSettingsModel.DebugLogEnabled);
+            _hub.PublishAsync(new DebugSettingsModifiedEvent(settings.UserSettingsModel.DebugLogEnabled));
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
@@ -219,16 +226,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog
 //            {
 //                MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
 //            }
-        }
-
-        public interface IOnDebugSelectionChanged
-        {
-            void SelectionChanged(bool enabled);
-        }
-
-        public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
-        {
-            _listener = listener;
         }
 
         /// <summary>

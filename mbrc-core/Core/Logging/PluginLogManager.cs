@@ -2,18 +2,23 @@ using MusicBeeRemote.Core.Settings;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Logging
 {
     class PluginLogManager : IPluginLogManager
     {
-
-        //todo Work on bootstrapping the logger (work on new switching mechanism)
         private readonly IStorageLocationProvider _storageLocationProvider;
 
-        public PluginLogManager(IStorageLocationProvider storageLocationProvider)
+        public PluginLogManager(IStorageLocationProvider storageLocationProvider, ITinyMessengerHub hub)
         {
             _storageLocationProvider = storageLocationProvider;
+            hub.Subscribe<DebugSettingsModifiedEvent>(OnDebugSettingsModifiedEvent);
+        }
+
+        private void OnDebugSettingsModifiedEvent(DebugSettingsModifiedEvent ev)
+        {
+            Initialize(ev.DebugLogEnabled ? LogLevel.Debug : LogLevel.Error);
         }
 
         public void Initialize(LogLevel logLevel)

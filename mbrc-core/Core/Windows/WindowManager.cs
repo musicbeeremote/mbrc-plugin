@@ -25,8 +25,7 @@ namespace MusicBeeRemote.Core.Windows
         {
             if (_window == null || !_window.Visible)
             {
-                _window = _container.GetInstance<InfoWindow>();
-                //_window.SetOnDebugSelectionListener(this); todo replace with some kind of event
+                _window = _container.GetInstance<InfoWindow>();            
             }
 
             _window.Show();

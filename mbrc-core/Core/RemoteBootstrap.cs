@@ -76,13 +76,7 @@ namespace MusicBeeRemote.Core
 
             var controller = _container.GetInstance<CommandExecutor>();
             Configuration.Register(controller, _container);
-
-            var logManager = _container.GetInstance<IPluginLogManager>();
-#if DEBUG
-            logManager.Initialize(LogLevel.Debug);
-#else
-            logManager.Initialize(LogLevel.Error);
-#endif
+            
             JsonConvert.DefaultSettings = () =>
             {
                 var settings = new JsonSerializerSettings
