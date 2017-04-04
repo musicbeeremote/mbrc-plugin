@@ -80,7 +80,7 @@ namespace MusicBeePlugin.ApiAdapters
                 Disc = GetDiskNumber(currentTrack),
                 Trackno = GetTrackNumber(currentTrack),
                 Src = currentTrack
-            });
+            }).ToList();
         }
 
         public IEnumerable<Genre> GetGenres(string filter)

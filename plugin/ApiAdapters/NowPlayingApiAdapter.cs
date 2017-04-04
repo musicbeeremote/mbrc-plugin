@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Windows.Forms;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Model.Entities;
 using static MusicBeePlugin.Plugin;
@@ -91,7 +89,7 @@ namespace MusicBeePlugin.ApiAdapters
                     Position = position + 1,
                     Path = path
                 };
-            });
+            }).ToList();
         }
 
         public IEnumerable<NowPlayingListTrack> GetTracksLegacy(int offset = 0, int limit = 5000)
@@ -117,7 +115,7 @@ namespace MusicBeePlugin.ApiAdapters
                     Position = position + 1,
                     Path = path
                 };
-            });
+            }).ToList();
         }
     }
 }
