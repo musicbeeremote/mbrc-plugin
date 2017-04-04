@@ -104,7 +104,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             var message = new SocketMessage
             {
                 Data = queueResponse,
-                Context = Constants.NowPlayingQueue
+                Context = Constants.NowPlayingQueue,
+                NewLineTerminated = true
             };
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
         }
