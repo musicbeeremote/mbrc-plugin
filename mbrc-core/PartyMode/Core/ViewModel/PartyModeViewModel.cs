@@ -2,12 +2,13 @@
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Model;
 using MusicBeeRemote.PartyMode.Core.ViewModel.Commands;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
-    public class PartyModeViewModel : ModelBase, IDisposable
+    public class PartyModeViewModel : ViewModelBase, IDisposable
     {
         #region vars
 
@@ -71,7 +72,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool IsActive
         {
-            get { return _model.Settings.IsActive; }
+            get => _model.Settings.IsActive;
             set
             {
                 _model.Settings.IsActive = value;

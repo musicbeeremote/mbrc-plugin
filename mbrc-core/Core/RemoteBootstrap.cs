@@ -7,6 +7,8 @@ using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Settings;
+using MusicBeeRemote.Core.Settings.Dialog;
+using MusicBeeRemote.Core.Settings.Dialog.Commands;
 using MusicBeeRemote.Core.Support;
 using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
@@ -29,8 +31,20 @@ namespace MusicBeeRemote.Core
             _container = new Container();
         }
 
-        public IMusicBeeRemote RegisterDependencies(MusicBeeDependencies dependencies)
+        public IMusicBeeRemote BootStrap(MusicBeeDependencies dependencies)
         {
+            JsonConvert.DefaultSettings = () =>
+            {
+                var settings = new JsonSerializerSettings
+                {
+                    DateTimeZoneHandling = DateTimeZoneHandling.Local,
+                    NullValueHandling = NullValueHandling.Ignore
+                };
+
+                settings.Converters.Add(new StringEnumConverter { CamelCaseText = false });
+                return settings;
+            };
+
             _container.Configure(c =>
             {
                 c.For<ILibraryApiAdapter>().Use(() => dependencies.LibraryAdapter).Singleton();
@@ -65,6 +79,13 @@ namespace MusicBeeRemote.Core
                     .Ctor<string>()
                     .Is(dependencies.BaseStoragePath)
                     .Singleton();
+
+                c.For<IVersionProvider>()
+                    .Use<VersionProvider>()
+                    .Ctor<string>()
+                    .Is(dependencies.CurrentVersion)
+                    .Singleton();
+
                 c.For<Authenticator>().Use<Authenticator>().Singleton();
                 c.For<PartyModeModel>().Use<PartyModeModel>().Singleton();
                 c.For<PartyModeCommandHandler>().Use<PartyModeCommandHandler>().Singleton();
@@ -72,22 +93,17 @@ namespace MusicBeeRemote.Core
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
                 c.For<ITinyMessengerHub>().Use<TinyMessengerHub>().Singleton();
                 c.For<IMusicBeeRemote>().Use<MusicBeeRemote>().Singleton();
+
+                c.For<OpenHelpCommand>().Use<OpenHelpCommand>();
+                c.For<OpenLogDirectoryCommand>().Use<OpenLogDirectoryCommand>();
+                c.For<SaveConfigurationCommand>().Use<SaveConfigurationCommand>();
+                c.For<ConfigurationPanel>().Use<ConfigurationPanel>();
+                c.For<ConfigurationPanelViewModel>().Use<ConfigurationPanelViewModel>();
             });
 
             var controller = _container.GetInstance<CommandExecutor>();
             Configuration.Register(controller, _container);
-            
-            JsonConvert.DefaultSettings = () =>
-            {
-                var settings = new JsonSerializerSettings
-                {
-                    DateTimeZoneHandling = DateTimeZoneHandling.Local,
-                    NullValueHandling = NullValueHandling.Ignore
-                };
-
-                settings.Converters.Add(new StringEnumConverter {CamelCaseText = false});
-                return settings;
-            };
+                    
 
             return _container.GetInstance<IMusicBeeRemote>();
         }

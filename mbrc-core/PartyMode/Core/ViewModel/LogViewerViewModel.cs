@@ -1,11 +1,12 @@
 ﻿using System;
 using System.ComponentModel;
+using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Helper;
 using MusicBeeRemote.PartyMode.Core.Model;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
-    public class LogViewerViewModel : ModelBase, IDisposable
+    public class LogViewerViewModel : ViewModelBase, IDisposable
     {
         private readonly PartyModeModel _model;
 

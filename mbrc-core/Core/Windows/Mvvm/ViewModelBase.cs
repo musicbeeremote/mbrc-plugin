@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel;
 
-namespace MusicBeeRemote.PartyMode.Core.ViewModel
+namespace MusicBeeRemote.Core.Windows.Mvvm
 {
-    public abstract class ModelBase : INotifyPropertyChanged
+    public abstract class ViewModelBase : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 

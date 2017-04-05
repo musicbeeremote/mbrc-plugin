@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:attachedCommandBehavior="clr-namespace:MusicBeeRemote.PartyMode.Core.AttachedCommandBehavior"
              xmlns:view="clr-namespace:MusicBeeRemote.PartyMode.Core.View"
+             xmlns:viewModel="clr-namespace:MusicBeeRemote.PartyMode.Core.ViewModel"
              Width="Auto"
              Height="Auto"
              HorizontalContentAlignment="Stretch"

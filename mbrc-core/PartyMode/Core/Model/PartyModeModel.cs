@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Helper;
 using MusicBeeRemote.PartyMode.Core.Tools;
 using MusicBeeRemote.PartyMode.Core.ViewModel;
@@ -10,7 +11,7 @@ using NLog;
 
 namespace MusicBeeRemote.PartyMode.Core.Model
 {
-    public class PartyModeModel : ModelBase
+    public class PartyModeModel : ViewModelBase
     {
         #region vars
 

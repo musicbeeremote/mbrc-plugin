@@ -67,7 +67,7 @@ namespace MusicBeePlugin
             );
 
             var remoteBootstrap = new RemoteBootstrap();
-            _musicBeeRemote = remoteBootstrap.RegisterDependencies(dependencies);
+            _musicBeeRemote = remoteBootstrap.BootStrap(dependencies);
 
             var menuItemDescription = "Information Panel of the MusicBee Remote";
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);

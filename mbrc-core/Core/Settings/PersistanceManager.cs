@@ -14,6 +14,7 @@ namespace MusicBeeRemote.Core.Settings
     {
         private readonly ITinyMessengerHub _hub;
         private readonly IJsonSettingsFileManager _jsonSettingsFileManager;
+        private readonly IVersionProvider _versionProvider;
 
         private readonly string _firewallUtility =
             $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe";
@@ -21,10 +22,12 @@ namespace MusicBeeRemote.Core.Settings
         public PersistanceManager(ITinyMessengerHub hub,
             ILegacySettingsMigration legacySettingsMigration,
             IJsonSettingsFileManager jsonSettingsFileManager,
-            IPluginLogManager pluginLogManager)
+            IPluginLogManager pluginLogManager,
+            IVersionProvider versionProvider)
         {
             _hub = hub;
             _jsonSettingsFileManager = jsonSettingsFileManager;
+            _versionProvider = versionProvider;
             UserSettingsModel = _jsonSettingsFileManager.Load();
             legacySettingsMigration.MigrateLegacySettings(UserSettingsModel);
             
@@ -33,6 +36,8 @@ namespace MusicBeeRemote.Core.Settings
 
         public void SaveSettings()
         {
+            UserSettingsModel.CurrentVersion = _versionProvider.GetPluginVersion();
+
             _jsonSettingsFileManager.Save(UserSettingsModel);
 
             if (UserSettingsModel.UpdateFirewall)
@@ -52,7 +57,7 @@ namespace MusicBeeRemote.Core.Settings
         /// <returns></returns>
         public bool IsFirstRun()
         {
-            return false;
+            return !UserSettingsModel.CurrentVersion.Equals(_versionProvider.GetPluginVersion());
         }
 
         /// <summary>

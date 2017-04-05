@@ -2,11 +2,12 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Model;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
-    public class ClientViewModel : ModelBase, IDisposable
+    public class ClientViewModel : ViewModelBase, IDisposable
     {
         private readonly PartyModeModel _model;
         private ObservableCollection<RemoteClient> _connectedClients;
@@ -21,7 +22,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public ObservableCollection<RemoteClient> ConnectedClients
         {
-            get { return _connectedClients; }
+            get => _connectedClients;
             set
             {
                 _connectedClients = value;
@@ -31,7 +32,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public RemoteClient SelectedClient
         {
-            get { return _selectedClient; }
+            get => _selectedClient;
             set
             {
                 _selectedClient = value;

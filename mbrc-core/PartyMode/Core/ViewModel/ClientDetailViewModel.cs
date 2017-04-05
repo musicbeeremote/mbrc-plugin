@@ -1,10 +1,11 @@
 ﻿using System.Windows;
 using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Windows.Mvvm;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
-    public sealed class ClientDetailViewModel : ModelBase
+    public sealed class ClientDetailViewModel : ViewModelBase
     {
         private readonly RemoteClient _connectedClient;
 
@@ -16,7 +17,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanAddToPlayList
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.AddTrack); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.AddTrack);
             set
             {
                 if (_connectedClient == null) return;
@@ -27,7 +28,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanSkipBackwards
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.PlayPrevious); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.PlayPrevious);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.PlayPrevious, value);
@@ -37,7 +38,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanDeleteFromPlayList
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.RemoveTrack); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.RemoveTrack);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.RemoveTrack, value);
@@ -47,7 +48,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanSkipForwards
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.PlayNext); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.PlayNext);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.PlayNext, value);
@@ -57,7 +58,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanStartStopPlayer
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.StopPlayback); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.StopPlayback);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.StopPlayback, value);
@@ -67,7 +68,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanVolumeUpDown
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeVolume); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeVolume);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.ChangeVolume, value);
@@ -77,7 +78,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanShuffle
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeShuffle); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeShuffle);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.ChangeShuffle, value);
@@ -87,7 +88,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanReplay
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeRepeat); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.ChangeRepeat);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.ChangeRepeat, value);
@@ -97,7 +98,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public bool CanMute
         {
-            get { return _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.CanMute); }
+            get => _connectedClient == null || _connectedClient.HasPermission(CommandPermissions.CanMute);
             set
             {
                 _connectedClient.SetPermission(CommandPermissions.CanMute, value);

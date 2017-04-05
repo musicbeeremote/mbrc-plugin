@@ -17,13 +17,14 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.38</AssemblyVersion>
+    <AssemblyVersion>1.0.0.48</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\build\bin\Debug\</OutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -31,7 +32,8 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\build\bin\Release\</OutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -159,14 +161,18 @@
     <Compile Include="Core\RemoteBootstrap.cs" />
     <Compile Include="Core\Settings\Dialog\CheckboxExtension.cs" />
     <Compile Include="Core\Logging\DebugSettingsModifiedEvent.cs" />
-    <Compile Include="Core\Settings\Dialog\InfoWindow.cs">
-      <SubType>Form</SubType>
+    <Compile Include="Core\Settings\Dialog\Commands\OpenHelpCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\OpenLogDirectoryCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\SaveConfigurationCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\ConfigurationPanel.xaml.cs">
+      <DependentUpon>ConfigurationPanel.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Core\Settings\Dialog\InfoWindow.Designer.cs" />
+    <Compile Include="Core\Settings\Dialog\ConfigurationPanelViewModel.cs" />
     <Compile Include="Core\Settings\FilteringSelection.cs" />
     <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
     <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
+    <Compile Include="Core\Settings\IVersionProvider.cs" />
     <Compile Include="Core\Settings\JsonSettingsFileManager.cs" />
     <Compile Include="Core\Settings\LegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\PersistanceManager.cs" />
@@ -202,7 +208,7 @@
     <Compile Include="PartyMode\Core\ViewModel\Commands\SaveCommand.cs" />
     <Compile Include="PartyMode\Core\ViewModel\Commands\UnloadedCommand.cs" />
     <Compile Include="PartyMode\Core\ViewModel\LogViewerViewModel.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\ModelBase.cs" />
+    <Compile Include="Core\Windows\Mvvm\ViewModelBase.cs" />
     <Compile Include="PartyMode\Core\ViewModel\PartyModeLogsView.cs" />
     <Compile Include="PartyMode\Core\ViewModel\PartyModeViewModel.cs" />
     <Compile Include="PartyMode\Core\View\ClientDetailView.xaml.cs" />
@@ -214,6 +220,10 @@
     <Compile Include="TinyMessenger.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Page Include="Core\Settings\Dialog\ConfigurationPanel.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />
     <Page Include="PartyMode\Core\View\ClientView.xaml" />
     <Page Include="PartyMode\Core\View\LogViewerView.xaml" />
@@ -224,7 +234,6 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Core\Settings\Dialog\InfoWindow.resx" />
     <EmbeddedResource Include="Properties\Resources.resx" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

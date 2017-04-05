@@ -8,7 +8,7 @@ namespace MusicBeeRemote.Core.Windows
     {
         private readonly IInvokeHandler _invokeHandler;
         private readonly IContainer _container;
-        private InfoWindow _window;
+        private ConfigurationPanel _window;
 
         public WindowManager(IInvokeHandler invokeHandler, IContainer container)
         {
@@ -23,9 +23,9 @@ namespace MusicBeeRemote.Core.Windows
 
         private void DisplayWindow()
         {
-            if (_window == null || !_window.Visible)
+            if (_window == null || !_window.IsVisible)
             {
-                _window = _container.GetInstance<InfoWindow>();            
+                _window = _container.GetInstance<ConfigurationPanel>();            
             }
 
             _window.Show();
