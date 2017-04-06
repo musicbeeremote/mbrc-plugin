@@ -38,7 +38,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             get => _userSettings.DebugLogEnabled;
             set
             {
-                _userSettings.DebugLogEnabled = true;
+                _userSettings.DebugLogEnabled = value;
                 OnPropertyChanged(nameof(DebugEnabled));
             }
         }
@@ -50,8 +50,18 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             get => _userSettings.UpdateFirewall;
             set
             {
-                _userSettings.UpdateFirewall = true;
+                _userSettings.UpdateFirewall = value;
                 OnPropertyChanged(nameof(FirewallUpdateEnabled));
+            }
+        }
+
+        public uint ListeningPort
+        {
+            get => _userSettings.ListeningPort;
+            set
+            {
+                _userSettings.ListeningPort = value;
+                OnPropertyChanged(nameof(ListeningPort));
             }
         }
 

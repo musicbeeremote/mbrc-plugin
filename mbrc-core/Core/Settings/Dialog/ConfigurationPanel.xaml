@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:dialog="clr-namespace:MusicBeeRemote.Core.Settings.Dialog"
+        xmlns:validations="clr-namespace:MusicBeeRemote.Core.Settings.Dialog.Validations"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance dialog:ConfigurationPanelViewModel}"
         Title="MusicBee Remote: plugin">
@@ -14,18 +15,20 @@
                 <Canvas Name="CantabPage1" Margin="0,0,-2,0.333" HorizontalAlignment="Left" Width="586">
 
                     <CheckBox Name="FirewallCheckbox" Height="21" Width="127" TabIndex="64" Margin="292,350,180,102"
-                              IsChecked="{Binding FirewallUpdateEnabled}"
+                              IsChecked="{Binding FirewallUpdateEnabled, Mode=TwoWay}"
                               HorizontalAlignment="Right" VerticalAlignment="Bottom">
                         Update Firewall
                     </CheckBox>
 
-                    <Button Name="OpenLogButton" Height="28" Width="100" TabIndex="63" Command="{Binding OpenLogDirectoryCommand}"
+                    <Button Name="OpenLogButton" Height="28" Width="100" TabIndex="63"
+                            Command="{Binding OpenLogDirectoryCommand}"
                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="374">
                         Open Log
                     </Button>
 
                     <CheckBox Name="DebugEnabled" Height="21" Width="100" TabIndex="62" HorizontalAlignment="Right"
-                              VerticalAlignment="Bottom" IsChecked="{Binding DebugEnabled}" Canvas.Left="10"
+                              VerticalAlignment="Bottom" IsChecked="{Binding DebugEnabled, Mode=TwoWay}"
+                              Canvas.Left="10"
                               Canvas.Top="407">
                         Debug Log
                     </CheckBox>
@@ -84,8 +87,17 @@
                            TabIndex="51" Margin="8,65,544,382" HorizontalAlignment="Right" VerticalAlignment="Bottom">
                         Port:
                     </Label>
-                    <TextBox Name="PortValue" Height="23" TextWrapping="Wrap" Text="" Width="120" Canvas.Left="139"
-                             Canvas.Top="67" />
+                    <TextBox Name="PortValue" Height="23" TextWrapping="Wrap" Width="120" Canvas.Left="139"
+                             Canvas.Top="67">
+                        <TextBox.Text>
+                            <Binding Path="ListeningPort" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged" NotifyOnValidationError="True">
+                                <Binding.ValidationRules>
+                                    <validations:PortValidationRule ValidationStep="RawProposedValue" />
+                                </Binding.ValidationRules>
+                            </Binding>
+                        </TextBox.Text>
+
+                    </TextBox>
                     <Label Name="ConnectionSettingsCategoryLabel" Height="26" Width="143" FontSize="11"
                            FontFamily="Microsoft Sans Serif" TabIndex="47" Margin="8,33,448,414"
                            HorizontalAlignment="Right" VerticalAlignment="Bottom">
