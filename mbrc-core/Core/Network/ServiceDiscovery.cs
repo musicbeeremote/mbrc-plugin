@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using MusicBeeRemote.Core.Settings;
+﻿using MusicBeeRemote.Core.Settings;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NLog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 namespace MusicBeeRemote.Core.Network
 {
@@ -56,7 +55,15 @@ namespace MusicBeeRemote.Core.Network
                _logger.Error(e, "Failed to proceed with messages");
             }
 
-            udpClient.BeginReceive(OnDataReceived, udpClient);
+            try
+            {
+                udpClient.BeginReceive(OnDataReceived, udpClient);
+            }
+            catch (ObjectDisposedException e)
+            {
+                _logger.Debug(e, "Client was already disposed");
+            }
+            
         }
 
         private void HandleDiscovery(byte[] request, IPEndPoint mEndPoint, UdpClient udpClient)
