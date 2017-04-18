@@ -6,89 +6,98 @@
         xmlns:dialog="clr-namespace:MusicBeeRemote.Core.Settings.Dialog"
         xmlns:validations="clr-namespace:MusicBeeRemote.Core.Settings.Dialog.Validations"
         mc:Ignorable="d"
+        Width="800"
+        Height="600"
         d:DataContext="{d:DesignInstance dialog:ConfigurationPanelViewModel}"
         Title="MusicBee Remote: plugin">
-    <Grid Width="600">
-        <TabControl Name="ConfigurationTabControl" Height="495" TabStripPlacement="Top" Margin="0,0,10,10.333"
-                    VerticalAlignment="Bottom" HorizontalAlignment="Right" Width="590">
-            <TabItem Name="ConfigurationTabPage" Header="Configuration">
-                <Canvas Name="CantabPage1" Margin="0,0,-2,0.333" HorizontalAlignment="Left" Width="586">
+    <Grid>
+        <TabControl Name="ConfigurationTabControl" Height="551" TabStripPlacement="Top" Margin="0,0,10.333,9.667"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Right" Width="773">
+            <TabItem Name="ConfigurationTabPage" Header="Configuration" Height="22" Margin="-2,-2,-2.333,0" VerticalAlignment="Top">
+                <Canvas Name="CantabPage1" Margin="0,0,-2,0.333" HorizontalAlignment="Left" >
 
-                    <CheckBox Name="FirewallCheckbox" Height="21" Width="127" TabIndex="64" Margin="292,350,180,102"
+                    <CheckBox Name="FirewallCheckbox" Height="21" Width="127" TabIndex="64"
                               IsChecked="{Binding FirewallUpdateEnabled, Mode=TwoWay}"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="460">
                         Update Firewall
                     </CheckBox>
 
                     <Button Name="OpenLogButton" Height="28" Width="100" TabIndex="63"
                             Command="{Binding OpenLogDirectoryCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="374">
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="659" Canvas.Top="431">
                         Open Log
                     </Button>
 
                     <CheckBox Name="DebugEnabled" Height="21" Width="100" TabIndex="62" HorizontalAlignment="Right"
                               VerticalAlignment="Bottom" IsChecked="{Binding DebugEnabled, Mode=TwoWay}"
-                              Canvas.Left="10"
-                              Canvas.Top="407">
+                              Canvas.Left="526"
+                              Canvas.Top="434">
                         Debug Log
                     </CheckBox>
 
-                    <Button Name="SaveButton" Height="28" Width="100" TabIndex="61"
+                    <Button Name="SaveButton" Height="31" Width="105" TabIndex="61"
                             Command="{Binding Path=SaveConfigurationCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="292" Canvas.Top="429">
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="486">
                         Save
                     </Button>
 
                     <Button Name="AddAddressButton" Height="26" Width="28" TabIndex="46" HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom" Canvas.Left="289" Canvas.Top="229">
+                            VerticalAlignment="Bottom" Canvas.Left="266" Canvas.Top="210">
                         +
                     </Button>
 
-                    <Label Name="AllowedLabel" Height="26" Width="69" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="60" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="12"
-                           Canvas.Top="229">
+                    <Label Name="AllowedLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="60" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="214">
                         Allowed:
                     </Label>
 
-                    <ComboBox Name="AllowedAddressesComboBox" Height="24" Width="145" TabIndex="50"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="138" Canvas.Top="231" />
+                    <ComboBox Name="AllowedAddressesComboBox" Height="26" Width="145" TabIndex="50"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="210" />
 
                     <Button Name="RemoveAddressButton" Height="26" Width="28" TabIndex="48"
                             HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Canvas.Left="322" Canvas.Top="229">
+                            Canvas.Left="299" Canvas.Top="210">
                         -
                     </Button>
-                    <Label Name="AddressLabel" Height="26" Width="73" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="58" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="12"
-                           Canvas.Top="187">
+                    <Label Name="AddressLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="58" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="183">
                         Client:
                     </Label>
-                    <TextBox Name="IpAddressInputTextBox" Height="22" Width="145" TabIndex="57"
+                    <TextBox Name="IpAddressInputTextBox" Height="22" Width="211" TabIndex="57"
                              HorizontalAlignment="Right"
-                             VerticalAlignment="Bottom" TextWrapping="Wrap" Canvas.Left="139" Canvas.Top="190" />
+                             VerticalAlignment="Bottom" TextWrapping="Wrap" Canvas.Left="116" Canvas.Top="183">
+                        <TextBox.Text>
+                            <Binding Path="IpAddress" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged" NotifyOnValidationError="True">
+                                <Binding.ValidationRules>
+                                    <validations:AddressValidationRule ValidationStep="RawProposedValue" />
+                                </Binding.ValidationRules>
+                            </Binding>
+                        </TextBox.Text>
+                    </TextBox>
 
-                    <Label Name="AllowLabel" Height="26" Width="53" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="56" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="18"
-                           Canvas.Top="152" RenderTransformOrigin="0.925,0.526">
-                        Allow:
+                    <Label Name="AllowLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="56" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="152" RenderTransformOrigin="0.492,0.487">
+                        Allowed:
                     </Label>
 
-                    <ComboBox Name="SelectionFilteringComboBox" Height="24" Width="211" TabIndex="55"
-                              Margin="138,143,250,306" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    <ComboBox Name="SelectionFilteringComboBox" Height="24" Width="211" TabIndex="55" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                               ItemsSource="{Binding FilterSelection}"
-                              SelectedItem="{Binding UserFilteringSelection}" />
+                              SelectedItem="{Binding UserFilteringSelection}" Canvas.Left="116" Canvas.Top="154" />
 
-                    <Label Name="AddressFilteringCategoryLabel" Height="26" Width="123" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="53" Margin="8,108,468,339"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Label Name="AddressFilteringCategoryLabel" Height="26" Width="123"
+                           FontFamily="Microsoft Sans Serif" TabIndex="53"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="121" FontWeight="Bold">
                         Client Filtering
                     </Label>
-                    <Label Name="PortLabel" Height="26" Width="47" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="51" Margin="8,65,544,382" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                        Port:
+                    <Label Name="PortLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="51" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="68">
+                        Listening Port:
                     </Label>
-                    <TextBox Name="PortValue" Height="23" TextWrapping="Wrap" Width="120" Canvas.Left="139"
-                             Canvas.Top="67">
+                    <TextBox Name="PortValue" Height="23" TextWrapping="Wrap" Width="211" Canvas.Left="116"
+                             Canvas.Top="70">
                         <TextBox.Text>
                             <Binding Path="ListeningPort" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged" NotifyOnValidationError="True">
                                 <Binding.ValidationRules>
@@ -98,43 +107,42 @@
                         </TextBox.Text>
 
                     </TextBox>
-                    <Label Name="ConnectionSettingsCategoryLabel" Height="26" Width="143" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="47" Margin="8,33,448,414"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Label Name="ConnectionSettingsCategoryLabel" Height="26" Width="123"
+                           FontFamily="Microsoft Sans Serif" TabIndex="47"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="37" FontWeight="Bold">
                         Connection Settings
                     </Label>
-                    <Button Name="HelpButton" Height="28" Width="123" TabIndex="45"
+                    <Button Name="HelpButton" Height="31" Width="123" TabIndex="45"
                             Command="{Binding Path=OpenHelpCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="453" Canvas.Top="429">
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="636" Canvas.Top="486">
                         Help
                     </Button>
-                    <Label Name="AddressListLabel" Height="26" Width="137" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="44" Margin="410,37,52,410"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Label Name="AddressListLabel" Height="26" Width="105" FontSize="11"
+                           FontFamily="Microsoft Sans Serif" TabIndex="44"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="654" Canvas.Top="6">
                         Private address list
                     </Label>
                     <Label Name="StatusLabelValue" Height="26" Width="57" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="43" Foreground="Green" Margin="70,6,472,441"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                           FontFamily="Microsoft Sans Serif" TabIndex="43" Foreground="Green"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="6">
                         Status
                     </Label>
-                    <Label Name="StatusLabel" Height="26" Width="61" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="42" Margin="10,6,528,441" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Label Name="StatusLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="42" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="6">
                         Status:
                     </Label>
 
-                    <ListBox Name="InternalIpList" Height="226" Width="158" TabIndex="41" Margin="404,63,37,184"
+                    <ListBox Name="InternalIpList" Height="226" Width="158" TabIndex="41"
                              ItemsSource="{Binding LocalIpAddresses}"
-                             HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="601" Canvas.Top="32" />
 
                     <Label Name="VersionLabel" Height="26" Width="61" FontSize="11" FontFamily="Microsoft Sans Serif"
                            TabIndex="40" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                           RenderTransformOrigin="0.404,0.551" Canvas.Left="138" Canvas.Top="431">
-                        0.0.0.0
-                    </Label>
-                    <Label Name="Label1" Height="26" Width="112" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="39" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="8"
-                           Canvas.Top="433">
+                            Content="{Binding PluginVersion}"
+                           RenderTransformOrigin="0.486,0.462" Canvas.Left="101" Canvas.Top="491" />
+                    <Label Name="Label1" Height="26" Width="95" FontSize="11" FontFamily="Microsoft Sans Serif"
+                           TabIndex="39" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="491">
                         Plugin Version:
                     </Label>
                 </Canvas>

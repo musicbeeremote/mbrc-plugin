@@ -11,6 +11,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog
     public class ConfigurationPanelViewModel : ViewModelBase
     {
         private readonly PersistanceManager _persistanceManager;
+        private readonly IVersionProvider _versionProvider;
 
         private readonly UserSettingsModel _userSettings;
 
@@ -22,6 +23,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog
 
         public IEnumerable<FilteringSelection> FilterSelection => Enum.GetValues(typeof(FilteringSelection))
             .Cast<FilteringSelection>();
+
+        public string IpAddress { get; set; }
 
         public FilteringSelection UserFilteringSelection
         {
@@ -65,17 +68,20 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             }
         }
 
+        public string PluginVersion => _versionProvider.GetPluginVersion();
 
         public ConfigurationPanelViewModel(PersistanceManager persistanceManager,
             SaveConfigurationCommand saveConfigurationCommand,
             OpenHelpCommand openHelpCommand,
-            OpenLogDirectoryCommand openLogDirectoryCommand
+            OpenLogDirectoryCommand openLogDirectoryCommand,
+            IVersionProvider versionProvider
         )
         {
             SaveConfigurationCommand = saveConfigurationCommand;
             OpenHelpCommand = openHelpCommand;
             OpenLogDirectoryCommand = openLogDirectoryCommand;
             _persistanceManager = persistanceManager;
+            _versionProvider = versionProvider;
             _userSettings = persistanceManager.UserSettingsModel;
         }
     }

@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.54</AssemblyVersion>
+    <AssemblyVersion>1.0.0.60</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -168,6 +168,7 @@
       <DependentUpon>ConfigurationPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="Core\Settings\Dialog\ConfigurationPanelViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\Validations\AddressValidationRule.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\PortValidationRule.cs" />
     <Compile Include="Core\Settings\FilteringSelection.cs" />
     <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />

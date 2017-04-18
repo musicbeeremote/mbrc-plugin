@@ -1,6 +1,7 @@
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Settings.Dialog;
 using StructureMap;
+using static System.Windows.Forms.Integration.ElementHost;
 
 namespace MusicBeeRemote.Core.Windows
 {
@@ -25,7 +26,8 @@ namespace MusicBeeRemote.Core.Windows
         {
             if (_window == null || !_window.IsVisible)
             {
-                _window = _container.GetInstance<ConfigurationPanel>();            
+                _window = _container.GetInstance<ConfigurationPanel>();
+                EnableModelessKeyboardInterop(_window);
             }
 
             _window.Show();
