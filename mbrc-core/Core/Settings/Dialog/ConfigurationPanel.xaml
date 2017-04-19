@@ -41,43 +41,10 @@
                         Save
                     </Button>
 
-                    <Button Name="AddAddressButton" Height="26" Width="28" TabIndex="46" HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom" Canvas.Left="266" Canvas.Top="210">
-                        +
-                    </Button>
+                    <Grid Name="FilteringControl" Height="144" Width="321" Canvas.Left="6" Canvas.Top="183"></Grid>
 
-                    <Label Name="AllowedLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="60" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
-                           Canvas.Top="214">
-                        Allowed:
-                    </Label>
 
-                    <ComboBox Name="AllowedAddressesComboBox" Height="26" Width="145" TabIndex="50"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="210" />
-
-                    <Button Name="RemoveAddressButton" Height="26" Width="28" TabIndex="48"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Canvas.Left="299" Canvas.Top="210">
-                        -
-                    </Button>
-                    <Label Name="AddressLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
-                           TabIndex="58" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
-                           Canvas.Top="183">
-                        Client:
-                    </Label>
-                    <TextBox Name="IpAddressInputTextBox" Height="22" Width="211" TabIndex="57"
-                             HorizontalAlignment="Right"
-                             VerticalAlignment="Bottom" TextWrapping="Wrap" Canvas.Left="116" Canvas.Top="183">
-                        <TextBox.Text>
-                            <Binding Path="IpAddress" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged" NotifyOnValidationError="True">
-                                <Binding.ValidationRules>
-                                    <validations:AddressValidationRule ValidationStep="RawProposedValue" />
-                                </Binding.ValidationRules>
-                            </Binding>
-                        </TextBox.Text>
-                    </TextBox>
-
-                    <Label Name="AllowLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                    <Label Name="AllowLabel" Height="26" Width="105" FontSize="11"
                            TabIndex="56" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
                            Canvas.Top="152" RenderTransformOrigin="0.492,0.487">
                         Allowed:
@@ -85,14 +52,14 @@
 
                     <ComboBox Name="SelectionFilteringComboBox" Height="24" Width="211" TabIndex="55" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                               ItemsSource="{Binding FilterSelection}"
-                              SelectedItem="{Binding UserFilteringSelection}" Canvas.Left="116" Canvas.Top="154" />
+                              SelectedItem="{Binding UserFilteringSelection}" Canvas.Left="116" Canvas.Top="154" SelectionChanged="SelectionFilteringComboBox_SelectionChanged" />
 
                     <Label Name="AddressFilteringCategoryLabel" Height="26" Width="123"
-                           FontFamily="Microsoft Sans Serif" TabIndex="53"
+                           TabIndex="53"
                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="121" FontWeight="Bold">
                         Client Filtering
                     </Label>
-                    <Label Name="PortLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                    <Label Name="PortLabel" Height="26" Width="105" FontSize="11"
                            TabIndex="51" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="68">
                         Listening Port:
                     </Label>
@@ -108,7 +75,7 @@
 
                     </TextBox>
                     <Label Name="ConnectionSettingsCategoryLabel" Height="26" Width="123"
-                           FontFamily="Microsoft Sans Serif" TabIndex="47"
+                           TabIndex="47"
                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="37" FontWeight="Bold">
                         Connection Settings
                     </Label>
@@ -118,16 +85,16 @@
                         Help
                     </Button>
                     <Label Name="AddressListLabel" Height="26" Width="105" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="44"
+                           TabIndex="44"
                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="654" Canvas.Top="6">
                         Private address list
                     </Label>
                     <Label Name="StatusLabelValue" Height="26" Width="57" FontSize="11"
-                           FontFamily="Microsoft Sans Serif" TabIndex="43" Foreground="Green"
+                           TabIndex="43" Foreground="Green"
                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="6">
                         Status
                     </Label>
-                    <Label Name="StatusLabel" Height="26" Width="105" FontSize="11" FontFamily="Microsoft Sans Serif"
+                    <Label Name="StatusLabel" Height="26" Width="105" FontSize="11"
                            TabIndex="42" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="6">
                         Status:
                     </Label>
