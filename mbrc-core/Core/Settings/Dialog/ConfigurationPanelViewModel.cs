@@ -70,12 +70,13 @@ namespace MusicBeeRemote.Core.Settings.Dialog
 
         public string PluginVersion => _versionProvider.GetPluginVersion();
 
+        public bool ServiceStatus { get; set; }
+
         public ConfigurationPanelViewModel(PersistanceManager persistanceManager,
             SaveConfigurationCommand saveConfigurationCommand,
             OpenHelpCommand openHelpCommand,
             OpenLogDirectoryCommand openLogDirectoryCommand,
-            IVersionProvider versionProvider
-        )
+            IVersionProvider versionProvider)
         {
             SaveConfigurationCommand = saveConfigurationCommand;
             OpenHelpCommand = openHelpCommand;
@@ -83,6 +84,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             _persistanceManager = persistanceManager;
             _versionProvider = versionProvider;
             _userSettings = persistanceManager.UserSettingsModel;
+
+            var socketTest = new SocketTester(persistanceManager);
+            socketTest.ConnectionChangeListener += status =>
+            {
+                ServiceStatus = status;
+                OnPropertyChanged(nameof(ServiceStatus));
+            };
+            socketTest.VerifyConnection();
         }
     }
 }

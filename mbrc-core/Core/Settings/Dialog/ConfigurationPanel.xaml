@@ -4,69 +4,68 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:dialog="clr-namespace:MusicBeeRemote.Core.Settings.Dialog"
+        xmlns:converter="clr-namespace:MusicBeeRemote.Core.Settings.Dialog.Converters"
         xmlns:validations="clr-namespace:MusicBeeRemote.Core.Settings.Dialog.Validations"
         mc:Ignorable="d"
         Width="800"
         Height="600"
         d:DataContext="{d:DesignInstance dialog:ConfigurationPanelViewModel}"
         Title="MusicBee Remote: plugin">
+
+    <Window.Resources>
+        <converter:StatusColorConverter x:Key="ColorConverter" />
+        <converter:StatusTextConverter x:Key="TextConverter" />
+    </Window.Resources>
     <Grid>
-        <TabControl Name="ConfigurationTabControl" Height="551" TabStripPlacement="Top" Margin="0,0,10.333,9.667"
-                    VerticalAlignment="Bottom" HorizontalAlignment="Right" Width="773">
-            <TabItem Name="ConfigurationTabPage" Header="Configuration" Height="22" Margin="-2,-2,-2.333,0" VerticalAlignment="Top">
-                <Canvas Name="CantabPage1" Margin="0,0,-2,0.333" HorizontalAlignment="Left" >
+        <TabControl Name="ConfigurationTabControl" TabStripPlacement="Top" Margin="10,10,10.333,9.667">
+            <TabItem Name="ConfigurationTabPage" Header="Configuration" Height="22" Margin="-2,-2,-2.333,0"
+                     VerticalAlignment="Top">
+                <Canvas Name="CantabPage1" Margin="0,0,-2,0.333" HorizontalAlignment="Left">
 
-                    <CheckBox Name="FirewallCheckbox" Height="21" Width="127" TabIndex="64"
+                    <CheckBox Name="FirewallCheckbox" Height="21" Width="127" TabIndex="64" Content="Update Firewall"
                               IsChecked="{Binding FirewallUpdateEnabled, Mode=TwoWay}"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="460">
-                        Update Firewall
-                    </CheckBox>
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="460" />
 
-                    <Button Name="OpenLogButton" Height="28" Width="100" TabIndex="63"
+                    <Button Name="OpenLogButton" Height="28" Width="100" TabIndex="63" Content="Open Log Directory"
                             Command="{Binding OpenLogDirectoryCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="659" Canvas.Top="431">
-                        Open Log
-                    </Button>
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="659" Canvas.Top="431" />
 
                     <CheckBox Name="DebugEnabled" Height="21" Width="100" TabIndex="62" HorizontalAlignment="Right"
                               VerticalAlignment="Bottom" IsChecked="{Binding DebugEnabled, Mode=TwoWay}"
-                              Canvas.Left="526"
-                              Canvas.Top="434">
-                        Debug Log
-                    </CheckBox>
+                              Canvas.Left="526" Canvas.Top="434" Content="Debug Log" />
 
                     <Button Name="SaveButton" Height="31" Width="105" TabIndex="61"
-                            Command="{Binding Path=SaveConfigurationCommand}"
-                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="486">
-                        Save
-                    </Button>
+                            Command="{Binding Path=SaveConfigurationCommand}" Content="Save"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="526" Canvas.Top="486" />
 
-                    <Grid Name="FilteringControl" Height="144" Width="321" Canvas.Left="6" Canvas.Top="183"></Grid>
+                    <Grid Name="FilteringControl" Height="144" Width="321" Canvas.Left="6" Canvas.Top="183" />
 
-
-                    <Label Name="AllowLabel" Height="26" Width="105" FontSize="11"
+                    <Label Name="AllowLabel" Height="26" Width="105" FontSize="11" Content="Allowed:"
                            TabIndex="56" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
-                           Canvas.Top="152" RenderTransformOrigin="0.492,0.487">
-                        Allowed:
-                    </Label>
+                           Canvas.Top="152" RenderTransformOrigin="0.492,0.487" />
 
-                    <ComboBox Name="SelectionFilteringComboBox" Height="24" Width="211" TabIndex="55" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    <ComboBox Name="SelectionFilteringComboBox" Height="24" Width="211" TabIndex="55"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
                               ItemsSource="{Binding FilterSelection}"
-                              SelectedItem="{Binding UserFilteringSelection}" Canvas.Left="116" Canvas.Top="154" SelectionChanged="SelectionFilteringComboBox_SelectionChanged" />
+                              SelectedItem="{Binding UserFilteringSelection}" Canvas.Left="116" Canvas.Top="154"
+                              SelectionChanged="SelectionFilteringComboBox_SelectionChanged" />
 
                     <Label Name="AddressFilteringCategoryLabel" Height="26" Width="123"
                            TabIndex="53"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="121" FontWeight="Bold">
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="121"
+                           FontWeight="Bold">
                         Client Filtering
                     </Label>
+
                     <Label Name="PortLabel" Height="26" Width="105" FontSize="11"
-                           TabIndex="51" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="68">
-                        Listening Port:
-                    </Label>
+                           Content="Listening Port:"
+                           TabIndex="51" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="68" />
                     <TextBox Name="PortValue" Height="23" TextWrapping="Wrap" Width="211" Canvas.Left="116"
                              Canvas.Top="70">
                         <TextBox.Text>
-                            <Binding Path="ListeningPort" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged" NotifyOnValidationError="True">
+                            <Binding Path="ListeningPort" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged"
+                                     NotifyOnValidationError="True">
                                 <Binding.ValidationRules>
                                     <validations:PortValidationRule ValidationStep="RawProposedValue" />
                                 </Binding.ValidationRules>
@@ -76,7 +75,8 @@
                     </TextBox>
                     <Label Name="ConnectionSettingsCategoryLabel" Height="26" Width="123"
                            TabIndex="47"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="37" FontWeight="Bold">
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="37"
+                           FontWeight="Bold">
                         Connection Settings
                     </Label>
                     <Button Name="HelpButton" Height="31" Width="123" TabIndex="45"
@@ -89,13 +89,16 @@
                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="654" Canvas.Top="6">
                         Private address list
                     </Label>
+
                     <Label Name="StatusLabelValue" Height="26" Width="57" FontSize="11"
-                           TabIndex="43" Foreground="Green"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="6">
-                        Status
-                    </Label>
+                           DataContext="{Binding Path=ServiceStatus}"
+                           TabIndex="43" Foreground="{Binding Converter={StaticResource ColorConverter}}"
+                           Content="{Binding Converter={StaticResource TextConverter}}"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="116" Canvas.Top="6" />
+
                     <Label Name="StatusLabel" Height="26" Width="105" FontSize="11"
-                           TabIndex="42" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6" Canvas.Top="6">
+                           TabIndex="42" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
+                           Canvas.Top="6">
                         Status:
                     </Label>
 
@@ -105,13 +108,12 @@
 
                     <Label Name="VersionLabel" Height="26" Width="61" FontSize="11" FontFamily="Microsoft Sans Serif"
                            TabIndex="40" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Content="{Binding PluginVersion}"
+                           Content="{Binding PluginVersion}"
                            RenderTransformOrigin="0.486,0.462" Canvas.Left="101" Canvas.Top="491" />
-                    <Label Name="Label1" Height="26" Width="95" FontSize="11" FontFamily="Microsoft Sans Serif"
+                    
+                    <Label Name="Label1" Height="26" Width="95" FontSize="11" Content="Plugin Version:"
                            TabIndex="39" HorizontalAlignment="Right" VerticalAlignment="Bottom" Canvas.Left="6"
-                           Canvas.Top="491">
-                        Plugin Version:
-                    </Label>
+                           Canvas.Top="491" />
                 </Canvas>
             </TabItem>
             <TabItem Name="PartyModeTab" Header="Party Mode">

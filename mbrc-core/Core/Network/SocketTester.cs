@@ -35,7 +35,9 @@ namespace MusicBeeRemote.Core.Network
             public StringBuilder Sb = new StringBuilder();
         }
 
-        public IConnectionListener ConnectionListener { get; set; }
+        public delegate void ConnectionStatusHandler(bool connectionStatus);
+
+        public event ConnectionStatusHandler ConnectionChangeListener;
 
         public void VerifyConnection()
         {
@@ -49,7 +51,7 @@ namespace MusicBeeRemote.Core.Network
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Debug, e, "Tester Connection error");
-                ConnectionListener?.OnConnectionResult(false);
+                OnConnectionChange(false);
             }
         }
 
@@ -68,14 +70,14 @@ namespace MusicBeeRemote.Core.Network
                 var verified = (string) json["context"] == Constants.VerifyConnection;
 
                 _logger.Log(LogLevel.Info, $"Connection verified: {verified}");
-                ConnectionListener?.OnConnectionResult(verified);
+                OnConnectionChange(verified);
 
                 client.Shutdown(SocketShutdown.Both);
             }
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Debug, e, "Tester Connection error");
-                ConnectionListener?.OnConnectionResult(false);
+                OnConnectionChange(false);
             }
         }
 
@@ -93,7 +95,7 @@ namespace MusicBeeRemote.Core.Network
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Debug, e, "Tester Connection error");
-                ConnectionListener?.OnConnectionResult(false);
+                OnConnectionChange(false);
             }
         }
 
@@ -104,9 +106,9 @@ namespace MusicBeeRemote.Core.Network
             return payload;
         }
 
-        public interface IConnectionListener
+        protected virtual void OnConnectionChange(bool connectionstatus)
         {
-            void OnConnectionResult(bool isConnnected);
+            ConnectionChangeListener?.Invoke(connectionstatus);
         }
     }
 }

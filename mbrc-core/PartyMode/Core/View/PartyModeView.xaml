@@ -34,10 +34,9 @@
         <Label Width="Auto"
                Height="Auto"
                Margin="1,1,1,1"
-               Background="Lavender"
-               Content="Party Mode extension"
-               DockPanel.Dock="top"
-               FontStyle="Italic"
+               Background="DarkGray"
+               Content="Party Mode"
+               DockPanel.Dock="top"              
                FontWeight="Bold" />
         <StackPanel Width="250"
                     Height="Auto"

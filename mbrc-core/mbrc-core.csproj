@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.69</AssemblyVersion>
+    <AssemblyVersion>1.0.0.79</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -174,6 +174,8 @@
       <DependentUpon>ConfigurationPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="Core\Settings\Dialog\ConfigurationPanelViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\Converters\StatusColorConverter.cs" />
+    <Compile Include="Core\Settings\Dialog\Converters\StatusTextConverter.cs" />
     <Compile Include="Core\Settings\Dialog\RangeFilter.xaml.cs">
       <DependentUpon>RangeFilter.xaml</DependentUpon>
     </Compile>
