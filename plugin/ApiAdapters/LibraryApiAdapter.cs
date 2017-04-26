@@ -60,15 +60,15 @@ namespace MusicBeePlugin.ApiAdapters
 
         public string[] QueryFiles(string filter = "")
         {
-            string[] files = { };
-            _api.Library_QueryFilesEx(filter, ref files);
+            string[] files;
+            _api.Library_QueryFilesEx(filter, out files);
             return files;
         }
 
         public IEnumerable<Track> GetTracks()
         {
-            string[] files = { };
-            _api.Library_QueryFilesEx(null, ref files);
+            string[] files;
+            _api.Library_QueryFilesEx(null, out files);
 
             return files.Select(currentTrack => new Track
             {
@@ -125,8 +125,8 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<RadioStation> GetRadioStations()
         {
-            var radioStations = new string[] { };
-            var success = _api.Library_QueryFilesEx("domain=Radio", ref radioStations);
+            string[] radioStations;
+            var success = _api.Library_QueryFilesEx("domain=Radio", out radioStations);
             List<RadioStation> stations;
             if (success)
             {

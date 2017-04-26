@@ -19,8 +19,8 @@ namespace MusicBeePlugin.ApiAdapters
 
         public bool PlayMatchingTrack(string query)
         {
-            string[] tracks = { };
-            _api.NowPlayingList_QueryFilesEx(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false), ref tracks);
+            string[] tracks;
+            _api.NowPlayingList_QueryFilesEx(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false), out tracks);
 
             return (from currentTrack in tracks
                 let artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist)
@@ -50,8 +50,8 @@ namespace MusicBeePlugin.ApiAdapters
         public bool PlayIndex(int index)
         {
             var success = false;
-            string[] tracks = { };
-            _api.NowPlayingList_QueryFilesEx(null, ref tracks);
+            string[] tracks;
+            _api.NowPlayingList_QueryFilesEx(null, out tracks);
 
             if (index >= 0 || index < tracks.Length)
             {
@@ -68,8 +68,8 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<NowPlaying> GetTracks(int offset = 0, int limit = 4000)
         {
-            string[] tracks = { };
-            _api.NowPlayingList_QueryFilesEx(null, ref tracks);
+            string[] tracks;
+            _api.NowPlayingList_QueryFilesEx(null, out tracks);
 
             return tracks.Select((path, position) =>
             {
@@ -94,8 +94,8 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<NowPlayingListTrack> GetTracksLegacy(int offset = 0, int limit = 5000)
         {
-            string[] tracks = { };
-            _api.NowPlayingList_QueryFilesEx(null, ref tracks);
+            string[] tracks;
+            _api.NowPlayingList_QueryFilesEx(null, out tracks);
 
             return tracks.Select((path, position) =>
             {
