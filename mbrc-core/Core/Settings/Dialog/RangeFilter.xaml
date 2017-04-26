@@ -7,12 +7,12 @@
     xmlns:Validations="clr-namespace:MusicBeeRemote.Core.Settings.Dialog.Validations"
     x:Class="MusicBeeRemote.Core.Settings.Dialog.RangeFilter"
     mc:Ignorable="d"
-    d:DesignHeight="300" d:DesignWidth="300">
+    d:DesignHeight="100" d:DesignWidth="300">
     <Grid>
 
         <TextBox x:Name="IpAddressInputTextBox" Height="26" Width="184" TabIndex="57" TextWrapping="Wrap"
                  VerticalAlignment="Top" HorizontalAlignment="Left"
-                 Margin="10,43,106,231">
+                 Margin="11,43,0,0">
             <Binding Path="IpAddress" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged"
                      NotifyOnValidationError="True">
                 <Binding.ValidationRules>
@@ -21,9 +21,9 @@
             </Binding>
         </TextBox>
         <Label Content="IP Range" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="98"
-               Height="28" />
+               Height="28" FontWeight="Bold" />
         <TextBox HorizontalAlignment="Left" Height="26" Margin="226,43,0,0" TextWrapping="Wrap" Text=""
-                 VerticalAlignment="Top" Width="55" />
+                 VerticalAlignment="Top" Width="64" />
         <Label Content="to" HorizontalAlignment="Left" Margin="200,43,0,0" VerticalAlignment="Top" />
 
     </Grid>

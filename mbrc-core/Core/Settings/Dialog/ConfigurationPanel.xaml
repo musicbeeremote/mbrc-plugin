@@ -117,7 +117,7 @@
                 </Canvas>
             </TabItem>
             <TabItem Name="PartyModeTab" Header="Party Mode">
-                <Canvas Name="PartyModeTabCanvas" Height="444" Width="591" />
+                <Grid Name="PartyModeControl"></Grid>
             </TabItem>
 
         </TabControl>

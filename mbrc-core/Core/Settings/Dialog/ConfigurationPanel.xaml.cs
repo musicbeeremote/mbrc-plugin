@@ -1,6 +1,6 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
+using MusicBeeRemote.PartyMode.Core.View;
 
 namespace MusicBeeRemote.Core.Settings.Dialog
 {
@@ -12,12 +12,17 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         private readonly AddressWhitelist _whitelistControl;
         private readonly RangeFilter _rangeFilterControl;
 
-        public ConfigurationPanel(ConfigurationPanelViewModel viewModel, AddressWhitelist whitelistControl, RangeFilter rangeFilterControl)
+        public ConfigurationPanel(ConfigurationPanelViewModel viewModel,
+            AddressWhitelist whitelistControl,
+            RangeFilter rangeFilterControl,
+            PartyModeView partyModeView)
         {
             _whitelistControl = whitelistControl;
             _rangeFilterControl = rangeFilterControl;
             InitializeComponent();
             DataContext = viewModel;
+            partyModeView.SetValue(Grid.ColumnProperty, 2);
+            PartyModeControl.Children.Add(partyModeView);
         }
 
         private void SelectionFilteringComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
