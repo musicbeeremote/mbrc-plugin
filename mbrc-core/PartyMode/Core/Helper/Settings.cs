@@ -34,20 +34,20 @@ namespace MusicBeeRemote.PartyMode.Core.Helper
 
         public List<RemoteClient> KnownClients
         {
-            get { return _knownClients; }
-            set { _knownClients = value; }
+            get => _knownClients;
+            set => _knownClients = value;
         }
 
         public uint AddressStoreDays
         {
-            get { return _addressStorageDays; }
-            set { _addressStorageDays = value; }
+            get => _addressStorageDays;
+            set => _addressStorageDays = value;
         }
 
         public bool IsActive
         {
-            get { return _isActive; }
-            set { _isActive = value; }
+            get => _isActive;
+            set => _isActive = value;
         }
     }
 }
