@@ -31,66 +31,43 @@ namespace MusicBeeRemote.Core.Network
         {
             _logger.Debug($"Received by client: {connectionId} message --> {incomingMessage}");
 
+            if (string.IsNullOrEmpty(incomingMessage))
+            {
+                return;
+            }
+
             try
             {
-                var msgList = new List<SocketMessage>();
-                if (string.IsNullOrEmpty(incomingMessage))
-                {
-                    return;
-                }
-                try
-                {
-                    msgList.AddRange(from msg
-                        in incomingMessage
-                            .Split(new[] {"\r\n"},
-                                StringSplitOptions.RemoveEmptyEntries)
-                        where !msg.Equals("\n")
-                        select new SocketMessage(JObject.Parse(msg)));
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"while processing message -> {incomingMessage} from {connectionId}");
-                }
-
+                var messageList = GetMessages(incomingMessage, connectionId);
                 var connection = _auth.GetConnection(connectionId);
 
-                foreach (var msg in msgList)
+                foreach (var message in messageList)
                 {
-                    if (msg.Context == Constants.VerifyConnection)
+                    if (message.IsVerifyConnection())
                     {
                         var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
                         _hub.Publish(new PluginResponseAvailableEvent(socketMessage, connectionId));
                         return;
                     }
 
-                    if (connection.PacketNumber == 0 && msg.Context != Constants.Player)
+                    if (connection.PacketNumber == 0 && !message.IsPlayer())
                     {
                         _hub.Publish(new ForceClientDisconnect(connectionId));
                         return;
                     }
 
-                    if (connection.PacketNumber == 1 && msg.Context != Constants.Protocol)
+                    if (connection.PacketNumber == 1 && !message.IsProtocol())
                     {
                         _hub.Publish(new ForceClientDisconnect(connectionId));
                         return;
                     }
 
-                    if (msg.Context == Constants.Protocol && msg.Data is JObject)
+                    if (message.IsProtocol() && message.Data is JObject)
                     {
-                        var data = (JObject) msg.Data;
-                        connection.BroadcastsEnabled = !(bool) data["no_broadcast"];
-                        connection.ClientProtocolVersion = (int) data["protocol_version"];
-                        connection.ClientId = (string) data["client_id"];
-
-                        if (string.IsNullOrEmpty(connection.ClientId))
-                        {
-                            _logger.Debug(msg.Data);
-                        }
-
-                        _hub.Publish(new ConnectionReadyEvent(connection));
+                        HandleProtocolMessage(message, connection);
                     }
 
-                    _hub.Publish(new MessageEvent(msg.Context, msg.Data, connectionId, connection.ClientId));
+                    _hub.Publish(new MessageEvent(message.Context, message.Data, connectionId, connection.ClientId));
                 }
                 connection.IncreasePacketNumber();
             }
@@ -98,6 +75,48 @@ namespace MusicBeeRemote.Core.Network
             {
                 _logger.Error(ex, $"Processing message failed --> {incomingMessage} from {connectionId}");
             }
+        }
+
+        private List<SocketMessage> GetMessages(string incomingMessage, string connectionId)
+        {
+            List<SocketMessage> messageList;
+            try
+            {
+                messageList = SplitIncomingPayload(incomingMessage);
+            }
+            catch (Exception ex)
+            {
+                messageList = new List<SocketMessage>();
+                _logger.Error(ex, $"while processing message -> {incomingMessage} from {connectionId}");
+            }
+            return messageList;
+        }
+
+        private static List<SocketMessage> SplitIncomingPayload(string incomingMessage)
+        {
+            var messageList = new List<SocketMessage>();
+            var individualMessages = incomingMessage.Split(new[] {"\r\n"}, StringSplitOptions.RemoveEmptyEntries);
+            messageList.AddRange(
+                from message in individualMessages
+                where !message.Equals("\n")
+                select new SocketMessage(JObject.Parse(message))
+            );
+            return messageList;
+        }
+
+        private void HandleProtocolMessage(SocketMessage msg, SocketConnection connection)
+        {
+            var data = (JObject) msg.Data;
+            connection.BroadcastsEnabled = !(bool) data["no_broadcast"];
+            connection.ClientProtocolVersion = (int) data["protocol_version"];
+            connection.ClientId = (string) data["client_id"];
+
+            if (string.IsNullOrEmpty(connection.ClientId))
+            {
+                _logger.Debug(msg.Data);
+            }
+
+            _hub.Publish(new ConnectionReadyEvent(connection));
         }
     }
 }
