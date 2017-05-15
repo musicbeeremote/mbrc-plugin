@@ -1,9 +1,6 @@
-﻿using System;
-using System.Windows.Input;
-
-namespace MusicBeeRemote.Core.Settings.Dialog.Commands
+﻿namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
-    public class SaveConfigurationCommand : ICommand
+    public class SaveConfigurationCommand
     {
         private readonly PersistanceManager _manager;
 
@@ -19,13 +16,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
             {
                 _manager.UpdateFirewallRules();
             }
-        }
-
-        public bool CanExecute(object parameter)
-        {
-            return true;
-        }
-
-        public event EventHandler CanExecuteChanged;
+        }    
     }
 }

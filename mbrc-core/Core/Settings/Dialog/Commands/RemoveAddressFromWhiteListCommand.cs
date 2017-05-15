@@ -1,23 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Windows.Input;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
-    public class RemoveAddressFromWhiteListCommand : ICommand
+    public class RemoveAddressFromWhiteListCommand
     {
+        private readonly AddressWhitelistViewModel _viewModel;
+
+        public RemoveAddressFromWhiteListCommand(AddressWhitelistViewModel viewModel)
+        {
+            _viewModel = viewModel;
+        }
+
         public void Execute(object parameter)
         {
-           
+            _viewModel.RemoveAddress(parameter.ToString());
         }
-
-        public bool CanExecute(object parameter)
-        {
-            return true;
-        }
-
-        public event EventHandler CanExecuteChanged;
     }
 }

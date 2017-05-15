@@ -3,18 +3,18 @@ using System.Windows.Input;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
-    public class AddAddressToWhiteListCommand : ICommand
+    public class AddAddressToWhiteListCommand 
     {
+        private readonly AddressWhitelistViewModel _viewModel;
+
+        public AddAddressToWhiteListCommand(AddressWhitelistViewModel viewModel)
+        {
+            _viewModel = viewModel;
+        }
+
         public void Execute(object parameter)
         {
-            
-        }
-
-        public bool CanExecute(object parameter)
-        {
-            return true;
-        }
-
-        public event EventHandler CanExecuteChanged;
+            _viewModel.AddAddress(parameter.ToString());
+        }        
     }
 }

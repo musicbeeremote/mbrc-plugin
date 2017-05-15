@@ -1,21 +1,12 @@
-﻿using System;
-using System.Diagnostics;
-using System.Windows.Input;
+﻿using System.Diagnostics;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
-    public class OpenHelpCommand : ICommand
+    public class OpenHelpCommand
     {
         public void Execute(object parameter)
         {
             Process.Start("http://kelsos.net/musicbeeremote/help/");
-        }
-
-        public bool CanExecute(object parameter)
-        {
-            return true;
-        }
-
-        public event EventHandler CanExecuteChanged;
+        }        
     }
 }

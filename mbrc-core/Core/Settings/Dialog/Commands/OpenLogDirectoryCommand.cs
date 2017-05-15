@@ -5,7 +5,7 @@ using System.Windows.Input;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
-    public class OpenLogDirectoryCommand : ICommand
+    public class OpenLogDirectoryCommand
     {
         private readonly IStorageLocationProvider _storageLocationProvider;
 
@@ -24,12 +24,5 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
                 Process.Start(logDirectory);
             }
         }
-
-        public bool CanExecute(object parameter)
-        {
-            return true;
-        }
-
-        public event EventHandler CanExecuteChanged;
     }
 }

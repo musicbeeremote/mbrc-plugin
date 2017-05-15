@@ -46,16 +46,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
         public LogViewerViewModel LogViewerViewModel { get; }
 
         #endregion ViewModels
-
-        #region Commands
-
-        public ICommand SaveCommand
-        {
-            get { return _saveCommand; }
-        }
-
-        #endregion Commands
-
+        
         private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ClientViewModel.SelectedClient))
@@ -106,9 +97,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         #endregion exception Handling
 
-        #region Disposing
-
-        public ICommand UnloadedCmd => new UnloadedCommand(Dispose);
+        #region Disposing       
 
         public void Dispose()
         {

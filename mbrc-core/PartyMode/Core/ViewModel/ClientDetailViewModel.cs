@@ -1,5 +1,4 @@
-﻿using System.Windows;
-using MusicBeeRemote.Core.Commands;
+﻿using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
 
@@ -11,8 +10,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public ClientDetailViewModel(RemoteClient client)
         {
-            _connectedClient = client;
-            OnPropertyChanged(nameof(IsVisible));
+            _connectedClient = client;           
         }
 
         public bool CanAddToPlayList
@@ -105,8 +103,6 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
                 OnPropertyChanged(nameof(CanMute));
             }
         }
-
-        public Visibility IsVisible => _connectedClient == null ? Visibility.Hidden : Visibility.Visible;
 
         #region text
 

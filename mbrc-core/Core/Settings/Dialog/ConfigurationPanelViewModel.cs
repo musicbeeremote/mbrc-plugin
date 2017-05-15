@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Input;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Settings.Dialog.Commands;
 using MusicBeeRemote.Core.Windows.Mvvm;
@@ -14,13 +13,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         private readonly IVersionProvider _versionProvider;
 
         private readonly UserSettingsModel _userSettings;
-
-        public ICommand SaveConfigurationCommand { get; }
-
-        public ICommand OpenHelpCommand { get; }
-
-        public ICommand OpenLogDirectoryCommand { get; }
-
+        
         public IEnumerable<FilteringSelection> FilterSelection => Enum.GetValues(typeof(FilteringSelection))
             .Cast<FilteringSelection>();
 
@@ -72,15 +65,13 @@ namespace MusicBeeRemote.Core.Settings.Dialog
 
         public bool ServiceStatus { get; set; }
 
+
         public ConfigurationPanelViewModel(PersistanceManager persistanceManager,
             SaveConfigurationCommand saveConfigurationCommand,
             OpenHelpCommand openHelpCommand,
             OpenLogDirectoryCommand openLogDirectoryCommand,
             IVersionProvider versionProvider)
-        {
-            SaveConfigurationCommand = saveConfigurationCommand;
-            OpenHelpCommand = openHelpCommand;
-            OpenLogDirectoryCommand = openLogDirectoryCommand;
+        {            
             _persistanceManager = persistanceManager;
             _versionProvider = versionProvider;
             _userSettings = persistanceManager.UserSettingsModel;

@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.94</AssemblyVersion>
+    <AssemblyVersion>1.0.0.101</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -48,8 +48,6 @@
     <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c">
       <HintPath>..\packages\NLog.4.4.4\lib\net40\NLog.dll</HintPath>
     </Reference>
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
     <Reference Include="StructureMap, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
       <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.dll</HintPath>
     </Reference>
@@ -68,7 +66,6 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
-    <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Core\ApiAdapters\IInvokeHandler.cs" />
@@ -161,9 +158,6 @@
     <Compile Include="Core\Network\Tools.cs" />
     <Compile Include="Core\Podcasts\PodcastSubscription.cs" />
     <Compile Include="Core\RemoteBootstrap.cs" />
-    <Compile Include="Core\Settings\Dialog\AddressWhitelist.xaml.cs">
-      <DependentUpon>AddressWhitelist.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Core\Settings\Dialog\AddressWhitelistViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\CheckboxExtension.cs" />
     <Compile Include="Core\Logging\DebugSettingsModifiedEvent.cs" />
@@ -172,15 +166,15 @@
     <Compile Include="Core\Settings\Dialog\Commands\OpenLogDirectoryCommand.cs" />
     <Compile Include="Core\Settings\Dialog\Commands\RemoveAddressFromWhiteListCommand.cs" />
     <Compile Include="Core\Settings\Dialog\Commands\SaveConfigurationCommand.cs" />
-    <Compile Include="Core\Settings\Dialog\ConfigurationPanel.xaml.cs">
-      <DependentUpon>ConfigurationPanel.xaml</DependentUpon>
+    <Compile Include="Core\Settings\Dialog\ConfigurationPanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\ConfigurationPanel.Designer.cs">
+      <DependentUpon>ConfigurationPanel.cs</DependentUpon>
     </Compile>
     <Compile Include="Core\Settings\Dialog\ConfigurationPanelViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\Converters\StatusColorConverter.cs" />
     <Compile Include="Core\Settings\Dialog\Converters\StatusTextConverter.cs" />
-    <Compile Include="Core\Settings\Dialog\RangeFilter.xaml.cs">
-      <DependentUpon>RangeFilter.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Core\Settings\Dialog\Validations\AddressValidationRule.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\PortValidationRule.cs" />
     <Compile Include="Core\Settings\FilteringSelection.cs" />
@@ -204,10 +198,6 @@
     <Compile Include="Core\Utilities\Utilities.cs" />
     <Compile Include="Core\Windows\iWindowManager.cs" />
     <Compile Include="Core\Windows\WindowManager.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehavior.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\CommandBehaviorBinding.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\EventHandlerGenerator.cs" />
-    <Compile Include="PartyMode\Core\AttachedCommandBehavior\SimpleCommand.cs" />
     <Compile Include="PartyMode\Core\ClientEventArgs.cs" />
     <Compile Include="PartyMode\Core\Helper\CycledList.cs" />
     <Compile Include="PartyMode\Core\Helper\ObservableCollectionEx.cs" />
@@ -221,42 +211,21 @@
     <Compile Include="PartyMode\Core\ViewModel\ClientDetailViewModel.cs" />
     <Compile Include="PartyMode\Core\ViewModel\ClientViewModel.cs" />
     <Compile Include="PartyMode\Core\ViewModel\Commands\SaveCommand.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\Commands\UnloadedCommand.cs" />
     <Compile Include="PartyMode\Core\ViewModel\LogViewerViewModel.cs" />
     <Compile Include="Core\Windows\Mvvm\ViewModelBase.cs" />
     <Compile Include="PartyMode\Core\ViewModel\PartyModeLogsView.cs" />
     <Compile Include="PartyMode\Core\ViewModel\PartyModeViewModel.cs" />
-    <Compile Include="PartyMode\Core\View\ClientDetailView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\ClientView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\LogViewerView.xaml.cs" />
-    <Compile Include="PartyMode\Core\View\PartyModeView.xaml.cs" />
     <Compile Include="Properties\Resources.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TinyMessenger.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Page Include="Core\Settings\Dialog\AddressWhitelist.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Core\Settings\Dialog\ConfigurationPanel.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Core\Settings\Dialog\RangeFilter.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="PartyMode\Core\View\ClientDetailView.xaml" />
-    <Page Include="PartyMode\Core\View\ClientView.xaml" />
-    <Page Include="PartyMode\Core\View\LogViewerView.xaml" />
-    <Page Include="PartyMode\Core\View\PartyModeView.xaml" />
-    <Page Include="PartyMode\Core\View\Style\StyleDictonary.xaml" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Core\Settings\Dialog\ConfigurationPanel.resx">
+      <DependentUpon>ConfigurationPanel.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
