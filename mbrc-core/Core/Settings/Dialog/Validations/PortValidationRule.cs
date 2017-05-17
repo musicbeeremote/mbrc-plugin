@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Validations
 {
@@ -8,30 +7,25 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Validations
         public const uint MinPort = 1;
         public const uint MaxPort = 65535;
 
-        //public override ValidationResult Validate(object value, CultureInfo cultureInfo)
-        //{
-        //    var port = 0;
+        public bool Validate(object value)
+        {
+            var port = 0;
 
-        //    try
-        //    {
-        //        var input = value as string;
+            try
+            {
+                var input = value as string;
 
-        //        if (!string.IsNullOrEmpty(input))
-        //        {
-        //            port = int.Parse(input);
-        //        }
-        //    }
-        //    catch (Exception exception)
-        //    {
-        //        return new ValidationResult(false, $"Invalid characters or {exception.Message}");
-        //    }
+                if (!string.IsNullOrEmpty(input))
+                {
+                    port = int.Parse(input);
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
 
-        //    if (port < MinPort || port > MaxPort)
-        //    {
-        //        return new ValidationResult(false, $"Please enter port in the range [${MinPort}, ${MaxPort}]");
-        //    }
-
-        //    return new ValidationResult(true, null);
-        //}
+            return port >= MinPort && port <= MaxPort;
+        }
     }
 }

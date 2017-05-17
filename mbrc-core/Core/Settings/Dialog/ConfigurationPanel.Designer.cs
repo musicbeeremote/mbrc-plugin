@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             this.statusLabel = new System.Windows.Forms.Label();
             this.connectionSettingsLabel = new System.Windows.Forms.Label();
             this.listeningPortLabel = new System.Windows.Forms.Label();
@@ -36,7 +37,6 @@
             this.label1 = new System.Windows.Forms.Label();
             this.filteringOptionsComboBox = new System.Windows.Forms.ComboBox();
             this.allowedLabel = new System.Windows.Forms.Label();
-            this.clientInterfaceAddresses = new System.Windows.Forms.ListView();
             this.privateIpAddressLabel = new System.Windows.Forms.Label();
             this.openHelpButton = new System.Windows.Forms.Button();
             this.saveButton = new System.Windows.Forms.Button();
@@ -48,6 +48,9 @@
             this.enableDebugLoggingCheckbox = new System.Windows.Forms.CheckBox();
             this.openLogDirectoryButton = new System.Windows.Forms.Button();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.clientAddressList = new System.Windows.Forms.ListBox();
+            this.listeningPortErrorProvider = new System.Windows.Forms.ErrorProvider(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).BeginInit();
             this.SuspendLayout();
             // 
             // statusLabel
@@ -86,6 +89,7 @@
             this.listeningPortNumber.Size = new System.Drawing.Size(121, 26);
             this.listeningPortNumber.TabIndex = 3;
             this.listeningPortNumber.Text = "30000";
+            this.listeningPortNumber.TextChanged += new System.EventHandler(this.listeningPortNumber_TextChanged);
             // 
             // statusValueLabel
             // 
@@ -124,14 +128,6 @@
             this.allowedLabel.TabIndex = 7;
             this.allowedLabel.Text = "Allowed:";
             // 
-            // clientInterfaceAddresses
-            // 
-            this.clientInterfaceAddresses.Location = new System.Drawing.Point(566, 85);
-            this.clientInterfaceAddresses.Name = "clientInterfaceAddresses";
-            this.clientInterfaceAddresses.Size = new System.Drawing.Size(212, 314);
-            this.clientInterfaceAddresses.TabIndex = 8;
-            this.clientInterfaceAddresses.UseCompatibleStateImageBehavior = false;
-            // 
             // privateIpAddressLabel
             // 
             this.privateIpAddressLabel.AutoSize = true;
@@ -143,12 +139,13 @@
             // 
             // openHelpButton
             // 
-            this.openHelpButton.Location = new System.Drawing.Point(684, 621);
+            this.openHelpButton.Location = new System.Drawing.Point(684, 618);
             this.openHelpButton.Name = "openHelpButton";
             this.openHelpButton.Size = new System.Drawing.Size(94, 41);
             this.openHelpButton.TabIndex = 10;
             this.openHelpButton.Text = "Help";
             this.openHelpButton.UseVisualStyleBackColor = true;
+            this.openHelpButton.Click += new System.EventHandler(this.OpenHelpButtonClick);
             // 
             // saveButton
             // 
@@ -158,6 +155,7 @@
             this.saveButton.TabIndex = 11;
             this.saveButton.Text = "Save";
             this.saveButton.UseVisualStyleBackColor = true;
+            this.saveButton.Click += new System.EventHandler(this.SaveButtonClick);
             // 
             // pluginVersionLabel
             // 
@@ -196,6 +194,7 @@
             this.updateFirewallSettingsCheckbox.TabIndex = 15;
             this.updateFirewallSettingsCheckbox.Text = "Update Firewall Settings";
             this.updateFirewallSettingsCheckbox.UseVisualStyleBackColor = true;
+            this.updateFirewallSettingsCheckbox.CheckedChanged += new System.EventHandler(this.UpdateFirewallSettingsCheckboxCheckedChanged);
             // 
             // label2
             // 
@@ -216,6 +215,7 @@
             this.enableDebugLoggingCheckbox.TabIndex = 17;
             this.enableDebugLoggingCheckbox.Text = "Enable Debug Logging";
             this.enableDebugLoggingCheckbox.UseVisualStyleBackColor = true;
+            this.enableDebugLoggingCheckbox.CheckedChanged += new System.EventHandler(this.EnableDebugLoggingCheckboxCheckedChanged);
             // 
             // openLogDirectoryButton
             // 
@@ -225,6 +225,7 @@
             this.openLogDirectoryButton.TabIndex = 18;
             this.openLogDirectoryButton.Text = "Open Log Directory";
             this.openLogDirectoryButton.UseVisualStyleBackColor = true;
+            this.openLogDirectoryButton.Click += new System.EventHandler(this.OpenLogDirectoryButtonClick);
             // 
             // panel1
             // 
@@ -233,11 +234,25 @@
             this.panel1.Size = new System.Drawing.Size(308, 137);
             this.panel1.TabIndex = 19;
             // 
+            // clientAddressList
+            // 
+            this.clientAddressList.FormattingEnabled = true;
+            this.clientAddressList.ItemHeight = 20;
+            this.clientAddressList.Location = new System.Drawing.Point(584, 85);
+            this.clientAddressList.Name = "clientAddressList";
+            this.clientAddressList.Size = new System.Drawing.Size(194, 284);
+            this.clientAddressList.TabIndex = 20;
+            // 
+            // listeningPortErrorProvider
+            // 
+            this.listeningPortErrorProvider.ContainerControl = this;
+            // 
             // ConfigurationPanel
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(790, 671);
+            this.Controls.Add(this.clientAddressList);
             this.Controls.Add(this.panel1);
             this.Controls.Add(this.openLogDirectoryButton);
             this.Controls.Add(this.enableDebugLoggingCheckbox);
@@ -249,7 +264,6 @@
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.openHelpButton);
             this.Controls.Add(this.privateIpAddressLabel);
-            this.Controls.Add(this.clientInterfaceAddresses);
             this.Controls.Add(this.allowedLabel);
             this.Controls.Add(this.filteringOptionsComboBox);
             this.Controls.Add(this.label1);
@@ -260,6 +274,7 @@
             this.Controls.Add(this.statusLabel);
             this.Name = "ConfigurationPanel";
             this.Text = "Configuration";
+            ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -275,7 +290,6 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.ComboBox filteringOptionsComboBox;
         private System.Windows.Forms.Label allowedLabel;
-        private System.Windows.Forms.ListView clientInterfaceAddresses;
         private System.Windows.Forms.Label privateIpAddressLabel;
         private System.Windows.Forms.Button openHelpButton;
         private System.Windows.Forms.Button saveButton;
@@ -287,5 +301,7 @@
         private System.Windows.Forms.CheckBox enableDebugLoggingCheckbox;
         private System.Windows.Forms.Button openLogDirectoryButton;
         private System.Windows.Forms.Panel panel1;
+        private System.Windows.Forms.ListBox clientAddressList;
+        private System.Windows.Forms.ErrorProvider listeningPortErrorProvider;
     }
 }

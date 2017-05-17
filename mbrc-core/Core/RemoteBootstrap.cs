@@ -99,6 +99,7 @@ namespace MusicBeeRemote.Core
                 c.For<SaveConfigurationCommand>().Use<SaveConfigurationCommand>();
                 c.For<ConfigurationPanel>().Use<ConfigurationPanel>();
                 c.For<ConfigurationPanelViewModel>().Use<ConfigurationPanelViewModel>();
+                c.For<IConfigurationPanelPresenter>().Use<ConfigurationPanelPresenter>();
             });
 
             var controller = _container.GetInstance<CommandExecutor>();
