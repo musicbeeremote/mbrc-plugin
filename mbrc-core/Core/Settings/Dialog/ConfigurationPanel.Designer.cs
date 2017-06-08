@@ -118,6 +118,7 @@
             this.filteringOptionsComboBox.Name = "filteringOptionsComboBox";
             this.filteringOptionsComboBox.Size = new System.Drawing.Size(121, 28);
             this.filteringOptionsComboBox.TabIndex = 6;
+            this.filteringOptionsComboBox.SelectedIndexChanged += new System.EventHandler(this.FilteringOptionsComboBox_SelectedIndexChanged);
             // 
             // allowedLabel
             // 

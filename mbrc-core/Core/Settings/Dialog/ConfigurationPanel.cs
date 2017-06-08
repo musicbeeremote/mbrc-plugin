@@ -48,6 +48,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             updateFirewallSettingsCheckbox.SetChecked(enabled);
         }
 
+        public void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection)
+        {
+            filteringOptionsComboBox.DataSource = modelFilterSelection;
+        }
+
         private void OpenHelpButtonClick(object sender, EventArgs e)
         {
             _presenter.OpenHelp();
@@ -86,6 +91,25 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             else
             {
                 listeningPortErrorProvider.SetError(listeningPortNumber, "Invalid Port Number");
+            }
+        }
+
+        private void FilteringOptionsComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;
+            
+            foreach (Control panel1Control in panel1.Controls)
+            {
+                panel1.Controls.Remove(panel1Control);
+            }
+
+            if (selected == FilteringSelection.Range)
+            {
+                panel1.Controls.Add(new RangeManagementControl());
+            } 
+            else if (selected == FilteringSelection.Specific)
+            {
+                panel1.Controls.Add(new WhitelistManagementControl());
             }
         }
     }
@@ -132,6 +156,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             _view.UpdateStatus(new SocketStatus(_model.ServiceStatus));
             _view.UpdateFirewallStatus(_model.FirewallUpdateEnabled);
             _view.UpdateLoggingStatus(_model.DebugEnabled);
+            _view.UpdateFilteringData(_model.FilterSelection);
         }
 
         private void OnPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -197,5 +222,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         void UpdateStatus(SocketStatus socketStatus);
         void UpdateLoggingStatus(bool enabled);
         void UpdateFirewallStatus(bool enabled);
+        void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection);
     }
 }
