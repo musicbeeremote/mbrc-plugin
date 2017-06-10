@@ -12,9 +12,17 @@ namespace MusicBeeRemote.Core.Settings.Dialog
     {
         private readonly IConfigurationPanelPresenter _presenter;
         private readonly PortValidationRule _validationRule;
+        private readonly WhitelistManagementControl _whitelistManagementControl;
+        private readonly RangeManagementControl _rangeManagementControl;
 
-        public ConfigurationPanel(IConfigurationPanelPresenter presenter)
+        public ConfigurationPanel(
+            IConfigurationPanelPresenter presenter,
+            WhitelistManagementControl whitelistManagementControl,
+            RangeManagementControl rangeManagementControl
+            )
         {
+            _whitelistManagementControl = whitelistManagementControl;
+            _rangeManagementControl = rangeManagementControl;
             _presenter = presenter;
             _validationRule = new PortValidationRule();
             InitializeComponent();
@@ -51,6 +59,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         public void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection)
         {
             filteringOptionsComboBox.DataSource = modelFilterSelection;
+        }
+
+        public void UpdateFilterSelection(FilteringSelection filteringSelection)
+        {
+            filteringOptionsComboBox.SelectedItem = filteringSelection;
         }
 
         private void OpenHelpButtonClick(object sender, EventArgs e)
@@ -98,18 +111,19 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         {
             var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;
             
-            foreach (Control panel1Control in panel1.Controls)
+            foreach (Control panel1Control in filteringPanel.Controls)
             {
-                panel1.Controls.Remove(panel1Control);
+                filteringPanel.Controls.Remove(panel1Control);
             }
 
-            if (selected == FilteringSelection.Range)
+            switch (selected)
             {
-                panel1.Controls.Add(new RangeManagementControl());
-            } 
-            else if (selected == FilteringSelection.Specific)
-            {
-                panel1.Controls.Add(new WhitelistManagementControl());
+                case FilteringSelection.Range:
+                    filteringPanel.Controls.Add(_rangeManagementControl);
+                    break;
+                case FilteringSelection.Specific:
+                    filteringPanel.Controls.Add(_whitelistManagementControl);
+                    break;
             }
         }
     }
@@ -156,7 +170,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog
             _view.UpdateStatus(new SocketStatus(_model.ServiceStatus));
             _view.UpdateFirewallStatus(_model.FirewallUpdateEnabled);
             _view.UpdateLoggingStatus(_model.DebugEnabled);
-            _view.UpdateFilteringData(_model.FilterSelection);
+            _view.UpdateFilteringData(_model.FilteringData);
+            _view.UpdateFilterSelection(_model.FilteringSelection);
         }
 
         private void OnPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -223,5 +238,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog
         void UpdateLoggingStatus(bool enabled);
         void UpdateFirewallStatus(bool enabled);
         void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection);
+        void UpdateFilterSelection(FilteringSelection filteringSelection);
     }
 }

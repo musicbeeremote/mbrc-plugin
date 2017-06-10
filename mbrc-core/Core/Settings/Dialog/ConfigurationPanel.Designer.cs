@@ -47,7 +47,7 @@
             this.label2 = new System.Windows.Forms.Label();
             this.enableDebugLoggingCheckbox = new System.Windows.Forms.CheckBox();
             this.openLogDirectoryButton = new System.Windows.Forms.Button();
-            this.panel1 = new System.Windows.Forms.Panel();
+            this.filteringPanel = new System.Windows.Forms.Panel();
             this.clientAddressList = new System.Windows.Forms.ListBox();
             this.listeningPortErrorProvider = new System.Windows.Forms.ErrorProvider(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).BeginInit();
@@ -228,12 +228,12 @@
             this.openLogDirectoryButton.UseVisualStyleBackColor = true;
             this.openLogDirectoryButton.Click += new System.EventHandler(this.OpenLogDirectoryButtonClick);
             // 
-            // panel1
+            // filteringPanel
             // 
-            this.panel1.Location = new System.Drawing.Point(20, 262);
-            this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(308, 137);
-            this.panel1.TabIndex = 19;
+            this.filteringPanel.Location = new System.Drawing.Point(20, 262);
+            this.filteringPanel.Name = "filteringPanel";
+            this.filteringPanel.Size = new System.Drawing.Size(308, 137);
+            this.filteringPanel.TabIndex = 19;
             // 
             // clientAddressList
             // 
@@ -254,7 +254,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(790, 671);
             this.Controls.Add(this.clientAddressList);
-            this.Controls.Add(this.panel1);
+            this.Controls.Add(this.filteringPanel);
             this.Controls.Add(this.openLogDirectoryButton);
             this.Controls.Add(this.enableDebugLoggingCheckbox);
             this.Controls.Add(this.label2);
@@ -301,7 +301,7 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.CheckBox enableDebugLoggingCheckbox;
         private System.Windows.Forms.Button openLogDirectoryButton;
-        private System.Windows.Forms.Panel panel1;
+        private System.Windows.Forms.Panel filteringPanel;
         private System.Windows.Forms.ListBox clientAddressList;
         private System.Windows.Forms.ErrorProvider listeningPortErrorProvider;
     }

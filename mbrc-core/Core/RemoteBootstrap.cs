@@ -100,6 +100,10 @@ namespace MusicBeeRemote.Core
                 c.For<ConfigurationPanel>().Use<ConfigurationPanel>();
                 c.For<ConfigurationPanelViewModel>().Use<ConfigurationPanelViewModel>();
                 c.For<IConfigurationPanelPresenter>().Use<ConfigurationPanelPresenter>();
+
+                c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();
+                c.For<WhitelistManagementViewModel>().Use<WhitelistManagementViewModel>();
+                c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();               
             });
 
             var controller = _container.GetInstance<CommandExecutor>();

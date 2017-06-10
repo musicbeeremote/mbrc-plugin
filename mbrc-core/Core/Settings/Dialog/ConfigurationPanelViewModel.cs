@@ -14,18 +14,18 @@ namespace MusicBeeRemote.Core.Settings.Dialog
 
         private readonly UserSettingsModel _userSettings;
         
-        public IEnumerable<FilteringSelection> FilterSelection => Enum.GetValues(typeof(FilteringSelection))
+        public IEnumerable<FilteringSelection> FilteringData => Enum.GetValues(typeof(FilteringSelection))
             .Cast<FilteringSelection>();
 
         public string IpAddress { get; set; }
 
-        public FilteringSelection UserFilteringSelection
+        public FilteringSelection FilteringSelection
         {
             get => _userSettings.FilterSelection;
             set
             {
                 _userSettings.FilterSelection = value;
-                OnPropertyChanged(nameof(UserFilteringSelection));
+                OnPropertyChanged(nameof(FilteringSelection));
             }
         }
 
