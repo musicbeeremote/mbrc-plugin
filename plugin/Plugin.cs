@@ -13,7 +13,7 @@ namespace MusicBeePlugin
     {
         private MusicBeeApiInterface _api;
         private readonly PluginInfo _about = new PluginInfo();
-        private IMusicBeeRemote _musicBeeRemote;
+        private IMusicBeeRemotePlugin _musicBeeRemotePlugin;
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
@@ -67,31 +67,31 @@ namespace MusicBeePlugin
             );
 
             var remoteBootstrap = new RemoteBootstrap();
-            _musicBeeRemote = remoteBootstrap.BootStrap(dependencies);
+            _musicBeeRemotePlugin = remoteBootstrap.BootStrap(dependencies);
 
             var menuItemDescription = "Information Panel of the MusicBee Remote";
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);
 
-            _musicBeeRemote.Start();
+            _musicBeeRemotePlugin.Start();
 
             return _about;
         }
 
         private void MenuItemClicked(object sender, EventArgs args)
         {
-            _musicBeeRemote.DisplayInfoWindow();
+            _musicBeeRemotePlugin.DisplayInfoWindow();
         }
 
         public bool Configure(IntPtr panelHandle)
         {
-            _musicBeeRemote.DisplayInfoWindow();
+            _musicBeeRemotePlugin.DisplayInfoWindow();
             return true;
         }
 
         public void Close(PluginCloseReason reason)
         {
             /** When the plugin closes for whatever reason the SocketServer must stop **/
-            _musicBeeRemote.Stop();
+            _musicBeeRemotePlugin.Stop();
         }
 
         /// <summary>
@@ -126,25 +126,25 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.TrackChanged:
-                    _musicBeeRemote.NotifyTrackChanged();
+                    _musicBeeRemotePlugin.NotifyTrackChanged();
                     break;
                 case NotificationType.VolumeLevelChanged:
-                    _musicBeeRemote.NotifyVolumeLevelChanged();
+                    _musicBeeRemotePlugin.NotifyVolumeLevelChanged();
                     break;
                 case NotificationType.VolumeMuteChanged:
-                    _musicBeeRemote.NotifyVolumeMuteChanged();
+                    _musicBeeRemotePlugin.NotifyVolumeMuteChanged();
                     break;
                 case NotificationType.PlayStateChanged:
-                    _musicBeeRemote.NotifyPlayStateChanged();
+                    _musicBeeRemotePlugin.NotifyPlayStateChanged();
                     break;
                 case NotificationType.NowPlayingLyricsReady:
-                    _musicBeeRemote.NotifyLyricsReady();
+                    _musicBeeRemotePlugin.NotifyLyricsReady();
                     break;
                 case NotificationType.NowPlayingArtworkReady:
-                    _musicBeeRemote.NotifyArtworkReady();
+                    _musicBeeRemotePlugin.NotifyArtworkReady();
                     break;
                 case NotificationType.NowPlayingListChanged:
-                    _musicBeeRemote.NotifyNowPlayingListChanged();
+                    _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
                     break;
             }
         }

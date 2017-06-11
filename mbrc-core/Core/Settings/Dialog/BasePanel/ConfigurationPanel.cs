@@ -125,6 +125,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
                     filteringPanel.Controls.Add(_whitelistManagementControl);
                     break;
             }
+            
+            _presenter.UpdateFilteringSelection(selected);
         }
     }
 }

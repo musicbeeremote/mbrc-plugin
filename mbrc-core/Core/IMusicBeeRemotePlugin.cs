@@ -1,6 +1,6 @@
 ﻿namespace MusicBeeRemote.Core
 {
-    public interface IMusicBeeRemote
+    public interface IMusicBeeRemotePlugin
     {
         void Start();
 

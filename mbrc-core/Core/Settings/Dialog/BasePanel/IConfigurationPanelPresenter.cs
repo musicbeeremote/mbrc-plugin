@@ -10,5 +10,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         void LoggingStatusChanged(bool @checked);
         void UpdateFirewallSettingsChanged(bool @checked);
         void UpdateListeningPort(uint listeningPort);
+        void UpdateFilteringSelection(FilteringSelection selected);
     }
 }

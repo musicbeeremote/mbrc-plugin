@@ -33,7 +33,7 @@ namespace MusicBeeRemote.Core
             _container = new Container();
         }
 
-        public IMusicBeeRemote BootStrap(MusicBeeDependencies dependencies)
+        public IMusicBeeRemotePlugin BootStrap(MusicBeeDependencies dependencies)
         {
             JsonConvert.DefaultSettings = () =>
             {
@@ -94,7 +94,7 @@ namespace MusicBeeRemote.Core
                 c.For<ITrackRepository>().Use<TrackRepository>().Singleton();
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
                 c.For<ITinyMessengerHub>().Use<TinyMessengerHub>().Singleton();
-                c.For<IMusicBeeRemote>().Use<MusicBeeRemote>().Singleton();
+                c.For<IMusicBeeRemotePlugin>().Use<MusicBeeRemotePlugin>().Singleton();
 
                 c.For<OpenHelpCommand>().Use<OpenHelpCommand>();
                 c.For<OpenLogDirectoryCommand>().Use<OpenLogDirectoryCommand>();
@@ -111,7 +111,7 @@ namespace MusicBeeRemote.Core
             Configuration.Register(controller, _container);
                     
 
-            return _container.GetInstance<IMusicBeeRemote>();
+            return _container.GetInstance<IMusicBeeRemotePlugin>();
         }
     }
 }

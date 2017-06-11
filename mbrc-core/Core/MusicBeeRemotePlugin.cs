@@ -6,7 +6,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core
 {
-    public class MusicBeeRemote : IMusicBeeRemote
+    public class MusicBeeRemotePlugin : IMusicBeeRemotePlugin
     {
         private readonly SocketServer _socketServer;
         private readonly ServiceDiscovery _serviceDiscovery;
@@ -16,7 +16,7 @@ namespace MusicBeeRemote.Core
         private readonly ITinyMessengerHub _hub;
 
 
-        public MusicBeeRemote(
+        public MusicBeeRemotePlugin(
             SocketServer socketServer,
             ServiceDiscovery serviceDiscovery,
             ITrackStateMonitor trackStateMonitor,

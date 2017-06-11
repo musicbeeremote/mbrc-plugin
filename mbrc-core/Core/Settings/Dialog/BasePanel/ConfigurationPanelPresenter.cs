@@ -81,6 +81,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             _model.ListeningPort = listeningPort;
         }
 
+        public void UpdateFilteringSelection(FilteringSelection selected)
+        {
+            _model.FilteringSelection = selected;
+        }
+
         private void CheckIfAttached()
         {
             if (_view == null)
