@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemote.Core.Settings.Dialog
+﻿namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 {
     partial class ConfigurationPanel
     {

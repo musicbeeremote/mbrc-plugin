@@ -8,7 +8,9 @@ using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Settings.Dialog;
+using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Commands;
+using MusicBeeRemote.Core.Settings.Dialog.Whitelist;
 using MusicBeeRemote.Core.Support;
 using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
@@ -101,8 +103,7 @@ namespace MusicBeeRemote.Core
                 c.For<ConfigurationPanelViewModel>().Use<ConfigurationPanelViewModel>();
                 c.For<IConfigurationPanelPresenter>().Use<ConfigurationPanelPresenter>();
 
-                c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();
-                c.For<WhitelistManagementViewModel>().Use<WhitelistManagementViewModel>();
+                c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();              
                 c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();               
             });
 

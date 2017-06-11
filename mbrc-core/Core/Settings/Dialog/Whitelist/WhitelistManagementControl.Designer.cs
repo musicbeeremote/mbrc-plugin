@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemote.Core.Settings.Dialog
+﻿namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
 {
     partial class WhitelistManagementControl
     {
@@ -69,7 +69,7 @@
             this.newAddressTextBox.Name = "newAddressTextBox";
             this.newAddressTextBox.Size = new System.Drawing.Size(172, 26);
             this.newAddressTextBox.TabIndex = 3;
-            this.newAddressTextBox.TextChanged += new System.EventHandler(this.newAddressTextBox_TextChanged);
+            this.newAddressTextBox.TextChanged += new System.EventHandler(this.NewAddressTextBoxTextChanged);
             // 
             // whiteListLabel
             // 

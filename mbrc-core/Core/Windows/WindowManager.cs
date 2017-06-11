@@ -1,5 +1,6 @@
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Settings.Dialog;
+using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
 using StructureMap;
 
 namespace MusicBeeRemote.Core.Windows
