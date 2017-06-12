@@ -55,7 +55,7 @@ namespace MusicBeePlugin.ApiAdapters
 
             if (index >= 0 || index < tracks.Length)
             {
-                success = _api.NowPlayingList_PlayNow(tracks[index]);
+                success = _api.NowPlayingList_PlayNow(tracks[index - 1]);
             }
 
             return success;
