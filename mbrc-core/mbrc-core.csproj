@@ -186,6 +186,7 @@
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementView.cs" />
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\AddressValidationRule.cs" />
+    <Compile Include="Core\Settings\Dialog\Validations\LastOctetValidator.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\PortValidationRule.cs" />
     <Compile Include="Core\Settings\Dialog\Whitelist\IWhitelistManagementPresenter.cs" />
     <Compile Include="Core\Settings\Dialog\Whitelist\IWhitelistManagementView.cs" />

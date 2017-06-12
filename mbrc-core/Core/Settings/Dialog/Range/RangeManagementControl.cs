@@ -8,10 +8,12 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
     {
         private readonly RangeManagementViewModel _viewModel;
         private readonly AddressValidationRule _addressValidationRule;
+        private readonly LastOctetValidator _lastOctetValidator;
 
         public RangeManagementControl(RangeManagementViewModel viewModel)
         {
             _addressValidationRule = new AddressValidationRule();
+            _lastOctetValidator = new LastOctetValidator();
             _viewModel = viewModel;
             InitializeComponent();
             baseIpTextBox.Text = _viewModel.BaseIp;
@@ -34,7 +36,9 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
 
         private void LastOctetTextBox_TextChanged(object sender, System.EventArgs e)
         {
-
+            lastOctetTextBox.BackColor = _lastOctetValidator.Validate(baseIpTextBox.Text, lastOctetTextBox.Text)
+                ? DefaultBackColor
+                : Color.Red;
         }
     }
 }
