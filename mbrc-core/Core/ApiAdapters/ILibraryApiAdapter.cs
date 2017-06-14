@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Podcasts;
 
 namespace MusicBeeRemote.Core.ApiAdapters
 {
@@ -32,6 +33,10 @@ namespace MusicBeeRemote.Core.ApiAdapters
 
         IEnumerable<RadioStation> GetRadioStations();
 
+        IEnumerable<PodcastSubscription> GetPodcastSubscriptions();
+
+        IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId);
+        
         IEnumerable<Playlist> GetPlaylists();
 
         string GetYearForTrack(string currentTrack);

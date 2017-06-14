@@ -4,6 +4,7 @@ using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
+using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Utilities;
 using static MusicBeePlugin.Plugin.MetaDataType;
 using Genre = MusicBeeRemote.Core.Model.Entities.Genre;
@@ -142,6 +143,47 @@ namespace MusicBeePlugin.ApiAdapters
                 stations = new List<RadioStation>();
             }
             return stations;
+        }
+
+        public IEnumerable<PodcastSubscription> GetPodcastSubscriptions()
+        {
+            var list = new List<PodcastSubscription>();
+            string[] subscriptionIds;
+            _api.Podcasts_QuerySubscriptions(null, out subscriptionIds);
+            var subscriptionConverter = new SubscriptionConverter();
+                   
+            foreach (var id in subscriptionIds)
+            {
+                string[] subscriptionMetadata;
+                if (_api.Podcasts_GetSubscription(id, out subscriptionMetadata))
+                {
+                    list.Add(subscriptionConverter.Convert(subscriptionMetadata));
+                }                
+            }
+            
+            return list;
+        }
+
+        public IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId)
+        {
+            var converter = new EpisodeConverter();
+            var list = new List<PodcastEpisode>();            
+            var episodeIndex = 0;
+
+            string[] episodes;
+            _api.Podcasts_GetSubscriptionEpisodes(subscriptionId, out episodes);
+
+            for (var i = 0; i < episodes.Length; i++)
+            {
+                string[] episodeMetadata;
+                if (!_api.Podcasts_GetSubscriptionEpisode(subscriptionId, i, out episodeMetadata))
+                {
+                    break;
+                }
+                list.Add(converter.Convert(episodeMetadata));
+            }
+            
+            return list;
         }
 
         public IEnumerable<Playlist> GetPlaylists()
