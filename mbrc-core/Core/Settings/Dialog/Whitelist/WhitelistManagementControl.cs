@@ -18,18 +18,21 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
             InitializeComponent();
             _presenter.Attach(this);
             _presenter.Load();
+            addressAddButton.Enabled = false;
         }
 
         public void UpdateWhitelist(List<string> whitelist)
         {
             var bindingSource = new BindingSource {DataSource = whitelist};
             whitelistComboBox.DataSource = bindingSource;
+            addressRemoveButton.Enabled = whitelist.Count > 0;           
         }
 
         private void AddressAddButtonClick(object sender, EventArgs e)
         {
             var input = newAddressTextBox.Text;
             _presenter.AddAddress(input);
+            newAddressTextBox.Text = "";
         }
 
         private void AddressRemoveButtonClick(object sender, EventArgs e)
@@ -48,6 +51,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
         private void NewAddressTextBoxTextChanged(object sender, EventArgs e)
         {
             var input = newAddressTextBox.Text;
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                addressAddButton.Enabled = false;
+                newAddressTextBox.BackColor = DefaultBackColor;
+                return;
+            }
+            
             if (_validationRule.Validate(input))
             {
                 addressAddButton.Enabled = true;

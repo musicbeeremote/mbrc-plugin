@@ -37,6 +37,7 @@
             // 
             // whitelistComboBox
             // 
+            this.whitelistComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.whitelistComboBox.FormattingEnabled = true;
             this.whitelistComboBox.Location = new System.Drawing.Point(9, 40);
             this.whitelistComboBox.Name = "whitelistComboBox";

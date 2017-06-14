@@ -273,8 +273,9 @@
             this.Controls.Add(this.listeningPortLabel);
             this.Controls.Add(this.connectionSettingsLabel);
             this.Controls.Add(this.statusLabel);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
             this.Name = "ConfigurationPanel";
-            this.Text = "Configuration";
+            this.Text = "MusicBee Remote";
             ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();

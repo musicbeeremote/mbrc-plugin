@@ -1,7 +1,7 @@
 ﻿using MusicBeeRemote.Core.Settings.Dialog.Validations;
 using NUnit.Framework;
 
-namespace mbrc_core.Test.Core.Settings.Dialog.Validations
+namespace MusicBeeRemote.Test.Core.Settings.Dialog.Validations
 {
     [TestFixture]
     public class LastOctetValidatorTest

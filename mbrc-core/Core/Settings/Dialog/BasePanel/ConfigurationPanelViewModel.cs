@@ -7,13 +7,34 @@ using MusicBeeRemote.Core.Windows.Mvvm;
 namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 {
     public class ConfigurationPanelViewModel : ViewModelBase
-    {       
-        private readonly IVersionProvider _versionProvider;
-
+    {
         private readonly UserSettingsModel _userSettings;
-        
+        private readonly IVersionProvider _versionProvider;
+        private readonly SocketTester _socketTester;
+
+        public ConfigurationPanelViewModel(PersistanceManager persistanceManager,
+            IVersionProvider versionProvider)
+        {
+            _versionProvider = versionProvider;
+            _userSettings = persistanceManager.UserSettingsModel;
+
+            _socketTester = new SocketTester(persistanceManager);
+            _socketTester.ConnectionChangeListener += status =>
+            {
+                ServiceStatus = status;
+                OnPropertyChanged(nameof(ServiceStatus));
+            };
+            
+            _socketTester.VerifyConnection();
+        }
+
+        public void VerifyConnection()
+        {
+            _socketTester.VerifyConnection();
+        }
+
         public IEnumerable<FilteringSelection> FilteringData => Enum.GetValues(typeof(FilteringSelection))
-            .Cast<FilteringSelection>();       
+            .Cast<FilteringSelection>();
 
         public FilteringSelection FilteringSelection
         {
@@ -21,6 +42,23 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             set
             {
                 _userSettings.FilterSelection = value;
+                switch (value)
+                {
+                    case FilteringSelection.All:
+                        _userSettings.IpAddressList = new List<string>();
+                        _userSettings.BaseIp = string.Empty;
+                        _userSettings.LastOctetMax = 0;
+                        break;
+                    case FilteringSelection.Range:
+                        _userSettings.IpAddressList = new List<string>();
+                        break;
+                    case FilteringSelection.Specific:
+                        _userSettings.BaseIp = string.Empty;
+                        _userSettings.LastOctetMax = 0;
+                        break;
+                }
+
+
                 OnPropertyChanged(nameof(FilteringSelection));
             }
         }
@@ -60,22 +98,5 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         public string PluginVersion => _versionProvider.GetPluginVersion();
 
         public bool ServiceStatus { get; set; }
-        
-        public ConfigurationPanelViewModel(PersistanceManager persistanceManager,                                
-            IVersionProvider versionProvider)
-        {                       
-            _versionProvider = versionProvider;
-            _userSettings = persistanceManager.UserSettingsModel;
-
-            var socketTest = new SocketTester(persistanceManager);
-            socketTest.ConnectionChangeListener += status =>
-            {
-                ServiceStatus = status;
-                OnPropertyChanged(nameof(ServiceStatus));
-            };
-            socketTest.VerifyConnection();
-        }
     }
-    
-    
 }

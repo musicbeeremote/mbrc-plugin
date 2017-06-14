@@ -202,25 +202,9 @@ namespace MusicBeeRemote.Core.Network
                         break;
 
                     case FilteringSelection.Range:
-                        var connectingAddress = ipString.Split(".".ToCharArray(),
-                            StringSplitOptions.RemoveEmptyEntries);
-                        var baseIp = _settings.UserSettingsModel.BaseIp.Split(".".ToCharArray(),
-                            StringSplitOptions.RemoveEmptyEntries);
-                        if (connectingAddress[0] == baseIp[0] && connectingAddress[1] == baseIp[1] &&
-                            connectingAddress[2] == baseIp[2])
-                        {
-                            int connectingAddressLowOctet;
-                            int baseIpAddressLowOctet;
-                            int.TryParse(connectingAddress[3], out connectingAddressLowOctet);
-                            int.TryParse(baseIp[3], out baseIpAddressLowOctet);
-                            if (connectingAddressLowOctet >= baseIpAddressLowOctet && baseIpAddressLowOctet <=
-                                _settings.UserSettingsModel.LastOctetMax)
-                            {
-                                isAllowed = true;
-                            }
-                        }
+                        var settings = _settings.UserSettingsModel;
+                        isAllowed = RangeChecker.AddressInRange(ipString, settings.BaseIp, settings.LastOctetMax);
                         break;
-
                     default:
                         isAllowed = true;
                         break;

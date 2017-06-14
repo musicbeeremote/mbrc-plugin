@@ -34,8 +34,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             _view.UpdateStatus(new SocketStatus(_model.ServiceStatus));
             _view.UpdateFirewallStatus(_model.FirewallUpdateEnabled);
             _view.UpdateLoggingStatus(_model.DebugEnabled);
-            _view.UpdateFilteringData(_model.FilteringData);
-            _view.UpdateFilterSelection(_model.FilteringSelection);
+            _view.UpdateFilteringData(_model.FilteringData, _model.FilteringSelection);           
+            _view.UpdatePluginVersion(_model.PluginVersion);
         }
 
         private void OnPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -59,6 +59,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         public void SaveSettings()
         {
             _saveConfigurationCommand.Execute(null);
+            _model.VerifyConnection();
         }
 
         public void OpenLogDirectory()

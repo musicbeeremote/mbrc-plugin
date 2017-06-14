@@ -9,8 +9,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         void UpdateListeningPort(uint modelListeningPort);
         void UpdateStatus(SocketStatus socketStatus);
         void UpdateLoggingStatus(bool enabled);
-        void UpdateFirewallStatus(bool enabled);
-        void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection);
-        void UpdateFilterSelection(FilteringSelection filteringSelection);
+        void UpdateFirewallStatus(bool enabled);        
+        void UpdatePluginVersion(string pluginVersion);
+        void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData, FilteringSelection filteringSelection);
     }
 }

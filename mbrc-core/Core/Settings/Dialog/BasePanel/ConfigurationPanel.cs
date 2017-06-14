@@ -54,16 +54,20 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         public void UpdateFirewallStatus(bool enabled)
         {
             updateFirewallSettingsCheckbox.SetChecked(enabled);
+        }             
+
+        public void UpdatePluginVersion(string pluginVersion)
+        {
+            versionValueLabel.Text = pluginVersion;
         }
 
-        public void UpdateFilteringData(IEnumerable<FilteringSelection> modelFilterSelection)
+        public void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData, FilteringSelection filteringSelection)
         {
-            filteringOptionsComboBox.DataSource = modelFilterSelection;
-        }
-
-        public void UpdateFilterSelection(FilteringSelection filteringSelection)
-        {
+            filteringOptionsComboBox.SelectedIndexChanged -= FilteringOptionsComboBox_SelectedIndexChanged;
+            filteringOptionsComboBox.DataSource = filteringData;
             filteringOptionsComboBox.SelectedItem = filteringSelection;
+            filteringOptionsComboBox.SelectedIndexChanged += FilteringOptionsComboBox_SelectedIndexChanged;
+            UpdateAddressFilteringPanel(filteringSelection);
         }
 
         private void OpenHelpButtonClick(object sender, EventArgs e)
@@ -109,8 +113,13 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         private void FilteringOptionsComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;
-            
+            var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;           
+            UpdateAddressFilteringPanel(selected);
+            _presenter.UpdateFilteringSelection(selected);
+        }
+
+        private void UpdateAddressFilteringPanel(FilteringSelection selected)
+        {
             foreach (Control panel1Control in filteringPanel.Controls)
             {
                 filteringPanel.Controls.Remove(panel1Control);
@@ -125,8 +134,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
                     filteringPanel.Controls.Add(_whitelistManagementControl);
                     break;
             }
-            
-            _presenter.UpdateFilteringSelection(selected);
         }
     }
 }

@@ -17,7 +17,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
             _viewModel = viewModel;
             InitializeComponent();
             baseIpTextBox.Text = _viewModel.BaseIp;
-            lastOctetTextBox.Text = _viewModel.LastOctetMax.ToString();
+            
+            if (_viewModel.LastOctetMax > 0)
+            {
+                lastOctetTextBox.Text = _viewModel.LastOctetMax.ToString();
+            }            
         }
 
         private void BaseIpTextBox_TextChanged(object sender, System.EventArgs e)
@@ -36,9 +40,15 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
 
         private void LastOctetTextBox_TextChanged(object sender, System.EventArgs e)
         {
-            lastOctetTextBox.BackColor = _lastOctetValidator.Validate(baseIpTextBox.Text, lastOctetTextBox.Text)
-                ? DefaultBackColor
-                : Color.Red;
+            if (_lastOctetValidator.Validate(baseIpTextBox.Text, lastOctetTextBox.Text))
+            {
+                lastOctetTextBox.BackColor = DefaultBackColor;
+                _viewModel.LastOctetMax = uint.Parse(lastOctetTextBox.Text);
+            }
+            else
+            {
+                lastOctetTextBox.BackColor = Color.Red;
+            }
         }
     }
 }
