@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.166</AssemblyVersion>
+    <AssemblyVersion>1.0.0.168</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -88,9 +88,12 @@
     <Compile Include="Core\Commands\Requests\LibraryBrowseCommands.cs" />
     <Compile Include="Core\Commands\Requests\NowPlayingCommands.cs" />
     <Compile Include="Core\Commands\Requests\OutputCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PaginatedData.cs" />
+    <Compile Include="Core\Commands\Requests\PaginatedDataCommand.cs" />
     <Compile Include="Core\Commands\Requests\PlayerStateCommands.cs" />
     <Compile Include="Core\Commands\Requests\PlayingTrackCommands.cs" />
     <Compile Include="Core\Commands\Requests\PlaylistCommands.cs" />
+    <Compile Include="Core\Commands\Requests\RequestPodcastCommand.cs" />
     <Compile Include="Core\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="Core\Commands\Requests\RequestRadioStations.cs" />
     <Compile Include="Core\Commands\Requests\SupportSearchCommands.cs" />

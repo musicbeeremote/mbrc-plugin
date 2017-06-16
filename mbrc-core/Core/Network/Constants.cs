@@ -98,6 +98,9 @@
         /// </summary>
         public const string CommandUnavailable = "commandunavailable";
 
+        public const string PodcastSubscriptions = "subscriptions";
+        public const string PodcastEpisodes = "episodes";
+
         #endregion
 
 
