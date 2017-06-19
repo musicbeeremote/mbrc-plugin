@@ -23,5 +23,18 @@ namespace MusicBeeRemote.Core.Commands.Requests
             };
             return message;
         }
+
+        public static Page<T> CreatePage<T>(int offset, int limit, List<T> data)
+        {
+            var total = data.Count;
+            var realLimit = offset + limit > total ? total - offset : limit;
+            return new Page<T>
+            {
+                Data = offset > total ? new List<T>() : data.GetRange(offset, realLimit),
+                Offset = offset,
+                Limit = limit,
+                Total = total
+            };
+        }
     }
 }

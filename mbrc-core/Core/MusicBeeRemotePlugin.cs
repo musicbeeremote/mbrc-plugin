@@ -10,15 +10,16 @@ namespace MusicBeeRemote.Core
     {
         private readonly SocketServer _socketServer;
         private readonly ServiceDiscovery _serviceDiscovery;
+        private readonly HttpSupport _httpSupport;
         private readonly ITrackStateMonitor _trackStateMonitor;
         private readonly IPlayerStateMonitor _playerStateMonitor;
         private readonly IWindowManager _windowManager;
         private readonly ITinyMessengerHub _hub;
 
-
         public MusicBeeRemotePlugin(
             SocketServer socketServer,
             ServiceDiscovery serviceDiscovery,
+            HttpSupport httpSupport,
             ITrackStateMonitor trackStateMonitor,
             IPlayerStateMonitor playerStateMonitor,
             IWindowManager windowManager,
@@ -27,6 +28,7 @@ namespace MusicBeeRemote.Core
         {
             _socketServer = socketServer;
             _serviceDiscovery = serviceDiscovery;
+            _httpSupport = httpSupport;
             _trackStateMonitor = trackStateMonitor;
             _playerStateMonitor = playerStateMonitor;
             _windowManager = windowManager;
@@ -39,6 +41,7 @@ namespace MusicBeeRemote.Core
             _playerStateMonitor.Start();
             _serviceDiscovery.Start();
             _socketServer.Start();
+            _httpSupport.Start();
         }
 
         public void Stop()
@@ -47,6 +50,7 @@ namespace MusicBeeRemote.Core
             _serviceDiscovery.Stop();
             _trackStateMonitor.Stop();
             _playerStateMonitor.Stop();
+            _httpSupport.Stop();            
         }
 
         public void DisplayInfoWindow()
