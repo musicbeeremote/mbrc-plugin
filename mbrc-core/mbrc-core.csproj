@@ -17,7 +17,7 @@
     <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
     <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
     <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
-    <AssemblyVersion>1.0.0.177</AssemblyVersion>
+    <AssemblyVersion>1.0.0.185</AssemblyVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -134,9 +134,12 @@
     <Compile Include="Core\Model\Entities\SocketMessageExtesion.cs" />
     <Compile Include="Core\Model\Entities\Track.cs" />
     <Compile Include="Core\Model\Generators\CoverPayloadGenerator.cs" />
+    <Compile Include="Core\Model\IdentifiablePaginatedRequest.cs" />
+    <Compile Include="Core\Model\IdentifiableRequest.cs" />
     <Compile Include="Core\Model\LyricCoverModel.cs" />
     <Compile Include="Core\Model\LyricsPayload.cs" />
     <Compile Include="Core\Model\OutputDevice.cs" />
+    <Compile Include="Core\Model\PaginatedRequest.cs" />
     <Compile Include="Core\Model\PlayerStatus.cs" />
     <Compile Include="Core\Model\QueuePayload.cs" />
     <Compile Include="Core\Model\QueueResponse.cs" />
@@ -152,6 +155,8 @@
     <Compile Include="Core\MusicBeeRemotePlugin.cs" />
     <Compile Include="Core\Network\Constants.cs" />
     <Compile Include="Core\Network\HttpSupport.cs" />
+    <Compile Include="Core\Network\Http\Extentions.cs" />
+    <Compile Include="Core\Network\Http\Response.cs" />
     <Compile Include="Core\Network\ProtocolHandler.cs" />
     <Compile Include="Core\Network\RangeChecker.cs" />
     <Compile Include="Core\Network\RemoteClient.cs" />
@@ -162,8 +167,9 @@
     <Compile Include="Core\Network\SocketTester.cs" />
     <Compile Include="Core\Network\Tools.cs" />
     <Compile Include="Core\Network\WebServer.cs" />
+    <Compile Include="Core\Podcasts\ArtworkResponse.cs" />
     <Compile Include="Core\Podcasts\EpisodeConverter.cs" />
-    <Compile Include="Core\Podcasts\PodcastApi.cs" />
+    <Compile Include="Core\Podcasts\PodcastHttpApi.cs" />
     <Compile Include="Core\Podcasts\PodcastEpisode.cs" />
     <Compile Include="Core\Podcasts\PodcastSubscription.cs" />
     <Compile Include="Core\Podcasts\SubscriptionConverter.cs" />

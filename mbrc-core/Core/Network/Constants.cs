@@ -100,6 +100,7 @@
 
         public const string PodcastSubscriptions = "subscriptions";
         public const string PodcastEpisodes = "episodes";
+        public const string PodcastArtwork = "podcastartwork";
 
         #endregion
 

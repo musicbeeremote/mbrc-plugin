@@ -106,7 +106,7 @@ namespace MusicBeeRemote.Core
                 c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();              
                 c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();
 
-                c.For<PodcastApi>().Use<PodcastApi>().Singleton();
+                c.For<PodcastHttpApi>().Use<PodcastHttpApi>().Singleton();
             });
 
             var controller = _container.GetInstance<CommandExecutor>();

@@ -166,12 +166,18 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId)
         {
+            string[] subscriptionIds;
+            _api.Podcasts_QuerySubscriptions(null, out subscriptionIds);
+
             var converter = new EpisodeConverter();
             var list = new List<PodcastEpisode>();            
             var episodeIndex = 0;
 
             string[] episodes;
-            _api.Podcasts_GetSubscriptionEpisodes(subscriptionId, out episodes);
+            if (!_api.Podcasts_GetSubscriptionEpisodes(subscriptionId, out episodes))
+            {
+                return list;
+            }
 
             for (var i = 0; i < episodes.Length; i++)
             {
@@ -184,6 +190,16 @@ namespace MusicBeePlugin.ApiAdapters
             }
             
             return list;
+        }
+
+        public byte[] GetPodcastSubscriptionArtwork(string subscriptionId)
+        {
+            byte[] artwork;
+            if (_api.Podcasts_GetSubscriptionArtwork(subscriptionId, 0, out artwork))
+            {
+                return Utilities.ToJpeg(artwork);
+            }
+            return new byte[] {};
         }
 
         public IEnumerable<Playlist> GetPlaylists()

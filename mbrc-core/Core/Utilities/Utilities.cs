@@ -11,7 +11,7 @@ using Encoder = System.Drawing.Imaging.Encoder;
 
 namespace MusicBeeRemote.Core.Utilities
 {
-    internal class Utilities
+    public class Utilities
     {
         private static readonly SHA1Managed Sha1 = new SHA1Managed();
         private static byte[] _hash = new byte[20];
@@ -59,6 +59,41 @@ namespace MusicBeeRemote.Core.Utilities
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
         }
 
+        public static byte[] ToJpeg(byte[] image, int width = 600, int height = 600)
+        {
+            using (var ms = new MemoryStream(image))
+            using (var imageData = Image.FromStream(ms, true))
+            {
+                ms.Flush();
+                var sourceWidth = imageData.Width;
+                var sourceHeight = imageData.Height;
+
+                var nPercentW = width / (float)sourceWidth;
+                var nPercentH = height / (float)sourceHeight;
+
+                var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
+                var destWidth = (int)(sourceWidth * nPercent);
+                var destHeight = (int)(sourceHeight * nPercent);
+                using (var bmp = new Bitmap(destWidth, destHeight))
+                using (var ms2 = new MemoryStream())
+                {
+                    var graph = Graphics.FromImage(bmp);
+                    graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    graph.DrawImage(imageData, 0, 0, destWidth, destHeight);
+                    graph.Dispose();
+
+                    var mInfo = GetEncoder(ImageFormat.Jpeg);
+                    var mEncoder = Encoder.Quality;
+                    var mParams = new EncoderParameters(1);
+                    var mParam = new EncoderParameter(mEncoder, 80L);
+                    mParams.Param[0] = mParam;
+
+                    bmp.Save(ms2, mInfo, mParams);
+                    return ms2.ToArray();
+                }
+            }
+        }
+
         /// <summary>
         /// Given a base64 encoded image it resizes the image and returns the resized image
         /// in a base64 encoded JPEG.
@@ -83,8 +118,8 @@ namespace MusicBeeRemote.Core.Utilities
                     var sourceWidth = albumCover.Width;
                     var sourceHeight = albumCover.Height;
 
-                    var nPercentW = (width / (float)sourceWidth);
-                    var nPercentH = (height / (float)sourceHeight);
+                    var nPercentW = width / (float)sourceWidth;
+                    var nPercentH = height / (float)sourceHeight;
 
                     var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
                     var destWidth = (int)(sourceWidth * nPercent);

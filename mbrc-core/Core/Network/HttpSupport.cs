@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 
@@ -10,17 +11,16 @@ namespace MusicBeeRemote.Core.Network
         private WebServer _webServer;
         private readonly Dictionary<string, RouteAction> _routes = new Dictionary<string, RouteAction>();
 
-        public HttpSupport(PersistanceManager persistanceManager, PodcastApi podcastApi)
+        public HttpSupport(PersistanceManager persistanceManager, PodcastHttpApi podcastHttpApi)
         {
             _persistanceManager = persistanceManager;
-            podcastApi.RegisterRoutes(this);
+            podcastHttpApi.RegisterRoutes(this);
         }
-
 
         public void Start()
         {
             var port = _persistanceManager.UserSettingsModel.ListeningPort + 1;
-            _webServer?.Stop();
+            Stop();
             _webServer = new WebServer($"http://localhost:{port}/");
             foreach (var route in _routes)
             {
@@ -31,7 +31,14 @@ namespace MusicBeeRemote.Core.Network
 
         public void Stop()
         {
-            _webServer.Stop();
+            try
+            {
+                _webServer?.Stop();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);                
+            }            
         }
 
         public void AddRoute(string path, RouteAction action)

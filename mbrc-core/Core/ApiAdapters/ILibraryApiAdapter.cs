@@ -36,6 +36,8 @@ namespace MusicBeeRemote.Core.ApiAdapters
         IEnumerable<PodcastSubscription> GetPodcastSubscriptions();
 
         IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId);
+
+        byte[] GetPodcastSubscriptionArtwork(string subscriptionId);
         
         IEnumerable<Playlist> GetPlaylists();
 
