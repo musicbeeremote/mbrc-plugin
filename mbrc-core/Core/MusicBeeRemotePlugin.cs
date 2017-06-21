@@ -92,5 +92,10 @@ namespace MusicBeeRemote.Core
         {
             _hub.Publish(new NowPlayingListChangedEvent());
         }
+
+        public void DisplayPartyModeWindow()
+        {
+            _windowManager.DisplayPartyModeWindow();
+        }
     }
 }

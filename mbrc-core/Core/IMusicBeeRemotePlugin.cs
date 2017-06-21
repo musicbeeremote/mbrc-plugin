@@ -24,5 +24,10 @@
         void NotifyArtworkReady();
 
         void NotifyNowPlayingListChanged();
+
+        /// <summary>
+        /// Displays the party mode configuration window.
+        /// </summary>
+        void DisplayPartyModeWindow();
     }
 }

@@ -55,42 +55,67 @@ namespace MusicBeeRemote.Core.Network
 
         public void Start(bool async = false)
         {
-            Action fnWorker = () =>
+            try
             {
-                while (_httpListener != null && _httpListener.IsListening)
+                RealStart(async);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
+
+        private void RealStart(bool async)
+        {
+            Action workerFunction = () =>
+            {
+                var clientIsListening = _httpListener != null && _httpListener.IsListening;
+                while (clientIsListening)
                 {
-                    ThreadPool.QueueUserWorkItem(state =>
-                    {
-                        var ctx = state as HttpListenerContext;
-                        try
-                        {
-                            RouteAction fnRoute;
-                            Dictionary<string, string> data;
-                            if (_router.TryGetValue(ctx.Request.Url.LocalPath, out fnRoute, out data)
-                                || _router.TryGetValue("*", out fnRoute, out data))
-                                fnRoute(ctx, data);
-                            else
-                                ctx.Response.StatusCode = (int) HttpStatusCode.NotFound;
-                        }
-                        catch
-                        {
-                            ctx.Response.StatusCode = (int) HttpStatusCode.InternalServerError;
-                        }
-                        try
-                        {
-                            ctx.Response.Close();
-                        }
-                        catch
-                        {
-                        }
-                    }, _httpListener.GetContext());
+                    ThreadPool.QueueUserWorkItem(QueueItem, _httpListener.GetContext());
                 }
             };
+
             _httpListener.Start();
+
             if (async)
-                ThreadPool.QueueUserWorkItem(_ => fnWorker());
-            else
-                fnWorker();
+            {
+                ThreadPool.QueueUserWorkItem(_ => workerFunction());
+            }                
+            else {
+                workerFunction();
+            }
+        }
+
+        private void QueueItem(object state)
+        {
+            var ctx = state as HttpListenerContext;
+            if (ctx == null)
+            {
+                return;
+            }
+            
+            try
+            {
+                RouteAction fnRoute;
+                Dictionary<string, string> data;
+                if (_router.TryGetValue(ctx.Request.Url.LocalPath, out fnRoute, out data)
+                    || _router.TryGetValue("*", out fnRoute, out data))
+                    fnRoute(ctx, data);
+                else
+                    ctx.Response.StatusCode = (int) HttpStatusCode.NotFound;
+            }
+            catch
+            {
+                ctx.Response.StatusCode = (int) HttpStatusCode.InternalServerError;
+            }
+            try
+            {
+                ctx.Response.Close();
+            }
+            catch
+            {
+            }
         }
 
         public void Stop()

@@ -1,16 +1,21 @@
+using System;
+
 namespace MusicBeeRemote.PartyMode.Core.Model
 {
     public class PartyModeLogs
     {
-        public PartyModeLogs(string client, string command, bool deny)
+        public DateTime TimeStamp { get; }
+        
+        public PartyModeLogs(string client, string command, ExecutionStatus	 status)
         {
+            TimeStamp = DateTime.Now;
             Client = Client == string.Empty ? "---" : client;
             Command = command;
-            Deny = deny;
+            Status = status;
         }
 
-        public string Client { get; set; }
-        public string Command { get; set; }
-        public bool Deny { get; set; }
+        public string Client { get; }
+        public string Command { get; }
+        public ExecutionStatus Status { get; }
     }
 }

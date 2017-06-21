@@ -1,34 +1,43 @@
 ﻿using System;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Runtime.Serialization;
 using MusicBeeRemote.Core.Commands;
 
 namespace MusicBeeRemote.Core.Network
 {
-    [Serializable]
+    [DataContract(Name = "client")]
     public class RemoteClient : IEquatable<RemoteClient>
     {
         public RemoteClient(PhysicalAddress macAddress, IPAddress ipAddress)
         {
-            _macAddress = macAddress;
-            _ipAddress = ipAddress;
+            MacAdress = macAddress;
+            IpAddress = ipAddress;
             LastLogIn = DateTime.Now;
         }
-
-        #region vars
-
-        private PhysicalAddress _macAddress;
-        private DateTime _lastLogIn;
-        private IPAddress _ipAddress;
-
-        #endregion vars
-
+        
         #region Properties
 
+        [DataMember(Name = "permissions")]
         public CommandPermissions ClientPermissions { get; private set; } = CommandPermissions.None;
+        
+        [DataMember(Name = "client_id")]
         public string ClientId { get; set; }
+        
+        [IgnoreDataMember]
         public uint ActiveConnections { get; private set; }
+        
+        [DataMember(Name = "mac_address")]
+        public PhysicalAddress MacAdress { get; set; }
 
+        [DataMember(Name = "ip_address")]
+        public IPAddress IpAddress { get; set; }
+
+        [DataMember(Name = "last_login")]
+        public DateTime LastLogIn { get; set; }
+
+        #endregion Properties
+        
         public virtual void AddConnection()
         {
             ActiveConnections++;
@@ -64,27 +73,7 @@ namespace MusicBeeRemote.Core.Network
             {
                 RemovePermission(permissions);
             }
-        }
-
-        public virtual PhysicalAddress MacAdress
-        {
-            get { return _macAddress; }
-            set { _macAddress = value; }
-        }
-
-        public virtual IPAddress IpAddress
-        {
-            get { return _ipAddress; }
-            set { _ipAddress = value; }
-        }
-
-        public DateTime LastLogIn
-        {
-            get { return _lastLogIn; }
-            set { _lastLogIn = value; }
-        }
-
-        #endregion Properties
+        }      
 
         #region Equatable
 
@@ -95,9 +84,7 @@ namespace MusicBeeRemote.Core.Network
 
         public bool Equals(RemoteClient obj)
         {
-            var other = obj;
-
-            return _macAddress.ToString() == other._macAddress.ToString();
+            return MacAdress.ToString() == obj.MacAdress.ToString();
         }
 
         #endregion Equatable

@@ -1,53 +1,31 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Runtime.Serialization;
 using MusicBeeRemote.Core.Network;
 
 namespace MusicBeeRemote.PartyMode.Core.Helper
 {
-    [Serializable]
+    [DataContract]
     public class Settings
     {
-        #region constructor
-
         public Settings(List<RemoteClient> knownClients, uint addressStorageDays)
         {
-            _knownClients = knownClients;
-            _addressStorageDays = addressStorageDays;
+            KnownClients = knownClients;
+            AddressStoreDays = addressStorageDays;
         }
 
         public Settings()
         {
-            _knownClients = new List<RemoteClient>();
-            _addressStorageDays = 90;
+            KnownClients = new List<RemoteClient>();
+            AddressStoreDays = 90;
         }
 
-        #endregion
+        [DataMember(Name = "known_clients")]
+        public List<RemoteClient> KnownClients { get; set; }
 
-        #region vars
+        [DataMember(Name = "delete_after")]
+        public uint AddressStoreDays { get; set; }
 
-        private List<RemoteClient> _knownClients;
-        private uint _addressStorageDays;
-        private bool _isActive;
-
-        #endregion
-
-
-        public List<RemoteClient> KnownClients
-        {
-            get => _knownClients;
-            set => _knownClients = value;
-        }
-
-        public uint AddressStoreDays
-        {
-            get => _addressStorageDays;
-            set => _addressStorageDays = value;
-        }
-
-        public bool IsActive
-        {
-            get => _isActive;
-            set => _isActive = value;
-        }
+        [DataMember(Name = "active")]
+        public bool IsActive { get; set; }
     }
 }

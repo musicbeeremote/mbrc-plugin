@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Windows.Input;
 using System.Windows.Threading;
+using MusicBeeRemote.Core.Commands;
+using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
+using MusicBeeRemote.PartyMode.Core.Helper;
 using MusicBeeRemote.PartyMode.Core.Model;
-using MusicBeeRemote.PartyMode.Core.ViewModel.Commands;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
 {
@@ -13,21 +15,14 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
         #region vars
 
         private readonly PartyModeModel _model;
-        private readonly SaveCommand _saveCommand;
 
         #endregion vars
 
         #region constructor
 
-        public PartyModeViewModel(PartyModeModel model, SaveCommand saveCommand)
+        public PartyModeViewModel(PartyModeModel model)
         {
-
             _model = model;
-            _saveCommand = saveCommand;
-            ClientViewModel = new ClientViewModel(_model);
-            ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
-            LogViewerViewModel = new LogViewerViewModel(_model);
-            ClientViewModel.PropertyChanged += OnPropertyChanged;
             _model.PropertyChanged += OnPropertyChanged;
             _model.RequestAllServerMessages();
 
@@ -37,29 +32,15 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         #endregion constructor
 
-        #region ViewModels
 
-        public ClientViewModel ClientViewModel { get; }
-
-        public ClientDetailViewModel ClientDetailViewModel { get; private set; }
-
-        public LogViewerViewModel LogViewerViewModel { get; }
-
-        #endregion ViewModels
-        
         private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(ClientViewModel.SelectedClient))
-            {
-                SelectedClientChanged();
-            }
         }
 
         private void SelectedClientChanged()
         {
-            ClientDetailViewModel = new ClientDetailViewModel(ClientViewModel.SelectedClient);
-            OnPropertyChanged(nameof(ClientDetailViewModel));
         }
+
 
         public bool IsActive
         {
@@ -71,17 +52,9 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
             }
         }
 
-        public bool IsDebug
-        {
-            get
-            {
-#if DEBUG
-                return true;
-#else
-               return false;
-#endif
-            }
-        }
+        public IList<RemoteClient> KnownClients => _model.KnownClients;
+        public IList<PartyModeLogs> Logs => _model.Logs;
+        public IEnumerable<CommandPermissions> Permissions => _model.Permissions; 
 
         #region exception Handling
 
@@ -101,10 +74,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public void Dispose()
         {
-            ClientViewModel.PropertyChanged -= OnPropertyChanged;
             _model.PropertyChanged -= OnPropertyChanged;
-            LogViewerViewModel.Dispose();
-            ClientViewModel.Dispose();
             AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
             Dispatcher.CurrentDispatcher.UnhandledException -= CurrentDispatcher_UnhandledException;
         }

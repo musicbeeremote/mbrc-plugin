@@ -1,12 +1,14 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Net;
+using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Helper;
 using MusicBeeRemote.PartyMode.Core.Tools;
-using MusicBeeRemote.PartyMode.Core.ViewModel;
 using NLog;
 
 namespace MusicBeeRemote.PartyMode.Core.Model
@@ -17,7 +19,8 @@ namespace MusicBeeRemote.PartyMode.Core.Model
 
         private readonly SettingsHandler _handler;
 
-        private readonly CycledList<PartyModeLogs> _logs;
+        public CycledList<PartyModeLogs> Logs { get; }
+
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -25,13 +28,14 @@ namespace MusicBeeRemote.PartyMode.Core.Model
 
         public PartyModeModel(SettingsHandler handler)
         {
+            Permissions = Enum.GetValues(typeof(CommandPermissions)).Cast<CommandPermissions>();
             _handler = handler;
             Settings = _handler.GetSettings();
 
             // Load stored
-            KnownClients = Settings.KnownClients;
+            KnownClients = new BindingList<RemoteClient>(Settings.KnownClients);
 
-            _logs = new CycledList<PartyModeLogs>(10000);
+            Logs = new CycledList<PartyModeLogs>(10000);
             ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>();
         }
 
@@ -55,7 +59,6 @@ namespace MusicBeeRemote.PartyMode.Core.Model
                 {
                     KnownClients.Add(CreateClient(ipadress, clientId));
                 }
-
             }
 
             LogCommand(new ServerCommandEventArgs(clientId, "New connection", true));
@@ -75,7 +78,7 @@ namespace MusicBeeRemote.PartyMode.Core.Model
 
         public Settings Settings { get; }
 
-        public List<RemoteClient> KnownClients { get; }
+        public BindingList<RemoteClient> KnownClients { get; }
 
         public void LogCommand(ServerCommandEventArgs e)
         {
@@ -84,23 +87,25 @@ namespace MusicBeeRemote.PartyMode.Core.Model
                 return;
             }
 
-            var logMessages = new PartyModeLogs(e.Client, e.Command, !e.IsCommandAllowed);
-            _logs.Add(logMessages);
+            var status = !e.IsCommandAllowed ? ExecutionStatus.Denied : ExecutionStatus.Executed;
+            var logMessages = new PartyModeLogs(e.Client, e.Command, status);
+            Logs.Add(logMessages);
             ServerMessagesQueue.Enqueue(logMessages);
             OnPropertyChanged(nameof(ServerMessagesQueue));
         }
 
         public ConcurrentQueue<PartyModeLogs> ServerMessagesQueue;
+        public IEnumerable<CommandPermissions> Permissions { get; }
 
         public void SaveSettings()
         {
-            Settings.KnownClients = KnownClients;
+            Settings.KnownClients = KnownClients.ToList();
             _handler.SaveSettings(Settings);
         }
 
         public void RequestAllServerMessages()
         {
-            ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>(_logs);
+            ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>(Logs);
             OnPropertyChanged(nameof(ServerMessagesQueue));
         }
 

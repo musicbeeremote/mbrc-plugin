@@ -103,6 +103,8 @@ namespace MusicBeeRemote.Core
                 c.For<ConfigurationPanelViewModel>().Use<ConfigurationPanelViewModel>();
                 c.For<IConfigurationPanelPresenter>().Use<ConfigurationPanelPresenter>();
 
+                c.For<PartyModePanel>().Use<PartyModePanel>();
+
                 c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();              
                 c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();
 
