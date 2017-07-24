@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.Serialization;
+using LiteDB;
 using MusicBeeRemote.Core.Commands;
 
 namespace MusicBeeRemote.Core.Network
@@ -9,6 +10,12 @@ namespace MusicBeeRemote.Core.Network
     [DataContract(Name = "client")]
     public class RemoteClient : IEquatable<RemoteClient>
     {
+
+        public RemoteClient()
+        {
+            
+        }
+        
         public RemoteClient(PhysicalAddress macAddress, IPAddress ipAddress)
         {
             MacAdress = macAddress;
@@ -21,6 +28,7 @@ namespace MusicBeeRemote.Core.Network
         [DataMember(Name = "permissions")]
         public CommandPermissions ClientPermissions { get; private set; } = CommandPermissions.None;
         
+        [BsonId]
         [DataMember(Name = "client_id")]
         public string ClientId { get; set; }
         
@@ -53,12 +61,12 @@ namespace MusicBeeRemote.Core.Network
             return ClientPermissions.HasFlag(permissions);
         }
 
-        public virtual void SetPermission(CommandPermissions permissions)
+        protected virtual void SetPermission(CommandPermissions permissions)
         {
             ClientPermissions |= permissions;
         }
 
-        public virtual void RemovePermission(CommandPermissions permissions)
+        protected virtual void RemovePermission(CommandPermissions permissions)
         {
             ClientPermissions &= ~permissions;
         }

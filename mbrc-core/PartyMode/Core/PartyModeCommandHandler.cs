@@ -38,11 +38,6 @@ namespace MusicBeeRemote.PartyMode.Core
             _partyModeModel.RemoveConnection(client);
         }
 
-        public void LogActivity(string client, string command, bool isCmdAllowed)
-        {
-            _partyModeModel.LogCommand(new ServerCommandEventArgs(client, command, isCmdAllowed));
-        }
-
         public bool HasPermissions(ICommand command, IEvent @event)
         {
             var limitedCommand = command as LimitedCommand;
@@ -53,7 +48,8 @@ namespace MusicBeeRemote.PartyMode.Core
 
             var client = _partyModeModel.GetClient(@event.ClientId);
             var hasPermissions = client.HasPermission(limitedCommand.GetPermissions());
-            LogActivity(@event.ClientId, @event.Type, hasPermissions);
+            _partyModeModel.LogCommand(@event.ClientId, @event.Type, hasPermissions);
+           
             return hasPermissions;
         }
     }

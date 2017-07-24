@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using MusicBeeRemote.Core.Settings;
 using Newtonsoft.Json;
 
@@ -23,14 +22,6 @@ namespace MusicBeeRemote.PartyMode.Core.Helper
                 var stream = File.Create(_filePath);
                 stream.Close();
             }
-
-            //todo figure out how this customization would work with
-//            JsConfig<IPAddress>.SerializeFn = ipadr => ipadr.ToString();
-//            JsConfig<IPAddress>.DeSerializeFn = IPAddress.Parse;
-//
-//            JsConfig<PhysicalAddress>.SerializeFn = phadr => phadr.ToString();
-//            JsConfig<PhysicalAddress>.DeSerializeFn = StrictParseAddress;
-            //todo serialize date to epoch
         }
 
         public Settings GetSettings()
@@ -70,27 +61,8 @@ namespace MusicBeeRemote.PartyMode.Core.Helper
             }
         }
 
-        /// <summary>
-        /// https://msdn.microsoft.com/en-us/library/system.net.networkinformation.physicaladdress.parse(v=vs.110).aspx
-        /// </summary>
-        /// <param name="address"></param>
-        /// <returns></returns>
-        public static PhysicalAddress StrictParseAddress(string address)
-        {
-            var newAddress = PhysicalAddress.Parse(address);
-            return PhysicalAddress.None.Equals(newAddress) ? null : newAddress;
-        }
-
         private static Settings ValidateSettings(Settings settings)
-        {
-            var storageIsOverDate = DateTime.Now.AddDays(settings.AddressStoreDays * -1);
-
-            var validAddresses = settings.KnownClients
-                .Where(x => DateTime.Compare(x.LastLogIn, storageIsOverDate) > 1)
-                .ToList();
-
-            if (validAddresses.Any()) settings.KnownClients = validAddresses;
-
+        {    
             return settings;
         }
     }

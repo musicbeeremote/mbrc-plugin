@@ -1,26 +1,19 @@
-﻿using System.Collections.Generic;
-using System.Runtime.Serialization;
-using MusicBeeRemote.Core.Network;
+﻿using System.Runtime.Serialization;
 
 namespace MusicBeeRemote.PartyMode.Core.Helper
 {
     [DataContract]
     public class Settings
     {
-        public Settings(List<RemoteClient> knownClients, uint addressStorageDays)
+        public Settings(uint addressStorageDays)
         {
-            KnownClients = knownClients;
             AddressStoreDays = addressStorageDays;
         }
 
         public Settings()
-        {
-            KnownClients = new List<RemoteClient>();
+        {            
             AddressStoreDays = 90;
-        }
-
-        [DataMember(Name = "known_clients")]
-        public List<RemoteClient> KnownClients { get; set; }
+        }      
 
         [DataMember(Name = "delete_after")]
         public uint AddressStoreDays { get; set; }

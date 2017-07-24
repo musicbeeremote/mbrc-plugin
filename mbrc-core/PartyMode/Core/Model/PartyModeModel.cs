@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Net;
-using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
 using MusicBeeRemote.PartyMode.Core.Helper;
+using MusicBeeRemote.PartyMode.Core.Repository;
 using MusicBeeRemote.PartyMode.Core.Tools;
-using NLog;
+using TinyMessenger;
 
 namespace MusicBeeRemote.PartyMode.Core.Model
 {
@@ -18,25 +16,28 @@ namespace MusicBeeRemote.PartyMode.Core.Model
         #region vars
 
         private readonly SettingsHandler _handler;
-
-        public CycledList<PartyModeLogs> Logs { get; }
-
-
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly PartyModeRepository _repository;
+        private readonly ITinyMessengerHub _hub;
 
         #endregion vars
 
-        public PartyModeModel(SettingsHandler handler)
+        #region properties
+
+        public Settings Settings { get; }
+        public BindingList<RemoteClient> KnownClients { get; }
+
+        #endregion
+
+        public PartyModeModel(SettingsHandler handler, PartyModeRepository repository, ITinyMessengerHub _hub)
         {
-            Permissions = Enum.GetValues(typeof(CommandPermissions)).Cast<CommandPermissions>();
+            this._hub = _hub;
             _handler = handler;
+            _repository = repository;
+            
             Settings = _handler.GetSettings();
 
             // Load stored
-            KnownClients = new BindingList<RemoteClient>(Settings.KnownClients);
-
-            Logs = new CycledList<PartyModeLogs>(10000);
-            ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>();
+            KnownClients = new BindingList<RemoteClient>(_repository.GetKnownClients());
         }
 
         public void AddClientIfNotExists(SocketConnection connection)
@@ -46,7 +47,7 @@ namespace MusicBeeRemote.PartyMode.Core.Model
 
             if (!KnownClients.Any())
             {
-                KnownClients.Add(CreateClient(ipadress, clientId));
+                NewClient(ipadress, clientId);
             }
             else
             {
@@ -57,13 +58,19 @@ namespace MusicBeeRemote.PartyMode.Core.Model
                 }
                 else
                 {
-                    KnownClients.Add(CreateClient(ipadress, clientId));
+                    NewClient(ipadress, clientId);
                 }
             }
 
-            LogCommand(new ServerCommandEventArgs(clientId, "New connection", true));
-
+            LogCommand(clientId, "New connection", true);
             OnPropertyChanged(nameof(KnownClients));
+        }
+
+        private void NewClient(IPAddress ipadress, string clientId)
+        {
+            var remoteClient = CreateClient(ipadress, clientId);
+            KnownClients.Add(remoteClient);
+            _repository.InsertClient(remoteClient);
         }
 
         private static RemoteClient CreateClient(IPAddress ipadress, string clientId)
@@ -76,49 +83,36 @@ namespace MusicBeeRemote.PartyMode.Core.Model
             return client;
         }
 
-        public Settings Settings { get; }
-
-        public BindingList<RemoteClient> KnownClients { get; }
-
-        public void LogCommand(ServerCommandEventArgs e)
+        public void LogCommand(string clientId, string command, bool hasPermissions)
         {
-            if (e.Command == Constants.Ping || e.Command == Constants.Pong)
+            if (command == Constants.Ping || command == Constants.Pong)
             {
                 return;
             }
 
-            var status = !e.IsCommandAllowed ? ExecutionStatus.Denied : ExecutionStatus.Executed;
-            var logMessages = new PartyModeLogs(e.Client, e.Command, status);
-            Logs.Add(logMessages);
-            ServerMessagesQueue.Enqueue(logMessages);
-            OnPropertyChanged(nameof(ServerMessagesQueue));
-        }
+            var status = !hasPermissions ? ExecutionStatus.Denied : ExecutionStatus.Executed;
+            var log = new PartyModeLog(clientId, command, status);
 
-        public ConcurrentQueue<PartyModeLogs> ServerMessagesQueue;
-        public IEnumerable<CommandPermissions> Permissions { get; }
-
-        public void SaveSettings()
-        {
-            Settings.KnownClients = KnownClients.ToList();
-            _handler.SaveSettings(Settings);
-        }
-
-        public void RequestAllServerMessages()
-        {
-            ServerMessagesQueue = new ConcurrentQueue<PartyModeLogs>(Logs);
-            OnPropertyChanged(nameof(ServerMessagesQueue));
+            _repository.InsertLog(log);
+            _hub.PublishAsync(new CommandProcessedEvent(log));
         }
 
         public void RemoveConnection(RemoteClient client)
         {
             var savedClient = KnownClients.SingleOrDefault(x => x.ClientId == client.ClientId);
             savedClient?.RemoveConnection();
-            LogCommand(new ServerCommandEventArgs(client.ClientId, "connection closed", true));
+            LogCommand(client.ClientId, "connection closed", true);
         }
 
         public RemoteClient GetClient(string clientId)
         {
             return KnownClients.SingleOrDefault(x => x.ClientId == clientId);
+        }
+
+
+        public List<PartyModeLog> GetLogs()
+        {
+            return _repository.GetLogs();
         }
     }
 }

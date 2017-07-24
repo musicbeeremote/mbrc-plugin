@@ -1,4 +1,7 @@
-﻿using MusicBeeRemote.Core.ApiAdapters;
+﻿using System.Net;
+using System.Net.NetworkInformation;
+using LiteDB;
+using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Caching;
 using MusicBeeRemote.Core.Caching.Monitor;
 using MusicBeeRemote.Core.Commands;
@@ -16,6 +19,7 @@ using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
 using MusicBeeRemote.PartyMode.Core;
 using MusicBeeRemote.PartyMode.Core.Model;
+using MusicBeeRemote.PartyMode.Core.Repository;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using StructureMap;
@@ -42,10 +46,26 @@ namespace MusicBeeRemote.Core
                     NullValueHandling = NullValueHandling.Ignore
                 };
 
-                settings.Converters.Add(new StringEnumConverter { CamelCaseText = false });
+                settings.Converters.Add(new StringEnumConverter {CamelCaseText = false});
                 return settings;
             };
 
+            //Bson serialization for client IP addresses
+            BsonMapper.Global.RegisterType(
+                ipAddress => ipAddress.ToString(),
+                bson => IPAddress.Parse(bson.AsString)
+            );
+
+            //Bson serialization for client Physical Addresses
+            BsonMapper.Global.RegisterType(
+                mac => mac.ToString(),
+                bson =>
+                {
+                    var newAddress = PhysicalAddress.Parse(bson);
+                    return PhysicalAddress.None.Equals(newAddress) ? null : newAddress;
+                }
+            );
+            
             _container.Configure(c =>
             {
                 c.For<ILibraryApiAdapter>().Use(() => dependencies.LibraryAdapter).Singleton();
@@ -105,15 +125,16 @@ namespace MusicBeeRemote.Core
 
                 c.For<PartyModePanel>().Use<PartyModePanel>();
 
-                c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();              
+                c.For<IWhitelistManagementPresenter>().Use<WhitelistManagementPresenter>();
                 c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();
 
                 c.For<PodcastHttpApi>().Use<PodcastHttpApi>().Singleton();
+                c.For<PartyModeRepository>().Singleton();
             });
 
             var controller = _container.GetInstance<CommandExecutor>();
             Configuration.Register(controller, _container);
-                    
+
 
             return _container.GetInstance<IMusicBeeRemotePlugin>();
         }

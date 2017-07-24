@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Windows.Threading;
 using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
-using MusicBeeRemote.PartyMode.Core.Helper;
 using MusicBeeRemote.PartyMode.Core.Model;
 
 namespace MusicBeeRemote.PartyMode.Core.ViewModel
@@ -15,6 +13,7 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
         #region vars
 
         private readonly PartyModeModel _model;
+        private RemoteClient _selectedClient;
 
         #endregion vars
 
@@ -23,24 +22,12 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
         public PartyModeViewModel(PartyModeModel model)
         {
             _model = model;
-            _model.PropertyChanged += OnPropertyChanged;
-            _model.RequestAllServerMessages();
 
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             Dispatcher.CurrentDispatcher.UnhandledException += CurrentDispatcher_UnhandledException;
         }
 
         #endregion constructor
-
-
-        private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
-        {
-        }
-
-        private void SelectedClientChanged()
-        {
-        }
-
 
         public bool IsActive
         {
@@ -53,8 +40,6 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
         }
 
         public IList<RemoteClient> KnownClients => _model.KnownClients;
-        public IList<PartyModeLogs> Logs => _model.Logs;
-        public IEnumerable<CommandPermissions> Permissions => _model.Permissions; 
 
         #region exception Handling
 
@@ -74,11 +59,27 @@ namespace MusicBeeRemote.PartyMode.Core.ViewModel
 
         public void Dispose()
         {
-            _model.PropertyChanged -= OnPropertyChanged;
             AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
             Dispatcher.CurrentDispatcher.UnhandledException -= CurrentDispatcher_UnhandledException;
         }
 
         #endregion Disposing
+
+        public void SelectClient(int index) => _selectedClient = KnownClients[index];
+
+        public void UpdateSelectedClientPermissions(CommandPermissions permissions, bool @checked)
+        {
+            _selectedClient.SetPermission(permissions, @checked);
+        }
+
+        public bool SelectedClientHasPermission(CommandPermissions permissions)
+        {
+            return _selectedClient.HasPermission(permissions);
+        }
+
+        public List<PartyModeLog> GetLogs()
+        {
+            return _model.GetLogs();
+        }
     }
 }

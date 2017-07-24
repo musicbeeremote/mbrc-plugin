@@ -72,9 +72,24 @@ namespace MusicBeePlugin
             var menuItemDescription = "Information Panel of the MusicBee Remote";
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);
 
+#if DEBUG
+            AddPartyMode();
+#endif
+
             _musicBeeRemotePlugin.Start();
 
             return _about;
+        }
+
+        private void AddPartyMode()
+        {
+            var description = "MusicBee Remote Party Mode";
+            var key = "mnuTools/MusicBee Remote Party Mode";
+            _api.MB_AddMenuItem(key, description, (sender, args) =>
+            {
+                _musicBeeRemotePlugin.DisplayPartyModeWindow();
+            });
+
         }
 
         private void MenuItemClicked(object sender, EventArgs args)
