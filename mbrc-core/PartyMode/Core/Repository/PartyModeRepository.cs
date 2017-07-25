@@ -66,5 +66,14 @@ namespace MusicBeeRemote.PartyMode.Core.Repository
             }
             return logs.ToList();
         }
+
+        public void UpdateClient(RemoteClient client)
+        {
+            using (var db = new LiteDatabase(PartyModeBD))
+            {
+                var collection = db.GetCollection<RemoteClient>("clients");
+                collection.Update(client);
+            }            
+        }
     }
 }

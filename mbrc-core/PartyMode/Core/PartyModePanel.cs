@@ -26,7 +26,11 @@ namespace MusicBeeRemote.PartyMode.Core
             _logs.AddRange(_viewModel.GetLogs());
             logGrid.DataSource = _logs;
             activeCheckbox.SetChecked(_viewModel.IsActive);
-            _eventSubscription = _hub.Subscribe<CommandProcessedEvent>(msg => _logs.Add(msg.Log));
+            _eventSubscription = _hub.Subscribe<CommandProcessedEvent>(msg =>
+            {
+                _logs.Add(msg.Log);
+                logGrid.FirstDisplayedScrollingRowIndex = logGrid.RowCount - 1;
+            });
         }
 
         private void ActiveCheckbox_CheckedChanged(object sender, EventArgs e)

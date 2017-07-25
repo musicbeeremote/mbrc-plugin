@@ -45,6 +45,7 @@
             this.addTrackCheckbox = new System.Windows.Forms.CheckBox();
             this.removeTrackCheckbox = new System.Windows.Forms.CheckBox();
             this.logGrid = new System.Windows.Forms.DataGridView();
+            this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
             ((System.ComponentModel.ISupportInitialize)(this.clientListGrid)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
@@ -52,6 +53,7 @@
             this.splitContainer1.SuspendLayout();
             this.clientPermissionsGroupBox.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.logGrid)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
             this.SuspendLayout();
             // 
             // clientListGrid
@@ -111,6 +113,7 @@
             // 
             // splitContainer1.Panel1
             // 
+            this.splitContainer1.Panel1.Controls.Add(this.numericUpDown1);
             this.splitContainer1.Panel1.Controls.Add(this.clientPermissionsGroupBox);
             this.splitContainer1.Panel1.Controls.Add(this.clientListGrid);
             this.splitContainer1.Panel1.Controls.Add(this.activeCheckbox);
@@ -272,6 +275,13 @@
             this.logGrid.Size = new System.Drawing.Size(983, 280);
             this.logGrid.TabIndex = 4;
             // 
+            // numericUpDown1
+            // 
+            this.numericUpDown1.Location = new System.Drawing.Point(909, 10);
+            this.numericUpDown1.Name = "numericUpDown1";
+            this.numericUpDown1.Size = new System.Drawing.Size(81, 26);
+            this.numericUpDown1.TabIndex = 29;
+            // 
             // PartyModePanel
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
@@ -293,6 +303,7 @@
             this.clientPermissionsGroupBox.ResumeLayout(false);
             this.clientPermissionsGroupBox.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.logGrid)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -316,5 +327,6 @@
         private System.Windows.Forms.CheckBox changeVolumeCheckbox;
         private System.Windows.Forms.CheckBox addTrackCheckbox;
         private System.Windows.Forms.CheckBox removeTrackCheckbox;
+        private System.Windows.Forms.NumericUpDown numericUpDown1;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.Serialization;
@@ -10,42 +11,46 @@ namespace MusicBeeRemote.Core.Network
     [DataContract(Name = "client")]
     public class RemoteClient : IEquatable<RemoteClient>
     {
-
         public RemoteClient()
         {
-            
         }
-        
+
         public RemoteClient(PhysicalAddress macAddress, IPAddress ipAddress)
         {
             MacAdress = macAddress;
             IpAddress = ipAddress;
             LastLogIn = DateTime.Now;
         }
-        
+
         #region Properties
 
+        [DisplayName("Permissions")]
         [DataMember(Name = "permissions")]
         public CommandPermissions ClientPermissions { get; private set; } = CommandPermissions.None;
-        
+
+        [DisplayName("Client Id")]
         [BsonId]
         [DataMember(Name = "client_id")]
         public string ClientId { get; set; }
-        
+
+        [DisplayName("Connections")]
         [IgnoreDataMember]
         public uint ActiveConnections { get; private set; }
-        
+
+        [DisplayName("MAC")]
         [DataMember(Name = "mac_address")]
         public PhysicalAddress MacAdress { get; set; }
 
+        [DisplayName("IP")]
         [DataMember(Name = "ip_address")]
         public IPAddress IpAddress { get; set; }
 
+        [DisplayName("Last login")]
         [DataMember(Name = "last_login")]
         public DateTime LastLogIn { get; set; }
 
         #endregion Properties
-        
+
         public virtual void AddConnection()
         {
             ActiveConnections++;
@@ -81,7 +86,7 @@ namespace MusicBeeRemote.Core.Network
             {
                 RemovePermission(permissions);
             }
-        }      
+        }
 
         #region Equatable
 

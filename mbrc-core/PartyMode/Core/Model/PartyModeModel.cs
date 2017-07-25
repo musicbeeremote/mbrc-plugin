@@ -114,5 +114,10 @@ namespace MusicBeeRemote.PartyMode.Core.Model
         {
             return _repository.GetLogs();
         }
+
+        public void UpdateClient(RemoteClient client)
+        {
+            _repository.UpdateClient(client);
+        }
     }
 }

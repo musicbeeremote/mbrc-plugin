@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using MusicBeeRemote.Core.Settings;
 using Newtonsoft.Json;
 
