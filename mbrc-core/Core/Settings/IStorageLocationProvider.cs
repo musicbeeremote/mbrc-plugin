@@ -9,6 +9,7 @@ namespace MusicBeeRemote.Core.Settings
         string LegacySettingsFile { get; }
         string CacheLocation();
         string LogFile { get; }
+        string DatabaseFile { get; }
     }
 
     class StorageLocationProvider : IStorageLocationProvider
@@ -19,10 +20,12 @@ namespace MusicBeeRemote.Core.Settings
         private const string LogFileName = "mbrc.log";
         private const string SettingsFileName = "settings.json";
         private const string LegacySettingsFilename = "settings.xml";
+        private const string ClientDatabase = "data.db3";
 
         public StorageLocationProvider(string location)
         {
             _location = $"{location}{Path.DirectorySeparatorChar}{RemoteDataDirectory}";
+            Directory.CreateDirectory(CacheLocation());
         }
 
         public string StorageLocation()
@@ -50,6 +53,8 @@ namespace MusicBeeRemote.Core.Settings
         {
             return $"{_location}{Path.DirectorySeparatorChar}{CacheSubDir}";
         }
+
+        public string DatabaseFile => $"{CacheLocation()}{Path.DirectorySeparatorChar}{ClientDatabase}";
 
         /// <summary>
         /// Gets the log file location.

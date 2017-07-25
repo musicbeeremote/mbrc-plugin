@@ -1,27 +1,22 @@
 ﻿using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using LiteDB;
-using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Settings;
-using MusicBeeRemote.PartyMode.Core.Model;
 
-namespace MusicBeeRemote.PartyMode.Core.Repository
+namespace MusicBeeRemote.Core.Network
 {
-    public class PartyModeRepository
+    public class ClientRepository
     {
         private readonly IStorageLocationProvider _storageLocationProvider;
-        private readonly string PartyModeBD;
 
-        public PartyModeRepository(IStorageLocationProvider storageLocationProvider)
+        public ClientRepository(IStorageLocationProvider storageLocationProvider)
         {
             _storageLocationProvider = storageLocationProvider;
-            PartyModeBD = $"{storageLocationProvider.StorageLocation()}{Path.DirectorySeparatorChar}partymode.db";
         }
 
         public void InsertClient(RemoteClient client)
         {
-            using (var db = new LiteDatabase(PartyModeBD))
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 var storedClient = collection.FindById(client.ClientId);
@@ -40,7 +35,7 @@ namespace MusicBeeRemote.PartyMode.Core.Repository
         {
             var knownClients = new List<RemoteClient>();
 
-            using (var db = new LiteDatabase(PartyModeBD))
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
             {
                 var clients = db.GetCollection<RemoteClient>("clients").FindAll();
                 knownClients.AddRange(clients.ToList());
@@ -48,32 +43,25 @@ namespace MusicBeeRemote.PartyMode.Core.Repository
             return knownClients;
         }
 
-        public void InsertLog(PartyModeLog log)
-        {
-            using (var db = new LiteDatabase(PartyModeBD))
-            {
-                var collection = db.GetCollection<PartyModeLog>("logs");
-                collection.Insert(log);
-            }
-        }
-
-        public List<PartyModeLog> GetLogs()
-        {
-            IEnumerable<PartyModeLog> logs;
-            using (var db = new LiteDatabase(PartyModeBD))
-            {
-                logs = db.GetCollection<PartyModeLog>("logs").FindAll();
-            }
-            return logs.ToList();
-        }
-
         public void UpdateClient(RemoteClient client)
         {
-            using (var db = new LiteDatabase(PartyModeBD))
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 collection.Update(client);
-            }            
+            }
+        }
+
+        public RemoteClient GetClientById(string clientId)
+        {
+            RemoteClient client;
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            {
+                var collection = db.GetCollection<RemoteClient>("clients");
+                client = collection.FindById(clientId);
+            }
+            
+            return client;
         }
     }
 }

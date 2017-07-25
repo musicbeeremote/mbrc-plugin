@@ -81,9 +81,14 @@
     <Compile Include="Core\Commands\CommandExecutor.cs" />
     <Compile Include="Core\Commands\CommandPermissions.cs" />
     <Compile Include="Core\Commands\configuration.cs" />
+    <Compile Include="Core\Commands\Events\CommandProcessedEvent.cs" />
+    <Compile Include="Core\Commands\ExecutionStatus.cs" />
+    <Compile Include="Core\Commands\ExecutorHelper.cs" />
     <Compile Include="Core\Commands\ICommand.cs" />
     <Compile Include="Core\Commands\InstaReplies\InstantReplyCommands.cs" />
     <Compile Include="Core\Commands\LimitedCommand.cs" />
+    <Compile Include="Core\Commands\Logs\ExecutionLog.cs" />
+    <Compile Include="Core\Commands\Logs\LogRepository.cs" />
     <Compile Include="Core\Commands\Requests\HandeshakeCommands.cs" />
     <Compile Include="Core\Commands\Requests\LibraryBrowseCommands.cs" />
     <Compile Include="Core\Commands\Requests\NowPlayingCommands.cs" />
@@ -153,6 +158,8 @@
     <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
     <Compile Include="Core\MusicBeeRemotePlugin.cs" />
+    <Compile Include="Core\Network\ClientManager.cs" />
+    <Compile Include="Core\Network\ClientRepository.cs" />
     <Compile Include="Core\Network\Constants.cs" />
     <Compile Include="Core\Network\HttpSupport.cs" />
     <Compile Include="Core\Network\Http\Extentions.cs" />
@@ -193,6 +200,13 @@
     <Compile Include="Core\Settings\Dialog\HintTextBox.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.Designer.cs">
+      <DependentUpon>PartyModePanel.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModeViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -235,24 +249,7 @@
     <Compile Include="Core\Utilities\Utilities.cs" />
     <Compile Include="Core\Windows\iWindowManager.cs" />
     <Compile Include="Core\Windows\WindowManager.cs" />
-    <Compile Include="PartyMode\Core\Helper\CycledList.cs" />
-    <Compile Include="PartyMode\Core\Helper\Settings.cs" />
-    <Compile Include="PartyMode\Core\Helper\SettingsHandler.cs" />
-    <Compile Include="PartyMode\Core\Model\CommandProcessedEvent.cs" />
-    <Compile Include="PartyMode\Core\Model\PartyModeLog.cs" />
-    <Compile Include="PartyMode\Core\Model\PartyModeModel.cs" />
-    <Compile Include="PartyMode\Core\Model\ExecutionStatus.cs" />
-    <Compile Include="PartyMode\Core\PartyModeCommandHandler.cs" />
-    <Compile Include="PartyMode\Core\PartyModePanel.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="PartyMode\Core\PartyModePanel.Designer.cs">
-      <DependentUpon>PartyModePanel.cs</DependentUpon>
-    </Compile>
-    <Compile Include="PartyMode\Core\Repository\PartyModeRepository.cs" />
-    <Compile Include="PartyMode\Core\Tools\NetworkTools.cs" />
     <Compile Include="Core\Windows\Mvvm\ViewModelBase.cs" />
-    <Compile Include="PartyMode\Core\ViewModel\PartyModeViewModel.cs" />
     <Compile Include="Properties\Resources.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TinyMessenger.cs" />
@@ -264,14 +261,14 @@
     <EmbeddedResource Include="Core\Settings\Dialog\BasePanel\ConfigurationPanel.resx">
       <DependentUpon>ConfigurationPanel.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.resx">
+      <DependentUpon>PartyModePanel.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Core\Settings\Dialog\Range\RangeManagementControl.resx">
       <DependentUpon>RangeManagementControl.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Core\Settings\Dialog\Whitelist\WhitelistManagementControl.resx">
       <DependentUpon>WhitelistManagementControl.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="PartyMode\Core\PartyModePanel.resx">
-      <DependentUpon>PartyModePanel.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx" />
   </ItemGroup>

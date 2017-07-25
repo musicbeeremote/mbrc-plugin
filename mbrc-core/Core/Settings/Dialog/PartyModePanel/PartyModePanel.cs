@@ -1,29 +1,27 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Windows.Forms;
 using MusicBeeRemote.Core.Commands;
-using MusicBeeRemote.Core.Settings.Dialog;
-using MusicBeeRemote.PartyMode.Core.Helper;
-using MusicBeeRemote.PartyMode.Core.Model;
-using MusicBeeRemote.PartyMode.Core.ViewModel;
+using MusicBeeRemote.Core.Commands.Events;
+using MusicBeeRemote.Core.Commands.Logs;
 using TinyMessenger;
 
-namespace MusicBeeRemote.PartyMode.Core
+namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
 {
     public partial class PartyModePanel : Form
     {
         private readonly PartyModeViewModel _viewModel;
         private readonly ITinyMessengerHub _hub;
-        private readonly CycledList<PartyModeLog> _logs;
+        private readonly BindingList<ExecutionLog> _logs;
         private TinyMessageSubscriptionToken _eventSubscription;
 
         public PartyModePanel(PartyModeViewModel viewModel, ITinyMessengerHub hub)
         {
             _viewModel = viewModel;
             _hub = hub;
-            _logs = new CycledList<PartyModeLog>(10000);
+            _logs = new BindingList<ExecutionLog>(_viewModel.GetLogs());
             InitializeComponent();
-            clientListGrid.DataSource = _viewModel.KnownClients;
-            _logs.AddRange(_viewModel.GetLogs());
+            clientListGrid.DataSource = _viewModel.KnownClients;           
             logGrid.DataSource = _logs;
             activeCheckbox.SetChecked(_viewModel.IsActive);
             _eventSubscription = _hub.Subscribe<CommandProcessedEvent>(msg =>

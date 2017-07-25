@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace MusicBeeRemote.Core.Network
 {
@@ -57,6 +59,27 @@ namespace MusicBeeRemote.Core.Network
                 broadcastBytes[i] = (byte) (addressBytes[i] & maskBytes[i]);
             }
             return new IPAddress(broadcastBytes);
+        }
+
+        [DllImport("iphlpapi.dll")]
+        private static extern long SendARP(int destIp, int scrIp, [Out] byte[] pMacAddr, ref int phyAddr);
+
+        public static PhysicalAddress GetMacAddress(IPAddress ipAddress)
+        {
+            if (ipAddress == null) return null;
+            try
+            {
+                var bpMacAddr = new byte[6];
+                var len = bpMacAddr.Length;
+                var res = SendARP(ipAddress.GetHashCode(), 0, bpMacAddr, ref len);
+                var adr = new PhysicalAddress(bpMacAddr);
+                return adr;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine("Get MAC address failed IP: " + ipAddress + "\n" + e.Message + " \n" + e.StackTrace);
+                throw e;
+            }
         }
     }
 }

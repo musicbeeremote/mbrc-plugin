@@ -1,4 +1,4 @@
-﻿namespace MusicBeeRemote.PartyMode.Core
+﻿namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
 {
     partial class PartyModePanel
     {

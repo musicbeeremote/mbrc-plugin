@@ -1,6 +1,6 @@
 ﻿using System.Runtime.Serialization;
 
-namespace MusicBeeRemote.PartyMode.Core.Model
+namespace MusicBeeRemote.Core.Commands
 {
     public enum ExecutionStatus
     {

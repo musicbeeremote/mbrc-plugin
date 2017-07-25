@@ -40,6 +40,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
+        
     }
 
     public class RequestNowplayingQueue : LimitedCommand
@@ -136,7 +137,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
+        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;      
     }
 
     internal class RequestNowPlayingTrackRemoval : LimitedCommand
@@ -173,63 +174,6 @@ namespace MusicBeeRemote.Core.Commands.Requests
         }
 
         public override CommandPermissions GetPermissions() => CommandPermissions.RemoveTrack;
-    }
-
-    public class RequestNowplayingPartyQueue : ICommand
-    {
-        private readonly ITinyMessengerHub _hub;
-        private readonly IQueueAdapter _queueAdapter;
-
-        public RequestNowplayingPartyQueue(ITinyMessengerHub hub, IQueueAdapter queueAdapter)
-        {
-            _hub = hub;
-            _queueAdapter = queueAdapter;
-        }
-
-        public void Execute(IEvent @event)
-        {
-            var payload = @event.Data as JObject;
-            if (payload == null)
-            {
-                const int code = 400;
-                SendResponse(@event.ConnectionId, code);
-                return;
-            }
-
-            var data = (JArray) payload["data"];
-
-            if (data == null)
-            {
-                const int code = 400;
-                SendResponse(@event.ConnectionId, code);
-                return;
-            }
-
-            if (data.Count > 1)
-            {
-                SendResponse(@event.ConnectionId, 403);
-            }
-            else
-            {
-                var success = _queueAdapter.QueueFiles(QueueType.Last, data.Select(c => (string) c).ToArray());
-                SendResponse(@event.ConnectionId, success ? 200 : 500);
-            }
-        }
-
-        private void SendResponse(string connectionId, int code)
-        {
-            var queueResponse = new QueueResponse
-            {
-                Code = code
-            };
-            var message = new SocketMessage
-            {
-                Data = queueResponse,
-                Context = Constants.NowPlayingQueue
-            };
-
-            _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));
-        }
     }
 
     internal class RequestNowPlayingMoveTrack : ICommand

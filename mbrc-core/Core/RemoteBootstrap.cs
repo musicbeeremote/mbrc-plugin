@@ -13,13 +13,11 @@ using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Commands;
+using MusicBeeRemote.Core.Settings.Dialog.PartyModePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Whitelist;
 using MusicBeeRemote.Core.Support;
 using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
-using MusicBeeRemote.PartyMode.Core;
-using MusicBeeRemote.PartyMode.Core.Model;
-using MusicBeeRemote.PartyMode.Core.Repository;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using StructureMap;
@@ -108,9 +106,7 @@ namespace MusicBeeRemote.Core
                     .Is(dependencies.CurrentVersion)
                     .Singleton();
 
-                c.For<Authenticator>().Use<Authenticator>().Singleton();
-                c.For<PartyModeModel>().Use<PartyModeModel>().Singleton();
-                c.For<PartyModeCommandHandler>().Use<PartyModeCommandHandler>().Singleton();
+                c.For<Authenticator>().Use<Authenticator>().Singleton();               
                 c.For<ITrackRepository>().Use<TrackRepository>().Singleton();
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
                 c.For<ITinyMessengerHub>().Use<TinyMessengerHub>().Singleton();
@@ -129,7 +125,8 @@ namespace MusicBeeRemote.Core
                 c.For<WhitelistManagementControl>().Use<WhitelistManagementControl>();
 
                 c.For<PodcastHttpApi>().Use<PodcastHttpApi>().Singleton();
-                c.For<PartyModeRepository>().Singleton();
+                c.For<ClientRepository>().Singleton();
+                c.For<ClientManager>().Singleton();
             });
 
             var controller = _container.GetInstance<CommandExecutor>();

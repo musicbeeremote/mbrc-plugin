@@ -113,6 +113,20 @@ namespace MusicBeeRemote.Core.Events
         public object Sender { get; } = null;
     }
 
+    internal class ConnectionRemovedEvent : ITinyMessage
+    {
+        public SocketConnection Client { get; }
+        
+        public object Sender { get; } = null;
+        
+        public ConnectionRemovedEvent(SocketConnection client)
+        {
+            Client = client;
+        }
+        
+        
+    }
+
     internal class LyricsAvailable : ITinyMessage
     {
         public string Lyrics { get; }

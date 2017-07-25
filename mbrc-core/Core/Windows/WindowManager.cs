@@ -1,7 +1,7 @@
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Settings.Dialog;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
-using MusicBeeRemote.PartyMode.Core;
+using MusicBeeRemote.Core.Settings.Dialog.PartyModePanel;
 using StructureMap;
 
 namespace MusicBeeRemote.Core.Windows

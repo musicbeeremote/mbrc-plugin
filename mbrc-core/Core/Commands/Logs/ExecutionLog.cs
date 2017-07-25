@@ -2,10 +2,10 @@ using System;
 using System.ComponentModel;
 using System.Runtime.Serialization;
 
-namespace MusicBeeRemote.PartyMode.Core.Model
+namespace MusicBeeRemote.Core.Commands.Logs
 {
     [DataContract]
-    public class PartyModeLog
+    public class ExecutionLog
     {            
         [DisplayName("Date")]
         [DataMember(Name = "date")]
@@ -23,11 +23,11 @@ namespace MusicBeeRemote.PartyMode.Core.Model
         [DataMember(Name = "status")]
         public ExecutionStatus Status { get; set; }
 
-        public PartyModeLog()
+        public ExecutionLog()
         {
         }
 
-        public PartyModeLog(string client, string command, ExecutionStatus status)
+        public ExecutionLog(string client, string command, ExecutionStatus status)
         {
             TimeStamp = DateTime.Now;
             Client = Client == string.Empty ? "---" : client;

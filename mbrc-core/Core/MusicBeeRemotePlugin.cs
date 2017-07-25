@@ -14,6 +14,7 @@ namespace MusicBeeRemote.Core
         private readonly ITrackStateMonitor _trackStateMonitor;
         private readonly IPlayerStateMonitor _playerStateMonitor;
         private readonly IWindowManager _windowManager;
+        private readonly ClientManager _clientManager;
         private readonly ITinyMessengerHub _hub;
 
         public MusicBeeRemotePlugin(
@@ -23,6 +24,7 @@ namespace MusicBeeRemote.Core
             ITrackStateMonitor trackStateMonitor,
             IPlayerStateMonitor playerStateMonitor,
             IWindowManager windowManager,
+            ClientManager clientManager,
             ITinyMessengerHub hub
         )
         {
@@ -32,6 +34,7 @@ namespace MusicBeeRemote.Core
             _trackStateMonitor = trackStateMonitor;
             _playerStateMonitor = playerStateMonitor;
             _windowManager = windowManager;
+            _clientManager = clientManager;
             _hub = hub;
         }
 

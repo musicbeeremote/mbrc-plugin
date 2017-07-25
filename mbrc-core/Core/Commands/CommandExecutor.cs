@@ -4,22 +4,21 @@ using System.Diagnostics;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
-using MusicBeeRemote.PartyMode.Core;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands
 {
     public class CommandExecutor
     {
-        private readonly Dictionary<string, ICommand> _commandMap;
+        private readonly Dictionary<string, ICommand> _commandMap = new Dictionary<string, ICommand>();
         private readonly ITinyMessengerHub _hub;
-        private readonly PartyModeCommandHandler _handler;
+        private readonly ExecutorHelper _executorHelper;
 
-        public CommandExecutor(ITinyMessengerHub hub, PartyModeCommandHandler handler)
+
+        public CommandExecutor(ITinyMessengerHub hub, ExecutorHelper executorHelper)
         {
             _hub = hub;
-            _handler = handler;
-            _commandMap = new Dictionary<string, ICommand>();
+            _executorHelper = executorHelper;
             _hub.Subscribe<MessageEvent>(CommandExecute);
         }
 
@@ -35,7 +34,7 @@ namespace MusicBeeRemote.Core.Commands
                 _commandMap.Remove(eventType);
         }
 
-        public void CommandExecute(IEvent e)
+        private void CommandExecute(IEvent e)
         {
             if (e?.Type == null)
             {
@@ -49,23 +48,7 @@ namespace MusicBeeRemote.Core.Commands
             var command = _commandMap[e.Type];
             try
             {
-                if (_handler.PartyModeActive)
-                {
-                    if (_handler.HasPermissions(command, e))
-                    {
-                        command.Execute(e);
-                    }
-                    else
-                    {
-                        var message = new SocketMessage(Constants.CommandUnavailable);
-                        _hub.Publish(new PluginResponseAvailableEvent(message));
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine($"Running {command.GetType()}");
-                    command.Execute(e);
-                }
+                Execute(e, command);
             }
             catch (Exception ex)
             {
@@ -73,6 +56,38 @@ namespace MusicBeeRemote.Core.Commands
                 Debug.WriteLine(ex.Message + "\n" + ex.StackTrace);
 #endif
                 // Oh noes something went wrong... let's ignore the exception?
+            }
+        }
+
+        private void Execute(IEvent e, ICommand command)
+        {
+            if (_executorHelper.PermissionMode)
+            {
+                PermissionBasedExecution(e, command);
+            }
+            else
+            {
+                Debug.WriteLine($"Running {command.GetType()}");
+                command.Execute(e);
+            }
+        }
+
+        private void PermissionBasedExecution(IEvent e, ICommand command)
+        {
+            var limited = command as LimitedCommand;
+            if (limited != null)
+            {
+                var status = limited.Execute(e, _executorHelper.ClientPermissions(e.ClientId));
+                if (status != ExecutionStatus.Denied)
+                {
+                    return;
+                }
+                var message = new SocketMessage(Constants.CommandUnavailable);
+                _hub.Publish(new PluginResponseAvailableEvent(message));
+            }
+            else
+            {
+                command.Execute(e);
             }
         }
     }
