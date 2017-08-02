@@ -21,6 +21,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _libraryApiAdapter = libraryApiAdapter;
         }
 
+        public override string Name() => "Playlist: Play";
+
         public override void Execute(IEvent @event)
         {
             var success = false;
@@ -29,12 +31,12 @@ namespace MusicBeeRemote.Core.Commands.Requests
             {
                 var url = token.Value<string>();
                 success = _libraryApiAdapter.PlayPlaylist(url);
-            }                       
+            }
             var message = new SocketMessage(Constants.PlaylistPlay, success);
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.AddTrack;
     }
 
     internal class RequestPlaylistList : ICommand

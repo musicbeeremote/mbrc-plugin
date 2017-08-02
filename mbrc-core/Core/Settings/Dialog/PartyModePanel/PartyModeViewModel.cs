@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Commands.Logs;
 using MusicBeeRemote.Core.Network;
@@ -10,10 +11,19 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
     {
         private RemoteClient _selectedClient;
         private ClientRepository _repository;
+        private LogRepository _logRepository;
 
-        public PartyModeViewModel(ClientRepository repository)
+        public event EventHandler ClientDataUpdated;
+
+        public PartyModeViewModel(ClientRepository repository, LogRepository logRepository)
         {
             _repository = repository;
+            _logRepository = logRepository;
+        }
+
+        protected virtual void OnClientDataUpdated(EventArgs e)
+        {
+            ClientDataUpdated?.Invoke(this, e);
         }
 
 
@@ -31,6 +41,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
         {
             _selectedClient.SetPermission(permissions, @checked);
             _repository.UpdateClient(_selectedClient);
+            OnClientDataUpdated(EventArgs.Empty);
         }
 
         public bool SelectedClientHasPermission(CommandPermissions permissions)
@@ -40,7 +51,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
 
         public List<ExecutionLog> GetLogs()
         {
-            return new List<ExecutionLog>();
+            return _logRepository.GetLogs();
         }
     }
 }

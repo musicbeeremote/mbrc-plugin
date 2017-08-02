@@ -26,12 +26,13 @@ namespace MusicBeeRemote.Core.Commands.Logs
 
         public List<ExecutionLog> GetLogs()
         {
-            IEnumerable<ExecutionLog> logs;
+            var logs = new List<ExecutionLog>();
             using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
             {
-                logs = db.GetCollection<ExecutionLog>(TableName).FindAll();
+                var result = db.GetCollection<ExecutionLog>(TableName).FindAll();
+                logs.AddRange(result.ToList());
             }
-            return logs.ToList();
+            return logs;
         }
     }
 }

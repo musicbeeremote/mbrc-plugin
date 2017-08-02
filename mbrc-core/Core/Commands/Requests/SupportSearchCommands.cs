@@ -77,6 +77,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _searchQueue = searchQueue;
         }
 
+        public override string Name() => "Library: Queue Track";
+
         public override void Execute(IEvent @event)
         {
             string type, query;
@@ -103,7 +105,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _searchQueue.RequestQueueFiles(qType, MetaTag.Title, query);
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+        protected override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
                                                                CommandPermissions.StartPlayback;
     }
 
@@ -115,6 +117,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
         {
             _searchQueue = searchQueue;
         }
+        
+        public override string Name() => "Library: Queue Genre";
 
         public override void Execute(IEvent @event)
         {
@@ -141,7 +145,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _searchQueue.RequestQueueFiles(qType, MetaTag.Genre, query);
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+        protected override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
                                                                CommandPermissions.StartPlayback;
     }
 
@@ -154,7 +158,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
         {
             _searchQueue = searchQueue;
         }
-
+        
+        public override string Name() => "Library: Queue Artist";
+        
         public override void Execute(IEvent @event)
         {
             try
@@ -189,7 +195,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             }
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+        protected override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
                                                                CommandPermissions.StartPlayback;
     }
 
@@ -201,6 +207,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
         {
             _searchQueue = searchQueue;
         }
+        
+        public override string Name() => "Library: Queue Album";
 
         public override void Execute(IEvent @event)
         {
@@ -230,7 +238,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _searchQueue.RequestQueueFiles(qType, MetaTag.Album, query);
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
+        protected override CommandPermissions GetPermissions() => CommandPermissions.AddTrack |
                                                                CommandPermissions.StartPlayback;
     }
 

@@ -2,8 +2,8 @@
 using System.ComponentModel;
 using System.Windows.Forms;
 using MusicBeeRemote.Core.Commands;
-using MusicBeeRemote.Core.Commands.Events;
 using MusicBeeRemote.Core.Commands.Logs;
+using MusicBeeRemote.Core.Network;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
@@ -12,22 +12,22 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
     {
         private readonly PartyModeViewModel _viewModel;
         private readonly ITinyMessengerHub _hub;
-        private readonly BindingList<ExecutionLog> _logs;
         private TinyMessageSubscriptionToken _eventSubscription;
 
         public PartyModePanel(PartyModeViewModel viewModel, ITinyMessengerHub hub)
         {
+            InitializeComponent();
             _viewModel = viewModel;
             _hub = hub;
-            _logs = new BindingList<ExecutionLog>(_viewModel.GetLogs());
-            InitializeComponent();
-            clientListGrid.DataSource = _viewModel.KnownClients;           
-            logGrid.DataSource = _logs;
+            clientListGrid.DataSource = new BindingList<RemoteClient>(_viewModel.KnownClients);
+            var logData = new BindingList<ExecutionLog>(_viewModel.GetLogs());
+            logGrid.DataSource = logData;
             activeCheckbox.SetChecked(_viewModel.IsActive);
-            _eventSubscription = _hub.Subscribe<CommandProcessedEvent>(msg =>
+            _eventSubscription = _hub.Subscribe<ClientManager.ActionLoggedEvent>(msg =>
             {
-                _logs.Add(msg.Log);
+                logData.Add(msg.Log);
                 logGrid.FirstDisplayedScrollingRowIndex = logGrid.RowCount - 1;
+                logGrid.Refresh();
             });
         }
 
@@ -111,11 +111,15 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
 
         private void PartyModePanel_Load(object sender, EventArgs e)
         {
+            _viewModel.ClientDataUpdated += (o, args) =>
+            {
+                clientListGrid.DataSource = new BindingList<RemoteClient>(_viewModel.KnownClients);
+            };
         }
 
         private void PartyModePanel_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            _hub.Unsubscribe<CommandProcessedEvent>(_eventSubscription);
+        {            
+            _hub.Unsubscribe<ClientManager.ActionLoggedEvent>(_eventSubscription);
         }
     }
 }

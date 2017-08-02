@@ -24,6 +24,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub = hub;
         }
 
+        public override string Name() => "Now Playing: Search";
+
         public override void Execute(IEvent @event)
         {
             var result = false;
@@ -39,8 +41,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
-        
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
     }
 
     public class RequestNowplayingQueue : LimitedCommand
@@ -56,8 +57,11 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _queueAdapter = queueAdapter;
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
-                                                               CommandPermissions.AddTrack;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
+                                                                  CommandPermissions.AddTrack;
+
+        /// <inheritdoc />
+        public override string Name() => "Now Playing: Queue";
 
         public override void Execute(IEvent @event)
         {
@@ -123,6 +127,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _nowPlayingApiAdapter = nowPlayingApiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Now Playing: Play";
+
         public override void Execute(IEvent @event)
         {
             var result = false;
@@ -137,7 +144,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;      
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
     }
 
     internal class RequestNowPlayingTrackRemoval : LimitedCommand
@@ -150,6 +157,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub = hub;
             _nowPlayingApiAdapter = nowPlayingApiAdapter;
         }
+
+        /// <inheritdoc />
+        public override string Name() => "Now Playing: Remove Track";
 
         public override void Execute(IEvent @event)
         {
@@ -173,7 +183,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.RemoveTrack;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.RemoveTrack;
     }
 
     internal class RequestNowPlayingMoveTrack : ICommand

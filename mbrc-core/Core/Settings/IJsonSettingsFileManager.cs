@@ -5,5 +5,9 @@
         void Save(UserSettingsModel model);
 
         UserSettingsModel Load();
+
+        void SaveLimitedModeSettingsModel(LimitedModeSettingsModel model);
+
+        LimitedModeSettingsModel LoadLimitedModeSettingsModel();
     }
 }

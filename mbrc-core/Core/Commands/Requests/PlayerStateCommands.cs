@@ -37,13 +37,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        public override string Name() => "Player: Play previous";
+
         public override void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.PlayerPrevious, _apiAdapter.PlayPrevious());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.PlayPrevious;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.PlayPrevious;
     }
 
     internal class RequestNextTrack : LimitedCommand
@@ -57,13 +59,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub = hub;
         }
 
+        public override string Name() => "Player: Play next";
+
         public override void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.PlayerNext, _apiAdapter.PlayNext());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.PlayNext;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.PlayNext;
     }
 
     internal class RequestRepeat : LimitedCommand
@@ -77,6 +81,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        public override string Name() => "Player: Change Repeat";
+
         public override void Execute(IEvent @event)
         {
             var token = @event.Data as JToken;
@@ -89,7 +95,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.ChangeRepeat;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeRepeat;
     }
 
     internal class RequestScrobble : ICommand
@@ -128,6 +134,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: Change shuffle";
+
         public override void Execute(IEvent @event)
         {
             var isToggle = false;
@@ -155,7 +164,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
     }
 
     internal class RequestPlay : LimitedCommand
@@ -167,12 +176,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = playerApiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: Play";
+
         public override void Execute(IEvent @event)
         {
             _apiAdapter.Play();
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
     }
 
     internal class RequestPause : LimitedCommand
@@ -184,12 +196,15 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = playerApiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: Pause";
+
         public override void Execute(IEvent @event)
         {
             _apiAdapter.Pause();
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
     }
 
     internal class RequestPlayPause : LimitedCommand
@@ -203,14 +218,17 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: Play/Pause";
+
         public override void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.PlayerPause, _apiAdapter.PlayPause());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
-                                                               CommandPermissions.StopPlayback;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback |
+                                                                  CommandPermissions.StopPlayback;
     }
 
     internal class RequestStop : LimitedCommand
@@ -224,13 +242,16 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: Stop";
+
         public override void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.PlayerStop, _apiAdapter.StopPlayback());
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.StopPlayback;
     }
 
     internal class RequestVolume : LimitedCommand
@@ -243,6 +264,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub = hub;
             _apiAdapter = apiAdapter;
         }
+
+        public override string Name() => "Player: Change Volume";
 
         public override void Execute(IEvent @event)
         {
@@ -260,7 +283,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.ChangeVolume;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeVolume;
     }
 
     internal class RequestMute : LimitedCommand
@@ -274,6 +297,8 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        public override string Name() => "Player: Mute";
+
         public override void Execute(IEvent @event)
         {
             var isToggle = false;
@@ -281,7 +306,6 @@ namespace MusicBeeRemote.Core.Commands.Requests
             if (token != null && ((string) token).Equals("toggle"))
             {
                 isToggle = true;
-
             }
 
             if (isToggle)
@@ -293,7 +317,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.CanMute;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.CanMute;
     }
 
     internal class RequestAutoDj : LimitedCommand
@@ -307,6 +331,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter = apiAdapter;
         }
 
+        /// <inheritdoc />
+        public override string Name() => "Player: AutoDJ";
+
         public override void Execute(IEvent @event)
         {
             var isToggle = false;
@@ -314,7 +341,6 @@ namespace MusicBeeRemote.Core.Commands.Requests
             if (token != null && ((string) token).Equals("toggle"))
             {
                 isToggle = true;
-
             }
 
             if (isToggle)
@@ -326,6 +352,6 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
+        protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeShuffle;
     }
 }

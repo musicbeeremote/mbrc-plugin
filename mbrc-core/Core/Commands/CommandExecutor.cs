@@ -12,13 +12,12 @@ namespace MusicBeeRemote.Core.Commands
     {
         private readonly Dictionary<string, ICommand> _commandMap = new Dictionary<string, ICommand>();
         private readonly ITinyMessengerHub _hub;
-        private readonly ExecutorHelper _executorHelper;
+        private readonly ClientManager _clientManager;
 
-
-        public CommandExecutor(ITinyMessengerHub hub, ExecutorHelper executorHelper)
+        public CommandExecutor(ITinyMessengerHub hub, ClientManager clientManager)
         {
             _hub = hub;
-            _executorHelper = executorHelper;
+            _clientManager = clientManager;
             _hub.Subscribe<MessageEvent>(CommandExecute);
         }
 
@@ -61,7 +60,7 @@ namespace MusicBeeRemote.Core.Commands
 
         private void Execute(IEvent e, ICommand command)
         {
-            if (_executorHelper.PermissionMode)
+            if (_clientManager.PermissionMode)
             {
                 PermissionBasedExecution(e, command);
             }
@@ -74,10 +73,11 @@ namespace MusicBeeRemote.Core.Commands
 
         private void PermissionBasedExecution(IEvent e, ICommand command)
         {
-            var limited = command as LimitedCommand;
-            if (limited != null)
+            if (command.GetType().IsSubclassOf(typeof(LimitedCommand)))
             {
-                var status = limited.Execute(e, _executorHelper.ClientPermissions(e.ClientId));
+                var limited = (LimitedCommand) command;
+                var status = limited.Execute(e, _clientManager.ClientPermissions(e.ClientId));
+                _clientManager.Log(limited.Name(), status, e.ClientId);
                 if (status != ExecutionStatus.Denied)
                 {
                     return;

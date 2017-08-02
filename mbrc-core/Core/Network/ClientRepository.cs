@@ -26,7 +26,9 @@ namespace MusicBeeRemote.Core.Network
                 }
                 else
                 {
-                    collection.Update(client);
+                    storedClient.IpAddress = client.IpAddress;
+                    storedClient.AddConnection();
+                    collection.Update(storedClient);
                 }
             }
         }
@@ -60,8 +62,39 @@ namespace MusicBeeRemote.Core.Network
                 var collection = db.GetCollection<RemoteClient>("clients");
                 client = collection.FindById(clientId);
             }
-            
+
             return client;
+        }
+
+        public void ReduceConnections(string clientId)
+        {
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            {
+                var collection = db.GetCollection<RemoteClient>("clients");
+                var client = collection.FindById(clientId);
+                client.RemoveConnection();
+                collection.Update(client);
+            }
+        }
+
+        public void ResetClientConnections(string clientId)
+        {
+            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            {
+                var collection = db.GetCollection<RemoteClient>("clients");
+                var client = collection
+                    .Find(x => x.ClientId == clientId)
+                    .FirstOrDefault();
+
+
+                if (client == null)
+                {
+                    return;
+                }
+
+                client.ResetConnection();
+                collection.Update(client);
+            }
         }
     }
 }

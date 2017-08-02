@@ -5,6 +5,7 @@ using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Caching;
 using MusicBeeRemote.Core.Caching.Monitor;
 using MusicBeeRemote.Core.Commands;
+using MusicBeeRemote.Core.Commands.Logs;
 using MusicBeeRemote.Core.Logging;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Monitoring;
@@ -126,6 +127,7 @@ namespace MusicBeeRemote.Core
 
                 c.For<PodcastHttpApi>().Use<PodcastHttpApi>().Singleton();
                 c.For<ClientRepository>().Singleton();
+                c.For<LogRepository>().Singleton();
                 c.For<ClientManager>().Singleton();
             });
 

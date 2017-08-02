@@ -58,7 +58,15 @@ namespace MusicBeeRemote.Core.Network
 
         public virtual void RemoveConnection()
         {
-            ActiveConnections--;
+            if (ActiveConnections > 0)
+            {
+                ActiveConnections--;
+            }
+        }
+        
+        public virtual void ResetConnection()
+        {
+            ActiveConnections = 0;
         }
 
         public virtual bool HasPermission(CommandPermissions permissions)
@@ -110,6 +118,6 @@ namespace MusicBeeRemote.Core.Network
                    $" {nameof(MacAdress)}: {MacAdress}," +
                    $" {nameof(IpAddress)}: {IpAddress}," +
                    $" {nameof(LastLogIn)}: {LastLogIn}";
-        }
+        }       
     }
 }

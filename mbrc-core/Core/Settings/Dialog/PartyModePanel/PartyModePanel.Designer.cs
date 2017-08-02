@@ -1,4 +1,6 @@
-﻿namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
+﻿using System.Windows.Forms;
+
+namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
 {
     partial class PartyModePanel
     {
@@ -73,6 +75,7 @@
             this.clientListGrid.Size = new System.Drawing.Size(795, 328);
             this.clientListGrid.TabIndex = 0;
             this.clientListGrid.RowStateChanged += new System.Windows.Forms.DataGridViewRowStateChangedEventHandler(this.ClientListGrid_RowStateChanged);
+            this.clientListGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             // 
             // knownClientsLabel
             // 
@@ -274,6 +277,7 @@
             this.logGrid.RowTemplate.Height = 28;
             this.logGrid.Size = new System.Drawing.Size(983, 280);
             this.logGrid.TabIndex = 4;
+            this.logGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             // 
             // numericUpDown1
             // 
