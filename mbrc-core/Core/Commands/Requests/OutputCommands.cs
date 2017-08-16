@@ -21,7 +21,10 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent @event)
         {
-            var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices());
+            var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices())
+            {
+                NewLineTerminated = true
+            };
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
@@ -46,7 +49,10 @@ namespace MusicBeeRemote.Core.Commands.Requests
                 var outputDevice = _apiAdapter.SetOutputDevice(device);
             }
 
-            var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices());
+            var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices())
+            {
+                NewLineTerminated = true
+            };
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
