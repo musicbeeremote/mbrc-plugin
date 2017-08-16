@@ -16,7 +16,6 @@ using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Commands;
 using MusicBeeRemote.Core.Settings.Dialog.PartyModePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Whitelist;
-using MusicBeeRemote.Core.Support;
 using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
 using Newtonsoft.Json;
@@ -73,10 +72,7 @@ namespace MusicBeeRemote.Core
                 c.For<IPlayerApiAdapter>().Use(() => dependencies.PlayerAdapter).Singleton();
                 c.For<IQueueAdapter>().Use(() => dependencies.QueueAdapter).Singleton();
                 c.For<ITrackApiAdapter>().Use(() => dependencies.TrackAdapter).Singleton();
-                c.For<IInvokeHandler>().Use(() => dependencies.InvokeHandler).Singleton();
-
-                c.For<ISearchApi>().Use<SearchApi>().Singleton();
-                c.For<ISearchQueue>().Use<SearchQueue>().Singleton();
+                c.For<IInvokeHandler>().Use(() => dependencies.InvokeHandler).Singleton();              
 
                 c.For<IWindowManager>().Use<WindowManager>().Singleton();
 

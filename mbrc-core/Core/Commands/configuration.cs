@@ -34,22 +34,9 @@ namespace MusicBeeRemote.Core.Commands
             commandExecutor.AddCommand(Constants.NowPlayingTrack, container.GetInstance<RequestSongInfo>());
             commandExecutor.AddCommand(Constants.NowPlayingCover, container.GetInstance<RequestCover>());
             commandExecutor.AddCommand(Constants.NowPlayingLyrics, container.GetInstance<RequestLyrics>());
-            commandExecutor.AddCommand(Constants.NowPlayingRating, container.GetInstance<RequestRating>());
-            commandExecutor.AddCommand(Constants.NowPlayingListSearch,
-                container.GetInstance<RequestNowPlayingSearch>());
+            commandExecutor.AddCommand(Constants.NowPlayingRating, container.GetInstance<RequestRating>());           
             commandExecutor.AddCommand(Constants.NowPlayingListMove,
                 container.GetInstance<RequestNowPlayingMoveTrack>());
-            commandExecutor.AddCommand(Constants.LibrarySearchArtist, container.GetInstance<RequestLibSearchArtist>());
-            commandExecutor.AddCommand(Constants.LibrarySearchAlbum, container.GetInstance<RequestLibSearchAlbum>());
-            commandExecutor.AddCommand(Constants.LibrarySearchGenre, container.GetInstance<RequestLibSearchGenre>());
-            commandExecutor.AddCommand(Constants.LibrarySearchTitle, container.GetInstance<RequestLibSearchTitle>());
-            commandExecutor.AddCommand(Constants.LibraryQueueAlbum, container.GetInstance<RequestLibQueueAlbum>());
-            commandExecutor.AddCommand(Constants.LibraryQueueArtist, container.GetInstance<RequestLibQueueArtist>());
-            commandExecutor.AddCommand(Constants.LibraryQueueGenre, container.GetInstance<RequestLibQueueGenre>());
-            commandExecutor.AddCommand(Constants.LibraryQueueTrack, container.GetInstance<RequestLibQueueTrack>());
-            commandExecutor.AddCommand(Constants.LibraryArtistAlbums, container.GetInstance<RequestLibArtistAlbums>());
-            commandExecutor.AddCommand(Constants.LibraryAlbumTracks, container.GetInstance<RequestLibAlbumTracks>());
-            commandExecutor.AddCommand(Constants.LibraryGenreArtists, container.GetInstance<RequestLibGenreArtists>());
 
             #region Protocol 2.1
 

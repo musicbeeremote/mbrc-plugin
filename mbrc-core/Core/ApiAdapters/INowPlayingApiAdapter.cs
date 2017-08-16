@@ -6,14 +6,6 @@ namespace MusicBeeRemote.Core.ApiAdapters
     public interface INowPlayingApiAdapter
     {
         /// <summary>
-        /// Searchs the available metadata in the now playing list and plays the first track matching the
-        /// query supplied.
-        /// </summary>
-        /// <param name="query">A string that will be used to filter the available tracks</param>
-        /// <returns>True if it managed to play a track or false if it failed</returns>
-        bool PlayMatchingTrack(string query);
-
-        /// <summary>
         /// Moves a track in the now Playing list from the initial position to the destination position.
         /// </summary>
         /// <param name="from">The original position of the track</param>

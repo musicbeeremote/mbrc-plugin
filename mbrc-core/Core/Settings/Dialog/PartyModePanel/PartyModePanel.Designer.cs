@@ -35,6 +35,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.logsLabel = new System.Windows.Forms.Label();
             this.activeCheckbox = new System.Windows.Forms.CheckBox();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
+            this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
             this.clientPermissionsGroupBox = new System.Windows.Forms.GroupBox();
             this.startPlaybackCheckbox = new System.Windows.Forms.CheckBox();
             this.changeMuteCheckBox = new System.Windows.Forms.CheckBox();
@@ -47,15 +48,15 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.addTrackCheckbox = new System.Windows.Forms.CheckBox();
             this.removeTrackCheckbox = new System.Windows.Forms.CheckBox();
             this.logGrid = new System.Windows.Forms.DataGridView();
-            this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
+            this.keepLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.clientListGrid)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
             this.clientPermissionsGroupBox.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.logGrid)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
             this.SuspendLayout();
             // 
             // clientListGrid
@@ -65,7 +66,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.clientListGrid.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.clientListGrid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.AllCells;
+            this.clientListGrid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.clientListGrid.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.clientListGrid.Location = new System.Drawing.Point(12, 62);
             this.clientListGrid.Name = "clientListGrid";
@@ -75,7 +76,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.clientListGrid.Size = new System.Drawing.Size(795, 328);
             this.clientListGrid.TabIndex = 0;
             this.clientListGrid.RowStateChanged += new System.Windows.Forms.DataGridViewRowStateChangedEventHandler(this.ClientListGrid_RowStateChanged);
-            this.clientListGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             // 
             // knownClientsLabel
             // 
@@ -116,6 +116,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             // 
             // splitContainer1.Panel1
             // 
+            this.splitContainer1.Panel1.Controls.Add(this.keepLabel);
             this.splitContainer1.Panel1.Controls.Add(this.numericUpDown1);
             this.splitContainer1.Panel1.Controls.Add(this.clientPermissionsGroupBox);
             this.splitContainer1.Panel1.Controls.Add(this.clientListGrid);
@@ -129,6 +130,18 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.splitContainer1.Size = new System.Drawing.Size(1002, 712);
             this.splitContainer1.SplitterDistance = 393;
             this.splitContainer1.TabIndex = 7;
+            // 
+            // numericUpDown1
+            // 
+            this.numericUpDown1.Location = new System.Drawing.Point(909, 14);
+            this.numericUpDown1.Maximum = new decimal(new int[] {
+            30,
+            0,
+            0,
+            0});
+            this.numericUpDown1.Name = "numericUpDown1";
+            this.numericUpDown1.Size = new System.Drawing.Size(81, 26);
+            this.numericUpDown1.TabIndex = 29;
             // 
             // clientPermissionsGroupBox
             // 
@@ -269,7 +282,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.logGrid.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.logGrid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.AllCells;
+            this.logGrid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.logGrid.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.logGrid.Location = new System.Drawing.Point(7, 23);
             this.logGrid.Name = "logGrid";
@@ -277,14 +290,15 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.logGrid.RowTemplate.Height = 28;
             this.logGrid.Size = new System.Drawing.Size(983, 280);
             this.logGrid.TabIndex = 4;
-            this.logGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             // 
-            // numericUpDown1
+            // keepLabel
             // 
-            this.numericUpDown1.Location = new System.Drawing.Point(909, 10);
-            this.numericUpDown1.Name = "numericUpDown1";
-            this.numericUpDown1.Size = new System.Drawing.Size(81, 26);
-            this.numericUpDown1.TabIndex = 29;
+            this.keepLabel.AutoSize = true;
+            this.keepLabel.Location = new System.Drawing.Point(653, 16);
+            this.keepLabel.Name = "keepLabel";
+            this.keepLabel.Size = new System.Drawing.Size(250, 20);
+            this.keepLabel.TabIndex = 30;
+            this.keepLabel.Text = "Days to keep after last connection";
             // 
             // PartyModePanel
             // 
@@ -304,10 +318,10 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
             this.splitContainer1.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
             this.clientPermissionsGroupBox.ResumeLayout(false);
             this.clientPermissionsGroupBox.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.logGrid)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -332,5 +346,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyModePanel
         private System.Windows.Forms.CheckBox addTrackCheckbox;
         private System.Windows.Forms.CheckBox removeTrackCheckbox;
         private System.Windows.Forms.NumericUpDown numericUpDown1;
+        private Label keepLabel;
     }
 }

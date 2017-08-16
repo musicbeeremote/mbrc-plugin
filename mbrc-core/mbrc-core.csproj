@@ -99,7 +99,6 @@
     <Compile Include="Core\Commands\Requests\RequestPodcastCommand.cs" />
     <Compile Include="Core\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="Core\Commands\Requests\RequestRadioStations.cs" />
-    <Compile Include="Core\Commands\Requests\SupportSearchCommands.cs" />
     <Compile Include="Core\Enumerations\LastfmStatus.cs" />
     <Compile Include="Core\Enumerations\MetaTag.cs" />
     <Compile Include="Core\Enumerations\PlayerState.cs" />
@@ -236,11 +235,6 @@
     <Compile Include="Core\Settings\LimitedModeSettingsModel.cs" />
     <Compile Include="Core\Settings\PersistanceManager.cs" />
     <Compile Include="Core\Settings\UserSettingsModel.cs" />
-    <Compile Include="Core\Support\FilterHelper.cs" />
-    <Compile Include="Core\Support\ISearchApi.cs" />
-    <Compile Include="Core\Support\ISearchQueue.cs" />
-    <Compile Include="Core\Support\SearchApi.cs" />
-    <Compile Include="Core\Support\SearchQueue.cs" />
     <Compile Include="Core\Utilities\Authenticator.cs" />
     <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
     <Compile Include="Core\Utilities\IdGenerator.cs" />

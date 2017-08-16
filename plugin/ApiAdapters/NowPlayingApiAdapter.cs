@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Model.Entities;
 using static MusicBeePlugin.Plugin;
-using static MusicBeeRemote.Core.Support.FilterHelper;
 
 namespace MusicBeePlugin.ApiAdapters
 {
@@ -15,20 +13,6 @@ namespace MusicBeePlugin.ApiAdapters
         public NowPlayingApiAdapter(MusicBeeApiInterface api)
         {
             _api = api;
-        }
-
-        public bool PlayMatchingTrack(string query)
-        {
-            string[] tracks;
-            _api.NowPlayingList_QueryFilesEx(XmlFilter(new[] {"ArtistPeople", "Title"}, query, false), out tracks);
-
-            return (from currentTrack in tracks
-                let artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist)
-                let title = _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle)
-                let noTitleMatch = title.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0
-                let noArtistMatch = artist.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0
-                where !noTitleMatch || !noArtistMatch
-                select _api.NowPlayingList_PlayNow(currentTrack)).FirstOrDefault();
         }
 
         public bool MoveTrack(int from, int to)

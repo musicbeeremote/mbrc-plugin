@@ -12,7 +12,7 @@ namespace MusicBeeRemote.Core.Network
         private readonly ClientRepository _repository;
         private readonly LogRepository _logRepository;
 
-        public bool PermissionMode { get; set; } = true;
+        public bool PermissionMode { get; set; } = false;
 
         public ClientManager(ITinyMessengerHub hub, ClientRepository repository, LogRepository logRepository)
         {

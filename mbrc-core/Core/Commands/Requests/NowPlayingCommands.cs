@@ -13,37 +13,6 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
 {
-    internal class RequestNowPlayingSearch : LimitedCommand
-    {
-        private readonly ITinyMessengerHub _hub;
-        private readonly INowPlayingApiAdapter _apiAdapter;
-
-        public RequestNowPlayingSearch(INowPlayingApiAdapter apiAdapter, ITinyMessengerHub hub)
-        {
-            _apiAdapter = apiAdapter;
-            _hub = hub;
-        }
-
-        public override string Name() => "Now Playing: Search";
-
-        public override void Execute(IEvent @event)
-        {
-            var result = false;
-            var token = @event.Data as JToken;
-
-            if (token != null)
-            {
-                var query = (string) token;
-                result = _apiAdapter.PlayMatchingTrack(query);
-            }
-
-            var message = new SocketMessage(Constants.NowPlayingListSearch, result);
-            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
-        }
-
-        protected override CommandPermissions GetPermissions() => CommandPermissions.StartPlayback;
-    }
-
     public class RequestNowplayingQueue : LimitedCommand
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();

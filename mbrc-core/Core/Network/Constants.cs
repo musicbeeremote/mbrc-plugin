@@ -50,10 +50,6 @@
         public const string LibraryGenreArtists = "librarygenreartists";
         public const string LibraryAlbumTracks = "libraryalbumtracks";
         
-        public const string LibraryQueueGenre = "libraryqueuegenre";
-        public const string LibraryQueueArtist = "libraryqueueartist";
-        public const string LibraryQueueAlbum = "libraryqueuealbum";
-        public const string LibraryQueueTrack = "libraryqueuetrack";
 
         public const string PlaylistList = "playlistlist"; 
 
