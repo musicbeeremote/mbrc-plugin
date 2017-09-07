@@ -4,11 +4,10 @@ using System.Runtime.Serialization;
 namespace MusicBeeRemote.Core.Model.Entities
 {
     [DataContract]
-    public class Track :IEquatable<Track>, IComparable<Track>
+    public class Track : IEquatable<Track>, IComparable<Track>
     {
         public Track()
         {
-            
         }
 
         public Track(string artist, string title, int trackNo, string src)
@@ -36,12 +35,15 @@ namespace MusicBeeRemote.Core.Model.Entities
 
         [DataMember(Name = "album")]
         public string Album { get; set; }
-         
+
         [DataMember(Name = "album_artist")]
         public string AlbumArtist { get; set; }
 
         [DataMember(Name = "genre")]
         public string Genre { get; set; }
+
+        [DataMember(Name = "year")]
+        public string Year { get; set; }
 
         public bool Equals(Track other)
         {

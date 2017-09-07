@@ -6,23 +6,7 @@ using MusicBeeRemote.Core.Podcasts;
 namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface ILibraryApiAdapter
-    {
-        int GetTrackNumber(string currentTrack);
-
-        int GetDiskNumber(string currentTrack);
-
-        string GetGenreForTrack(string currentTrack);
-
-        string GetAlbumArtistForTrack(string currentTrack);
-
-        string GetAlbumForTrack(string currentTrack);
-
-        string GetTitleForTrack(string currentTrack);
-
-        string GetArtistForTrack(string currentTrack);
-
-        string[] QueryFiles(string filter = "");
-
+    {        
         IEnumerable<Track> GetTracks();
 
         IEnumerable<Genre> GetGenres(string filter = "");
@@ -40,8 +24,6 @@ namespace MusicBeeRemote.Core.ApiAdapters
         byte[] GetPodcastSubscriptionArtwork(string subscriptionId);
         
         IEnumerable<Playlist> GetPlaylists();
-
-        string GetYearForTrack(string currentTrack);
 
         bool PlayPlaylist(string url);
     }

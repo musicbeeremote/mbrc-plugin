@@ -20,50 +20,48 @@ namespace MusicBeePlugin.ApiAdapters
             _api = api;
         }
 
-        public int GetTrackNumber(string currentTrack)
+        private int GetTrackNumber(string currentTrack)
         {
             int trackNumber;
             int.TryParse(_api.Library_GetFileTag(currentTrack, TrackNo), out trackNumber);
             return trackNumber;
         }
 
-        public int GetDiskNumber(string currentTrack)
+        private int GetDiskNumber(string currentTrack)
         {
             int discNumber;
             int.TryParse(_api.Library_GetFileTag(currentTrack, DiscNo), out discNumber);
             return discNumber;
         }
 
-        public string GetGenreForTrack(string currentTrack)
+        private string GetGenreForTrack(string currentTrack)
         {
             return _api.Library_GetFileTag(currentTrack, Plugin.MetaDataType.Genre).Cleanup();
         }
 
-        public string GetAlbumArtistForTrack(string currentTrack)
+        private string GetAlbumArtistForTrack(string currentTrack)
         {
             return _api.Library_GetFileTag(currentTrack, AlbumArtist).Cleanup();
         }
 
-        public string GetAlbumForTrack(string currentTrack)
+        private string GetAlbumForTrack(string currentTrack)
         {
             return _api.Library_GetFileTag(currentTrack, Plugin.MetaDataType.Album).Cleanup();
         }
 
-        public string GetTitleForTrack(string currentTrack)
+        private string GetTitleForTrack(string currentTrack)
         {
             return _api.Library_GetFileTag(currentTrack, TrackTitle).Cleanup();
         }
 
-        public string GetArtistForTrack(string currentTrack)
+        private string GetArtistForTrack(string currentTrack)
         {
             return _api.Library_GetFileTag(currentTrack, Plugin.MetaDataType.Artist).Cleanup();
         }
 
-        public string[] QueryFiles(string filter = "")
+        private string GetAlbumYear(string currentTrack)
         {
-            string[] files;
-            _api.Library_QueryFilesEx(filter, out files);
-            return files;
+            return _api.Library_GetFileTag(currentTrack, Year).Cleanup();
         }
 
         public IEnumerable<Track> GetTracks()
@@ -77,6 +75,7 @@ namespace MusicBeePlugin.ApiAdapters
                 Title = GetTitleForTrack(currentTrack),
                 Album = GetAlbumForTrack(currentTrack),
                 AlbumArtist = GetAlbumArtistForTrack(currentTrack),
+                Year = GetAlbumYear(currentTrack),
                 Genre = GetGenreForTrack(currentTrack),
                 Disc = GetDiskNumber(currentTrack),
                 Trackno = GetTrackNumber(currentTrack),
@@ -247,11 +246,6 @@ namespace MusicBeePlugin.ApiAdapters
             _api.Library_QueryLookupTable(null, null, null);
 
             return albums;
-        }
-
-        public string GetYearForTrack(string currentTrack)
-        {
-            return _api.Library_GetFileTag(currentTrack, Year);
         }
 
         public bool PlayPlaylist(string url)

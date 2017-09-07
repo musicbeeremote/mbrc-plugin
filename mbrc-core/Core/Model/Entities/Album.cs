@@ -30,7 +30,7 @@ namespace MusicBeeRemote.Core.Model.Entities
 
         public bool Equals(Album other)
         {
-            return other != null && (other.Artist.Equals(Artist) && other.Name.Equals(Name));
+            return other != null && other.Artist.Equals(Artist) && other.Name.Equals(Name);
         }
 
         public override int GetHashCode()
