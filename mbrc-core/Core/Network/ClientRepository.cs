@@ -16,7 +16,7 @@ namespace MusicBeeRemote.Core.Network
 
         public void InsertClient(RemoteClient client)
         {
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 var storedClient = collection.FindById(client.ClientId);
@@ -37,7 +37,7 @@ namespace MusicBeeRemote.Core.Network
         {
             var knownClients = new List<RemoteClient>();
 
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var clients = db.GetCollection<RemoteClient>("clients").FindAll();
                 knownClients.AddRange(clients.ToList());
@@ -47,7 +47,7 @@ namespace MusicBeeRemote.Core.Network
 
         public void UpdateClient(RemoteClient client)
         {
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 collection.Update(client);
@@ -57,7 +57,7 @@ namespace MusicBeeRemote.Core.Network
         public RemoteClient GetClientById(string clientId)
         {
             RemoteClient client;
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 client = collection.FindById(clientId);
@@ -68,7 +68,7 @@ namespace MusicBeeRemote.Core.Network
 
         public void ReduceConnections(string clientId)
         {
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 var client = collection.FindById(clientId);
@@ -79,7 +79,7 @@ namespace MusicBeeRemote.Core.Network
 
         public void ResetClientConnections(string clientId)
         {
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
                 var client = collection

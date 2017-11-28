@@ -2,7 +2,7 @@
 
 namespace MusicBeeRemote.Core.Caching.Monitor
 {
-    internal interface ILibraryScanner
+    public interface ILibraryScanner
     {
         void Start();
         void Stop();
@@ -27,7 +27,7 @@ namespace MusicBeeRemote.Core.Caching.Monitor
 
         public void Stop()
         {
-            throw new System.NotImplementedException();
+            
         }
     }
 }

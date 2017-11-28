@@ -9,7 +9,7 @@ namespace MusicBeeRemote.Core.Settings
         string LegacySettingsFile { get; }
         string CacheLocation();
         string LogFile { get; }
-        string DatabaseFile { get; }
+        string CacheDatabase { get; }
         string LimitedSettings { get; }
     }
 
@@ -50,7 +50,7 @@ namespace MusicBeeRemote.Core.Settings
 
         public string CacheLocation() => $"{_location}{Path.DirectorySeparatorChar}{CacheSubDir}";
 
-        public string DatabaseFile => $"{CacheLocation()}{Path.DirectorySeparatorChar}{ClientDatabase}";
+        public string CacheDatabase => $"{CacheLocation()}{Path.DirectorySeparatorChar}{ClientDatabase}";
 
         public string LimitedSettings => $"{_location}{Path.DirectorySeparatorChar}{LimitedSettingsFile}";
 
