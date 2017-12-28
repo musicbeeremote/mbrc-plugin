@@ -1,4 +1,5 @@
-﻿using MusicBeeRemote.Core.Events.Notifications;
+﻿using MusicBeeRemote.Core.Caching.Monitor;
+using MusicBeeRemote.Core.Events.Notifications;
 using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows;
@@ -13,6 +14,7 @@ namespace MusicBeeRemote.Core
         private readonly HttpSupport _httpSupport;
         private readonly ITrackStateMonitor _trackStateMonitor;
         private readonly IPlayerStateMonitor _playerStateMonitor;
+        private readonly ILibraryScanner _libraryScanner;
         private readonly IWindowManager _windowManager;
         private readonly ClientManager _clientManager;
         private readonly ITinyMessengerHub _hub;
@@ -23,8 +25,9 @@ namespace MusicBeeRemote.Core
             HttpSupport httpSupport,
             ITrackStateMonitor trackStateMonitor,
             IPlayerStateMonitor playerStateMonitor,
+            ILibraryScanner libraryScanner,
             IWindowManager windowManager,
-            ClientManager clientManager,
+            ClientManager clientManager,            
             ITinyMessengerHub hub
         )
         {
@@ -33,6 +36,7 @@ namespace MusicBeeRemote.Core
             _httpSupport = httpSupport;
             _trackStateMonitor = trackStateMonitor;
             _playerStateMonitor = playerStateMonitor;
+            _libraryScanner = libraryScanner;
             _windowManager = windowManager;
             _clientManager = clientManager;
             _hub = hub;
@@ -43,8 +47,8 @@ namespace MusicBeeRemote.Core
             _trackStateMonitor.Start();
             _playerStateMonitor.Start();
             _serviceDiscovery.Start();
-            _socketServer.Start();
-            _httpSupport.Start();
+            _socketServer.Start();           
+            _libraryScanner.Start();
         }
 
         public void Stop()
@@ -53,7 +57,7 @@ namespace MusicBeeRemote.Core
             _serviceDiscovery.Stop();
             _trackStateMonitor.Stop();
             _playerStateMonitor.Stop();
-            _httpSupport.Stop();            
+            _libraryScanner.Stop();
         }
 
         public void DisplayInfoWindow()

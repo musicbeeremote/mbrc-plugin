@@ -5,14 +5,15 @@ using MusicBeeRemote.Core.Settings;
 
 namespace MusicBeeRemote.Core.Caching
 {
-    internal interface IRepository<T>
+    public interface IRepository<T>
     {
         void AddAll(IEnumerable<T> items);
         void RemoveAll();
         IEnumerable<T> GetRange(int offset, int limit);
+        int Count();
     }
 
-    internal interface ITrackRepository : IRepository<Track>
+    public interface ITrackRepository : IRepository<Track>
     {
     }
 
@@ -27,7 +28,7 @@ namespace MusicBeeRemote.Core.Caching
 
         public void AddAll(IEnumerable<Track> items)
         {
-            using (var db = new LiteDatabase(_storageProvider.CacheLocation()))
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<Track>("tracks");
                 using (var transaction = db.BeginTrans())
@@ -44,7 +45,7 @@ namespace MusicBeeRemote.Core.Caching
 
         public void RemoveAll()
         {
-            using (var db = new LiteDatabase(_storageProvider.CacheLocation()))
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
             {
                 db.DropCollection("tracks");
             }
@@ -52,10 +53,19 @@ namespace MusicBeeRemote.Core.Caching
 
         public IEnumerable<Track> GetRange(int offset, int limit)
         {
-            using (var db = new LiteDatabase(_storageProvider.CacheLocation()))
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<Track>("tracks");
                 return collection.Find(Query.All(), offset, limit);
+            }
+        }
+
+        public int Count()
+        {
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
+            {
+                var collection = db.GetCollection<Track>("tracks");
+                return collection.Count();
             }
         }
     }

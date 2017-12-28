@@ -17,7 +17,7 @@ namespace MusicBeeRemote.Core.Commands.Logs
 
         public void InsertLog(ExecutionLog log)
         {
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<ExecutionLog>(TableName);
                 collection.Insert(log);
@@ -27,7 +27,7 @@ namespace MusicBeeRemote.Core.Commands.Logs
         public List<ExecutionLog> GetLogs()
         {
             var logs = new List<ExecutionLog>();
-            using (var db = new LiteDatabase(_storageLocationProvider.DatabaseFile))
+            using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var result = db.GetCollection<ExecutionLog>(TableName).FindAll();
                 logs.AddRange(result.ToList());
