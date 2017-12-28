@@ -104,5 +104,10 @@ namespace MusicBeeRemote.Core
         {
             _windowManager.DisplayPartyModeWindow();
         }
+
+        public void NotifyFilesAddedToLibrary()
+        {
+            _hub.Publish(new LibraryTrackAddedEvent());
+        }
     }
 }

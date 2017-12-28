@@ -110,6 +110,7 @@
     <Compile Include="Core\Events\InternalEvents.cs" />
     <Compile Include="Core\Events\MessageEvent.cs" />
     <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
+    <Compile Include="Core\Events\Notifications\LibraryTrackAddedEvent.cs" />
     <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
     <Compile Include="Core\Events\Notifications\NowPlayingListChangedEvent.cs" />
     <Compile Include="Core\Events\Notifications\PlayStateChangedEvent.cs" />

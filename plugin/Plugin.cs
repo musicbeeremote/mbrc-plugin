@@ -157,6 +157,8 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingListChanged:
                     _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
                     break;
+                case NotificationType.FileAddedToLibrary:
+                    _musicBeeRemotePlugin.NotifyFilesAddedToLibrary();
             }
         }
     }

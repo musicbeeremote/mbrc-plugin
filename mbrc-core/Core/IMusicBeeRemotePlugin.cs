@@ -29,5 +29,11 @@
         /// Displays the party mode configuration window.
         /// </summary>
         void DisplayPartyModeWindow();
+
+        /// <summary>
+        /// Notifies the plugin that new files have been added to the library and thus
+        /// a new scan is required.
+        /// </summary>
+        void NotifyFilesAddedToLibrary();
     }
 }
