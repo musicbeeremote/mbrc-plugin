@@ -2,6 +2,12 @@ Change Log
 ---------
 # Versions
 
+## 1.2.0
+- Drops protocol support for legacy search commands. (legacy clients that use the library search api won't work properly)
+- Removes support for the ```nowplayinglistsearch``` api call.
+- API optimizations.
+- Adds support for podcast retrieval to the protocol.
+
 ## 1.1.0
 - Adds a check to avoid a case where invalid characters in the tags would result in a sync failure.
 - Adds a proper socket checker to update the status.
