@@ -153,3 +153,5 @@ MB_REMOTE.XML
 .idea
 *.iml
 *.dll
+
+.vs/
