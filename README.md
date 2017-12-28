@@ -1,6 +1,10 @@
 MusicBee Remote (Plugin)
 ====================
 
+[![Join the chat at https://gitter.im/musicbee-remote/Lobby](https://badges.gitter.im/musicbee-remote/Lobby.svg)](https://gitter.im/musicbee-remote/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
+
+
 About
 -------
 This is a plugin for [MusicBee](http://getmusicbee.com/) that is required for [MusicBee Remote](https://github.com/kelsos/mbrc) android application to function. The plugin acts as a socket server (TCP) that listens for incoming connections. The plugin implements a JSON based protocol functionality that is translated to calls to the MusicBee API.
