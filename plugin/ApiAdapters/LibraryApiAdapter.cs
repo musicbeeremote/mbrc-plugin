@@ -22,15 +22,13 @@ namespace MusicBeePlugin.ApiAdapters
 
         private int GetTrackNumber(string currentTrack)
         {
-            int trackNumber;
-            int.TryParse(_api.Library_GetFileTag(currentTrack, TrackNo), out trackNumber);
+            int.TryParse(_api.Library_GetFileTag(currentTrack, TrackNo), out var trackNumber);
             return trackNumber;
         }
 
         private int GetDiskNumber(string currentTrack)
         {
-            int discNumber;
-            int.TryParse(_api.Library_GetFileTag(currentTrack, DiscNo), out discNumber);
+            int.TryParse(_api.Library_GetFileTag(currentTrack, DiscNo), out var discNumber);
             return discNumber;
         }
 
@@ -66,8 +64,7 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<Track> GetTracks()
         {
-            string[] files;
-            _api.Library_QueryFilesEx(null, out files);
+            _api.Library_QueryFilesEx(null, out var files);
 
             return files.Select(currentTrack => new Track
             {
@@ -125,8 +122,7 @@ namespace MusicBeePlugin.ApiAdapters
 
         public IEnumerable<RadioStation> GetRadioStations()
         {
-            string[] radioStations;
-            var success = _api.Library_QueryFilesEx("domain=Radio", out radioStations);
+            var success = _api.Library_QueryFilesEx("domain=Radio", out var radioStations);
             List<RadioStation> stations;
             if (success)
             {
@@ -147,14 +143,12 @@ namespace MusicBeePlugin.ApiAdapters
         public IEnumerable<PodcastSubscription> GetPodcastSubscriptions()
         {
             var list = new List<PodcastSubscription>();
-            string[] subscriptionIds;
-            _api.Podcasts_QuerySubscriptions(null, out subscriptionIds);
+            _api.Podcasts_QuerySubscriptions(null, out var subscriptionIds);
             var subscriptionConverter = new SubscriptionConverter();
                    
             foreach (var id in subscriptionIds)
             {
-                string[] subscriptionMetadata;
-                if (_api.Podcasts_GetSubscription(id, out subscriptionMetadata))
+                if (_api.Podcasts_GetSubscription(id, out var subscriptionMetadata))
                 {
                     list.Add(subscriptionConverter.Convert(subscriptionMetadata));
                 }                
@@ -172,16 +166,14 @@ namespace MusicBeePlugin.ApiAdapters
             var list = new List<PodcastEpisode>();            
             var episodeIndex = 0;
 
-            string[] episodes;
-            if (!_api.Podcasts_GetSubscriptionEpisodes(subscriptionId, out episodes))
+            if (!_api.Podcasts_GetSubscriptionEpisodes(subscriptionId, out var episodes))
             {
                 return list;
             }
 
             for (var i = 0; i < episodes.Length; i++)
             {
-                string[] episodeMetadata;
-                if (!_api.Podcasts_GetSubscriptionEpisode(subscriptionId, i, out episodeMetadata))
+                if (!_api.Podcasts_GetSubscriptionEpisode(subscriptionId, i, out var episodeMetadata))
                 {
                     break;
                 }
@@ -193,12 +185,9 @@ namespace MusicBeePlugin.ApiAdapters
 
         public byte[] GetPodcastSubscriptionArtwork(string subscriptionId)
         {
-            byte[] artwork;
-            if (_api.Podcasts_GetSubscriptionArtwork(subscriptionId, 0, out artwork))
-            {
-                return Utilities.ToJpeg(artwork);
-            }
-            return new byte[] {};
+            return _api.Podcasts_GetSubscriptionArtwork(subscriptionId, 0, out var artwork) 
+                ? Utilities.ToJpeg(artwork) 
+                : new byte[] {};
         }
 
         public IEnumerable<Playlist> GetPlaylists()
