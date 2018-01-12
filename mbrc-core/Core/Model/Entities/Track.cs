@@ -18,6 +18,9 @@ namespace MusicBeeRemote.Core.Model.Entities
             Trackno = trackNo;
         }
 
+        [IgnoreDataMember]
+        public int Id { get; set; }
+
         [DataMember(Name = "src")]
         public string Src { get; set; }
 

@@ -31,15 +31,7 @@ namespace MusicBeeRemote.Core.Caching
             using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<Track>("tracks");
-                using (var transaction = db.BeginTrans())
-                {
-                    foreach (var track in items)
-                    {
-                        collection.Insert(track);
-                    }
-
-                    transaction.Commit();
-                }
+                collection.InsertBulk(items);
             }
         }
 
