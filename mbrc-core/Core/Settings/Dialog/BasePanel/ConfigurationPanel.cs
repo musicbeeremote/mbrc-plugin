@@ -19,7 +19,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             IConfigurationPanelPresenter presenter,
             WhitelistManagementControl whitelistManagementControl,
             RangeManagementControl rangeManagementControl
-            )
+        )
         {
             _whitelistManagementControl = whitelistManagementControl;
             _rangeManagementControl = rangeManagementControl;
@@ -42,8 +42,19 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         public void UpdateStatus(SocketStatus socketStatus)
         {
-            statusValueLabel.Text = socketStatus.TextLabel;
-            statusValueLabel.ForeColor = socketStatus.LabelColor;
+            if (statusLabel.InvokeRequired)
+            {
+                statusLabel.Invoke(new MethodInvoker(delegate
+                {
+                    statusValueLabel.Text = socketStatus.TextLabel;
+                    statusValueLabel.ForeColor = socketStatus.LabelColor;
+                }));
+            }
+            else
+            {
+                statusValueLabel.Text = socketStatus.TextLabel;
+                statusValueLabel.ForeColor = socketStatus.LabelColor;
+            }
         }
 
         public void UpdateLoggingStatus(bool enabled)
@@ -54,14 +65,15 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         public void UpdateFirewallStatus(bool enabled)
         {
             updateFirewallSettingsCheckbox.SetChecked(enabled);
-        }             
+        }
 
         public void UpdatePluginVersion(string pluginVersion)
         {
             versionValueLabel.Text = pluginVersion;
         }
 
-        public void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData, FilteringSelection filteringSelection)
+        public void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData,
+            FilteringSelection filteringSelection)
         {
             filteringOptionsComboBox.SelectedIndexChanged -= FilteringOptionsComboBox_SelectedIndexChanged;
             filteringOptionsComboBox.DataSource = filteringData;
@@ -113,7 +125,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         private void FilteringOptionsComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;           
+            var selected = (FilteringSelection) filteringOptionsComboBox.SelectedItem;
             UpdateAddressFilteringPanel(selected);
             _presenter.UpdateFilteringSelection(selected);
         }
