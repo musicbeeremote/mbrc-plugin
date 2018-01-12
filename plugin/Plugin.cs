@@ -159,6 +159,7 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.FileAddedToLibrary:
                     _musicBeeRemotePlugin.NotifyFilesAddedToLibrary();
+                    break;
             }
         }
     }
