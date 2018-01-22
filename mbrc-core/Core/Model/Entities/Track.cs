@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.Serialization;
+using LiteDB;
 
 namespace MusicBeeRemote.Core.Model.Entities
 {
@@ -17,10 +18,8 @@ namespace MusicBeeRemote.Core.Model.Entities
             Src = src;
             Trackno = trackNo;
         }
-
-        [IgnoreDataMember]
-        public int Id { get; set; }
-
+        
+        [BsonId]
         [DataMember(Name = "src")]
         public string Src { get; set; }
 
