@@ -1,5 +1,6 @@
-MusicBee Remote (Plugin)
+[Hiatus] MusicBee Remote (Plugin)
 ====================
+**!Important**: The application development is currently in hiatus, if you are interested in picking the development please feel free to contact me.
 
 [![Join the chat at https://gitter.im/musicbee-remote/Lobby](https://badges.gitter.im/musicbee-remote/Lobby.svg)](https://gitter.im/musicbee-remote/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
