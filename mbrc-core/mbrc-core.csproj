@@ -1,0 +1,280 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>MusicBeeRemote</RootNamespace>
+    <AssemblyName>mbrc-core</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <PrimaryVersionType>AssemblyVersionAttribute</PrimaryVersionType>
+    <AssemblyInfoFilePath>Properties\AssemblyInfo.cs</AssemblyInfoFilePath>
+    <UpdateAssemblyVersion>True</UpdateAssemblyVersion>
+    <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
+    <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
+    <AssemblyVersionSettings>None.None.None.Increment</AssemblyVersionSettings>
+    <AssemblyVersion>1.0.0.308</AssemblyVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\build\bin\Debug\</OutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\build\bin\Release\</OutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="LiteDB, Version=4.1.1.0, Culture=neutral, PublicKeyToken=4ee40123013c9f27, processorArchitecture=MSIL">
+      <HintPath>..\packages\LiteDB.4.1.1\lib\net40\LiteDB.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed">
+      <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\net40\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\packages\NLog.4.4.12\lib\net40\NLog.dll</HintPath>
+    </Reference>
+    <Reference Include="StructureMap, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
+      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.dll</HintPath>
+    </Reference>
+    <Reference Include="StructureMap.Net4, Version=4.2.0.402, Culture=neutral, PublicKeyToken=null">
+      <HintPath>..\packages\structuremap.4.2.0.402\lib\net40\StructureMap.Net4.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Core\ApiAdapters\IInvokeHandler.cs" />
+    <Compile Include="Core\ApiAdapters\ILibraryApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\INowPlayingApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IOutputApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IPlayerApiAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
+    <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Caching\IRepository.cs" />
+    <Compile Include="Core\Caching\Monitor\FileAddedEvent.cs" />
+    <Compile Include="Core\Caching\Monitor\ILibraryScanner.cs" />
+    <Compile Include="Core\Commands\CommandExecutor.cs" />
+    <Compile Include="Core\Commands\CommandPermissions.cs" />
+    <Compile Include="Core\Commands\configuration.cs" />
+    <Compile Include="Core\Commands\ExecutionStatus.cs" />
+    <Compile Include="Core\Commands\ICommand.cs" />
+    <Compile Include="Core\Commands\InstaReplies\InstantReplyCommands.cs" />
+    <Compile Include="Core\Commands\LimitedCommand.cs" />
+    <Compile Include="Core\Commands\Logs\ExecutionLog.cs" />
+    <Compile Include="Core\Commands\Logs\LogRepository.cs" />
+    <Compile Include="Core\Commands\Requests\HandeshakeCommands.cs" />
+    <Compile Include="Core\Commands\Requests\LibraryBrowseCommands.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands.cs" />
+    <Compile Include="Core\Commands\Requests\OutputCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PaginatedData.cs" />
+    <Compile Include="Core\Commands\Requests\PaginatedDataCommand.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerStateCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrackCommands.cs" />
+    <Compile Include="Core\Commands\Requests\PlaylistCommands.cs" />
+    <Compile Include="Core\Commands\Requests\RequestPodcastCommand.cs" />
+    <Compile Include="Core\Commands\Requests\RequestPluginVersion.cs" />
+    <Compile Include="Core\Commands\Requests\RequestRadioStations.cs" />
+    <Compile Include="Core\Enumerations\LastfmStatus.cs" />
+    <Compile Include="Core\Enumerations\MetaTag.cs" />
+    <Compile Include="Core\Enumerations\PlayerState.cs" />
+    <Compile Include="Core\Enumerations\QueueType.cs" />
+    <Compile Include="Core\Enumerations\Repeat.cs" />
+    <Compile Include="Core\Enumerations\ShuffleState.cs" />
+    <Compile Include="Core\Events\BroadcastEvent.cs" />
+    <Compile Include="Core\Events\IEvent.cs" />
+    <Compile Include="Core\Events\InternalEvents.cs" />
+    <Compile Include="Core\Events\MessageEvent.cs" />
+    <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
+    <Compile Include="Core\Events\Notifications\LibraryTrackAddedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
+    <Compile Include="Core\Events\Notifications\NowPlayingListChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\PlayStateChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\TrackChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\VolumeLevelChangedEvent.cs" />
+    <Compile Include="Core\Events\Notifications\VolumeMuteChangedEvent.cs" />
+    <Compile Include="Core\IMusicBeeRemotePlugin.cs" />
+    <Compile Include="Core\Logging\IPluginLogManager.cs" />
+    <Compile Include="Core\Logging\PluginLogManager.cs" />
+    <Compile Include="Core\Model\CoverPayload.cs" />
+    <Compile Include="Core\Model\CoverStatusCodes.cs" />
+    <Compile Include="Core\Model\Entities\Album.cs" />
+    <Compile Include="Core\Model\Entities\Artist.cs" />
+    <Compile Include="Core\Model\Entities\Genre.cs" />
+    <Compile Include="Core\Model\Entities\MetaData.cs" />
+    <Compile Include="Core\Model\Entities\NowPlaying.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingListTrack.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrack.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrackBase.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrackV2.cs" />
+    <Compile Include="Core\Model\Entities\Page.cs" />
+    <Compile Include="Core\Model\Entities\Playlist.cs" />
+    <Compile Include="Core\Model\Entities\SocketMessage.cs" />
+    <Compile Include="Core\Model\Entities\SocketMessageExtesion.cs" />
+    <Compile Include="Core\Model\Entities\Track.cs" />
+    <Compile Include="Core\Model\Generators\CoverPayloadGenerator.cs" />
+    <Compile Include="Core\Model\IdentifiablePaginatedRequest.cs" />
+    <Compile Include="Core\Model\IdentifiableRequest.cs" />
+    <Compile Include="Core\Model\LyricCoverModel.cs" />
+    <Compile Include="Core\Model\LyricsPayload.cs" />
+    <Compile Include="Core\Model\OutputDevice.cs" />
+    <Compile Include="Core\Model\PaginatedRequest.cs" />
+    <Compile Include="Core\Model\PlayerStatus.cs" />
+    <Compile Include="Core\Model\QueuePayload.cs" />
+    <Compile Include="Core\Model\QueueResponse.cs" />
+    <Compile Include="Core\Model\RadioStation.cs" />
+    <Compile Include="Core\Monitoring\IPlayerStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\IStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\ITrackStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\PlayerStateModel.cs" />
+    <Compile Include="Core\Monitoring\PlayerStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\TrackStateMonitor.cs" />
+    <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
+    <Compile Include="Core\MusicBeeDependencies.cs" />
+    <Compile Include="Core\MusicBeeRemotePlugin.cs" />
+    <Compile Include="Core\Network\ClientManager.cs" />
+    <Compile Include="Core\Network\ClientRepository.cs" />
+    <Compile Include="Core\Network\Constants.cs" />
+    <Compile Include="Core\Network\HttpSupport.cs" />
+    <Compile Include="Core\Network\Http\Extentions.cs" />
+    <Compile Include="Core\Network\Http\Response.cs" />
+    <Compile Include="Core\Network\ProtocolHandler.cs" />
+    <Compile Include="Core\Network\RangeChecker.cs" />
+    <Compile Include="Core\Network\RemoteClient.cs" />
+    <Compile Include="Core\Network\ServiceDiscovery.cs" />
+    <Compile Include="Core\Network\SocketConnection.cs" />
+    <Compile Include="Core\Network\SocketPacket.cs" />
+    <Compile Include="Core\Network\SocketServer.cs" />
+    <Compile Include="Core\Network\SocketTester.cs" />
+    <Compile Include="Core\Network\Tools.cs" />
+    <Compile Include="Core\Network\WebServer.cs" />
+    <Compile Include="Core\Podcasts\ArtworkResponse.cs" />
+    <Compile Include="Core\Podcasts\EpisodeConverter.cs" />
+    <Compile Include="Core\Podcasts\PodcastHttpApi.cs" />
+    <Compile Include="Core\Podcasts\PodcastEpisode.cs" />
+    <Compile Include="Core\Podcasts\PodcastSubscription.cs" />
+    <Compile Include="Core\Podcasts\SubscriptionConverter.cs" />
+    <Compile Include="Core\RemoteBootstrap.cs" />
+    <Compile Include="Core\Settings\Dialog\BasePanel\ConfigurationPanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\BasePanel\ConfigurationPanel.Designer.cs">
+      <DependentUpon>ConfigurationPanel.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\BasePanel\ConfigurationPanelPresenter.cs" />
+    <Compile Include="Core\Settings\Dialog\BasePanel\ConfigurationPanelViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\BasePanel\IConfigurationPanelPresenter.cs" />
+    <Compile Include="Core\Settings\Dialog\BasePanel\IConfigurationPanelView.cs" />
+    <Compile Include="Core\Settings\Dialog\CheckboxExtension.cs" />
+    <Compile Include="Core\Logging\DebugSettingsModifiedEvent.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\OpenHelpCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\OpenLogDirectoryCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\SaveConfigurationCommand.cs" />
+    <Compile Include="Core\Settings\Dialog\Converters\SocketStatus.cs" />
+    <Compile Include="Core\Settings\Dialog\HintTextBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.Designer.cs">
+      <DependentUpon>PartyModePanel.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModeViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\Range\RangeManagementControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\Range\RangeManagementControl.Designer.cs">
+      <DependentUpon>RangeManagementControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\Range\RangeManagementView.cs" />
+    <Compile Include="Core\Settings\Dialog\Range\RangeManagementViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\Validations\AddressValidationRule.cs" />
+    <Compile Include="Core\Settings\Dialog\Validations\LastOctetValidator.cs" />
+    <Compile Include="Core\Settings\Dialog\Validations\PortValidationRule.cs" />
+    <Compile Include="Core\Settings\Dialog\Whitelist\IWhitelistManagementPresenter.cs" />
+    <Compile Include="Core\Settings\Dialog\Whitelist\IWhitelistManagementView.cs" />
+    <Compile Include="Core\Settings\Dialog\Whitelist\WhitelistManagementControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\Whitelist\WhitelistManagementControl.Designer.cs">
+      <DependentUpon>WhitelistManagementControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Core\Settings\Dialog\Whitelist\WhitelistManagementPresenter.cs" />
+    <Compile Include="Core\Settings\Dialog\Whitelist\WhitelistManagementViewModel.cs" />
+    <Compile Include="Core\Settings\FilteringSelection.cs" />
+    <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
+    <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
+    <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
+    <Compile Include="Core\Settings\IVersionProvider.cs" />
+    <Compile Include="Core\Settings\JsonSettingsFileManager.cs" />
+    <Compile Include="Core\Settings\LegacySettingsMigration.cs" />
+    <Compile Include="Core\Settings\LimitedModeSettingsModel.cs" />
+    <Compile Include="Core\Settings\PersistanceManager.cs" />
+    <Compile Include="Core\Settings\UserSettingsModel.cs" />
+    <Compile Include="Core\Utilities\Authenticator.cs" />
+    <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
+    <Compile Include="Core\Utilities\IdGenerator.cs" />
+    <Compile Include="Core\Utilities\StateAction.cs" />
+    <Compile Include="Core\Utilities\Utilities.cs" />
+    <Compile Include="Core\Windows\iWindowManager.cs" />
+    <Compile Include="Core\Windows\WindowManager.cs" />
+    <Compile Include="Core\Windows\Mvvm\ViewModelBase.cs" />
+    <Compile Include="Properties\Resources.Designer.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TinyMessenger.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Core\Settings\Dialog\BasePanel\ConfigurationPanel.resx">
+      <DependentUpon>ConfigurationPanel.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.resx">
+      <DependentUpon>PartyModePanel.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Core\Settings\Dialog\Range\RangeManagementControl.resx">
+      <DependentUpon>RangeManagementControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Core\Settings\Dialog\Whitelist\WhitelistManagementControl.resx">
+      <DependentUpon>WhitelistManagementControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Core\Commands\Events\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

@@ -1,14 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-server", "mbrc-server.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.12
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-plugin", "plugin\mbrc-plugin.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{1052270C-92E1-4DCE-A08B-4C39E163CF5E}"
-	ProjectSection(SolutionItems) = preProject
-		.nuget\NuGet.Config = .nuget\NuGet.Config
-		.nuget\NuGet.exe = .nuget\NuGet.exe
-		.nuget\NuGet.targets = .nuget\NuGet.targets
-	EndProjectSection
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "firewall-utility", "firewall-utility\firewall-utility.csproj", "{48E9B838-6430-459B-9B44-D1E3548DF393}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{445C3839-41BD-4B4D-8B5E-CDBC5E0BFF2E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-core", "mbrc-core\mbrc-core.csproj", "{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-core.Test", "mbrc-core.Test\mbrc-core.Test.csproj", "{9A620192-B2AA-4347-92DE-27A531A680A7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -30,17 +33,53 @@ Global
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Win32.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.Build.0 = Debug|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.ActiveCfg = Release|Any CPU
+		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.Build.0 = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Win32.Build.0 = Debug|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Win32.ActiveCfg = Release|Any CPU
+		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Win32.Build.0 = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Win32.Build.0 = Debug|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Win32.ActiveCfg = Release|Any CPU
+		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Win32.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
-		BuildVersion_BuildVersioningStyle = None.None.Increment.None
-		BuildVersion_ConfigurationName = Release
-		BuildVersion_UpdateAssemblyVersion = True
-		BuildVersion_UpdateFileVersion = True
-		BuildVersion_UseGlobalSettings = False
 		BuildVersion_UseUniversalClock = True
+		BuildVersion_UseGlobalSettings = False
+		BuildVersion_UpdateFileVersion = True
+		BuildVersion_UpdateAssemblyVersion = True
+		BuildVersion_ConfigurationName = Release
+		BuildVersion_BuildVersioningStyle = None.None.Increment.None
+		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
 	EndGlobalSection
 EndGlobal
