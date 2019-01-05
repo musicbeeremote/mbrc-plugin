@@ -15,7 +15,7 @@ namespace MbrcTester
             var mockNowPlaying = new MockNowPlaying();
             //todo some in memory/json
             var libraryApiAdapter = new LibraryApiAdapter(mockLibrary);
-            var nowPlayingApiAdapter = new NowPlayingApiAdapter(mockNowPlaying);
+            var nowPlayingApiAdapter = new NowPlayingApiAdapter(mockNowPlaying, mockPlayer);
             var outputApiAdapter = new MockOutputApiAdapter();
             var playerApiAdapter = new MockPlayerApiAdapter(playerState, mockPlayer);
             var queueAdapter = new QueueAdapter();

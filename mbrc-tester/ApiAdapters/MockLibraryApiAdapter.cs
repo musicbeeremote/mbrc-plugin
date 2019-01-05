@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
@@ -26,12 +27,22 @@ namespace MbrcTester.ApiAdapters
 
         public IEnumerable<Genre> GetGenres(string filter)
         {
-            throw new System.NotImplementedException();
+            return from track in _mockLibrary.GetTracks()
+                where track.Genre.ToLowerInvariant().Contains(filter.ToLowerInvariant())
+                orderby track.Genre
+                group track by track.Genre
+                into grp
+                select new Genre(grp.Key, grp.Count());
         }
 
         public IEnumerable<Artist> GetArtists(string filter)
         {
-            throw new System.NotImplementedException();
+            return from track in _mockLibrary.GetTracks()
+                where track.Artist.ToLowerInvariant().Contains(filter.ToLowerInvariant())
+                orderby track.Artist
+                group track by track.Artist
+                into grp
+                select new Artist(grp.Key, grp.Count());
         }
 
         public IEnumerable<RadioStation> GetRadioStations()
@@ -61,7 +72,12 @@ namespace MbrcTester.ApiAdapters
 
         public IEnumerable<Album> GetAlbums(string filter = "")
         {
-            throw new System.NotImplementedException();
+            return from track in _mockLibrary.GetTracks()
+                where track.Album != null && track.Album.ToLowerInvariant().Contains(filter.ToLowerInvariant())
+                orderby track.Album
+                group track by track.Album
+                into grp
+                select new Album(grp.Key, grp.Any() ? grp.First().AlbumArtist : "");
         }
 
         public bool PlayPlaylist(string url)

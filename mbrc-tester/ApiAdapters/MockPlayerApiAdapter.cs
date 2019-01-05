@@ -119,15 +119,13 @@ namespace MbrcTester.ApiAdapters
 
         public bool SetVolume(int volume)
         {
-            var success = false;
-            if (volume >= 0)
-            {
-                success = _mockPlayerState.SetVolume((float) volume / 100);
+            if (volume < 0) return false;
+            
+            var success = _mockPlayerState.SetVolume((float) volume / 100);
 
-                if (_mockPlayerState.GetMute())
-                {
-                    _mockPlayerState.SetMute(false);
-                }
+            if (_mockPlayerState.GetMute())
+            {
+                _mockPlayerState.SetMute(false);
             }
 
             return success;

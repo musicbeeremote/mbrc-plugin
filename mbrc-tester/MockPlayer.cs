@@ -2,6 +2,8 @@ namespace MbrcTester
 {
     public class MockPlayer
     {
+        public MockTrackMetadata playingTrack { get; set; } = new MockTrackMetadata();
+
         public bool PlayNextTrack()
         {
             throw new System.NotImplementedException();
