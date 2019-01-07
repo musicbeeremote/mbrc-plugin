@@ -6,6 +6,18 @@ namespace MbrcTester
     {
         private bool shuffle;
         private bool mute;
+        private Repeat repeat;
+        private bool scrobble;
+        private float volume;
+        private PlayerState playerState;
+        private bool autoDJ;
+
+        public MockPlayerState()
+        {
+            repeat = Repeat.None;
+            volume = 0;
+            playerState = PlayerState.Undefined;
+        }
 
         public bool GetShuffle()
         {
@@ -20,57 +32,71 @@ namespace MbrcTester
 
         public bool GetAutoDjEnabled()
         {
-            throw new System.NotImplementedException();
+            return autoDJ;
         }
 
         public bool ToggleMute()
         {
-            throw new System.NotImplementedException();
+            mute = !mute;
+            return true;
         }
 
         public Repeat GetRepeat()
         {
-            throw new System.NotImplementedException();
+            return repeat;
         }
 
         public bool SetRepeat(Repeat repeat)
         {
-            throw new System.NotImplementedException();
+            this.repeat = repeat;
+            return true;
         }
 
         public bool GetScrobbleEnabled()
         {
-            throw new System.NotImplementedException();
+            return scrobble;
         }
 
         public PlayerState GetPlayerState()
         {
-            throw new System.NotImplementedException();
+            return playerState;
+        }
+
+        public void SetPlayerState(PlayerState playerState)
+        {
+            this.playerState = playerState;
         }
 
         public float GetVolume()
         {
-            throw new System.NotImplementedException();
+            return volume;
         }
 
         public bool SetVolume(float volume)
         {
-            throw new System.NotImplementedException();
+            this.volume = volume;
+            return true;
         }
 
         public bool GetMute()
         {
-            throw new System.NotImplementedException();
+            return mute;
         }
 
         public void SetMute(bool mute)
         {
-            throw new System.NotImplementedException();
+            this.mute = mute;
         }
 
         public bool SetScrobbleEnabled(bool enabled)
         {
-            throw new System.NotImplementedException();
+            scrobble = enabled;
+            return true;
+        }
+
+        public void SetAutoDj(bool enabled)
+        {
+            autoDJ = enabled;
         }
     }
 }

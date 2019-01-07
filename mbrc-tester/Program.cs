@@ -10,16 +10,16 @@ namespace MbrcTester
         public static void Main(string[] args)
         {
             var playerState = new MockPlayerState();
-            var mockPlayer = new MockPlayer();
-            var mockLibrary = new MockLibrary();
-            var mockNowPlaying = new MockNowPlaying();
-            //todo some in memory/json
-            var libraryApiAdapter = new LibraryApiAdapter(mockLibrary);
-            var nowPlayingApiAdapter = new NowPlayingApiAdapter(mockNowPlaying, mockPlayer);
+            var nowPlaying = new MockNowPlaying();
+            var player = new MockPlayer(playerState, nowPlaying);
+            var library = new MockLibrary();
+            
+            var libraryApiAdapter = new LibraryApiAdapter(library);
+            var nowPlayingApiAdapter = new NowPlayingApiAdapter(nowPlaying, player);
             var outputApiAdapter = new MockOutputApiAdapter();
-            var playerApiAdapter = new MockPlayerApiAdapter(playerState, mockPlayer);
+            var playerApiAdapter = new MockPlayerApiAdapter(playerState, player);
             var queueAdapter = new QueueAdapter();
-            var trackApiAdapter = new TrackApiAdapter();
+            var trackApiAdapter = new TrackApiAdapter(player);
             var baseStoragePath = Path.GetTempPath();
 
             var dependencies = new MusicBeeDependencies(

@@ -9,20 +9,21 @@ namespace MbrcTester.ApiAdapters
 {
     public class TrackApiAdapter : ITrackApiAdapter
     {
+        private readonly MockPlayer _player;
 
-        public TrackApiAdapter()
+        public TrackApiAdapter(MockPlayer player)
         {
- 
+            _player = player;
         }
 
         public TrackTemporalnformation GetTemporalInformation()
         {
-            throw new System.NotImplementedException();
+           return _player.GetTemporalInformation();
         }
 
         public bool SeekTo(int position)
         {
-            throw new System.NotImplementedException();
+            return _player.SeekTo(position);
         }
 
         public string GetLyrics()
@@ -37,22 +38,37 @@ namespace MbrcTester.ApiAdapters
 
         public NowPlayingTrack GetPlayingTrackInfoLegacy()
         {
-            throw new System.NotImplementedException();
+            var track = _player.PlayingTrack;
+            return new NowPlayingTrack()
+            {
+                Album = track.Album,
+                Artist = track.Artist,
+                Title = track.Title,
+                Year = track.Year
+            };
         }
 
         public NowPlayingTrackV2 GetPlayingTrackInfo()
         {
-            throw new System.NotImplementedException();
+            var track = _player.PlayingTrack;
+            return new NowPlayingTrackV2()
+            {
+                Path = track._id,
+                Album = track.Album,
+                Artist = track.Artist,
+                Title = track.Title,
+                Year = track.Year
+            };
         }
 
         public string SetRating(string rating)
         {
-            throw new System.NotImplementedException();
+            return _player.SetRating(rating);
         }
 
         public string GetRating()
         {
-            throw new System.NotImplementedException();
+            return _player.GetRating();
         }
 
         public LastfmStatus ChangeStatus(string action)
@@ -60,25 +76,9 @@ namespace MbrcTester.ApiAdapters
             throw new System.NotImplementedException();
         }
 
-        private LastfmStatus SetLfmNormalStatus()
-        {
-            throw new System.NotImplementedException();
-        }
-
-        private LastfmStatus SetLfmLoveStatus()
-        {
-            throw new System.NotImplementedException();
-        }
-
-        private LastfmStatus SetLfmLoveBan()
-        {
-            throw new System.NotImplementedException();
-        }
-
         public LastfmStatus GetLfmStatus()
         {
-            throw new System.NotImplementedException();
+            return LastfmStatus.Normal;
         }
-
     }
 }

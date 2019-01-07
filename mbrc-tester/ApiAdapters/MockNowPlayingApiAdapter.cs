@@ -34,8 +34,8 @@ namespace MbrcTester.ApiAdapters
 
         public bool PlayIndex(int index)
         {
-            _mockPlayer.playingTrack = _mockNowPlaying.NowPlayingList[index];
-            throw new System.NotImplementedException();
+            _mockPlayer.PlayIndex(index);
+            return true;
         }
 
         public bool RemoveIndex(int index)
