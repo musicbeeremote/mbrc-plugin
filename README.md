@@ -1,34 +1,30 @@
-[Hiatus] MusicBee Remote (Plugin)
-====================
-**!Important**: The application development is currently in hiatus, if you are interested in picking the development please feel free to contact me.
+# MusicBee Remote (Plugin)
 
 [![Discord](https://img.shields.io/discord/420977901215678474.svg?style=popout)](https://discordapp.com/invite/rceTb57)
 [![Join the chat at https://gitter.im/musicbee-remote/Lobby](https://badges.gitter.im/musicbee-remote/Lobby.svg)](https://gitter.im/musicbee-remote/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
+## About
 
-About
--------
-This is a plugin for [MusicBee](http://getmusicbee.com/) that is required for [MusicBee Remote](https://github.com/kelsos/mbrc) android application to function. The plugin acts as a socket server (TCP) that listens for incoming connections. The plugin implements a JSON based protocol functionality that is translated to calls to the MusicBee API.
+This is a plugin for [MusicBee](http://getmusicbee.com/) that is required for [MusicBee Remote](https://github.com/musicbeeremote/android-app) android application to function. The plugin acts as a socket server (TCP) that listens for incoming connections. The plugin implements a JSON based protocol functionality that is translated to calls to the MusicBee API.
 
-This project is a split from the main repository as the development branch is now a completely different project.
-Since the legacy (v1.x) plugin will receive some updates I am working on some major refactoring in order to be able to properly support
-any new features before migrating to the v2.0 code base.
+The plugin acts as a server to provide data to the Android application using TCP sockets to transfer JSON formatted
+messages.
 
-As soon as I find a way to embed resources I will be migrating to Visual Studio 2017. 
+## Building
 
-Building
--------
-To build the plugin you have to open it with Visual Studio 2015. 
-After opening the project you will probably have to restore the required packages with NuGet.
+The project requires Visual Studio 2017.
 
-Protocol
--------
-All the protocol messages have the following format ``{"context":"command","type":"type","data":"data"}`` you can find all the available commands at the [Constants.cs](https://github.com/kelsos/mbrc-plugin/blob/development/AndroidRemote/Networking/Constants.cs) file. The type can be has one of the following values **req** for request, **rep** for reply and **msg** for message, but they are currently ignored. The data contains the data part of the Protocol. In requests it contains data send to the server for example during the volume change it contains the integer of the new volume e.g. `` {"context":"playervolume","type":"req","data":10}``. In the replies it may contain more complex data like Arrays of tracks etc.
+## Protocol
 
-Thirdparty dependencies
--------
-
+All the protocol messages have the following format ``{"context":"command","data":"data"}``.
+[Constants.cs](https://github.com/musicbeeremote/plugin/blob/master/mbrc-core/Core/Network/Constants.cs) 
+contains the available protocol commands. 
+ 
+You can find a first attempt to document the protocol [here](https://github.com/musicbeeremote/plugin/blob/master/PROTOCOL.md).
+The protocol is currently not sufficiently documented though.
+ 
+## Thirdparty dependencies
 
 *   [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json)
     
@@ -50,11 +46,10 @@ Thirdparty dependencies
 
     [Apache 2.0](https://github.com/structuremap/structuremap/blob/master/LICENSE.TXT)
 
-License
-------
+## License
 
     MusicBee Remote (Plugin for MusicBee)
-    Copyright (C) 2017  Konstantinos Paparas
+    Copyright (C) 2018  Konstantinos Paparas
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
