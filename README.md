@@ -1,5 +1,7 @@
 # MusicBee Remote (Plugin)
 
+[![Build status](https://ci.appveyor.com/api/projects/status/awvi78psj8gtay89/branch/master?svg=true)](https://ci.appveyor.com/project/kelsos/plugin/branch/master)
+[![codecov](https://codecov.io/gh/musicbeeremote/plugin/branch/master/graph/badge.svg)](https://codecov.io/gh/musicbeeremote/plugin)
 [![Discord](https://img.shields.io/discord/420977901215678474.svg?style=popout)](https://discordapp.com/invite/rceTb57)
 [![Join the chat at https://gitter.im/musicbee-remote/Lobby](https://badges.gitter.im/musicbee-remote/Lobby.svg)](https://gitter.im/musicbee-remote/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
