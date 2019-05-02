@@ -158,5 +158,17 @@ namespace MbrcTester
             this.position = position;
             return true;
         }
+
+        public bool PlayPath(string path)
+        {
+            var match = _nowPlaying.NowPlayingList.Find(metadata => metadata._id == path);
+            if (match == null)
+            {
+                return false;
+            }
+
+            PlayingTrack = match;
+            return true;
+        }
     }
 }

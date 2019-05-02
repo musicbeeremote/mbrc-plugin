@@ -2,7 +2,7 @@
 
 namespace MusicBeeRemote.Core.Events
 {
-    internal class MessageEvent : IEvent
+    public class MessageEvent : IEvent
     {
         public MessageEvent(string type, object data, string connectionId, string clientId)
         {

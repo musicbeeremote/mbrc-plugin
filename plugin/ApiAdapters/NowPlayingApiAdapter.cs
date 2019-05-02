@@ -45,6 +45,11 @@ namespace MusicBeePlugin.ApiAdapters
             return success;
         }
 
+        public bool PlayPath(string path)
+        {
+            return _api.NowPlayingList_PlayNow(path);
+        }
+
         public bool RemoveIndex(int index)
         {
             return _api.NowPlayingList_RemoveAt(index);
