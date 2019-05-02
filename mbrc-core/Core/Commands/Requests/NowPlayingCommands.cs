@@ -85,7 +85,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
         }
     }
 
-    internal class RequestNowPlayingPlay : LimitedCommand
+    public class RequestNowPlayingPlay : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
@@ -103,10 +103,17 @@ namespace MusicBeeRemote.Core.Commands.Requests
         {
             var result = false;
 
-            var token = @event.Data as JToken;
-            if (token != null && token.Type == JTokenType.Integer)
+            if (@event.Data is JToken token)
             {
-                result = _nowPlayingApiAdapter.PlayIndex((int) token);
+                switch (token.Type)
+                {
+                    case JTokenType.Integer:
+                        result = _nowPlayingApiAdapter.PlayIndex((int) token);
+                        break;
+                    case JTokenType.String:
+                        result = _nowPlayingApiAdapter.PlayPath((string) token);
+                        break;
+                }
             }
 
             var message = new SocketMessage(Constants.NowPlayingListPlay, result);

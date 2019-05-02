@@ -5,7 +5,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events
 {
-    internal class PluginResponseAvailableEvent : ITinyMessage
+    public class PluginResponseAvailableEvent : ITinyMessage
     {
         public SocketMessage Message { get; }
         public string ConnectionId { get; }

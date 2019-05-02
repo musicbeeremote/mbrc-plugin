@@ -15,6 +15,13 @@ namespace MusicBeeRemote.Core.ApiAdapters
 
         bool PlayIndex(int index);
 
+        /// <summary>
+        /// Plays a track in the now playing list by the supplied path
+        /// </summary>
+        /// <param name="path">The path of the file to play</param>
+        /// <returns>True if the operation was successful and false if not</returns>
+        bool PlayPath(string path);
+
         bool RemoveIndex(int index);
 
         IEnumerable<NowPlaying> GetTracks(int offset = 0, int limit = 5000);

@@ -38,6 +38,11 @@ namespace MbrcTester.ApiAdapters
             return true;
         }
 
+        bool INowPlayingApiAdapter.PlayPath(string path)
+        {
+            return _mockPlayer.PlayPath(path);
+        }
+
         public bool RemoveIndex(int index)
         {
             _mockNowPlaying.NowPlayingList.RemoveAt(index);
