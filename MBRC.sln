@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26430.12
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29911.84
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mbrc-plugin", "plugin\mbrc-plugin.csproj", "{F5D46BA1-6F21-40EF-9695-46105CCACD08}"
 EndProject
@@ -18,82 +18,49 @@ EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
-		Debug|Mixed Platforms = Debug|Mixed Platforms
 		Debug|Win32 = Debug|Win32
 		Release|Any CPU = Release|Any CPU
-		Release|Mixed Platforms = Release|Mixed Platforms
-		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Win32.ActiveCfg = Release|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Debug|Win32.Build.0 = Debug|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Any CPU.Build.0 = Release|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.ActiveCfg = Release|Any CPU
-		{48E9B838-6430-459B-9B44-D1E3548DF393}.Release|Win32.Build.0 = Release|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Debug|Win32.Build.0 = Debug|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Win32.ActiveCfg = Release|Any CPU
-		{EE2D4D2E-21AA-44E5-AB58-B2FE5BC1050E}.Release|Win32.Build.0 = Release|Any CPU
 		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{9A620192-B2AA-4347-92DE-27A531A680A7}.Debug|Win32.Build.0 = Debug|Any CPU
 		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Win32.ActiveCfg = Release|Any CPU
-		{9A620192-B2AA-4347-92DE-27A531A680A7}.Release|Win32.Build.0 = Release|Any CPU
 		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Debug|Win32.Build.0 = Debug|Any CPU
 		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Mixed Platforms.Build.0 = Release|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Win32.ActiveCfg = Release|Any CPU
-		{F371901D-3AD5-4227-9C42-5205D5DC32C0}.Release|Win32.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		BuildVersion_UseUniversalClock = True
-		BuildVersion_UseGlobalSettings = False
-		BuildVersion_UpdateFileVersion = True
-		BuildVersion_UpdateAssemblyVersion = True
-		BuildVersion_ConfigurationName = Release
-		BuildVersion_BuildVersioningStyle = None.None.Increment.None
 		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
+		BuildVersion_BuildVersioningStyle = None.None.Increment.None
+		BuildVersion_ConfigurationName = Release
+		BuildVersion_UpdateAssemblyVersion = True
+		BuildVersion_UpdateFileVersion = True
+		BuildVersion_UseGlobalSettings = False
+		BuildVersion_UseUniversalClock = True
+		SolutionGuid = {3C67120D-446E-421C-AFE0-1A698552E523}
 	EndGlobalSection
 EndGlobal
