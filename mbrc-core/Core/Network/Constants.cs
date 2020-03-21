@@ -97,6 +97,7 @@
         public const string PodcastSubscriptions = "subscriptions";
         public const string PodcastEpisodes = "episodes";
         public const string PodcastArtwork = "podcastartwork";
+        public const string NowPlayingCurrentPosition = "nowplayingcurrentposition";
 
         #endregion
 
