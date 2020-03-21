@@ -61,6 +61,18 @@ namespace MbrcTester.ApiAdapters
             };
         }
 
+        public NowPlayingDetails GetPlayingTrackDetails()
+        {
+            var track = _player.PlayingTrack;
+            return new NowPlayingDetails()
+            {
+                AlbumArtist = track.AlbumArtist,
+                Genre = track.Genre,
+                TrackNo = track.TrackNo.ToString(),
+                DiscNo = track.Disc.ToString()
+            };
+        }
+
         public string SetRating(string rating)
         {
             return _player.SetRating(rating);
