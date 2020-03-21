@@ -88,6 +88,40 @@ namespace MusicBeePlugin.ApiAdapters
             return nowPlayingTrack;
         }
 
+        public NowPlayingDetails GetPlayingTrackDetails()
+        {
+            var nowPlayingTrack = new NowPlayingDetails
+            {
+                AlbumArtist = _api.NowPlaying_GetFileTag(MetaDataType.AlbumArtist).Cleanup(),
+                Genre = _api.NowPlaying_GetFileTag(MetaDataType.Genre).Cleanup(),
+                TrackNo = _api.NowPlaying_GetFileTag(MetaDataType.TrackNo).Cleanup(),
+                TrackCount = _api.NowPlaying_GetFileTag(MetaDataType.TrackCount).Cleanup(),
+                DiscNo = _api.NowPlaying_GetFileTag(MetaDataType.DiscNo).Cleanup(),
+                DiscCount = _api.NowPlaying_GetFileTag(MetaDataType.DiscCount).Cleanup(),
+                Grouping = _api.NowPlaying_GetFileTag(MetaDataType.Grouping).Cleanup(),
+                Publisher = _api.NowPlaying_GetFileTag(MetaDataType.Publisher).Cleanup(),
+                RatingAlbum = _api.NowPlaying_GetFileTag(MetaDataType.RatingAlbum).Cleanup(),
+                Composer = _api.NowPlaying_GetFileTag(MetaDataType.Composer).Cleanup(),
+                Comment = _api.NowPlaying_GetFileTag(MetaDataType.Comment).Cleanup(),
+                Encoder = _api.NowPlaying_GetFileTag(MetaDataType.Encoder).Cleanup(),
+
+                Kind = _api.NowPlaying_GetFileProperty(FilePropertyType.Kind).Cleanup(),
+                Format = _api.NowPlaying_GetFileProperty(FilePropertyType.Format).Cleanup(),
+                Size = _api.NowPlaying_GetFileProperty(FilePropertyType.Size).Cleanup(),
+                Channels = _api.NowPlaying_GetFileProperty(FilePropertyType.Channels).Cleanup(),
+                SampleRate = _api.NowPlaying_GetFileProperty(FilePropertyType.SampleRate).Cleanup(),
+                Bitrate = _api.NowPlaying_GetFileProperty(FilePropertyType.Bitrate).Cleanup(),
+                DateModified = _api.NowPlaying_GetFileProperty(FilePropertyType.DateModified).Cleanup(),
+                DateAdded = _api.NowPlaying_GetFileProperty(FilePropertyType.DateAdded).Cleanup(),
+                LastPlayed = _api.NowPlaying_GetFileProperty(FilePropertyType.LastPlayed).Cleanup(),
+                PlayCount = _api.NowPlaying_GetFileProperty(FilePropertyType.PlayCount).Cleanup(),
+                SkipCount = _api.NowPlaying_GetFileProperty(FilePropertyType.SkipCount).Cleanup(),
+                Duration = _api.NowPlaying_GetFileProperty(FilePropertyType.Duration).Cleanup()
+            };
+
+            return nowPlayingTrack;
+        }
+
         public string SetRating(string rating)
         {
             var currentTrack = _api.NowPlaying_GetFileUrl();

@@ -74,6 +74,7 @@ namespace MusicBeeRemote.Core.Commands
             commandExecutor.AddCommand(Constants.PodcastEpisodes, container.GetInstance<RequestPodcastEpisodeCommand>());
             commandExecutor.AddCommand(Constants.PodcastArtwork, container.GetInstance<RequestPodcastArtworkCommand>());
             commandExecutor.AddCommand(Constants.NowPlayingCurrentPosition, container.GetInstance<RequestCurrentPosition>());
+            commandExecutor.AddCommand(Constants.NowPlayingDetails, container.GetInstance<RequestDetails>());
 
             #endregion
         }

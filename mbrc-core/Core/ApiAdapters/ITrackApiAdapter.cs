@@ -18,6 +18,8 @@ namespace MusicBeeRemote.Core.ApiAdapters
 
         NowPlayingTrackV2 GetPlayingTrackInfo();
 
+        NowPlayingDetails GetPlayingTrackDetails();
+
         string SetRating(string rating);
 
         string GetRating();

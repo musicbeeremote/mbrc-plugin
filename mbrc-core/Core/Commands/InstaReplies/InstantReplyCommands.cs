@@ -198,4 +198,23 @@ namespace MusicBeeRemote.Core.Commands.InstaReplies
             _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
+
+    internal class RequestDetails : ICommand
+    {
+        private readonly ITinyMessengerHub _hub;
+        private readonly ITrackApiAdapter _apiAdapter;
+
+        public RequestDetails(ITinyMessengerHub hub, ITrackApiAdapter apiAdapter)
+        {
+            _hub = hub;
+            _apiAdapter = apiAdapter;
+        }
+
+        public void Execute(IEvent @event)
+        {
+            var trackDetails = _apiAdapter.GetPlayingTrackDetails();
+            var message = new SocketMessage(Constants.NowPlayingDetails, trackDetails);
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
+        }
+    }
 }
