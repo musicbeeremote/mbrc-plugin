@@ -102,9 +102,9 @@ namespace MusicBeePlugin.ApiAdapters
                 }
 
 
-                if (fRating >= 0 && fRating <= 5)
+                if (fRating >= 0 && fRating <= 5 || rating == "")
                 {
-                    var value = fRating.ToString(CultureInfo.CurrentCulture);
+                    var value = rating == "" ? rating.ToString(CultureInfo.CurrentCulture) : fRating.ToString(CultureInfo.CurrentCulture);
                     _api.Library_SetFileTag(currentTrack, MetaDataType.Rating, value);
                     _api.Library_CommitTagsToFile(currentTrack);
                     _api.Player_GetShowRatingTrack();
