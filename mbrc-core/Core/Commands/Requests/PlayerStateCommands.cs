@@ -280,7 +280,7 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _apiAdapter.SetVolume(newVolume);
 
             var message = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
-            _hub.Publish(new PluginResponseAvailableEvent(message));
+            _hub.PublishAsync(new PluginResponseAvailableEvent(message));
         }
 
         protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeVolume;
