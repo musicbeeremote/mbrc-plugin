@@ -186,6 +186,10 @@ namespace MusicBeeRemote.Core.Network
         {
             try
             {
+                if (_mainSocket == null)
+                {
+                    return;
+                }
                 // Here we complete/end the BeginAccept asynchronous call
                 // by calling EndAccept() - Which returns the reference
                 // to a new Socket object.

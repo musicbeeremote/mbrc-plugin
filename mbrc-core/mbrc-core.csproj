@@ -78,9 +78,12 @@
     <Compile Include="Core\ApiAdapters\IPlayerApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Caching\ICacheInfoRepository.cs" />
     <Compile Include="Core\Caching\IRepository.cs" />
+    <Compile Include="Core\Caching\CacheInfo.cs" />
     <Compile Include="Core\Caching\Monitor\FileAddedEvent.cs" />
     <Compile Include="Core\Caching\Monitor\ILibraryScanner.cs" />
+    <Compile Include="Core\Caching\Monitor\Modifications.cs" />
     <Compile Include="Core\Commands\CommandExecutor.cs" />
     <Compile Include="Core\Commands\CommandPermissions.cs" />
     <Compile Include="Core\Commands\configuration.cs" />

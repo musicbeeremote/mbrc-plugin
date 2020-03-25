@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Caching.Monitor;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Podcasts;
@@ -20,9 +21,14 @@ namespace MbrcTester.ApiAdapters
             _mockLibrary = mockLibrary;
         }
 
-        public IEnumerable<Track> GetTracks()
+        public IEnumerable<Track> GetTracks(string[] paths)
         {
             return _mockLibrary.GetTracks();
+        }
+
+        public Modifications GetSyncDelta(string[] cachedFiles, DateTime lastSync)
+        {
+            throw new NotImplementedException();
         }
 
         public IEnumerable<Genre> GetGenres(string filter)

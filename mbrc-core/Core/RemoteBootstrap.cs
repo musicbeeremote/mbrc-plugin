@@ -106,6 +106,7 @@ namespace MusicBeeRemote.Core
 
                 c.For<Authenticator>().Use<Authenticator>().Singleton();               
                 c.For<ITrackRepository>().Use<TrackRepository>().Singleton();
+                c.For<ICacheInfoRepository>().Use<CacheInfoRepository>().Singleton();
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
                 c.For<ITinyMessengerHub>().Use<TinyMessengerHub>().Singleton();
                 c.For<IMusicBeeRemotePlugin>().Use<MusicBeeRemotePlugin>().Singleton();

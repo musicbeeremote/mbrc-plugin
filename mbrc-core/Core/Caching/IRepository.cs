@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using LiteDB;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Settings;
@@ -15,6 +17,10 @@ namespace MusicBeeRemote.Core.Caching
 
     public interface ITrackRepository : IRepository<Track>
     {
+        IEnumerable<string> GetCachedPaths();
+        int RemoveAll(IEnumerable<string> paths);
+        void Insert(IEnumerable<Track> tracks);
+        void Update(IEnumerable<Track> tracks);
     }
 
     internal class TrackRepository : ITrackRepository
@@ -48,7 +54,16 @@ namespace MusicBeeRemote.Core.Caching
                             collection.Insert(track);
                         }
                     }
-                }                
+                }
+            }
+        }
+
+        public IEnumerable<string> GetCachedPaths()
+        {
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
+            {
+                var collection = db.GetCollection<Track>("tracks");
+                return collection.Find(Query.All()).Select(x => x.Src);
             }
         }
 
@@ -57,6 +72,36 @@ namespace MusicBeeRemote.Core.Caching
             using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
             {
                 db.DropCollection("tracks");
+            }
+        }
+
+        public int RemoveAll(IEnumerable<string> paths)
+        {
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
+            {
+                var collection = db.GetCollection<Track>("tracks");
+                return paths.Select(path => collection.Delete(path)).Count(deleted => deleted);
+            }
+        }
+
+        public void Insert(IEnumerable<Track> tracks)
+        {
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
+            {
+                var collection = db.GetCollection<Track>("tracks");
+                collection.InsertBulk(tracks);
+            }
+        }
+
+        public void Update(IEnumerable<Track> tracks)
+        {
+            using (var db = new LiteDatabase(_storageProvider.CacheDatabase))
+            {
+                var collection = db.GetCollection<Track>("tracks");
+                foreach (var track in tracks)
+                {
+                    collection.Update(track);
+                }
             }
         }
 
