@@ -1,18 +1,20 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Timers;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Settings;
+using MusicBeeRemote.Core.Threading;
 using MusicBeeRemote.Core.Utilities;
 using Newtonsoft.Json;
 using NLog;
 using TinyMessenger;
+using Timer = System.Timers.Timer;
 
 namespace MusicBeeRemote.Core.Network
 {
@@ -26,6 +28,9 @@ namespace MusicBeeRemote.Core.Network
         private readonly ProtocolHandler _handler;
 
         private readonly ConcurrentDictionary<string, Socket> _availableWorkerSockets;
+
+        private readonly TaskFactory _factory;
+        private readonly TaskScheduler _scheduler;
 
         /// <summary>
         /// The main socket. This is the Socket that listens for new client connections.
@@ -50,6 +55,7 @@ namespace MusicBeeRemote.Core.Network
         /// <param name="handler"></param>
         /// <param name="hub"></param>
         /// <param name="auth"></param>
+        ///  <param name="settings"></param>
         public SocketServer(ProtocolHandler handler, ITinyMessengerHub hub, Authenticator auth, PersistanceManager settings)
         {
             _handler = handler;
@@ -57,6 +63,9 @@ namespace MusicBeeRemote.Core.Network
             _auth = auth;
             _settings = settings;
             _availableWorkerSockets = new ConcurrentDictionary<string, Socket>();
+            _scheduler = new LimitedTaskScheduler(2);
+            _factory = new TaskFactory(_scheduler);
+            
             _hub.Subscribe<StopSocketServer>(eEvent => Stop());
             _hub.Subscribe<StartSocketServerEvent>(eEvent => Start());
             _hub.Subscribe<RestartSocketEvent>(eEvent => RestartSocket());
@@ -66,12 +75,11 @@ namespace MusicBeeRemote.Core.Network
         }
 
         /// <summary>
-        /// Retrives the current status of the socket server. (not completely reliable)
+        /// Retrieves the current status of the socket server. (not completely reliable)
         /// </summary>
-        public bool IsRunning
+        private bool IsRunning
         {
-            get { return _isRunning; }
-            private set
+            set
             {
                 _isRunning = value;
                 _hub.Publish(new SocketStatusChanged(_isRunning));
@@ -83,12 +91,11 @@ namespace MusicBeeRemote.Core.Network
         /// the connection and disposes the worker socket.
         /// </summary>
         /// <param name="connectionId">The id of the connection we want to disconnect</param>
-        public void DisconnectSocket(string connectionId)
+        private void DisconnectSocket(string connectionId)
         {
             try
             {
-                Socket workerSocket;
-                if (!_availableWorkerSockets.TryRemove(connectionId, out workerSocket)) return;
+                if (!_availableWorkerSockets.TryRemove(connectionId, out var workerSocket)) return;
                 workerSocket.Close();
                 workerSocket.Dispose();
                 _hub.Publish(new ClientDisconnectedEvent(connectionId));
@@ -168,7 +175,7 @@ namespace MusicBeeRemote.Core.Network
         /// Restarts the main socket that is listening for new clients.
         /// Useful when the user wants to change the listening port.
         /// </summary>
-        public void RestartSocket()
+        private void RestartSocket()
         {
             Stop();
             Start();
@@ -237,8 +244,7 @@ namespace MusicBeeRemote.Core.Network
             }
             catch (ObjectDisposedException)
             {
-                _logger.Debug(
-                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnection: Socket has been closed\n");
+                _logger.Debug("OnClientConnection: Socket has been closed\n");
             }
             catch (SocketException se)
             {
@@ -246,8 +252,7 @@ namespace MusicBeeRemote.Core.Network
             }
             catch (Exception ex)
             {
-                _logger.Debug(
-                    $"{DateTime.Now.ToString(CultureInfo.InvariantCulture)} : OnClientConnect Exception : {ex.Message}\n");
+                _logger.Debug($"OnClientConnect Exception : {ex.Message}\n");
             }
             finally
             {
@@ -259,8 +264,7 @@ namespace MusicBeeRemote.Core.Network
                 }
                 catch (Exception e)
                 {
-                    _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
-                                  $" : OnClientConnect Exception : " + e.Message + "\n");
+                    _logger.Debug($"OnClientConnect Exception : {e.Message}\n");
                 }
             }
         }
@@ -301,7 +305,7 @@ namespace MusicBeeRemote.Core.Network
             try
             {
                 var socketData = (SocketPacket) ar.AsyncState;
-                // Complete the BeginReceive() asynchronus call by EndReceive() method
+                // Complete the BeginReceive() asynchronous call by EndReceive() method
                 // which will return the number of characters written to the stream
                 // by the client.
 
@@ -337,7 +341,7 @@ namespace MusicBeeRemote.Core.Network
                     socketData.Partial.Clear();
                 }
 
-                _handler.ProcessIncomingMessage(message, socketData.ConnectionId);
+                _factory.StartNew(() => _handler.ProcessIncomingMessage(message, socketData.ConnectionId));
 
                 // Continue the waiting for data on the Socket.
                 WaitForData(socketData.WorkerSocket, socketData.ConnectionId, socketData);
@@ -345,16 +349,14 @@ namespace MusicBeeRemote.Core.Network
             catch (ObjectDisposedException)
             {
                 _hub.Publish(new ClientDisconnectedEvent(connectionId));
-                _logger.Debug(DateTime.Now.ToString(CultureInfo.InvariantCulture) +
-                              " : OnDataReceived: Socket has been closed\n");
+                _logger.Debug("OnDataReceived: Socket has been closed");
             }
             catch (SocketException se)
             {
                 if (se.ErrorCode == 10054) // Error code for Connection reset by peer
                 {
-                    Socket deadSocket;
                     if (_availableWorkerSockets.ContainsKey(connectionId))
-                        _availableWorkerSockets.TryRemove(connectionId, out deadSocket);
+                        _availableWorkerSockets.TryRemove(connectionId, out _);
                     _hub.Publish(new ClientDisconnectedEvent(connectionId));
                 }
                 else
@@ -369,7 +371,7 @@ namespace MusicBeeRemote.Core.Network
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="connectionId">The id of the connection that will receive the message</param>
-        public void Send(SocketMessage message, string connectionId)
+        private void Send(SocketMessage message, string connectionId)
         {
             var serializedMessage = JsonConvert.SerializeObject(message);
             if (message.NewLineTerminated)
@@ -388,8 +390,7 @@ namespace MusicBeeRemote.Core.Network
             try
             {
                 var data = Encoding.UTF8.GetBytes(serializedMessage + NewLine);
-                Socket wSocket;
-                if (_availableWorkerSockets.TryGetValue(connectionId, out wSocket))
+                if (_availableWorkerSockets.TryGetValue(connectionId, out var wSocket))
                 {
                     wSocket.Send(data);
                 }
@@ -402,13 +403,12 @@ namespace MusicBeeRemote.Core.Network
 
         private void RemoveDeadSocket(string connectionId)
         {
-            Socket worker;
-            _availableWorkerSockets.TryRemove(connectionId, out worker);
+            _availableWorkerSockets.TryRemove(connectionId, out var worker);
             worker?.Dispose();
             _hub.Publish(new ClientDisconnectedEvent(connectionId));
         }
 
-        public void Broadcast(BroadcastEvent broadcastEvent)
+        private void Broadcast(BroadcastEvent broadcastEvent)
         {
             _logger.Debug($"broadcasting message {broadcastEvent}");
 
@@ -416,8 +416,7 @@ namespace MusicBeeRemote.Core.Network
             {
                 foreach (var key in _availableWorkerSockets.Keys)
                 {
-                    Socket worker;
-                    if (!_availableWorkerSockets.TryGetValue(key, out worker)) continue;
+                    if (!_availableWorkerSockets.TryGetValue(key, out var worker)) continue;
                     var isConnected = worker != null && worker.Connected;
                     if (!isConnected)
                     {
@@ -445,7 +444,7 @@ namespace MusicBeeRemote.Core.Network
         /// The connections that are not in broadcast mode will be skipped
         /// </summary>
         /// <param name="message">The message that will be send through the socket connection.</param>
-        public void Send(string message)
+        private void Send(string message)
         {
             _logger.Debug($"sending-all: {message}");
 
@@ -455,8 +454,7 @@ namespace MusicBeeRemote.Core.Network
 
                 foreach (var key in _availableWorkerSockets.Keys)
                 {
-                    Socket worker;
-                    if (!_availableWorkerSockets.TryGetValue(key, out worker)) continue;
+                    if (!_availableWorkerSockets.TryGetValue(key, out var worker)) continue;
                     var isConnected = worker != null && worker.Connected;
                     if (!isConnected)
                     {
@@ -473,11 +471,6 @@ namespace MusicBeeRemote.Core.Network
             {
                 _logger.Error(ex, "While sending message to all available clients");
             }
-        }
-
-        public List<Socket> GetConnectedSockets()
-        {
-            return (List<Socket>) _availableWorkerSockets.Values;
         }
 
         /// <summary>

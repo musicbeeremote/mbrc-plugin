@@ -1,4 +1,6 @@
-﻿using MusicBeeRemote.Core.ApiAdapters;
+﻿using System.Threading;
+using System.Threading.Tasks;
+using MusicBeeRemote.Core.ApiAdapters;
 using NLog;
 using TinyMessenger;
 
@@ -16,7 +18,7 @@ namespace MusicBeeRemote.Core.Caching.Monitor
         private readonly ITrackRepository _trackRepository;
         private readonly ILibraryApiAdapter _apiAdapter;
         private readonly ITinyMessengerHub _hub;
-        private TinyMessageSubscriptionToken eventAddedToken;
+        private TinyMessageSubscriptionToken eventAddedToken;      
 
         public LibraryScanner(ILibraryApiAdapter apiAdapter, ITrackRepository trackRepository, ITinyMessengerHub hub)
         {
@@ -26,10 +28,13 @@ namespace MusicBeeRemote.Core.Caching.Monitor
         }
 
         public void Start()
-        {           
-            _logger.Debug("Starting library scanning");
-            _trackRepository.AddAll(_apiAdapter.GetTracks());           
-            eventAddedToken = _hub.Subscribe<FileAddedEvent>(@event => { OnFilesAdded(); });
+        {
+            Task.Factory.StartNew(() =>
+            {
+                _logger.Debug("Starting library scanning");
+                _trackRepository.AddAll(_apiAdapter.GetTracks());
+                eventAddedToken = _hub.Subscribe<FileAddedEvent>(@event => { OnFilesAdded(); });
+            }, TaskCreationOptions.PreferFairness);
         }
 
         public void Stop()

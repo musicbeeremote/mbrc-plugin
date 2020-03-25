@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using MusicBeePlugin.ApiAdapters;
 using MusicBeeRemote.Core;
 
@@ -133,34 +135,38 @@ namespace MusicBeePlugin
         /// <param name="type"></param>
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
-            /** Perfom an action depending on the notification type **/
-            switch (type)
+            Task.Factory.StartNew(() =>
             {
-                case NotificationType.TrackChanged:
-                    _musicBeeRemotePlugin.NotifyTrackChanged();
-                    break;
-                case NotificationType.VolumeLevelChanged:
-                    _musicBeeRemotePlugin.NotifyVolumeLevelChanged();
-                    break;
-                case NotificationType.VolumeMuteChanged:
-                    _musicBeeRemotePlugin.NotifyVolumeMuteChanged();
-                    break;
-                case NotificationType.PlayStateChanged:
-                    _musicBeeRemotePlugin.NotifyPlayStateChanged();
-                    break;
-                case NotificationType.NowPlayingLyricsReady:
-                    _musicBeeRemotePlugin.NotifyLyricsReady();
-                    break;
-                case NotificationType.NowPlayingArtworkReady:
-                    _musicBeeRemotePlugin.NotifyArtworkReady();
-                    break;
-                case NotificationType.NowPlayingListChanged:
-                    _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
-                    break;
-                case NotificationType.FileAddedToLibrary:
-                    _musicBeeRemotePlugin.NotifyFilesAddedToLibrary();
-                    break;
-            }
+                /** Perfom an action depending on the notification type **/
+                switch (type)
+                {
+                    case NotificationType.TrackChanged:
+                        _musicBeeRemotePlugin.NotifyTrackChanged();
+                        break;
+                    case NotificationType.VolumeLevelChanged:
+                        _musicBeeRemotePlugin.NotifyVolumeLevelChanged();
+                        break;
+                    case NotificationType.VolumeMuteChanged:
+                        _musicBeeRemotePlugin.NotifyVolumeMuteChanged();
+                        break;
+                    case NotificationType.PlayStateChanged:
+                        _musicBeeRemotePlugin.NotifyPlayStateChanged();
+                        break;
+                    case NotificationType.NowPlayingLyricsReady:
+                        _musicBeeRemotePlugin.NotifyLyricsReady();
+                        break;
+                    case NotificationType.NowPlayingArtworkReady:
+                        _musicBeeRemotePlugin.NotifyArtworkReady();
+                        break;
+                    case NotificationType.NowPlayingListChanged:
+                        _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
+                        break;
+                    case NotificationType.FileAddedToLibrary:
+                        _musicBeeRemotePlugin.NotifyFilesAddedToLibrary();
+                        break;
+                }
+            });
+
         }
     }
 }

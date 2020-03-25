@@ -239,6 +239,7 @@
     <Compile Include="Core\Settings\LimitedModeSettingsModel.cs" />
     <Compile Include="Core\Settings\PersistanceManager.cs" />
     <Compile Include="Core\Settings\UserSettingsModel.cs" />
+    <Compile Include="Core\Threading\LimitedTaskScheduler.cs" />
     <Compile Include="Core\Utilities\Authenticator.cs" />
     <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
     <Compile Include="Core\Utilities\IdGenerator.cs" />

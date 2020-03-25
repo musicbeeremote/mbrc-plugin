@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Security;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using MusicBeeRemote.Core.Events;
 using NLog;
@@ -22,11 +21,11 @@ namespace MusicBeeRemote.Core.Model
         public LyricCoverModel(ITinyMessengerHub hub)
         {
             _hub = hub;
-            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(() => SetCover(msg.Cover))); 
+            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(() => SetCover(msg.Cover)));
             _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
         }
 
-        public void SetCover(string base64)
+        private void SetCover(string base64)
         {
             var hash = Utilities.Utilities.Sha1Hash(base64);
 
@@ -47,7 +46,7 @@ namespace MusicBeeRemote.Core.Model
 
         public string Lyrics
         {
-            set
+            private set
             {
                 try
                 {
@@ -58,6 +57,7 @@ namespace MusicBeeRemote.Core.Model
                         lStr = lStr.Replace("\r\r\n\r\r\n", " \r\n ");
                         lStr = lStr.Replace("\r\r\n", " \n ");
                     }
+
                     lStr = lStr.Replace("\0", " ");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
                     var regEx = new Regex(pattern);
@@ -73,7 +73,7 @@ namespace MusicBeeRemote.Core.Model
                     _hub.Publish(new LyricsDataReadyEvent(_lyrics));
                 }
             }
-            get { return _lyrics; }
+            get => _lyrics;
         }
     }
 

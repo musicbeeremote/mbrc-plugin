@@ -20,6 +20,7 @@ using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
 using StructureMap;
 using TinyMessenger;
 
@@ -44,7 +45,7 @@ namespace MusicBeeRemote.Core
                     NullValueHandling = NullValueHandling.Ignore
                 };
 
-                settings.Converters.Add(new StringEnumConverter {CamelCaseText = false});
+                settings.Converters.Add(new StringEnumConverter {NamingStrategy = new SnakeCaseNamingStrategy()});
                 return settings;
             };
 

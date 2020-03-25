@@ -24,22 +24,10 @@ namespace MusicBeeRemote.Core.Logging
         public void Initialize(LogLevel logLevel)
         {
             var config = new LoggingConfiguration();
-
-            var fileTarget = new FileTarget
-            {
-                ArchiveAboveSize = 2097152,
-                ArchiveEvery = FileArchivePeriod.Day,
-                ArchiveNumbering = ArchiveNumberingMode.Rolling,
-                MaxArchiveFiles = 5,
-                EnableArchiveFileCompression = true,
-                FileName = _storageLocationProvider.LogFile,
-                Layout = "${longdate} [${level:uppercase=true}]${newline}" +
-                         "${logger} : ${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
-                         "${message}${newline}" +
-                         "${when:when=length('${exception}') > 0: ${exception}${newline}}"
-            };
-
-
+            var logLayout = "${longdate} [${level:uppercase=true}] Thread: [${threadid}]${newline}" +
+                            "${logger}:${callsite-linenumber} ${when:when=length('${threadname}') > 0: [${threadname}]}${newline}" +
+                            "${message}${newline}" +
+                            "${when:when=length('${exception}') > 0: ${exception}${newline}}";
 #if DEBUG
             var consoleTarget = new ColoredConsoleTarget();
             var debugger = new DebuggerTarget();
@@ -56,22 +44,31 @@ namespace MusicBeeRemote.Core.Logging
             config.LoggingRules.Add(sentinelRule);
             config.AddTarget("console", consoleTarget);
             config.AddTarget("debugger", debugger);
-            consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} ${message} ${exception}";
+            consoleTarget.Layout = @"${date:format=HH\\:MM\\:ss} ${logger} [${threadid}]:${message} ${exception}";
 
-            debugger.Layout = fileTarget.Layout;
+            debugger.Layout = logLayout;
 
             var consoleRule = new LoggingRule("*", LogLevel.Debug, consoleTarget);
             config.LoggingRules.Add(consoleRule);
 
             var debuggerRule = new LoggingRule("*", LogLevel.Debug, debugger);
             config.LoggingRules.Add(debuggerRule);
-#endif
+#else
+            var fileTarget = new FileTarget
+            {
+                ArchiveAboveSize = 2097152,
+                ArchiveEvery = FileArchivePeriod.Day,
+                ArchiveNumbering = ArchiveNumberingMode.Rolling,
+                MaxArchiveFiles = 5, 
+                EnableArchiveFileCompression = true,
+                FileName = _storageLocationProvider.LogFile,
+                Layout = logLayout
+            };
+
             config.AddTarget("file", fileTarget);
-
             var fileRule = new LoggingRule("*", logLevel, fileTarget);
-
             config.LoggingRules.Add(fileRule);
-
+#endif
             LogManager.Configuration = config;
             LogManager.ReconfigExistingLoggers();
         }
