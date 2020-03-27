@@ -372,8 +372,6 @@ namespace MusicBeeRemote.Core.Network
         public void Send(SocketMessage message, string connectionId)
         {
             var serializedMessage = JsonConvert.SerializeObject(message);
-            _logger.Debug($"sending-{connectionId}:{serializedMessage}");
-
             if (message.NewLineTerminated)
             {
                 serializedMessage += NewLine;
@@ -384,6 +382,9 @@ namespace MusicBeeRemote.Core.Network
                 Send(serializedMessage);
                 return;
             }
+            
+            _logger.Debug($"sending-{connectionId}:{serializedMessage}");
+            
             try
             {
                 var data = Encoding.UTF8.GetBytes(serializedMessage + NewLine);

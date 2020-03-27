@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Security;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using MusicBeeRemote.Core.Events;
 using NLog;
 using TinyMessenger;
@@ -20,7 +22,7 @@ namespace MusicBeeRemote.Core.Model
         public LyricCoverModel(ITinyMessengerHub hub)
         {
             _hub = hub;
-            _hub.Subscribe<CoverAvailable>(msg => SetCover(msg.Cover)); 
+            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(() => SetCover(msg.Cover))); 
             _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
         }
 
