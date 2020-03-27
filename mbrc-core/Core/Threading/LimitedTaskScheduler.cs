@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 
 namespace MusicBeeRemote.Core.Threading
 {
@@ -10,6 +10,7 @@ namespace MusicBeeRemote.Core.Threading
 // running on top of the thread pool.
     public class LimitedTaskScheduler : TaskScheduler
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         // Indicates whether the current thread is processing work items.
         [ThreadStatic] private static bool _currentThreadIsProcessingItems;
 
@@ -38,7 +39,7 @@ namespace MusicBeeRemote.Core.Threading
                 _tasks.AddLast(task);
                 if (_delegatesQueuedOrRunning >= MaximumConcurrencyLevel)
                 {
-                    Debug.WriteLine("returning");
+                    _logger.Debug("Not running");
                     return;
                 }
                 ++_delegatesQueuedOrRunning;

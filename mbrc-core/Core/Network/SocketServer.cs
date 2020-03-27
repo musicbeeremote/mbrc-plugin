@@ -248,7 +248,7 @@ namespace MusicBeeRemote.Core.Network
             }
             catch (ObjectDisposedException)
             {
-                _logger.Debug("OnClientConnection: Socket has been closed\n");
+                _logger.Debug("OnClientConnection: Socket has been closed");
             }
             catch (SocketException se)
             {
@@ -256,7 +256,7 @@ namespace MusicBeeRemote.Core.Network
             }
             catch (Exception ex)
             {
-                _logger.Debug($"OnClientConnect Exception : {ex.Message}\n");
+                _logger.Debug($"OnClientConnect Exception : {ex.Message}");
             }
             finally
             {
@@ -268,7 +268,7 @@ namespace MusicBeeRemote.Core.Network
                 }
                 catch (Exception e)
                 {
-                    _logger.Debug($"OnClientConnect Exception : {e.Message}\n");
+                    _logger.Debug($"OnClientConnect Exception : {e.Message}");
                 }
             }
         }

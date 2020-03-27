@@ -1,16 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using NLog;
 
 namespace MusicBeeRemote.Core.Network
 {
-    public class Tools
+    public static class Tools
     {
+        private static readonly Logger ToolsLogger = LogManager.GetCurrentClassLogger();
+        
         public static List<string> GetPrivateAddressList()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
@@ -28,9 +30,9 @@ namespace MusicBeeRemote.Core.Network
                 select address).ToList();
         }
 
-        public static IPAddress GetSubnetMask(string ipaddress)
+        public static IPAddress GetSubnetMask(string ipAddress)
         {
-            var address = IPAddress.Parse(ipaddress);
+            var address = IPAddress.Parse(ipAddress);
             foreach (var information in
                 from adapter in NetworkInterface.GetAllNetworkInterfaces()
                 from information in adapter.GetIPProperties().UnicastAddresses
@@ -71,14 +73,14 @@ namespace MusicBeeRemote.Core.Network
             {
                 var bpMacAddr = new byte[6];
                 var len = bpMacAddr.Length;
-                var res = SendARP(ipAddress.GetHashCode(), 0, bpMacAddr, ref len);
+                SendARP(ipAddress.GetHashCode(), 0, bpMacAddr, ref len);
                 var adr = new PhysicalAddress(bpMacAddr);
                 return adr;
             }
             catch (Exception e)
             {
-                Debug.WriteLine("Get MAC address failed IP: " + ipAddress + "\n" + e.Message + " \n" + e.StackTrace);
-                throw e;
+                ToolsLogger.Debug($"Get MAC address failed IP: {ipAddress}\n{e.Message} \n{e.StackTrace}");
+                throw;
             }
         }
     }

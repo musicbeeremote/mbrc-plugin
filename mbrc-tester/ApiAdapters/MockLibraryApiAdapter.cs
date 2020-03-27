@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Caching.Monitor;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Podcasts;
-using MusicBeeRemote.Core.Utilities;
 using Genre = MusicBeeRemote.Core.Model.Entities.Genre;
 
 namespace MbrcTester.ApiAdapters
@@ -53,27 +51,27 @@ namespace MbrcTester.ApiAdapters
 
         public IEnumerable<RadioStation> GetRadioStations()
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public IEnumerable<PodcastSubscription> GetPodcastSubscriptions()
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public byte[] GetPodcastSubscriptionArtwork(string subscriptionId)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public IEnumerable<Playlist> GetPlaylists()
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public IEnumerable<Album> GetAlbums(string filter = "")
@@ -88,7 +86,7 @@ namespace MbrcTester.ApiAdapters
 
         public bool PlayPlaylist(string url)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
     }
 }
