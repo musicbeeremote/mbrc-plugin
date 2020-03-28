@@ -22,6 +22,7 @@ Global
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Debug|Win32.Build.0 = Debug|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Any CPU.Build.0 = Release|Any CPU
 		{F5D46BA1-6F21-40EF-9695-46105CCACD08}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
@@ -44,12 +45,13 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		BuildVersion_UseUniversalClock = True
-		BuildVersion_UseGlobalSettings = False
-		BuildVersion_UpdateFileVersion = True
-		BuildVersion_UpdateAssemblyVersion = True
-		BuildVersion_ConfigurationName = Release
-		BuildVersion_BuildVersioningStyle = None.None.Increment.None
 		BuildVersion_AssemblyInfoFilename = Properties\AssemblyInfo.cs
+		BuildVersion_BuildVersioningStyle = None.None.Increment.None
+		BuildVersion_ConfigurationName = Release
+		BuildVersion_UpdateAssemblyVersion = True
+		BuildVersion_UpdateFileVersion = True
+		BuildVersion_UseGlobalSettings = False
+		BuildVersion_UseUniversalClock = True
+		SolutionGuid = {B3E361C2-94CF-4307-A560-AE980DE1C98A}
 	EndGlobalSection
 EndGlobal

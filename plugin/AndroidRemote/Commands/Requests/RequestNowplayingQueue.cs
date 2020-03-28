@@ -4,6 +4,7 @@ using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
+using ServiceStack;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests

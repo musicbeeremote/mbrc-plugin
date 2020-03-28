@@ -20,6 +20,7 @@ using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using ServiceStack;
 using ServiceStack.Text;
 using Timer = System.Timers.Timer;
 
