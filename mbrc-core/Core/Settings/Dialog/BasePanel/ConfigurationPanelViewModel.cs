@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using MusicBeeRemote.Core.Caching;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Windows.Mvvm;
 
@@ -11,11 +12,16 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         private readonly UserSettingsModel _userSettings;
         private readonly IVersionProvider _versionProvider;
         private readonly SocketTester _socketTester;
+        private readonly ITrackRepository _trackRepository;
 
-        public ConfigurationPanelViewModel(PersistanceManager persistanceManager,
-            IVersionProvider versionProvider)
+        public ConfigurationPanelViewModel(
+            PersistanceManager persistanceManager,
+            IVersionProvider versionProvider, 
+            ITrackRepository trackRepository
+        )
         {
             _versionProvider = versionProvider;
+            _trackRepository = trackRepository;
             _userSettings = persistanceManager.UserSettingsModel;
 
             _socketTester = new SocketTester(persistanceManager);
@@ -96,6 +102,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         }
 
         public string PluginVersion => _versionProvider.GetPluginVersion();
+
+        public int CachedTracks => _trackRepository.Count();
 
         public bool ServiceStatus { get; set; }
     }

@@ -88,5 +88,10 @@ namespace MbrcTester.ApiAdapters
         {
             throw new NotImplementedException();
         }
+
+        public IEnumerable<string> GetTrackPaths()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

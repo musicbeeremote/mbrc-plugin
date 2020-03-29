@@ -14,5 +14,11 @@ namespace MusicBeeRemote.Core.Caching.Monitor
         public string[] NewFiles { get; }
 
         public string[] UpdatedFiles { get; }
+
+        public override string ToString()
+        {
+            return
+                $"Found {NewFiles.Length} new, {DeletedFiles.Length} deleted and {UpdatedFiles.Length} updated files";
+        }
     }
 }

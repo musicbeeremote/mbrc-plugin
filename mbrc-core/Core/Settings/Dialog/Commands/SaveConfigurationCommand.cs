@@ -9,7 +9,7 @@
             _manager = manager;
         }
 
-        public void Execute(object parameter)
+        public void Execute()
         {
             _manager.SaveSettings();
             if (_manager.UserSettingsModel.UpdateFirewall)

@@ -12,5 +12,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         void UpdateFirewallStatus(bool enabled);        
         void UpdatePluginVersion(string pluginVersion);
         void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData, FilteringSelection filteringSelection);
+        void UpdateCachedTracks(int tracks);
     }
 }

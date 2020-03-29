@@ -264,7 +264,7 @@ namespace MusicBeeRemote.Core.Network
                 {
                     // Since the main Socket is now free, it can go back and
                     // wait for the other clients who are attempting to connect
-                    _mainSocket.BeginAccept(OnClientConnect, null);
+                    _mainSocket?.BeginAccept(OnClientConnect, null);
                 }
                 catch (Exception e)
                 {

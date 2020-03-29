@@ -24,5 +24,12 @@ namespace MusicBeeRemote.Core.Caching
         /// </summary>
         [DataMember]
         public DateTime PlaylistsUpdated { get; set; }
+
+        public void Deconstruct(out long id, out DateTime tracksUpdated, out DateTime playlistsUpdated)
+        {
+            id = Id;
+            tracksUpdated = TracksUpdated;
+            playlistsUpdated = PlaylistsUpdated;
+        }
     }
 }

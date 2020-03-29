@@ -1,7 +1,5 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
-using System.Windows.Input;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
@@ -14,7 +12,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
             _storageLocationProvider = storageLocationProvider;
         }
 
-        public void Execute(object parameter)
+        public void Execute()
         {
             //todo create a proper log directory
             var logDirectory = _storageLocationProvider.StorageLocation();

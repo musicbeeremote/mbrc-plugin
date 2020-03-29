@@ -250,7 +250,13 @@ namespace MusicBeePlugin.ApiAdapters
         {
             return _api.Playlist_PlayNow(url);
         }
-        
+
+        public IEnumerable<string> GetTrackPaths()
+        {
+            _api.Library_QueryFilesEx(null, out var files);
+            return files;
+        }
+
         public Modifications GetSyncDelta(string[] cachedFiles, DateTime lastSync)
         {
             _api.Library_GetSyncDelta(
