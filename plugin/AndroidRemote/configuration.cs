@@ -87,6 +87,8 @@
             controller.AddCommand(Constants.PlayerOutput, typeof(RequestOutputDeviceList));
             controller.AddCommand(Constants.PlayerOutputSwitch, typeof(RequestPlayerOutputSwitch));
             controller.AddCommand(Constants.RadioStations, typeof(RequestRadioStations));
+
+            controller.AddCommand(Constants.NowPlayingDetails, typeof(RequestSongDetails));
             #endregion
 
         }

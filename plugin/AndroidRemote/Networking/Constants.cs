@@ -88,6 +88,8 @@
         public const string PlayerOutputSwitch = "playeroutputswitch";
         public const string RadioStations = "radiostations";
 
+        public const string NowPlayingDetails = "nowplayingdetails";
+
         #endregion
 
 
