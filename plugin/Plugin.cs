@@ -342,7 +342,7 @@ namespace MusicBeePlugin
             {
                 case NotificationType.TrackChanged:
                     RequestNowPlayingTrackCover();
-                    RequestTrackRating(string.Empty, string.Empty);
+                    RequestTrackRating("-1", string.Empty);
                     RequestLoveStatus("status", "all");
                     RequestNowPlayingTrackLyrics();
                     RequestPlayPosition("status");
@@ -764,26 +764,30 @@ namespace MusicBeePlugin
         /// <returns>Track Rating</returns>
         public void RequestTrackRating(string rating, string clientId)
         {
+            var currentTrack = _api.NowPlaying_GetFileUrl();
+            var decimalSeparator = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+
             try
             {
-                var a = Convert.ToChar(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
-                rating = rating.Replace('.', a);
+                rating = rating.Replace('.', decimalSeparator);
                 float fRating;
                 if (!float.TryParse(rating, out fRating))
                 {
                     fRating = -1;
                 }
-                if (fRating >= 0 && fRating <= 5)
+
+                if (fRating >= 0 && fRating <= 5 || rating == "")
                 {
-                    _api.Library_SetFileTag(_api.NowPlaying_GetFileUrl(), MetaDataType.Rating,
-                        fRating.ToString(CultureInfo.CurrentCulture));
-                    _api.Library_CommitTagsToFile(_api.NowPlaying_GetFileUrl());
+                    var value = rating == "" ? 
+                        rating.ToString(CultureInfo.CurrentCulture) : 
+                        fRating.ToString(CultureInfo.CurrentCulture);
+                    _api.Library_SetFileTag(currentTrack, MetaDataType.Rating, value);
+                    _api.Library_CommitTagsToFile(currentTrack);
                     _api.Player_GetShowRatingTrack();
                     _api.MB_RefreshPanels();
                 }
-                rating = _api.Library_GetFileTag(
-                        _api.NowPlaying_GetFileUrl(), MetaDataType.Rating)
-                    .Replace(a, '.');
+
+                rating = _api.Library_GetFileTag(currentTrack, MetaDataType.Rating).Replace(decimalSeparator, '.');
 
                 EventBus.FireEvent(
                     new MessageEvent(EventType.ReplyAvailable,
