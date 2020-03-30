@@ -12,6 +12,12 @@ if not "%PackageVersion%" == "" (
 REM Remove Previous output
 rmdir %cd%\build\bin\%config% /s /q
 
+IF "%APPVEYOR%" == "True" ( 
+    CD .\tools
+    appveyor DownloadFile https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+    CD ..
+)
+
 REM Package restore
 tools\nuget.exe restore mbrc-core\packages.config -OutputDirectory %cd%\packages -NonInteractive
 tools\nuget.exe restore plugin\packages.config -OutputDirectory %cd%\packages -NonInteractive
