@@ -1,19 +1,43 @@
-version: 1.2.0.{build}
-image: Visual Studio 2017
+-   
+  branches:
+    only:
+      - master
+  image: Visual Studio 2019
+  
+  init:
+  - choco install opencover.portable
+  - choco install codecov
+  
+  configuration: Debug
+  
+  before_build:
+  - nuget restore
+  
+  build:
+    verbosity: minimal
+    project: MBRC.sln
+  
+  test_script:
+  - OpenCover.Console.exe -register:administrator -target:"nunit3-console.exe" -targetargs:".\build\bin\Debug\mbrc_core.Test.dll --result:nunitTestResult.xml" -output:".\coverage.xml" "-filter:+[*]* -[*.Test]*"
+  - codecov -f "coverage.xml"
+-  
+  branches:
+    only:
+      - /v\d*\.\d*\.\d*/
+        
+  image: Visual Studio 2019
+    
+  configuration: Release
 
-init:
-- choco install opencover.portable
-- choco install codecov
-
-configuration: Release
-
-before_build:
-- nuget restore
-
-build:
-  verbosity: minimal
-  project: MBRC.sln
-
-test_script:
-- OpenCover.Console.exe -register:user -target:"nunit3-console.exe" -targetargs:".\build\bin\Release\mbrc_core.Test.dll --result:nunitTestResult.xml" -output:".\coverage.xml" "-filter:+[*]* -[*.Test]*"
-- codecov -f "coverage.xml"
+  build_script:
+    - .\release\release.bat
+  deploy:
+    release: v$(appveyor_build_version)
+    provider: GitHub
+    auth_token:
+      secure: B3xXgycUMsd6TTbYsT1qXm1ggbTFR4ciVLvkXOOUvfG1MIEugP1u5tt7Sbhtzvml # your encrypted token from GitHub
+    artifact: .\release\dist\*
+    draft: true
+    on:
+      branch: master                 # release from master branch only
+      APPVEYOR_REPO_TAG: true        # deploy on tag push only

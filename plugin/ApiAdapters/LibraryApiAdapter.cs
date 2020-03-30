@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
+using MusicBeeRemote.Core.Caching.Monitor;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Podcasts;
@@ -62,10 +63,18 @@ namespace MusicBeePlugin.ApiAdapters
             return _api.Library_GetFileTag(currentTrack, Year).Cleanup();
         }
 
-        public IEnumerable<Track> GetTracks()
+        public IEnumerable<Track> GetTracks(string[] paths)
         {
-            _api.Library_QueryFilesEx(null, out var files);
-
+            string[] files;
+            if (paths == null)
+            {
+                _api.Library_QueryFilesEx(null, out files);
+            }
+            else
+            {
+                files = paths;
+            }
+            
             return files.Select(currentTrack => new Track
             {
                 Artist = GetArtistForTrack(currentTrack),
@@ -241,6 +250,25 @@ namespace MusicBeePlugin.ApiAdapters
         {
             return _api.Playlist_PlayNow(url);
         }
+
+        public IEnumerable<string> GetTrackPaths()
+        {
+            _api.Library_QueryFilesEx(null, out var files);
+            return files;
+        }
+
+        public Modifications GetSyncDelta(string[] cachedFiles, DateTime lastSync)
+        {
+            _api.Library_GetSyncDelta(
+                cachedFiles,
+                lastSync,
+                Plugin.LibraryCategory.Music,
+                out var newFiles,
+                out var updatedFiles,
+                out var deletedFiles);
+            return new Modifications(deletedFiles, newFiles, updatedFiles);
+        }
+
 
         private static Album CreateAlbum(string queryResult)
         {

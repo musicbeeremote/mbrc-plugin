@@ -269,18 +269,19 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public override void Execute(IEvent @event)
         {
-            var token = @event.Data as JToken;
-            if (token == null || token.Type != JTokenType.Integer)
+            if (!(@event.Data is JToken token) || token.Type != JTokenType.Integer)
             {
                 return;
             }
 
             var newVolume = token.Value<int>();
+            var volume = _apiAdapter.GetVolume();
+            if (newVolume == volume)
+            {
+                return;
+            }
 
             _apiAdapter.SetVolume(newVolume);
-
-            var message = new SocketMessage(Constants.PlayerVolume, _apiAdapter.GetVolume());
-            _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
         protected override CommandPermissions GetPermissions() => CommandPermissions.ChangeVolume;

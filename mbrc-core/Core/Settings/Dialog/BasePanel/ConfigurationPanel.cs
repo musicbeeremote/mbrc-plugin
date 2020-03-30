@@ -82,6 +82,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             UpdateAddressFilteringPanel(filteringSelection);
         }
 
+        public void UpdateCachedTracks(int tracks)
+        {
+            tracksNumber.Text = tracks.ToString();
+        }
+
         private void OpenHelpButtonClick(object sender, EventArgs e)
         {
             _presenter.OpenHelp();
@@ -146,6 +151,11 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
                     filteringPanel.Controls.Add(_whitelistManagementControl);
                     break;
             }
+        }
+
+        private void RefreshButtonClick(object sender, EventArgs e)
+        {
+            _presenter.RefreshCache();
         }
     }
 }

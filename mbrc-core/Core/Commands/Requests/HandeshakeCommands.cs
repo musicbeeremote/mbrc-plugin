@@ -9,12 +9,12 @@ namespace MusicBeeRemote.Core.Commands.Requests
 {
     internal class RequestProtocol : ICommand
     {
-        private readonly ITinyMessengerHub _messengerHub;
+        private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;
 
-        public RequestProtocol(ITinyMessengerHub messengerHub, Authenticator auth)
+        public RequestProtocol(ITinyMessengerHub hub, Authenticator auth)
         {
-            _messengerHub = messengerHub;
+            _hub = hub;
             _auth = auth;
         }
 
@@ -47,23 +47,23 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
 
             var message = new SocketMessage(Constants.Protocol, Constants.ProtocolVersion);
-            _messengerHub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 
     internal class RequestPlayer : ICommand
     {
-        private readonly ITinyMessengerHub _messengerHub;
+        private readonly ITinyMessengerHub _hub;
 
-        public RequestPlayer(ITinyMessengerHub messengerHub)
+        public RequestPlayer(ITinyMessengerHub hub)
         {
-            _messengerHub = messengerHub;
+            _hub = hub;
         }
 
         public void Execute(IEvent @event)
         {
             var message = new SocketMessage(Constants.Player, "MusicBee");
-            _messengerHub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
+            _hub.Publish(new PluginResponseAvailableEvent(message, @event.ConnectionId));
         }
     }
 }

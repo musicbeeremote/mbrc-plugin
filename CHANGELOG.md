@@ -4,9 +4,13 @@
 
 ### Changed
 - API optimizations.
+- Rating now can be reset by sending an empty string.
+- Library caching optimizations.
 
 ### Added
 - Adds support for podcast retrieval to the protocol.
+- NowPlayingCurrentPosition message that can be used to request the current position of the playing track.
+- NowPlayingDetails can be used to get additional metadata for the playing track.
 
 ### Removed
 - Drops protocol support for legacy search commands. (legacy clients that use the library search api won't work properly)

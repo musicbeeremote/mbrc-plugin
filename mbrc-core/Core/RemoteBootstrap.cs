@@ -20,6 +20,7 @@ using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
 using StructureMap;
 using TinyMessenger;
 
@@ -44,7 +45,7 @@ namespace MusicBeeRemote.Core
                     NullValueHandling = NullValueHandling.Ignore
                 };
 
-                settings.Converters.Add(new StringEnumConverter {CamelCaseText = false});
+                settings.Converters.Add(new StringEnumConverter {NamingStrategy = new SnakeCaseNamingStrategy()});
                 return settings;
             };
 
@@ -105,6 +106,7 @@ namespace MusicBeeRemote.Core
 
                 c.For<Authenticator>().Use<Authenticator>().Singleton();               
                 c.For<ITrackRepository>().Use<TrackRepository>().Singleton();
+                c.For<ICacheInfoRepository>().Use<CacheInfoRepository>().Singleton();
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
                 c.For<ITinyMessengerHub>().Use<TinyMessengerHub>().Singleton();
                 c.For<IMusicBeeRemotePlugin>().Use<MusicBeeRemotePlugin>().Singleton();

@@ -80,7 +80,7 @@ namespace MusicBeeRemote.Core.Utilities
             SocketConnection connection;
             if (_connections.ContainsKey(connectionId) && _connections.TryRemove(connectionId, out connection))
             {
-                _hub.PublishAsync(new ConnectionRemovedEvent(connection));
+                _hub.Publish(new ConnectionRemovedEvent(connection));
                 _logger.Debug($"{connectionId} was removed.");
             }
         }

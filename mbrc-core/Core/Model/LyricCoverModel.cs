@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Security;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using MusicBeeRemote.Core.Events;
 using NLog;
 using TinyMessenger;
@@ -9,7 +10,7 @@ namespace MusicBeeRemote.Core.Model
 {
     internal class LyricCoverModel
     {
-        private readonly ITinyMessengerHub _messengerHub;
+        private readonly ITinyMessengerHub _hub;
 
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -17,14 +18,14 @@ namespace MusicBeeRemote.Core.Model
         private string _xHash;
         private string _lyrics;
 
-        public LyricCoverModel(ITinyMessengerHub messengerHub)
+        public LyricCoverModel(ITinyMessengerHub hub)
         {
-            _messengerHub = messengerHub;
-            _messengerHub.Subscribe<CoverAvailable>(msg => SetCover(msg.Cover));
-            _messengerHub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
+            _hub = hub;
+            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(() => SetCover(msg.Cover)));
+            _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
         }
 
-        public void SetCover(string base64)
+        private void SetCover(string base64)
         {
             var hash = Utilities.Utilities.Sha1Hash(base64);
 
@@ -38,14 +39,14 @@ namespace MusicBeeRemote.Core.Model
                 : Utilities.Utilities.ImageResize(base64);
             _xHash = hash;
 
-            _messengerHub.Publish(new CoverDataReadyEvent(Cover));
+            _hub.Publish(new CoverDataReadyEvent(Cover));
         }
 
         public string Cover { get; private set; }
 
         public string Lyrics
         {
-            set
+            private set
             {
                 try
                 {
@@ -56,6 +57,7 @@ namespace MusicBeeRemote.Core.Model
                         lStr = lStr.Replace("\r\r\n\r\r\n", " \r\n ");
                         lStr = lStr.Replace("\r\r\n", " \n ");
                     }
+
                     lStr = lStr.Replace("\0", " ");
                     const string pattern = "\\[\\d:\\d{2}.\\d{3}\\] ";
                     var regEx = new Regex(pattern);
@@ -68,10 +70,10 @@ namespace MusicBeeRemote.Core.Model
                 }
                 finally
                 {
-                    _messengerHub.Publish(new LyricsDataReadyEvent(_lyrics));
+                    _hub.Publish(new LyricsDataReadyEvent(_lyrics));
                 }
             }
-            get { return _lyrics; }
+            get => _lyrics;
         }
     }
 

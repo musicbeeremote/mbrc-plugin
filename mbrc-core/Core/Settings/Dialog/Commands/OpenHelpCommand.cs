@@ -4,7 +4,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 {
     public class OpenHelpCommand
     {
-        public void Execute(object parameter)
+        public void Execute()
         {
             Process.Start("http://kelsos.net/musicbeeremote/help/");
         }        

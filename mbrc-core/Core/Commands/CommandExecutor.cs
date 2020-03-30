@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
+using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands
@@ -13,6 +13,7 @@ namespace MusicBeeRemote.Core.Commands
         private readonly Dictionary<string, ICommand> _commandMap = new Dictionary<string, ICommand>();
         private readonly ITinyMessengerHub _hub;
         private readonly ClientManager _clientManager;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public CommandExecutor(ITinyMessengerHub hub, ClientManager clientManager)
         {
@@ -37,9 +38,7 @@ namespace MusicBeeRemote.Core.Commands
         {
             if (e?.Type == null)
             {
-#if DEBUG
-                Debug.WriteLine("failed to execute command due to missing type/or event");
-#endif
+                _logger.Debug($"failed to execute command due to missing type/or event: {e}");
                 return;
             }
 
@@ -51,10 +50,7 @@ namespace MusicBeeRemote.Core.Commands
             }
             catch (Exception ex)
             {
-#if DEBUG
-                Debug.WriteLine(ex.Message + "\n" + ex.StackTrace);
-#endif
-                // Oh noes something went wrong... let's ignore the exception?
+                _logger.Debug($"{ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -66,7 +62,7 @@ namespace MusicBeeRemote.Core.Commands
             }
             else
             {
-                Debug.WriteLine($"Running {command.GetType()}");
+                _logger.Debug($"Running {command.GetType()}");
                 command.Execute(e);
             }
         }

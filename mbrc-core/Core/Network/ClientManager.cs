@@ -39,7 +39,7 @@ namespace MusicBeeRemote.Core.Network
 
             _repository.ResetClientConnections(connection.ClientId);
 
-            _hub.PublishAsync(new ActionLoggedEvent(log));
+            _hub.Publish(new ActionLoggedEvent(log));
             _logRepository.InsertLog(log);
         }
 
@@ -52,7 +52,7 @@ namespace MusicBeeRemote.Core.Network
             {
                 return;
             }
-            _hub.PublishAsync(new ClientDataUpdateEvent(client));
+            _hub.Publish(new ClientDataUpdateEvent(client));
             Log("Connected", ExecutionStatus.Executed, connection.ClientId);
         }
 
@@ -82,7 +82,7 @@ namespace MusicBeeRemote.Core.Network
                 Status = status
             };
             _logRepository.InsertLog(logEntry);
-            _hub.PublishAsync(new ActionLoggedEvent(logEntry));
+            _hub.Publish(new ActionLoggedEvent(logEntry));
         }
 
         public class ActionLoggedEvent : ITinyMessage

@@ -78,9 +78,11 @@
     <Compile Include="Core\ApiAdapters\IPlayerApiAdapter.cs" />
     <Compile Include="Core\ApiAdapters\IQueueAdapter.cs" />
     <Compile Include="Core\ApiAdapters\ITrackApiAdapter.cs" />
+    <Compile Include="Core\Caching\ICacheInfoRepository.cs" />
     <Compile Include="Core\Caching\IRepository.cs" />
-    <Compile Include="Core\Caching\Monitor\FileAddedEvent.cs" />
+    <Compile Include="Core\Caching\CacheInfo.cs" />
     <Compile Include="Core\Caching\Monitor\ILibraryScanner.cs" />
+    <Compile Include="Core\Caching\Monitor\Modifications.cs" />
     <Compile Include="Core\Commands\CommandExecutor.cs" />
     <Compile Include="Core\Commands\CommandPermissions.cs" />
     <Compile Include="Core\Commands\configuration.cs" />
@@ -113,7 +115,6 @@
     <Compile Include="Core\Events\InternalEvents.cs" />
     <Compile Include="Core\Events\MessageEvent.cs" />
     <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
-    <Compile Include="Core\Events\Notifications\LibraryTrackAddedEvent.cs" />
     <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
     <Compile Include="Core\Events\Notifications\NowPlayingListChangedEvent.cs" />
     <Compile Include="Core\Events\Notifications\PlayStateChangedEvent.cs" />
@@ -239,6 +240,7 @@
     <Compile Include="Core\Settings\LimitedModeSettingsModel.cs" />
     <Compile Include="Core\Settings\PersistanceManager.cs" />
     <Compile Include="Core\Settings\UserSettingsModel.cs" />
+    <Compile Include="Core\Threading\LimitedTaskScheduler.cs" />
     <Compile Include="Core\Utilities\Authenticator.cs" />
     <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
     <Compile Include="Core\Utilities\IdGenerator.cs" />
@@ -250,6 +252,7 @@
     <Compile Include="Core\Model\Entities\NowPlayingDetails.cs" />
     <Compile Include="Properties\Resources.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Core\Settings\Dialog\Commands\RefreshLibraryCommand.cs" />
     <Compile Include="TinyMessenger.cs" />
   </ItemGroup>
   <ItemGroup>

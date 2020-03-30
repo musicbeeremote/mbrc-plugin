@@ -155,3 +155,5 @@ MB_REMOTE.XML
 *.dll
 
 .vs/
+
+release
