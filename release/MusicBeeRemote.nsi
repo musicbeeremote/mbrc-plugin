@@ -4,7 +4,7 @@
 
 !define PLUGIN_NAME "MusicBee Remote"
 !define PLUGIN_NAME_ALT "musicbee_remote"
-!ifdef $%APPVEYOR_REPO_TAG_NAME%
+!if $%APPVEYOR_REPO_TAG_NAME% != ""
     !define PLUGIN_VERSION $%APPVEYOR_REPO_TAG_NAME%
 !else
     !define PLUGIN_VERSION $%PLUGIN_VERSION%
