@@ -25,7 +25,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>..\build\bin\Debug\</OutputPath>
-    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>   
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -34,10 +34,10 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>..\build\bin\Release\</OutputPath>
-    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>   
+    <BaseIntermediateOutputPath>..\build\obj\</BaseIntermediateOutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>   
+    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
@@ -83,7 +83,11 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>XCOPY /Q /E /I /Y /C /R "$(TargetDir)mb_remote.dll" "C:\Program Files (x86)\MusicBee\Plugins"</PostBuildEvent>
+    <PostBuildEvent>if EXIST "C:\Program Files (x86)\MusicBee\Plugins" (
+XCOPY /Q /E /I /Y /C /R "$(TargetDir)mb_remote.dll" "C:\Program Files (x86)\MusicBee\Plugins"
+)
+
+</PostBuildEvent>
   </PropertyGroup>
   <Import Project="..\packages\Fody.6.0.0\build\Fody.targets" Condition="Exists('..\packages\Fody.6.0.0\build\Fody.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
