@@ -9,18 +9,17 @@ if not "%PackageVersion%" == "" (
    set version=-Version %PackageVersion%
 )
 
-REM Remove Previous output
-rmdir %cd%\build\bin\%config% /s /q
-
-IF "%APPVEYOR%" == "True" ( 
-    CD .\tools
-    appveyor DownloadFile https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
-    CD ..
+IF EXIST "%cd%\build\bin\%config%" (
+    echo "Removing directory %cd%\build\bin\%config%"
+    rmdir %cd%\build\bin\%config% /s /q
 )
 
-REM Package restore
-tools\nuget.exe restore mbrc-core\packages.config -OutputDirectory %cd%\packages -NonInteractive
-tools\nuget.exe restore plugin\packages.config -OutputDirectory %cd%\packages -NonInteractive
+IF NOT "%APPVEYOR%" == "True" (
+    echo "Restoring NuGet packages" 
+    REM Package restore
+    tools\nuget.exe restore mbrc-core\packages.config -OutputDirectory %cd%\packages -NonInteractive
+    tools\nuget.exe restore plugin\packages.config -OutputDirectory %cd%\packages -NonInteractive    
+)
 
 REM Build
 "%programfiles(x86)%\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe" MBRC.sln /p:Configuration="%config%";Platform="Any CPU" /m /v:M /fl /flp:LogFile=msbuild.log;Verbosity=Normal /nr:false
