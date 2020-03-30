@@ -32,6 +32,12 @@
   before_build:
     - nuget restore
 
+  artifacts:  
+    - path: release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).zip
+      name: archive  
+    - path: release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).exe
+      name: installer
+
   build_script:
     - cd .\release && release.bat
   deploy:
