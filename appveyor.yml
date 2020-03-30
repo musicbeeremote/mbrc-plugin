@@ -40,7 +40,7 @@
     provider: GitHub
     auth_token:
       secure: B3xXgycUMsd6TTbYsT1qXm1ggbTFR4ciVLvkXOOUvfG1MIEugP1u5tt7Sbhtzvml # your encrypted token from GitHub
-    artifact: .\release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).zip, .\release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).exe
+    artifact: release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).zip, release\dist\musicbee_remote_$(APPVEYOR_REPO_TAG_NAME).exe
     draft: true
     on:
       APPVEYOR_REPO_TAG: true        # deploy on tag push only
