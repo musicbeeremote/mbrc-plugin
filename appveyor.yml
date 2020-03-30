@@ -30,7 +30,7 @@
   configuration: Release
 
   build_script:
-    - .\release\release.bat
+    - cd .\release && release.bat
   deploy:
     release: v$(appveyor_build_version)
     provider: GitHub
@@ -39,5 +39,4 @@
     artifact: .\release\dist\*
     draft: true
     on:
-      branch: master                 # release from master branch only
       APPVEYOR_REPO_TAG: true        # deploy on tag push only
