@@ -70,7 +70,7 @@ In order to get started with the project as a developer there are a few steps yo
 
 ### Prerequisites
 
-The project requires [Visual Studio 2017 Community](https://visualstudio.microsoft.com/vs/community/).
+The project requires [Visual Studio 2019 Community](https://visualstudio.microsoft.com/vs/community/).
 Parts of it can run on `Mono`, for example the [mbrc-tester](./mbrc-tester), so you should be able
 to work on parts of the protocol implementation without the need of Windows and Visual Studio, however,
 for integration testing an environment with Windows, Visual Studio and MusicBee installed is required.
@@ -101,12 +101,19 @@ virtual machine is using a `Bridged` connection, otherwise you might not be able
 Contributions are always welcome.
 The contribution guide should follow soon.
 
+## Building
+
+You can build the application either through Visual Studio or by running `build.bat`.
+The bat file supports either `Release` by default or `Debug` configurations.
+
+It will also copy the merged `mb_remote.dll` to the MusicBee plugin's folder.
+
 ## License
 
 The source code of the application is licensed under the [GPLv3](https://www.gnu.org/licenses/gpl.html) license. See `LICENSE` for more information
 
     MusicBee Remote (Plugin for MusicBee)
-    Copyright (C) 2011-2019  Konstantinos Paparas
+    Copyright (C) 2011-2020  Konstantinos Paparas
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
