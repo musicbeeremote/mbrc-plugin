@@ -102,4 +102,5 @@
     <Target Name="AfterBuild">
     </Target>
     -->
+    <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
 </Project>

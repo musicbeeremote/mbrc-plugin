@@ -135,4 +135,5 @@ XCOPY /Q /E /I /Y /C /R "$(TargetDir)mb_remote.dll" "C:\Program Files (x86)\Musi
   <Target Name="AfterBuild">
   </Target>
   -->
+    <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
 </Project>
