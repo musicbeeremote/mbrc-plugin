@@ -8,10 +8,6 @@
   - choco install opencover.portable
   - choco install codecov
   
-  environment:
-    sonar_token: 
-      secure: 3EJEA1sN08p3xAxwIVbg0zDpUQMkLLWVgtYS1xdW0BWYncD8u0ecbN4G/3ibkccT
-  
   configuration: Debug
   
   before_build:
@@ -19,7 +15,7 @@
   - ps: >-
       if (-Not $env:APPVEYOR_PULL_REQUEST_NUMBER) { 
         choco install "sonarscanner-msbuild-net46" -y
-        SonarScanner.MSBuild.exe begin /k:"musicbeeremote_plugin" /d:"sonar.host.url=https://sonarcloud.io" /o:"musicbeeremote" /d:"sonar.login=%sonar_token%" /v:"$env:APPVEYOR_BUILD_NUMBER" /d:sonar.cs.opencover.reportsPaths="$env:CD\coverage.xml" 
+        SonarScanner.MSBuild.exe begin /k:"musicbeeremote_plugin" /d:sonar.host.url="https://sonarcloud.io" /o:"musicbeeremote" /d:sonar.login="%sonar_token%" /v:"$env:APPVEYOR_BUILD_NUMBER" /d:sonar.cs.opencover.reportsPaths="$env:CD\coverage.xml" 
       }
   
   build:
@@ -36,7 +32,7 @@
   after_test:
     - ps: >-
         if (-Not $env:APPVEYOR_PULL_REQUEST_NUMBER) { 
-          SonarScanner.MSBuild.exe end /d:"sonar.login=%sonar_token%" 
+          SonarScanner.MSBuild.exe end /d:sonar.login="%sonar_token%" 
         }
 -  
   branches:
