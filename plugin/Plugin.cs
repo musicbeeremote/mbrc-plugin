@@ -154,7 +154,7 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingArtworkReady:
                     _musicBeeRemotePlugin.NotifyArtworkReady();
                     break;
-                case NotificationType.NowPlayingListChanged:
+                case NotificationType.PlayingTracksChanged:
                     _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
                     break;
             }
