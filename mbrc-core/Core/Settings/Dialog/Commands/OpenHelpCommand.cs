@@ -6,7 +6,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
     {
         public void Execute()
         {
-            Process.Start("http://kelsos.net/musicbeeremote/help/");
-        }        
+            Process.Start("http://mbrc.kelsos.net/help/");
+        }
     }
 }

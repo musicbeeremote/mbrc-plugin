@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using LiteDB;
 using MusicBeeRemote.Core.Model.Entities;
@@ -10,16 +9,22 @@ namespace MusicBeeRemote.Core.Caching
     public interface IRepository<T>
     {
         void AddAll(IEnumerable<T> items);
+
         void RemoveAll();
+
         IEnumerable<T> GetRange(int offset, int limit);
+
         int Count();
     }
 
     public interface ITrackRepository : IRepository<Track>
     {
         IEnumerable<string> GetCachedPaths();
+
         int RemoveAll(IEnumerable<string> paths);
+
         void Insert(IEnumerable<Track> tracks);
+
         void Update(IEnumerable<Track> tracks);
     }
 

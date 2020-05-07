@@ -3,7 +3,7 @@
 namespace MusicBeeRemote.Core.Enumerations
 {
     /// <summary>
-    /// Represents the repeat mode of the server
+    /// Represents the repeat mode of the server.
     /// </summary>
     public enum Repeat
     {
@@ -12,15 +12,17 @@ namespace MusicBeeRemote.Core.Enumerations
         /// </summary>
         [EnumMember(Value = "none")]
         None,
+
         /// <summary>
         /// Represents the on track repeat
         /// </summary>
         [EnumMember(Value = "one")]
         One,
+
         /// <summary>
         /// Represents the repeat of the whole playlist
         /// </summary>
         [EnumMember(Value = "all")]
-        All
+        All,
     }
 }

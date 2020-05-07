@@ -1,6 +1,8 @@
-﻿using System.Timers;
+﻿using System;
+using System.Timers;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Events.Notifications;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
@@ -10,7 +12,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Monitoring
 {
-    class TrackStateMonitor : ITrackStateMonitor
+    internal class TrackStateMonitor : ITrackStateMonitor, System.IDisposable
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;
@@ -18,6 +20,7 @@ namespace MusicBeeRemote.Core.Monitoring
         private Timer _positionUpdateTimer;
         private TinyMessageSubscriptionToken _coverSubscription;
         private TinyMessageSubscriptionToken _lyricsSubscription;
+        private bool _isDisposed;
 
         public TrackStateMonitor(ITinyMessengerHub hub, ITrackApiAdapter apiAdapter)
         {
@@ -33,10 +36,42 @@ namespace MusicBeeRemote.Core.Monitoring
             _hub.Subscribe<ArtworkReadyEvent>(_ => { _hub.Publish(new CoverAvailable(_apiAdapter.GetCover())); });
             _hub.Subscribe<LyricsReadyEvent>(_ => { _hub.Publish(new LyricsAvailable(_apiAdapter.GetLyrics())); });
 
-
             _positionUpdateTimer = new Timer(20000);
             _positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
             _positionUpdateTimer.Enabled = true;
+        }
+
+        public void Terminate()
+        {
+            _hub.Unsubscribe<CoverDataReadyEvent>(_coverSubscription);
+            _hub.Unsubscribe<LyricsDataReadyEvent>(_lyricsSubscription);
+
+            _positionUpdateTimer.Enabled = false;
+            _positionUpdateTimer.Stop();
+            _positionUpdateTimer.Close();
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _positionUpdateTimer.Dispose();
+                _coverSubscription.Dispose();
+                _lyricsSubscription.Dispose();
+            }
+
+            _isDisposed = true;
         }
 
         private void BroadcastTrackInfo()
@@ -61,16 +96,6 @@ namespace MusicBeeRemote.Core.Monitoring
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
 
-        public void Stop()
-        {
-            _hub.Unsubscribe<CoverDataReadyEvent>(_coverSubscription);
-            _hub.Unsubscribe<LyricsDataReadyEvent>(_lyricsSubscription);
-
-            _positionUpdateTimer.Enabled = false;
-            _positionUpdateTimer.Stop();
-            _positionUpdateTimer.Close();
-        }
-
         private void PositionUpdateTimerOnElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
         {
             BroadcastPosition();
@@ -89,7 +114,6 @@ namespace MusicBeeRemote.Core.Monitoring
             var message = new SocketMessage(Constants.NowPlayingPosition, temporalInformation);
             _hub.Publish(new PluginResponseAvailableEvent(message));
         }
-
 
         private void BroadcastCover(string cover)
         {

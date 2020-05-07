@@ -1,9 +1,9 @@
-using System.IO;
+﻿using System.IO;
 using Newtonsoft.Json;
 
 namespace MusicBeeRemote.Core.Settings
 {
-    class JsonSettingsFileManager : IJsonSettingsFileManager
+    internal class JsonSettingsFileManager : IJsonSettingsFileManager
     {
         private readonly string _storageFilePath;
         private readonly string _limitedFilePath;
@@ -45,7 +45,8 @@ namespace MusicBeeRemote.Core.Settings
             File.WriteAllText(path, settings);
         }
 
-        private T Load<T>(string path) where T : new()
+        private T Load<T>(string path)
+            where T : new()
         {
             if (!File.Exists(path))
             {

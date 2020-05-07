@@ -1,6 +1,7 @@
+using System;
 using System.Timers;
 using MusicBeeRemote.Core.ApiAdapters;
-using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Events.Notifications;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Monitoring
 {
-    class PlayerStateMonitor : IPlayerStateMonitor
+    internal class PlayerStateMonitor : IPlayerStateMonitor, System.IDisposable
     {
         private readonly PlayerStateModel _stateModel;
         private readonly ITinyMessengerHub _hub;
@@ -19,6 +20,8 @@ namespace MusicBeeRemote.Core.Monitoring
         private TinyMessageSubscriptionToken _muteSubscriptionToken;
         private TinyMessageSubscriptionToken _playStateSubscriptionToken;
         private TinyMessageSubscriptionToken _playingListSubscriptionToken;
+
+        private bool _isDisposed;
 
         public PlayerStateMonitor(PlayerStateModel stateModel, ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
@@ -34,11 +37,46 @@ namespace MusicBeeRemote.Core.Monitoring
             _playStateSubscriptionToken = _hub.Subscribe<PlayStateChangedEvent>(_ => { SendPlayState(); });
             _playingListSubscriptionToken = _hub.Subscribe<NowPlayingListChangedEvent>(_ => { });
 
-            _timer = new Timer {Interval = 1000};
+            _timer = new Timer { Interval = 1000 };
             _timer.Elapsed += HandleTimerElapsed;
             _timer.Enabled = true;
         }
 
+        public void Terminate()
+        {
+            _timer.Enabled = false;
+            _timer.Stop();
+            _timer.Close();
+            _hub.Unsubscribe<VolumeLevelChangedEvent>(_volumeSubscriptionToken);
+            _hub.Unsubscribe<VolumeMuteChangedEvent>(_muteSubscriptionToken);
+            _hub.Unsubscribe<PlayStateChangedEvent>(_playStateSubscriptionToken);
+            _hub.Unsubscribe<NowPlayingListChangedEvent>(_playingListSubscriptionToken);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _timer.Dispose();
+                _volumeSubscriptionToken.Dispose();
+                _muteSubscriptionToken.Dispose();
+                _playStateSubscriptionToken.Dispose();
+                _playingListSubscriptionToken.Dispose();
+            }
+
+            _isDisposed = true;
+        }
 
         private void SendVolume()
         {
@@ -56,17 +94,6 @@ namespace MusicBeeRemote.Core.Monitoring
         {
             var stateMessage = new SocketMessage(Constants.PlayerState, _apiAdapter.GetState());
             _hub.Publish(new PluginResponseAvailableEvent(stateMessage));
-        }
-
-        public void Stop()
-        {
-            _timer.Enabled = false;
-            _timer.Stop();
-            _timer.Close();
-            _hub.Unsubscribe<VolumeLevelChangedEvent>(_volumeSubscriptionToken);
-            _hub.Unsubscribe<VolumeMuteChangedEvent>(_muteSubscriptionToken);
-            _hub.Unsubscribe<PlayStateChangedEvent>(_playStateSubscriptionToken);
-            _hub.Unsubscribe<NowPlayingListChangedEvent>(_playingListSubscriptionToken);
         }
 
         private void HandleTimerElapsed(object sender, ElapsedEventArgs args)

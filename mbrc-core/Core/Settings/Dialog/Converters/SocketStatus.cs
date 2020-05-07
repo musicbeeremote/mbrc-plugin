@@ -9,10 +9,10 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Converters
             Listening = serviceStatus;
         }
 
-        private bool Listening { get; }
-
         public string TextLabel => Listening ? "Running" : "Stopped";
 
         public Color LabelColor => Listening ? Color.Green : Color.Red;
+
+        private bool Listening { get; }
     }
 }

@@ -54,7 +54,7 @@
             this.tracksNumber = new System.Windows.Forms.Label();
             this.trackLabel = new System.Windows.Forms.Label();
             this.refreshButton = new System.Windows.Forms.Button();
-            ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize) (this.listeningPortErrorProvider)).BeginInit();
             this.SuspendLayout();
             // 
             // statusLabel
@@ -69,7 +69,7 @@
             // connectionSettingsLabel
             // 
             this.connectionSettingsLabel.AutoSize = true;
-            this.connectionSettingsLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.connectionSettingsLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte) (0)));
             this.connectionSettingsLabel.Location = new System.Drawing.Point(11, 68);
             this.connectionSettingsLabel.Name = "connectionSettingsLabel";
             this.connectionSettingsLabel.Size = new System.Drawing.Size(153, 17);
@@ -94,7 +94,7 @@
             this.listeningPortNumber.Size = new System.Drawing.Size(108, 22);
             this.listeningPortNumber.TabIndex = 3;
             this.listeningPortNumber.Text = "30000";
-            this.listeningPortNumber.TextChanged += new System.EventHandler(this.listeningPortNumber_TextChanged);
+            this.listeningPortNumber.TextChanged += new System.EventHandler(this.ListeningPortNumberTextChanged);
             // 
             // statusValueLabel
             // 
@@ -109,7 +109,7 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte) (0)));
             this.label1.Location = new System.Drawing.Point(11, 140);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(113, 17);
@@ -187,7 +187,7 @@
             // miscLabel
             // 
             this.miscLabel.AutoSize = true;
-            this.miscLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.miscLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte) (0)));
             this.miscLabel.Location = new System.Drawing.Point(11, 326);
             this.miscLabel.Name = "miscLabel";
             this.miscLabel.Size = new System.Drawing.Size(110, 17);
@@ -209,7 +209,7 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte) (0)));
             this.label2.Location = new System.Drawing.Point(11, 395);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(55, 17);
@@ -264,7 +264,7 @@
             // cacheLabel
             // 
             this.cacheLabel.AutoSize = true;
-            this.cacheLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.cacheLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte) (0)));
             this.cacheLabel.Location = new System.Drawing.Point(237, 395);
             this.cacheLabel.Name = "cacheLabel";
             this.cacheLabel.Size = new System.Drawing.Size(53, 17);
@@ -332,38 +332,37 @@
             this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.Name = "ConfigurationPanel";
             this.Text = "MusicBee Remote";
-            ((System.ComponentModel.ISupportInitialize)(this.listeningPortErrorProvider)).EndInit();
+            ((System.ComponentModel.ISupportInitialize) (this.listeningPortErrorProvider)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
-
         }
 
-        #endregion
-
-        private System.Windows.Forms.Label statusLabel;
+        private System.Windows.Forms.Label allowedLabel;
+        private System.Windows.Forms.Label cacheLabel;
+        private System.Windows.Forms.ListBox clientAddressList;
         private System.Windows.Forms.Label connectionSettingsLabel;
+        private System.Windows.Forms.CheckBox enableDebugLoggingCheckbox;
+        private System.Windows.Forms.ComboBox filteringOptionsComboBox;
+        private System.Windows.Forms.Panel filteringPanel;
+        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.ErrorProvider listeningPortErrorProvider;
         private System.Windows.Forms.Label listeningPortLabel;
         private System.Windows.Forms.TextBox listeningPortNumber;
-        private System.Windows.Forms.Label statusValueLabel;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.ComboBox filteringOptionsComboBox;
-        private System.Windows.Forms.Label allowedLabel;
-        private System.Windows.Forms.Label privateIpAddressLabel;
-        private System.Windows.Forms.Button openHelpButton;
-        private System.Windows.Forms.Button saveButton;
-        private System.Windows.Forms.Label pluginVersionLabel;
-        private System.Windows.Forms.Label versionValueLabel;
         private System.Windows.Forms.Label miscLabel;
-        private System.Windows.Forms.CheckBox updateFirewallSettingsCheckbox;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.CheckBox enableDebugLoggingCheckbox;
+        private System.Windows.Forms.Button openHelpButton;
         private System.Windows.Forms.Button openLogDirectoryButton;
-        private System.Windows.Forms.Panel filteringPanel;
-        private System.Windows.Forms.ListBox clientAddressList;
-        private System.Windows.Forms.ErrorProvider listeningPortErrorProvider;
-        private System.Windows.Forms.Label cacheLabel;
-        private System.Windows.Forms.Label tracksNumber;
-        private System.Windows.Forms.Label trackLabel;
+        private System.Windows.Forms.Label pluginVersionLabel;
+        private System.Windows.Forms.Label privateIpAddressLabel;
         private System.Windows.Forms.Button refreshButton;
+        private System.Windows.Forms.Button saveButton;
+        private System.Windows.Forms.Label statusLabel;
+        private System.Windows.Forms.Label statusValueLabel;
+        private System.Windows.Forms.Label trackLabel;
+        private System.Windows.Forms.Label tracksNumber;
+        private System.Windows.Forms.CheckBox updateFirewallSettingsCheckbox;
+        private System.Windows.Forms.Label versionValueLabel;
+
+        #endregion
     }
 }

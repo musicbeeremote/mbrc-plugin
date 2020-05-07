@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.Serialization;
 using LiteDB;
 
@@ -7,20 +7,20 @@ namespace MusicBeeRemote.Core.Caching
     public class CacheInfo
     {
         /// <summary>
-        ///     The id of the entry.
+        /// Gets or sets the id of the entry.
         /// </summary>
         [BsonId]
         [DataMember]
         public long Id { get; set; }
-        
+
         /// <summary>
-        ///     The most recent update for the tracks table.
+        /// Gets or sets the time of most recent update for the tracks table.
         /// </summary>
         [DataMember]
         public DateTime TracksUpdated { get; set; }
 
         /// <summary>
-        ///     The most recent update for the playlists table.
+        ///  Gets or sets the time of the most recent update for the playlists table.
         /// </summary>
         [DataMember]
         public DateTime PlaylistsUpdated { get; set; }

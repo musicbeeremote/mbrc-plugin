@@ -12,39 +12,27 @@ namespace MusicBeeRemote.Core.Network
     public class SocketTester
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly PersistanceManager _settings;
+        private readonly PersistenceManager _settings;
 
-        public SocketTester(PersistanceManager settings)
+        public SocketTester(PersistenceManager settings)
         {
             _settings = settings;
-        }
-
-        // State object for receiving data from remote device.
-        public class StateObject
-        {
-            // Client socket.
-            public Socket WorkSocket;
-
-            // Size of receive buffer.
-            public const int BufferSize = 256;
-
-            // Receive buffer.
-            public byte[] Buffer = new byte[BufferSize];
-
-            // Received data string.
-            public StringBuilder Sb = new StringBuilder();
         }
 
         public delegate void ConnectionStatusHandler(bool connectionStatus);
 
         public event ConnectionStatusHandler ConnectionChangeListener;
 
+        /// <summary>
+        /// Starts a local socket client that attempts to connect to the plugin
+        /// to verify that the socket server is running properly.
+        /// </summary>
         public void VerifyConnection()
         {
             try
             {
                 var port = _settings.UserSettingsModel.ListeningPort;
-                var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int) port);
+                var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int)port);
                 var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 client.BeginConnect(ipEndpoint, ConnectCallback, client);
             }
@@ -55,24 +43,37 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
+        protected virtual void OnConnectionChange(bool connectionStatus)
+        {
+            ConnectionChangeListener?.Invoke(connectionStatus);
+        }
+
+        private static byte[] Payload()
+        {
+            var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
+            var payload = Encoding.UTF8.GetBytes(socketMessage.ToJsonString() + "\r\n");
+            return payload;
+        }
+
         private void ReceiveCallback(IAsyncResult ar)
         {
             try
             {
-                var state = (StateObject) ar.AsyncState;
-                var client = state.WorkSocket;
+                var state = (StateObject)ar.AsyncState;
+                var client = state.GetSocket();
                 var received = client.EndReceive(ar);
                 var chars = new char[received + 1];
                 var decoder = Encoding.UTF8.GetDecoder();
-                decoder.GetChars(state.Buffer, 0, received, chars, 0);
+                decoder.GetChars(state.GetBuffer(), 0, received, chars, 0);
                 var message = new string(chars);
                 var json = JObject.Parse(message);
-                var verified = (string) json["context"] == Constants.VerifyConnection;
+                var verified = (string)json["context"] == Constants.VerifyConnection;
 
                 _logger.Log(LogLevel.Info, $"Connection verified: {verified}");
                 OnConnectionChange(verified);
 
                 client.Shutdown(SocketShutdown.Both);
+                client.Dispose();
             }
             catch (Exception e)
             {
@@ -85,10 +86,10 @@ namespace MusicBeeRemote.Core.Network
         {
             try
             {
-                var client = (Socket) ar.AsyncState;
+                var client = (Socket)ar.AsyncState;
                 client.EndConnect(ar);
-                var state = new StateObject {WorkSocket = client};
-                client.BeginReceive(state.Buffer, 0, StateObject.BufferSize, 0, ReceiveCallback, state);
+                var state = new StateObject(client);
+                client.BeginReceive(state.GetBuffer(), 0, StateObject.BufferSize, 0, ReceiveCallback, state);
                 client.ReceiveTimeout = 3000;
                 client.Send(Payload());
             }
@@ -99,16 +100,32 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
-        private static byte[] Payload()
+        // State object for receiving data from remote device.
+        private class StateObject
         {
-            var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
-            var payload = Encoding.UTF8.GetBytes(socketMessage.ToJsonString() + "\r\n");
-            return payload;
-        }
+            // Size of receive buffer.
+            public const int BufferSize = 256;
 
-        protected virtual void OnConnectionChange(bool connectionstatus)
-        {
-            ConnectionChangeListener?.Invoke(connectionstatus);
+            // Receive buffer.
+            private readonly byte[] _buffer = new byte[BufferSize];
+
+            // Client socket.
+            private readonly Socket _socket;
+
+            public StateObject(Socket socket)
+            {
+                _socket = socket;
+            }
+
+            public byte[] GetBuffer()
+            {
+                return _buffer;
+            }
+
+            public Socket GetSocket()
+            {
+                return _socket;
+            }
         }
     }
 }

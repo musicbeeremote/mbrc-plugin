@@ -9,34 +9,39 @@ namespace MusicBeeRemote.Core.Commands
     public abstract class LimitedCommand : ICommand
     {
         /// <summary>
-        /// The name of the command. This value will be logged during execution or when the command will be denied
+        /// The name of the command. This value will be logged during execution or when the command will be denied.
         /// </summary>
+        /// <returns>The name of the command.</returns>
         public abstract string Name();
 
-        public abstract void Execute(IEvent @event);
-
         /// <summary>
-        /// Permissions required by the command in order to run.
+        /// Executes the command for the event's payload.
         /// </summary>
-        /// <returns>The required command permissions.</returns>
-        protected abstract CommandPermissions GetPermissions();
+        /// <param name="receivedEvent">The event with the data payload.</param>
+        public abstract void Execute(IEvent receivedEvent);
 
         /// <summary>
         /// Takes as input the event data and the client permissions and executes only the commands that actually
-        /// match. The commands the support partial execution should override the method
+        /// match. The commands the support partial execution should override the method.
         /// </summary>
-        /// <param name="event">The event with the data payload.</param>
+        /// <param name="receivedEvent">The event with the data payload.</param>
         /// <param name="permissions">The client permissions.</param>
         /// <returns>The execution status of the command.</returns>
-        public ExecutionStatus Execute(IEvent @event, CommandPermissions permissions)
+        public ExecutionStatus Execute(IEvent receivedEvent, CommandPermissions permissions)
         {
             if (!permissions.HasFlag(GetPermissions()))
             {
                 return ExecutionStatus.Denied;
             }
 
-            Execute(@event);
+            Execute(receivedEvent);
             return ExecutionStatus.Executed;
         }
+
+        /// <summary>
+        /// Permissions required by the command in order to run.
+        /// </summary>
+        /// <returns>The required command permissions.</returns>
+        protected abstract CommandPermissions GetPermissions();
     }
 }

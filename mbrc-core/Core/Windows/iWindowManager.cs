@@ -6,7 +6,7 @@
     public interface IWindowManager
     {
         /// <summary>
-        /// Displays the information window / configuration panel for the 
+        /// Displays the information window / configuration panel for the
         /// remote application.
         /// </summary>
         void DisplayInfoWindow();

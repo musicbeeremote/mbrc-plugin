@@ -1,30 +1,31 @@
-using System;
+﻿using System;
 using System.Timers;
 using MusicBeeRemote.Core.Enumerations;
 using MusicBeeRemote.Core.Monitoring;
 
 namespace MbrcTester
 {
-    public class MockPlayer
+    public class MockPlayer : IDisposable
     {
         private readonly MockPlayerState _playerState;
         private readonly MockNowPlaying _nowPlaying;
-        private string rating;
-        private Timer timer;
+        private readonly Timer _timer;
+        private readonly Random _rnd = new Random();
+        private readonly int _duration;
 
-        private int position;
-        private int duration;
+        private string _rating;
 
-        private Random rnd = new Random();
+        private int _position;
+        private bool _disposed;
 
         public MockPlayer(MockPlayerState playerState, MockNowPlaying nowPlaying)
         {
-            position = 0;
-            duration = (int) Math.Round(4.6 * 60) * 1000;
+            _position = 0;
+            _duration = (int)Math.Round(4.6 * 60) * 1000;
             _playerState = playerState;
             _nowPlaying = nowPlaying;
-            timer = new Timer(1000);
-            timer.Elapsed += (sender, args) => { position += 1000; };
+            _timer = new Timer(1000);
+            _timer.Elapsed += (sender, args) => { _position += 1000; };
         }
 
         public MockTrackMetadata PlayingTrack { get; private set; } = new MockTrackMetadata();
@@ -47,7 +48,7 @@ namespace MbrcTester
             }
             else
             {
-                next = rnd.Next(0, list.Count);
+                next = _rnd.Next(0, list.Count);
             }
 
             if (list.Count < next)
@@ -64,9 +65,9 @@ namespace MbrcTester
 
         public void PlayIndex(int index)
         {
-            position = 0;
+            _position = 0;
             _playerState.SetPlayerState(PlayerState.Playing);
-            timer.Start();
+            _timer.Start();
             PlayingTrack = _nowPlaying.NowPlayingList[index];
         }
 
@@ -88,7 +89,7 @@ namespace MbrcTester
             }
             else
             {
-                previous = rnd.Next(0, list.Count);
+                previous = _rnd.Next(0, list.Count);
             }
 
             if (previous >= 0)
@@ -105,7 +106,7 @@ namespace MbrcTester
 
         public bool Stop()
         {
-            timer.Stop();
+            _timer.Stop();
             _playerState.SetPlayerState(PlayerState.Stopped);
             return true;
         }
@@ -114,12 +115,12 @@ namespace MbrcTester
         {
             if (_playerState.GetPlayerState() == PlayerState.Playing)
             {
-                timer.Stop();
+                _timer.Stop();
                 _playerState.SetPlayerState(PlayerState.Paused);
             }
             else
             {
-                timer.Start();
+                _timer.Start();
                 _playerState.SetPlayerState(PlayerState.Playing);
             }
 
@@ -139,23 +140,23 @@ namespace MbrcTester
 
         public string SetRating(string rating)
         {
-            this.rating = rating;
+            this._rating = rating;
             return rating;
         }
 
         public string GetRating()
         {
-            return rating;
+            return _rating;
         }
 
-        public TrackTemporalnformation GetTemporalInformation()
+        public TrackTemporalInformation GetTemporalInformation()
         {
-            return new TrackTemporalnformation(position, duration);
+            return new TrackTemporalInformation(_position, _duration);
         }
 
         public bool SeekTo(int position)
         {
-            this.position = position;
+            this._position = position;
             return true;
         }
 
@@ -169,6 +170,27 @@ namespace MbrcTester
 
             PlayingTrack = match;
             return true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _timer.Dispose();
+            }
+
+            _disposed = true;
         }
     }
 }

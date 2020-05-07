@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MusicBeeRemote.Core.Windows.Mvvm;
 
@@ -5,9 +6,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
 {
     public class WhitelistManagementViewModel : ViewModelBase
     {
-        public WhitelistManagementViewModel(PersistanceManager persistanceManager)
+        public WhitelistManagementViewModel(PersistenceManager persistenceManager)
         {
-            Whitelist = persistanceManager.UserSettingsModel.IpAddressList;
+            if (persistenceManager == null)
+            {
+                throw new ArgumentNullException(nameof(persistenceManager));
+            }
+
+            Whitelist = persistenceManager.UserSettingsModel.IpAddressList;
         }
 
         public List<string> Whitelist { get; }
@@ -23,7 +29,5 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
             Whitelist.Remove(address);
             OnPropertyChanged(nameof(Whitelist));
         }
-
-
     }
 }

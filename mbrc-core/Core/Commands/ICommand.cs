@@ -4,6 +4,6 @@ namespace MusicBeeRemote.Core.Commands
 {
     public interface ICommand
     {
-        void Execute(IEvent @event);
+        void Execute(IEvent receivedEvent);
     }
 }

@@ -6,15 +6,16 @@ using MusicBeeRemote.Core.Settings.Dialog.Validations;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
 {
+    /// <summary>
+    /// A control used to manage the whitelisted IP addresses.
+    /// </summary>
     public partial class WhitelistManagementControl : UserControl, IWhitelistManagementView
     {
         private readonly IWhitelistManagementPresenter _presenter;
-        private readonly AddressValidationRule _validationRule;
 
         public WhitelistManagementControl(IWhitelistManagementPresenter presenter)
         {
-            _validationRule = new AddressValidationRule();
-            _presenter = presenter;
+            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             InitializeComponent();
             _presenter.Attach(this);
             _presenter.Load();
@@ -23,16 +24,21 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
 
         public void UpdateWhitelist(List<string> whitelist)
         {
-            var bindingSource = new BindingSource {DataSource = whitelist};
+            if (whitelist == null)
+            {
+                throw new ArgumentNullException(nameof(whitelist));
+            }
+
+            var bindingSource = new BindingSource { DataSource = whitelist };
             whitelistComboBox.DataSource = bindingSource;
-            addressRemoveButton.Enabled = whitelist.Count > 0;           
+            addressRemoveButton.Enabled = whitelist.Count > 0;
         }
 
         private void AddressAddButtonClick(object sender, EventArgs e)
         {
             var input = newAddressTextBox.Text;
             _presenter.AddAddress(input);
-            newAddressTextBox.Text = "";
+            newAddressTextBox.Text = string.Empty;
         }
 
         private void AddressRemoveButtonClick(object sender, EventArgs e)
@@ -40,11 +46,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
             var addresses = whitelistComboBox.Items;
             if (addresses.Count > 0)
             {
-                _presenter.RemoveAddress(addresses[0].ToString());            
-            }
-            else
-            {
-                
+                _presenter.RemoveAddress(addresses[0].ToString());
             }
         }
 
@@ -58,8 +60,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
                 newAddressTextBox.BackColor = DefaultBackColor;
                 return;
             }
-            
-            if (_validationRule.Validate(input))
+
+            if (AddressValidationRule.Validate(input))
             {
                 addressAddButton.Enabled = true;
                 newAddressTextBox.BackColor = Color.LawnGreen;

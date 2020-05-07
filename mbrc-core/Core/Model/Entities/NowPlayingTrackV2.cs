@@ -8,7 +8,6 @@ namespace MusicBeeRemote.Core.Model.Entities
         private string _artist;
         private string _album;
 
-
         public NowPlayingTrackV2()
         {
             _artist = Title = _album = Year = string.Empty;
@@ -17,8 +16,8 @@ namespace MusicBeeRemote.Core.Model.Entities
         [DataMember(Name = "artist")]
         public override string Artist
         {
-            get { return _artist; }
-            set { _artist = GetArtistText(value); }
+            get => _artist;
+            set => _artist = GetArtistText(value);
         }
 
         [DataMember(Name = "title")]
@@ -27,8 +26,8 @@ namespace MusicBeeRemote.Core.Model.Entities
         [DataMember(Name = "album")]
         public override string Album
         {
-            get { return _album; }
-            set { _album = GetAlbumValue(value); }
+            get => _album;
+            set => _album = GetAlbumValue(value);
         }
 
         [DataMember(Name = "year")]

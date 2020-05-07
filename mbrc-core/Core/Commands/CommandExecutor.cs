@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using NLog;
@@ -17,21 +18,27 @@ namespace MusicBeeRemote.Core.Commands
 
         public CommandExecutor(ITinyMessengerHub hub, ClientManager clientManager)
         {
-            _hub = hub;
+            _hub = hub ?? throw new ArgumentNullException(nameof(hub));
             _clientManager = clientManager;
             _hub.Subscribe<MessageEvent>(CommandExecute);
         }
 
         public void AddCommand(string eventType, ICommand command)
         {
-            if (_commandMap.ContainsKey(eventType)) return;
+            if (_commandMap.ContainsKey(eventType))
+            {
+                return;
+            }
+
             _commandMap.Add(eventType, command);
         }
 
         public void RemoveCommand(string eventType)
         {
             if (_commandMap.ContainsKey(eventType))
+            {
                 _commandMap.Remove(eventType);
+            }
         }
 
         private void CommandExecute(IEvent e)
@@ -42,7 +49,11 @@ namespace MusicBeeRemote.Core.Commands
                 return;
             }
 
-            if (!_commandMap.ContainsKey(e.Type)) return;
+            if (!_commandMap.ContainsKey(e.Type))
+            {
+                return;
+            }
+
             var command = _commandMap[e.Type];
             try
             {
@@ -71,13 +82,14 @@ namespace MusicBeeRemote.Core.Commands
         {
             if (command.GetType().IsSubclassOf(typeof(LimitedCommand)))
             {
-                var limited = (LimitedCommand) command;
+                var limited = (LimitedCommand)command;
                 var status = limited.Execute(e, _clientManager.ClientPermissions(e.ClientId));
                 _clientManager.Log(limited.Name(), status, e.ClientId);
                 if (status != ExecutionStatus.Denied)
                 {
                     return;
                 }
+
                 var message = new SocketMessage(Constants.CommandUnavailable);
                 _hub.Publish(new PluginResponseAvailableEvent(message));
             }

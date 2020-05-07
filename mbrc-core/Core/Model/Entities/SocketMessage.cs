@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -16,12 +17,17 @@ namespace MusicBeeRemote.Core.Model.Entities
 
         public SocketMessage(JObject jsonObject)
         {
-            Context = (string) jsonObject["context"];
+            if (jsonObject == null)
+            {
+                throw new ArgumentNullException(nameof(jsonObject));
+            }
+
+            Context = (string)jsonObject["context"];
 
             var messageData = jsonObject["data"];
             if (messageData == null)
             {
-                Data = "";
+                Data = string.Empty;
             }
             else
             {

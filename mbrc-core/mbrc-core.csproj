@@ -35,6 +35,8 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <DocumentationFile>
+    </DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -95,31 +97,76 @@
     <Compile Include="Core\Commands\configuration.cs" />
     <Compile Include="Core\Commands\ExecutionStatus.cs" />
     <Compile Include="Core\Commands\ICommand.cs" />
-    <Compile Include="Core\Commands\InstaReplies\InstantReplyCommands.cs" />
+    <Compile Include="Core\Commands\InstantReplies\HandlePong.cs" />
+    <Compile Include="Core\Commands\InstantReplies\PingReply.cs" />
+    <Compile Include="Core\Commands\InstantReplies\ProcessInitRequest.cs" />
+    <Compile Include="Core\Commands\InstantReplies\RequestCover.cs" />
+    <Compile Include="Core\Commands\InstantReplies\RequestCurrentPosition.cs" />
+    <Compile Include="Core\Commands\InstantReplies\RequestDetails.cs" />
+    <Compile Include="Core\Commands\InstantReplies\RequestLyrics.cs" />
     <Compile Include="Core\Commands\LimitedCommand.cs" />
     <Compile Include="Core\Commands\Logs\ExecutionLog.cs" />
     <Compile Include="Core\Commands\Logs\LogRepository.cs" />
-    <Compile Include="Core\Commands\Requests\HandeshakeCommands.cs" />
-    <Compile Include="Core\Commands\Requests\LibraryBrowseCommands.cs" />
-    <Compile Include="Core\Commands\Requests\NowPlayingCommands.cs" />
-    <Compile Include="Core\Commands\Requests\OutputCommands.cs" />
+    <Compile Include="Core\Commands\Requests\Handshake\RequestPlayer.cs" />
+    <Compile Include="Core\Commands\Requests\Handshake\RequestProtocol.cs" />
+    <Compile Include="Core\Commands\Requests\Library\RequestBrowseAlbums.cs" />
+    <Compile Include="Core\Commands\Requests\Library\RequestBrowseArtists.cs" />
+    <Compile Include="Core\Commands\Requests\Library\RequestBrowseGenres.cs" />
+    <Compile Include="Core\Commands\Requests\Library\RequestBrowseTracks.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands\RequestNowPlayingList.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands\RequestNowPlayingMoveTrack.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands\RequestNowPlayingPlay.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands\RequestNowPlayingQueue.cs" />
+    <Compile Include="Core\Commands\Requests\NowPlayingCommands\RequestNowPlayingTrackRemoval.cs" />
+    <Compile Include="Core\Commands\Requests\Output\RequestOutputDeviceList.cs" />
+    <Compile Include="Core\Commands\Requests\Output\RequestPlayerOutputSwitch.cs" />
     <Compile Include="Core\Commands\Requests\PaginatedData.cs" />
     <Compile Include="Core\Commands\Requests\PaginatedDataCommand.cs" />
-    <Compile Include="Core\Commands\Requests\PlayerStateCommands.cs" />
-    <Compile Include="Core\Commands\Requests\PlayingTrackCommands.cs" />
-    <Compile Include="Core\Commands\Requests\PlaylistCommands.cs" />
-    <Compile Include="Core\Commands\Requests\RequestPodcastCommand.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestAutoDj.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestMute.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestNextTrack.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestPause.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestPlay.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestPlayerStatus.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestPlayPause.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestPreviousTrack.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestRepeat.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestScrobble.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestShuffle.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestStop.cs" />
+    <Compile Include="Core\Commands\Requests\PlayerState\RequestVolume.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrack\RequestPlaybackPosition.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrack\RequestRating.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrack\RequestSongInfo.cs" />
+    <Compile Include="Core\Commands\Requests\PlayingTrack\RequestLfmLoveRating.cs" />
+    <Compile Include="Core\Commands\Requests\Playlists\RequestPlaylistList.cs" />
+    <Compile Include="Core\Commands\Requests\Playlists\RequestPlaylistPlay.cs" />
+    <Compile Include="Core\Commands\Requests\Podcasts\RequestPodcastArtworkCommand.cs" />
+    <Compile Include="Core\Commands\Requests\Podcasts\RequestPodcastCommand.cs" />
+    <Compile Include="Core\Commands\Requests\Podcasts\RequestPodcastEpisodeCommand.cs" />
     <Compile Include="Core\Commands\Requests\RequestPluginVersion.cs" />
     <Compile Include="Core\Commands\Requests\RequestRadioStations.cs" />
     <Compile Include="Core\Enumerations\LastfmStatus.cs" />
-    <Compile Include="Core\Enumerations\MetaTag.cs" />
     <Compile Include="Core\Enumerations\PlayerState.cs" />
     <Compile Include="Core\Enumerations\QueueType.cs" />
     <Compile Include="Core\Enumerations\Repeat.cs" />
     <Compile Include="Core\Enumerations\ShuffleState.cs" />
     <Compile Include="Core\Events\BroadcastEvent.cs" />
     <Compile Include="Core\Events\IEvent.cs" />
-    <Compile Include="Core\Events\InternalEvents.cs" />
+    <Compile Include="Core\Events\Internal\BroadcastEventAvailable.cs" />
+    <Compile Include="Core\Events\Internal\ClientConnectedEvent.cs" />
+    <Compile Include="Core\Events\Internal\ClientDisconnectedEvent.cs" />
+    <Compile Include="Core\Events\Internal\ConnectionReadyEvent.cs" />
+    <Compile Include="Core\Events\Internal\ConnectionRemovedEvent.cs" />
+    <Compile Include="Core\Events\Internal\CoverAvailable.cs" />
+    <Compile Include="Core\Events\Internal\ForceClientDisconnect.cs" />
+    <Compile Include="Core\Events\Internal\LyricsAvailable.cs" />
+    <Compile Include="Core\Events\Internal\PluginResponseAvailableEvent.cs" />
+    <Compile Include="Core\Events\Internal\RestartSocketEvent.cs" />
+    <Compile Include="Core\Events\Internal\SocketStatusChanged.cs" />
+    <Compile Include="Core\Events\Internal\StartServiceBroadcastEvent.cs" />
+    <Compile Include="Core\Events\Internal\StartSocketServerEvent.cs" />
+    <Compile Include="Core\Events\Internal\StopSocketServer.cs" />
     <Compile Include="Core\Events\MessageEvent.cs" />
     <Compile Include="Core\Events\Notifications\ArtworkReadyEvent.cs" />
     <Compile Include="Core\Events\Notifications\LyricsReadyEvent.cs" />
@@ -131,13 +178,13 @@
     <Compile Include="Core\IMusicBeeRemotePlugin.cs" />
     <Compile Include="Core\Logging\IPluginLogManager.cs" />
     <Compile Include="Core\Logging\PluginLogManager.cs" />
+    <Compile Include="Core\Model\CoverDataReadyEvent.cs" />
     <Compile Include="Core\Model\CoverPayload.cs" />
     <Compile Include="Core\Model\CoverStatusCodes.cs" />
     <Compile Include="Core\Model\Entities\Album.cs" />
     <Compile Include="Core\Model\Entities\Artist.cs" />
     <Compile Include="Core\Model\Entities\Genre.cs" />
-    <Compile Include="Core\Model\Entities\MetaData.cs" />
-    <Compile Include="Core\Model\Entities\NowPlaying.cs" />
+    <Compile Include="Core\Model\Entities\NowPlayingTrackInfo.cs" />
     <Compile Include="Core\Model\Entities\NowPlayingListTrack.cs" />
     <Compile Include="Core\Model\Entities\NowPlayingTrack.cs" />
     <Compile Include="Core\Model\Entities\NowPlayingTrackBase.cs" />
@@ -145,12 +192,13 @@
     <Compile Include="Core\Model\Entities\Page.cs" />
     <Compile Include="Core\Model\Entities\Playlist.cs" />
     <Compile Include="Core\Model\Entities\SocketMessage.cs" />
-    <Compile Include="Core\Model\Entities\SocketMessageExtesion.cs" />
+    <Compile Include="Core\Model\Entities\SocketMessageExtension.cs" />
     <Compile Include="Core\Model\Entities\Track.cs" />
     <Compile Include="Core\Model\Generators\CoverPayloadGenerator.cs" />
     <Compile Include="Core\Model\IdentifiablePaginatedRequest.cs" />
     <Compile Include="Core\Model\IdentifiableRequest.cs" />
     <Compile Include="Core\Model\LyricCoverModel.cs" />
+    <Compile Include="Core\Model\LyricsDataReadyEvent.cs" />
     <Compile Include="Core\Model\LyricsPayload.cs" />
     <Compile Include="Core\Model\OutputDevice.cs" />
     <Compile Include="Core\Model\PaginatedRequest.cs" />
@@ -164,25 +212,29 @@
     <Compile Include="Core\Monitoring\PlayerStateModel.cs" />
     <Compile Include="Core\Monitoring\PlayerStateMonitor.cs" />
     <Compile Include="Core\Monitoring\TrackStateMonitor.cs" />
-    <Compile Include="Core\Monitoring\TrackTemporalnformation.cs" />
+    <Compile Include="Core\Monitoring\TrackTemporalInformation.cs" />
     <Compile Include="Core\MusicBeeDependencies.cs" />
     <Compile Include="Core\MusicBeeRemotePlugin.cs" />
+    <Compile Include="Core\Network\ActionLoggedEvent.cs" />
+    <Compile Include="Core\Network\ClientDataUpdateEvent.cs" />
     <Compile Include="Core\Network\ClientManager.cs" />
     <Compile Include="Core\Network\ClientRepository.cs" />
     <Compile Include="Core\Network\Constants.cs" />
+    <Compile Include="Core\Network\Http\ContextExtensions.cs" />
     <Compile Include="Core\Network\HttpSupport.cs" />
-    <Compile Include="Core\Network\Http\Extentions.cs" />
+    <Compile Include="Core\Network\Http\Extensions.cs" />
     <Compile Include="Core\Network\Http\Response.cs" />
     <Compile Include="Core\Network\ProtocolHandler.cs" />
     <Compile Include="Core\Network\RangeChecker.cs" />
     <Compile Include="Core\Network\RemoteClient.cs" />
+    <Compile Include="Core\Network\Router.cs" />
     <Compile Include="Core\Network\ServiceDiscovery.cs" />
     <Compile Include="Core\Network\SocketConnection.cs" />
     <Compile Include="Core\Network\SocketPacket.cs" />
     <Compile Include="Core\Network\SocketServer.cs" />
     <Compile Include="Core\Network\SocketTester.cs" />
     <Compile Include="Core\Network\Tools.cs" />
-    <Compile Include="Core\Network\WebServer.cs" />
+    <Compile Include="Core\Network\Http\WebServer.cs" />
     <Compile Include="Core\Podcasts\ArtworkResponse.cs" />
     <Compile Include="Core\Podcasts\EpisodeConverter.cs" />
     <Compile Include="Core\Podcasts\PodcastHttpApi.cs" />
@@ -200,6 +252,7 @@
     <Compile Include="Core\Settings\Dialog\BasePanel\ConfigurationPanelViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\BasePanel\IConfigurationPanelPresenter.cs" />
     <Compile Include="Core\Settings\Dialog\BasePanel\IConfigurationPanelView.cs" />
+    <Compile Include="Core\Settings\Dialog\BasePanel\ViewNotAttachedException.cs" />
     <Compile Include="Core\Settings\Dialog\CheckboxExtension.cs" />
     <Compile Include="Core\Logging\DebugSettingsModifiedEvent.cs" />
     <Compile Include="Core\Settings\Dialog\Commands\OpenHelpCommand.cs" />
@@ -209,20 +262,19 @@
     <Compile Include="Core\Settings\Dialog\HintTextBox.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.cs">
+    <Compile Include="Core\Settings\Dialog\PartyMode\PartyModePanel.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.Designer.cs">
+    <Compile Include="Core\Settings\Dialog\PartyMode\PartyModePanel.Designer.cs">
       <DependentUpon>PartyModePanel.cs</DependentUpon>
     </Compile>
-    <Compile Include="Core\Settings\Dialog\PartyModePanel\PartyModeViewModel.cs" />
+    <Compile Include="Core\Settings\Dialog\PartyMode\PartyModeViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementControl.Designer.cs">
       <DependentUpon>RangeManagementControl.cs</DependentUpon>
     </Compile>
-    <Compile Include="Core\Settings\Dialog\Range\RangeManagementView.cs" />
     <Compile Include="Core\Settings\Dialog\Range\RangeManagementViewModel.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\AddressValidationRule.cs" />
     <Compile Include="Core\Settings\Dialog\Validations\LastOctetValidator.cs" />
@@ -239,27 +291,29 @@
     <Compile Include="Core\Settings\Dialog\Whitelist\WhitelistManagementViewModel.cs" />
     <Compile Include="Core\Settings\FilteringSelection.cs" />
     <Compile Include="Core\Settings\IJsonSettingsFileManager.cs" />
-    <Compile Include="Core\Settings\ILegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\IStorageLocationProvider.cs" />
     <Compile Include="Core\Settings\IVersionProvider.cs" />
     <Compile Include="Core\Settings\JsonSettingsFileManager.cs" />
-    <Compile Include="Core\Settings\LegacySettingsMigration.cs" />
     <Compile Include="Core\Settings\LimitedModeSettingsModel.cs" />
-    <Compile Include="Core\Settings\PersistanceManager.cs" />
+    <Compile Include="Core\Settings\PersistenceManager.cs" />
     <Compile Include="Core\Settings\UserSettingsModel.cs" />
     <Compile Include="Core\Threading\LimitedTaskScheduler.cs" />
     <Compile Include="Core\Utilities\Authenticator.cs" />
     <Compile Include="Core\Utilities\ControlRemoveExtension.cs" />
     <Compile Include="Core\Utilities\IdGenerator.cs" />
-    <Compile Include="Core\Utilities\StateAction.cs" />
-    <Compile Include="Core\Utilities\Utilities.cs" />
-    <Compile Include="Core\Windows\iWindowManager.cs" />
+    <Compile Include="Core\Utilities\ArtworkUtilities.cs" />
+    <Compile Include="Core\Windows\IWindowManager.cs" />
     <Compile Include="Core\Windows\WindowManager.cs" />
     <Compile Include="Core\Windows\Mvvm\ViewModelBase.cs" />
     <Compile Include="Core\Model\Entities\NowPlayingDetails.cs" />
-    <Compile Include="Properties\Resources.Designer.cs" />
+    <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Core\Settings\Dialog\Commands\RefreshLibraryCommand.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="TinyMessenger.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -269,7 +323,7 @@
     <EmbeddedResource Include="Core\Settings\Dialog\BasePanel\ConfigurationPanel.resx">
       <DependentUpon>ConfigurationPanel.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Core\Settings\Dialog\PartyModePanel\PartyModePanel.resx">
+    <EmbeddedResource Include="Core\Settings\Dialog\PartyMode\PartyModePanel.resx">
       <DependentUpon>PartyModePanel.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Core\Settings\Dialog\Range\RangeManagementControl.resx">
@@ -278,7 +332,10 @@
     <EmbeddedResource Include="Core\Settings\Dialog\Whitelist\WhitelistManagementControl.resx">
       <DependentUpon>WhitelistManagementControl.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.resx" />
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Core\Commands\Events\" />
@@ -314,5 +371,5 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-    <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
+  <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
 </Project>

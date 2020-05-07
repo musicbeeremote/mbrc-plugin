@@ -11,18 +11,14 @@ namespace MusicBeeRemote.Core.Network
     [DataContract(Name = "client")]
     public class RemoteClient : IEquatable<RemoteClient>
     {
-        public RemoteClient()
-        {
-        }
+        private readonly PhysicalAddress _macAddress;
 
         public RemoteClient(PhysicalAddress macAddress, IPAddress ipAddress)
         {
-            MacAdress = macAddress;
+            _macAddress = macAddress;
             IpAddress = ipAddress;
             LastLogIn = DateTime.Now;
         }
-
-        #region Properties
 
         [DisplayName("Permissions")]
         [DataMember(Name = "permissions")]
@@ -39,7 +35,7 @@ namespace MusicBeeRemote.Core.Network
 
         [DisplayName("MAC")]
         [DataMember(Name = "mac_address")]
-        public PhysicalAddress MacAdress { get; set; }
+        public PhysicalAddress MacAddress => _macAddress;
 
         [DisplayName("IP")]
         [DataMember(Name = "ip_address")]
@@ -48,8 +44,6 @@ namespace MusicBeeRemote.Core.Network
         [DisplayName("Last login")]
         [DataMember(Name = "last_login")]
         public DateTime LastLogIn { get; set; }
-
-        #endregion Properties
 
         public virtual void AddConnection()
         {
@@ -63,7 +57,7 @@ namespace MusicBeeRemote.Core.Network
                 ActiveConnections--;
             }
         }
-        
+
         public virtual void ResetConnection()
         {
             ActiveConnections = 0;
@@ -72,16 +66,6 @@ namespace MusicBeeRemote.Core.Network
         public virtual bool HasPermission(CommandPermissions permissions)
         {
             return ClientPermissions.HasFlag(permissions);
-        }
-
-        protected virtual void SetPermission(CommandPermissions permissions)
-        {
-            ClientPermissions |= permissions;
-        }
-
-        protected virtual void RemovePermission(CommandPermissions permissions)
-        {
-            ClientPermissions &= ~permissions;
         }
 
         public virtual void SetPermission(CommandPermissions permissions, bool enable)
@@ -96,28 +80,45 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
-        #region Equatable
-
         bool IEquatable<RemoteClient>.Equals(RemoteClient other)
         {
             return Equals(other);
         }
 
-        public bool Equals(RemoteClient obj)
+        public override bool Equals(object obj)
         {
-            return MacAdress.ToString() == obj.MacAdress.ToString();
+            return ((IEquatable<RemoteClient>)this).Equals(obj as RemoteClient);
         }
 
-        #endregion Equatable
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            return MacAddress != null ? MacAddress.GetHashCode() : 0;
+        }
 
         public override string ToString()
         {
             return $"{nameof(ClientPermissions)}: {ClientPermissions}," +
                    $" {nameof(ClientId)}: {ClientId}," +
                    $" {nameof(ActiveConnections)}: {ActiveConnections}," +
-                   $" {nameof(MacAdress)}: {MacAdress}," +
+                   $" {nameof(MacAddress)}: {MacAddress}," +
                    $" {nameof(IpAddress)}: {IpAddress}," +
                    $" {nameof(LastLogIn)}: {LastLogIn}";
-        }       
+        }
+
+        protected virtual void SetPermission(CommandPermissions permissions)
+        {
+            ClientPermissions |= permissions;
+        }
+
+        protected virtual void RemovePermission(CommandPermissions permissions)
+        {
+            ClientPermissions &= ~permissions;
+        }
+
+        private bool Equals(RemoteClient obj)
+        {
+            return MacAddress.ToString() == obj.MacAddress.ToString();
+        }
     }
 }

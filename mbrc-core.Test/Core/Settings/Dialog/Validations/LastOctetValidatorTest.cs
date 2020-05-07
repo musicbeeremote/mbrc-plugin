@@ -6,49 +6,40 @@ namespace MusicBeeRemote.Test.Core.Settings.Dialog.Validations
     [TestFixture]
     public class LastOctetValidatorTest
     {
-        private LastOctetValidator _validator;
-        
-        [SetUp]
-        public void Before()
-        {
-            _validator = new LastOctetValidator();
-        }
-        
         [Test]
-        public void Invalid_LastOctetZero()
+        public void InvalidLastOctetZero()
         {
-            Assert.IsFalse(_validator.Validate("192.168.1.10", "0"));           
+            Assert.IsFalse(LastOctetValidator.Validate("192.168.1.10", "0"));
         }
 
         [Test]
-        public void Invalid_LastOctetOverMax()
+        public void InvalidLastOctetOverMax()
         {
-            Assert.IsFalse(_validator.Validate("192.168.1.10", "255"));
-        }
-        
-        [Test]
-        public void Invalid_LastLessThanLastOfBaseIp()
-        {
-            Assert.IsFalse(_validator.Validate("192.168.1.10", "8"));
-        }
-        
-        [Test]
-        public void Valid_LastOctetValid()
-        {
-            Assert.IsTrue(_validator.Validate("192.168.1.10", "20"));
+            Assert.IsFalse(LastOctetValidator.Validate("192.168.1.10", "255"));
         }
 
         [Test]
-        public void Invalid_BothInputsNull()
+        public void InvalidLastLessThanLastOfBaseIp()
         {
-            Assert.IsFalse(_validator.Validate(null, null));
+            Assert.IsFalse(LastOctetValidator.Validate("192.168.1.10", "8"));
         }
-        
+
         [Test]
-        public void Invalid_BothInputsEmpty()
+        public void ValidLastOctetValid()
         {
-            Assert.IsFalse(_validator.Validate("",""));
+            Assert.IsTrue(LastOctetValidator.Validate("192.168.1.10", "20"));
         }
-             
+
+        [Test]
+        public void InvalidBothInputsNull()
+        {
+            Assert.IsFalse(LastOctetValidator.Validate(null, null));
+        }
+
+        [Test]
+        public void InvalidBothInputsEmpty()
+        {
+            Assert.IsFalse(LastOctetValidator.Validate(string.Empty, string.Empty));
+        }
     }
 }

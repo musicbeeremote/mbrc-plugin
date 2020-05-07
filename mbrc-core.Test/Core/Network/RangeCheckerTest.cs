@@ -1,4 +1,4 @@
-using MusicBeeRemote.Core.Network;
+﻿using MusicBeeRemote.Core.Network;
 using NUnit.Framework;
 
 namespace MusicBeeRemote.Test.Core.Network
@@ -6,21 +6,19 @@ namespace MusicBeeRemote.Test.Core.Network
     [TestFixture]
     public class RangeCheckerTest
     {
-
-        [Test]
-        public void AddressNotInRange_OtherNetwork()
+        [Test(Description = "Address is not in Range because it is a different network")]
+        public void AddressNotInRangeOtherNetwork()
         {
             Assert.IsFalse(RangeChecker.AddressInRange("192.168.10.50", "192.168.20.1", 10));
         }
 
-
-        [Test]
-        public void AddressNotInRange_OutOfRange()
+        [Test(Description = "Address is not in Range")]
+        public void AddressNotInRangeOutOfRange()
         {
             Assert.IsFalse(RangeChecker.AddressInRange("192.168.10.50", "192.168.10.10", 20));
         }
 
-        [Test]
+        [Test(Description = "Address is in")]
         public void AddressInRange()
         {
             Assert.IsTrue(RangeChecker.AddressInRange("192.168.10.50", "192.168.10.10", 60));
@@ -43,7 +41,6 @@ namespace MusicBeeRemote.Test.Core.Network
         {
             Assert.IsFalse(RangeChecker.AddressInRange("192.168.10.50", "192.168.10.10", 0));
         }
-
 
         [Test]
         public void LastOctedAboveAllowed()

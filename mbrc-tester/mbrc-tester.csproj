@@ -13,7 +13,7 @@
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>MbrcTester</RootNamespace>
-    <AssemblyName>mbrc_tester</AssemblyName>
+    <AssemblyName>mbrc-tester</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <NuGetPackageImportStamp>
@@ -28,6 +28,9 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <DocumentationFile>
+    </DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -49,12 +52,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ApiAdapters\MockLibraryApiAdapter.cs" />
-    <Compile Include="ApiAdapters\MockNowPlayingApiAdapter.cs" />
+    <Compile Include="ApiAdapters\LibraryApiAdapter.cs" />
     <Compile Include="ApiAdapters\MockOutputApiAdapter.cs" />
     <Compile Include="ApiAdapters\MockPlayerApiAdapter.cs" />
-    <Compile Include="ApiAdapters\MockQueueAdapter.cs" />
-    <Compile Include="ApiAdapters\MockTrackApiAdapter.cs" />
+    <Compile Include="ApiAdapters\NowPlayingApiAdapter.cs" />
+    <Compile Include="ApiAdapters\QueueAdapter.cs" />
+    <Compile Include="ApiAdapters\TrackApiAdapter.cs" />
+    <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="MockLibrary.cs" />
     <Compile Include="MockNowPlaying.cs" />
     <Compile Include="MockPlayer.cs" />
@@ -62,6 +66,11 @@
     <Compile Include="MockTrackMetadata.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\mbrc-core\mbrc-core.csproj">
@@ -84,6 +93,12 @@
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.Analyzers.dll" />
     <Analyzer Include="..\packages\Microsoft.NetFramework.Analyzers.2.9.6\analyzers\dotnet\cs\Microsoft.NetFramework.CSharp.Analyzers.dll" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -102,5 +117,5 @@
     <Target Name="AfterBuild">
     </Target>
     -->
-    <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
+  <Import Project="../CodeAnalysis.props" Condition="'$(Configuration)'!='Release'" />
 </Project>

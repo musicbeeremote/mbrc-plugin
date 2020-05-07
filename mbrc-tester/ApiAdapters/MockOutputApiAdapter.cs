@@ -5,7 +5,7 @@ namespace MbrcTester.ApiAdapters
 {
     public class MockOutputApiAdapter : IOutputApiAdapter
     {
-        private string[] devices = new[]
+        private readonly string[] _devices =
         {
             "default",
             "sound1",
@@ -13,22 +13,22 @@ namespace MbrcTester.ApiAdapters
             "sound3",
         };
 
-        private string selectedDevice;
+        private string _selectedDevice;
 
         public MockOutputApiAdapter()
         {
-            selectedDevice = devices[0];
+            _selectedDevice = _devices[0];
         }
 
         public bool SetOutputDevice(string outputDevice)
         {
-            selectedDevice = outputDevice;
+            _selectedDevice = outputDevice;
             return true;
         }
 
         public OutputDevice GetOutputDevices()
         {
-            return new OutputDevice(devices, selectedDevice);
+            return new OutputDevice(_devices, _selectedDevice);
         }
     }
 }

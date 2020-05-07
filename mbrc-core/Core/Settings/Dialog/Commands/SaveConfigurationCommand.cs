@@ -2,9 +2,9 @@
 {
     public class SaveConfigurationCommand
     {
-        private readonly PersistanceManager _manager;
+        private readonly PersistenceManager _manager;
 
-        public SaveConfigurationCommand(PersistanceManager manager)
+        public SaveConfigurationCommand(PersistenceManager manager)
         {
             _manager = manager;
         }
@@ -16,6 +16,6 @@
             {
                 _manager.UpdateFirewallRules();
             }
-        }    
+        }
     }
 }

@@ -27,9 +27,8 @@ namespace MusicBeeRemote.Core
             IPlayerStateMonitor playerStateMonitor,
             ILibraryScanner libraryScanner,
             IWindowManager windowManager,
-            ClientManager clientManager,            
-            ITinyMessengerHub hub
-        )
+            ClientManager clientManager,
+            ITinyMessengerHub hub)
         {
             _socketServer = socketServer;
             _serviceDiscovery = serviceDiscovery;
@@ -47,17 +46,24 @@ namespace MusicBeeRemote.Core
             _trackStateMonitor.Start();
             _playerStateMonitor.Start();
             _serviceDiscovery.Start();
-            _socketServer.Start();           
+            _socketServer.Start();
             _libraryScanner.Start();
+#if DEBUG
+            _httpSupport.Start();
+#endif
         }
 
-        public void Stop()
+        public void Terminate()
         {
-            _socketServer.Stop();
-            _serviceDiscovery.Stop();
-            _trackStateMonitor.Stop();
-            _playerStateMonitor.Stop();
-            _libraryScanner.Stop();
+            _socketServer.Terminate();
+            _serviceDiscovery.Terminate();
+            _trackStateMonitor.Terminate();
+            _playerStateMonitor.Terminate();
+            _libraryScanner.Terminate();
+
+#if DEBUG
+            _httpSupport.Terminate();
+#endif
         }
 
         public void DisplayInfoWindow()

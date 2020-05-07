@@ -8,6 +8,7 @@ namespace MusicBeeRemote.Core.Model
     {
         [DataMember(Name = "queue")]
         public string Queue { get; set; }
+
         [DataMember(Name = "data")]
         public List<string> Data { get; set; }
     }

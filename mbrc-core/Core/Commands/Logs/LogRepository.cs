@@ -32,6 +32,7 @@ namespace MusicBeeRemote.Core.Commands.Logs
                 var result = db.GetCollection<ExecutionLog>(TableName).FindAll();
                 logs.AddRange(result.ToList());
             }
+
             return logs;
         }
     }

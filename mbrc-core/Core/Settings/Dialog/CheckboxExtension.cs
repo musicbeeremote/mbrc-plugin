@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace MusicBeeRemote.Core.Settings.Dialog
@@ -7,10 +8,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog
     {
         public static void SetChecked(this CheckBox chBox, bool check)
         {
-            typeof (CheckBox).GetField("checkState", BindingFlags.NonPublic |
-                                                     BindingFlags.Instance)?.SetValue(chBox, check
-                                                         ? CheckState.Checked
-                                                         : CheckState.Unchecked);
+            if (chBox == null)
+            {
+                throw new ArgumentNullException(nameof(chBox));
+            }
+
+            const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            var state = check ? CheckState.Checked : CheckState.Unchecked;
+            typeof(CheckBox).GetField("checkState", flags)?.SetValue(chBox, state);
             chBox.Invalidate();
         }
     }

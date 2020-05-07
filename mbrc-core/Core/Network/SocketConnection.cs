@@ -62,7 +62,10 @@ namespace MusicBeeRemote.Core.Network
         public void IncreasePacketNumber()
         {
             if (PacketNumber >= 0 && PacketNumber < 40)
+            {
                 PacketNumber++;
+            }
+
             Authenticated = PacketNumber >= 2;
         }
     }

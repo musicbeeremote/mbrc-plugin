@@ -1,51 +1,45 @@
 ﻿using System;
 using System.Security;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Threading;
 using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Model
 {
-    internal class LyricCoverModel
+    internal class LyricCoverModel : IDisposable
     {
         private readonly ITinyMessengerHub _hub;
 
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+        private readonly LimitedTaskScheduler _scheduler = new LimitedTaskScheduler(1);
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+
         private string _xHash;
         private string _lyrics;
 
         public LyricCoverModel(ITinyMessengerHub hub)
         {
-            _hub = hub;
-            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(() => SetCover(msg.Cover)));
+            _hub = hub ?? throw new ArgumentNullException(nameof(hub));
+            _hub.Subscribe<CoverAvailable>(msg => Task.Factory.StartNew(
+                () => SetCover(msg.Cover),
+                _cts.Token,
+                TaskCreationOptions.PreferFairness,
+                _scheduler));
             _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
-        }
-
-        private void SetCover(string base64)
-        {
-            var hash = Utilities.Utilities.Sha1Hash(base64);
-
-            if (_xHash != null && _xHash.Equals(hash))
-            {
-                return;
-            }
-
-            Cover = string.IsNullOrEmpty(base64)
-                ? string.Empty
-                : Utilities.Utilities.ImageResize(base64);
-            _xHash = hash;
-
-            _hub.Publish(new CoverDataReadyEvent(Cover));
         }
 
         public string Cover { get; private set; }
 
         public string Lyrics
         {
+            get => _lyrics;
             private set
             {
                 try
@@ -73,31 +67,28 @@ namespace MusicBeeRemote.Core.Model
                     _hub.Publish(new LyricsDataReadyEvent(_lyrics));
                 }
             }
-            get => _lyrics;
         }
-    }
 
-    internal class LyricsDataReadyEvent : ITinyMessage
-    {
-        public string Lyrics { get; }
-
-        public LyricsDataReadyEvent(string lyrics)
+        public void Dispose()
         {
-            Lyrics = lyrics;
+            _cts.Dispose();
         }
 
-        public object Sender { get; } = null;
-    }
-
-    internal class CoverDataReadyEvent : ITinyMessage
-    {
-        public string Cover { get; }
-
-        public CoverDataReadyEvent(string cover)
+        private void SetCover(string base64)
         {
-            Cover = cover;
-        }
+            var hash = Utilities.ArtworkUtilities.Sha1Hash(base64);
 
-        public object Sender { get; } = null;
+            if (_xHash != null && _xHash.Equals(hash, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return;
+            }
+
+            Cover = string.IsNullOrEmpty(base64)
+                ? string.Empty
+                : Utilities.ArtworkUtilities.ImageResize(base64);
+            _xHash = hash;
+
+            _hub.Publish(new CoverDataReadyEvent(Cover));
+        }
     }
 }

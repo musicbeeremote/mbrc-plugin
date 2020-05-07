@@ -1,20 +1,21 @@
-﻿using System.Runtime.Serialization;
+﻿using System.Collections.Generic;
+using System.Runtime.Serialization;
 
 namespace MusicBeeRemote.Core.Model
 {
     [DataContract]
     public class OutputDevice
     {
-        public OutputDevice(string[] deviceNames, string activeDeviceName)
+        public OutputDevice(IEnumerable<string> deviceNames, string activeDeviceName)
         {
-            DeviceNames = deviceNames;
+            DeviceNames = new List<string>(deviceNames);
             ActiveDeviceName = activeDeviceName;
         }
 
         [DataMember(Name = "active")]
-        public string ActiveDeviceName { get; set; }
+        public string ActiveDeviceName { get; }
 
         [DataMember(Name = "devices")]
-        public string[] DeviceNames { get; set; }
+        public List<string> DeviceNames { get; }
     }
 }

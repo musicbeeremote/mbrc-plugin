@@ -1,33 +1,32 @@
-using System;
+﻿using System;
+using System.Globalization;
 using System.Linq;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Validations
 {
-    public class LastOctetValidator
+    public static class LastOctetValidator
     {
-        private readonly AddressValidationRule _addressValidationRule;
-
-        public LastOctetValidator()
+        public static bool Validate(string address, string lastOctetValue)
         {
-            _addressValidationRule = new AddressValidationRule();
-        }
+            if (address == null)
+            {
+                return false;
+            }
 
-        public bool Validate(string address, string lastOctetValue)
-        {           
-            var lastOctet = !string.IsNullOrEmpty(lastOctetValue) ? int.Parse(lastOctetValue) : 0;
+            var lastOctet = !string.IsNullOrEmpty(lastOctetValue) ? int.Parse(lastOctetValue, CultureInfo.CurrentCulture) : 0;
 
             if (lastOctet > 254 || lastOctet < 1)
             {
                 return false;
             }
 
-            if (!_addressValidationRule.Validate(address))
-            {               
+            if (!AddressValidationRule.Validate(address))
+            {
                 return false;
             }
-            
+
             var octets = address.Split(".".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-            var baseLastOctet = int.Parse(octets.Last());
+            var baseLastOctet = int.Parse(octets.Last(), CultureInfo.CurrentCulture);
 
             return lastOctet >= baseLastOctet;
         }

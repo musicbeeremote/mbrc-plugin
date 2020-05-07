@@ -1,8 +1,8 @@
-﻿namespace MusicBeeRemote.Core.Settings.Dialog
-{
-    using System.Drawing;
-    using System.Windows.Forms;
+﻿using System.Drawing;
+using System.Windows.Forms;
 
+namespace MusicBeeRemote.Core.Settings.Dialog
+{
     public class HintTextBox : TextBox
     {
         private string _hint;
@@ -31,10 +31,16 @@
             {
                 return;
             }
+
             using (var graphics = CreateGraphics())
             {
-                TextRenderer.DrawText(graphics, Hint, Font,
-                    ClientRectangle, SystemColors.GrayText, BackColor,
+                TextRenderer.DrawText(
+                    graphics,
+                    Hint,
+                    Font,
+                    ClientRectangle,
+                    SystemColors.GrayText,
+                    BackColor,
                     TextFormatFlags.Top | TextFormatFlags.Left);
             }
         }

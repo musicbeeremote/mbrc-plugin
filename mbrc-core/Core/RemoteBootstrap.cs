@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using System.Net.NetworkInformation;
 using LiteDB;
 using MusicBeeRemote.Core.ApiAdapters;
@@ -14,7 +15,7 @@ using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
 using MusicBeeRemote.Core.Settings.Dialog.Commands;
-using MusicBeeRemote.Core.Settings.Dialog.PartyModePanel;
+using MusicBeeRemote.Core.Settings.Dialog.PartyMode;
 using MusicBeeRemote.Core.Settings.Dialog.Whitelist;
 using MusicBeeRemote.Core.Utilities;
 using MusicBeeRemote.Core.Windows;
@@ -26,15 +27,35 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core
 {
-    public class RemoteBootstrap
+    /// <summary>
+    /// Bootstraps the core functionality of the plugin.
+    /// </summary>
+    public sealed class RemoteBootstrap : IDisposable
     {
         private readonly Container _container;
+        private bool _isDisposed;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RemoteBootstrap"/> class.
+        /// </summary>
         public RemoteBootstrap()
         {
             _container = new Container();
         }
 
+        /// <summary>
+        /// Finalizes an instance of the <see cref="RemoteBootstrap"/> class.
+        /// </summary>
+        ~RemoteBootstrap()
+        {
+            Dispose(false);
+        }
+
+        /// <summary>
+        /// The function creates a new instance of the plugin.
+        /// </summary>
+        /// <param name="dependencies">The implementations of various adapters needed for the plugin to function.</param>
+        /// <returns>The instance of the plugin.</returns>
         public IMusicBeeRemotePlugin BootStrap(MusicBeeDependencies dependencies)
         {
             JsonConvert.DefaultSettings = () =>
@@ -42,29 +63,27 @@ namespace MusicBeeRemote.Core
                 var settings = new JsonSerializerSettings
                 {
                     DateTimeZoneHandling = DateTimeZoneHandling.Local,
-                    NullValueHandling = NullValueHandling.Ignore
+                    NullValueHandling = NullValueHandling.Ignore,
                 };
 
-                settings.Converters.Add(new StringEnumConverter {NamingStrategy = new SnakeCaseNamingStrategy()});
+                settings.Converters.Add(new StringEnumConverter { NamingStrategy = new SnakeCaseNamingStrategy() });
                 return settings;
             };
 
-            //Bson serialization for client IP addresses
+            // Bson serialization for client IP addresses
             BsonMapper.Global.RegisterType(
                 ipAddress => ipAddress.ToString(),
-                bson => IPAddress.Parse(bson.AsString)
-            );
+                bson => IPAddress.Parse(bson.AsString));
 
-            //Bson serialization for client Physical Addresses
+            // Bson serialization for client Physical Addresses
             BsonMapper.Global.RegisterType(
                 mac => mac.ToString(),
                 bson =>
                 {
                     var newAddress = PhysicalAddress.Parse(bson);
                     return PhysicalAddress.None.Equals(newAddress) ? null : newAddress;
-                }
-            );
-            
+                });
+
             _container.Configure(c =>
             {
                 c.For<ILibraryApiAdapter>().Use(() => dependencies.LibraryAdapter).Singleton();
@@ -73,7 +92,7 @@ namespace MusicBeeRemote.Core
                 c.For<IPlayerApiAdapter>().Use(() => dependencies.PlayerAdapter).Singleton();
                 c.For<IQueueAdapter>().Use(() => dependencies.QueueAdapter).Singleton();
                 c.For<ITrackApiAdapter>().Use(() => dependencies.TrackAdapter).Singleton();
-                c.For<IInvokeHandler>().Use(() => dependencies.InvokeHandler).Singleton();              
+                c.For<IInvokeHandler>().Use(() => dependencies.InvokeHandler).Singleton();
 
                 c.For<IWindowManager>().Use<WindowManager>().Singleton();
 
@@ -88,9 +107,8 @@ namespace MusicBeeRemote.Core
                 c.For<LyricCoverModel>().Use<LyricCoverModel>().Singleton();
                 c.For<ServiceDiscovery>().Use<ServiceDiscovery>().Singleton();
 
-                c.For<PersistanceManager>().Use<PersistanceManager>().Singleton();
+                c.For<PersistenceManager>().Use<PersistenceManager>().Singleton();
                 c.For<IJsonSettingsFileManager>().Use<JsonSettingsFileManager>().Singleton();
-                c.For<ILegacySettingsMigration>().Use<LegacySettingsMigration>().Singleton();
 
                 c.For<IStorageLocationProvider>()
                     .Use<StorageLocationProvider>()
@@ -104,7 +122,7 @@ namespace MusicBeeRemote.Core
                     .Is(dependencies.CurrentVersion)
                     .Singleton();
 
-                c.For<Authenticator>().Use<Authenticator>().Singleton();               
+                c.For<Authenticator>().Use<Authenticator>().Singleton();
                 c.For<ITrackRepository>().Use<TrackRepository>().Singleton();
                 c.For<ICacheInfoRepository>().Use<CacheInfoRepository>().Singleton();
                 c.For<ILibraryScanner>().Use<LibraryScanner>().Singleton();
@@ -132,8 +150,29 @@ namespace MusicBeeRemote.Core
             var controller = _container.GetInstance<CommandExecutor>();
             Configuration.Register(controller, _container);
 
-
             return _container.GetInstance<IMusicBeeRemotePlugin>();
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _container.Dispose();
+            }
+
+            _isDisposed = true;
         }
     }
 }

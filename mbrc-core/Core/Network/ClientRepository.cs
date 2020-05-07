@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using LiteDB;
 using MusicBeeRemote.Core.Settings;
@@ -16,6 +17,11 @@ namespace MusicBeeRemote.Core.Network
 
         public void InsertClient(RemoteClient client)
         {
+            if (client == null)
+            {
+                throw new ArgumentNullException(nameof(client));
+            }
+
             using (var db = new LiteDatabase(_storageLocationProvider.CacheDatabase))
             {
                 var collection = db.GetCollection<RemoteClient>("clients");
@@ -42,6 +48,7 @@ namespace MusicBeeRemote.Core.Network
                 var clients = db.GetCollection<RemoteClient>("clients").FindAll();
                 knownClients.AddRange(clients.ToList());
             }
+
             return knownClients;
         }
 
@@ -85,7 +92,6 @@ namespace MusicBeeRemote.Core.Network
                 var client = collection
                     .Find(x => x.ClientId == clientId)
                     .FirstOrDefault();
-
 
                 if (client == null)
                 {

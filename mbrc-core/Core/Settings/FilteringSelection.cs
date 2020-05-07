@@ -1,4 +1,4 @@
-using System.Runtime.Serialization;
+﻿using System.Runtime.Serialization;
 
 namespace MusicBeeRemote.Core.Settings
 {
@@ -12,15 +12,17 @@ namespace MusicBeeRemote.Core.Settings
         /// </summary>
         [EnumMember(Value = "all")]
         All,
+
         /// <summary>
         /// When selected only the IP addresses inside a specific range will be allowed to connect.
         /// </summary>
         [EnumMember(Value = "range")]
         Range,
+
         /// <summary>
         /// When selected only the specified IP addresses will be allowed to connect.
         /// </summary>
         [EnumMember(Value = "specific")]
-        Specific
+        Specific,
     }
 }
