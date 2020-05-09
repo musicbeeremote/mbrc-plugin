@@ -37,6 +37,11 @@ namespace MusicBeePlugin.ApiAdapters
             }
             else
             {
+                if (paths.Length == 0)
+                {
+                    return new List<Track>();
+                }
+
                 files = paths;
             }
 

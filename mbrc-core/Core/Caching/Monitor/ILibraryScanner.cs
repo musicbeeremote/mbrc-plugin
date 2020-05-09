@@ -141,11 +141,12 @@ namespace MusicBeeRemote.Core.Caching.Monitor
             }
 
             var delta = _apiAdapter.GetSyncDelta(paths, after);
+            _logger.Debug($"Delta contains {delta}");
             _trackRepository.RemoveAll(delta.GetDeletedFiles());
             _trackRepository.Insert(_apiAdapter.GetTracks(delta.GetNewFiles()));
             _trackRepository.Update(_apiAdapter.GetTracks(delta.GetUpdatedFiles()));
             _cacheInfoRepository.Update(new CacheInfo { TracksUpdated = DateTime.Now });
-            _logger.Info($"Cache contains {_trackRepository.Count()} tracks. {delta}");
+            _logger.Info($"Cache contains {_trackRepository.Count()} tracks.");
             _semaphore.Release();
         }
 

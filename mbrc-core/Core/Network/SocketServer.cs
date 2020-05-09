@@ -44,6 +44,7 @@ namespace MusicBeeRemote.Core.Network
         private AsyncCallback _workerCallback;
 
         private bool _isRunning;
+        private bool _isDisposed;
         private Timer _pingTimer;
 
         public SocketServer(
@@ -66,6 +67,11 @@ namespace MusicBeeRemote.Core.Network
             _hub.Subscribe<ForceClientDisconnect>(eEvent => DisconnectSocket(eEvent.ConnectionId));
             _hub.Subscribe<BroadcastEventAvailable>(eEvent => Broadcast(eEvent.BroadcastEvent));
             _hub.Subscribe<PluginResponseAvailableEvent>(eEvent => Send(eEvent.Message, eEvent.ConnectionId));
+        }
+
+        ~SocketServer()
+        {
+            Dispose(false);
         }
 
         /// <summary>
@@ -151,9 +157,25 @@ namespace MusicBeeRemote.Core.Network
         /// </summary>
         public void Dispose()
         {
-            // TODO: dispose properly
-            _mainSocket.Dispose();
-            _pingTimer.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _mainSocket?.Close();
+                _mainSocket?.Dispose();
+                _pingTimer.Dispose();
+            }
+
+            _isDisposed = true;
         }
 
         /// <summary>

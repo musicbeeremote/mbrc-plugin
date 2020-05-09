@@ -74,7 +74,7 @@ namespace MusicBeePlugin
             _musicBeeRemotePlugin = _bootstrap.BootStrap(dependencies);
 
             const string menuItemDescription = "Information Panel of the MusicBee Remote";
-            _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);
+            _api.MB_AddMenuItem("mnuTools/MusicBee Remote: Settings", menuItemDescription, MenuItemClicked);
 
 #if DEBUG
             // Experimental feature only supported on debug
@@ -165,7 +165,7 @@ namespace MusicBeePlugin
         private void AddPartyMode()
         {
             const string description = "Control panel of the party mode functionality";
-            const string key = "mnuTools/MusicBee Remote/Party Mode";
+            const string key = "mnuTools/MusicBee Remote: Party Mode";
             _api.MB_AddMenuItem(key, description, (sender, args) =>
             {
                 _musicBeeRemotePlugin.DisplayPartyModeWindow();
