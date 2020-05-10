@@ -19,6 +19,10 @@ IF NOT "%APPVEYOR%" == "True" (
     REM Package restore
     tools\nuget.exe restore mbrc-core\packages.config -OutputDirectory %cd%\packages -NonInteractive
     tools\nuget.exe restore plugin\packages.config -OutputDirectory %cd%\packages -NonInteractive    
+    if "%config%" == "Debug" (
+        tools\nuget.exe restore mbrc-core.Test\packages.config -OutputDirectory %cd%\packages -NonInteractive
+        tools\nuget.exe restore mbrc-tester\packages.config -OutputDirectory %cd%\packages -NonInteractive   
+    )
 )
 
 REM Build
