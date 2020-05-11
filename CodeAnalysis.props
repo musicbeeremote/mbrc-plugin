@@ -5,20 +5,9 @@
     <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)\.editorconfig')">
         <AdditionalFiles Include="$(MSBuildThisFileDirectory)\.editorconfig" />
     </ItemGroup>
-
+    
     <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers"
-                          Version="3.0.0">
-            <PrivateAssets>All</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="StyleCop.Analyzers"
-                          Version="1.1.118"
-                          PrivateAssets="All" />
-        <AdditionalFiles Include="$(MSBuildThisFileDirectory)stylecop.json"
+        <AdditionalFiles Include="$(MSBuildThisFileDirectory)\stylecop.json"
                          InProject="false" />
     </ItemGroup>
 
