@@ -34,17 +34,14 @@ namespace MusicBeeRemote.Core.Network
         public static IPAddress GetSubnetMask(string ipAddress)
         {
             var address = IPAddress.Parse(ipAddress);
-            foreach (var information in
-                from adapter in NetworkInterface.GetAllNetworkInterfaces()
+
+            var unicastIpAddressInformation = from adapter in NetworkInterface.GetAllNetworkInterfaces()
                 from information in adapter.GetIPProperties().UnicastAddresses
                 where information.Address.AddressFamily == AddressFamily.InterNetwork
                 where address.Equals(information.Address)
-                select information)
-            {
-                return information.IPv4Mask;
-            }
+                select information;
 
-            throw new ArgumentException($"unable to find subnet mask for '{address}'");
+            return unicastIpAddressInformation.First()?.IPv4Mask ?? throw new ArgumentException($"unable to find subnet mask for '{address}'");
         }
 
         public static IPAddress GetNetworkAddress(IPAddress address, IPAddress subnetMask)

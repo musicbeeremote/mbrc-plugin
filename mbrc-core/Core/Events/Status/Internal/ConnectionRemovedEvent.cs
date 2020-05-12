@@ -1,7 +1,7 @@
 using MusicBeeRemote.Core.Network;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Events.Internal
+namespace MusicBeeRemote.Core.Events.Status.Internal
 {
     internal class ConnectionRemovedEvent : ITinyMessage
     {

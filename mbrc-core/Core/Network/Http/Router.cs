@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using MusicBeeRemote.Core.Network.Http;
 
-namespace MusicBeeRemote.Core.Network
+namespace MusicBeeRemote.Core.Network.Http
 {
     // Each new route is assigned a key from permutations of `KeyBase` ("123456") and is stored in
     // `_routes` dictionary. Router implementation builds a composite regex from all routes
@@ -54,7 +53,11 @@ namespace MusicBeeRemote.Core.Network
                 return null;
             });
             _permEnum.MoveNext();
-            _routes.Add(string.Join(null, _permEnum.Current), new RouteEntry { Pattern = route, Handler = handler });
+            if (_permEnum.Current != null)
+            {
+                _routes.Add(string.Join(null, _permEnum.Current), new RouteEntry { Pattern = route, Handler = handler });
+            }
+
             _pathParser = null;
         }
 
@@ -68,25 +71,37 @@ namespace MusicBeeRemote.Core.Network
             }
 
             var match = _pathParser.Match(KeyBase + localPath);
-            if (match.Success)
+            if (!match.Success)
             {
-                string routeKey = null;
-                for (var idx = 1; idx <= KeyBase.Length; idx++)
-                {
-                    routeKey += match.Groups[$"__c{idx}__"].Value;
-                }
+                return false;
+            }
 
-                var entry = _routes[routeKey];
-                handler = entry.Handler;
-                if (entry.GroupStart < entry.GroupEnd)
-                {
-                    data = new Dictionary<string, string>();
-                }
+            string routeKey = null;
+            for (var idx = 1; idx <= KeyBase.Length; idx++)
+            {
+                routeKey += match.Groups[$"__c{idx}__"].Value;
+            }
 
-                for (var groupIdx = entry.GroupStart; groupIdx < entry.GroupEnd; groupIdx++)
-                {
-                    data[_groupNames[groupIdx]] = match.Groups[groupIdx].Value;
-                }
+            if (routeKey == null)
+            {
+                return false;
+            }
+
+            var entry = _routes[routeKey];
+            handler = entry.Handler;
+            if (entry.GroupStart < entry.GroupEnd)
+            {
+                data = new Dictionary<string, string>();
+            }
+
+            if (data == null)
+            {
+                return false;
+            }
+
+            for (var groupIdx = entry.GroupStart; groupIdx < entry.GroupEnd; groupIdx++)
+            {
+                data[_groupNames[groupIdx]] = match.Groups[groupIdx].Value;
             }
 
             return match.Success;
@@ -116,7 +131,7 @@ namespace MusicBeeRemote.Core.Network
                 var entry = _routes[key];
                 entry.GroupStart = groupIdx;
                 var el = 1;
-                foreach (var c in key.ToCharArray())
+                foreach (var c in key)
                 {
                     rev[c - '1'] = $"(?<__c{el++}__>{c})";
                 }
@@ -127,23 +142,23 @@ namespace MusicBeeRemote.Core.Network
                                   var str = m.Groups["static"].Value;
                                   if (!string.IsNullOrEmpty(str))
                                   {
-                                      return "/" + Regex.Escape(str);
+                                      return $"/{Regex.Escape(str)}";
                                   }
 
                                   str = m.Groups["data"].Value;
-                                  if (!string.IsNullOrEmpty(str))
+                                  if (string.IsNullOrEmpty(str))
                                   {
-                                      if (groupIdx >= _groupNames.Length)
-                                      {
-                                          Array.Resize(ref _groupNames, _groupNames.Length * 2);
-                                      }
-
-                                      _groupNames[groupIdx++] = str;
-                                      str = m.Groups["type"].Value;
-                                      return $"/({(string.IsNullOrEmpty(str) ? "[^/]*" : str)})";
+                                      return Regex.Escape(m.Groups[0].Value);
                                   }
 
-                                  return Regex.Escape(m.Groups[0].Value);
+                                  if (groupIdx >= _groupNames.Length)
+                                  {
+                                      Array.Resize(ref _groupNames, _groupNames.Length * 2);
+                                  }
+
+                                  _groupNames[groupIdx++] = str;
+                                  str = m.Groups["type"].Value;
+                                  return $"/({(string.IsNullOrEmpty(str) ? "[^/]*" : str)})";
                               }));
                 entry.GroupEnd = groupIdx;
             }

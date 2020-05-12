@@ -3,15 +3,15 @@ using System.Security;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Threading;
+using MusicBeeRemote.Core.Utilities;
 using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Model
 {
-    internal class LyricCoverModel : IDisposable
+    public class LyricCoverModel : IDisposable
     {
         private readonly ITinyMessengerHub _hub;
 
@@ -76,7 +76,7 @@ namespace MusicBeeRemote.Core.Model
 
         private void SetCover(string base64)
         {
-            var hash = Utilities.ArtworkUtilities.Sha1Hash(base64);
+            var hash = ArtworkUtilities.Sha1Hash(base64);
 
             if (_xHash != null && _xHash.Equals(hash, StringComparison.InvariantCultureIgnoreCase))
             {

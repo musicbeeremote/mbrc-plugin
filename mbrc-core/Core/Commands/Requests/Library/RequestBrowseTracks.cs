@@ -2,7 +2,7 @@
 using System.Linq;
 using MusicBeeRemote.Core.Caching;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;

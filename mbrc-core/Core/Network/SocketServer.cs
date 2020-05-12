@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Threading;
@@ -61,8 +61,6 @@ namespace MusicBeeRemote.Core.Network
             TaskScheduler scheduler = new LimitedTaskScheduler(2);
             _factory = new TaskFactory(scheduler);
 
-            _hub.Subscribe<StopSocketServer>(eEvent => Terminate());
-            _hub.Subscribe<StartSocketServerEvent>(eEvent => Start());
             _hub.Subscribe<RestartSocketEvent>(eEvent => RestartSocket());
             _hub.Subscribe<ForceClientDisconnect>(eEvent => DisconnectSocket(eEvent.ConnectionId));
             _hub.Subscribe<BroadcastEventAvailable>(eEvent => Broadcast(eEvent.BroadcastEvent));

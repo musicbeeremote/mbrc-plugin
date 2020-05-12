@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using MusicBeeRemote.Core.Network.Http;
 using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 using NLog;
 
-namespace MusicBeeRemote.Core.Network
+namespace MusicBeeRemote.Core.Network.Http
 {
-    public class HttpSupport : IDisposable
+    public sealed class HttpSupport : IDisposable
     {
         private readonly PersistenceManager _persistenceManager;
         private readonly Dictionary<string, RouteAction> _routes = new Dictionary<string, RouteAction>();
@@ -24,6 +23,11 @@ namespace MusicBeeRemote.Core.Network
 
             _persistenceManager = persistenceManager;
             podcastHttpApi.RegisterRoutes(this);
+        }
+
+        ~HttpSupport()
+        {
+            Dispose(false);
         }
 
         public void Start()
@@ -62,7 +66,7 @@ namespace MusicBeeRemote.Core.Network
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (_isDisposed)
             {

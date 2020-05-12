@@ -1,7 +1,7 @@
 ﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;

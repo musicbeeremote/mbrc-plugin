@@ -1,7 +1,7 @@
 using MusicBeeRemote.Core.Model.Entities;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Events.Internal
+namespace MusicBeeRemote.Core.Events.Status.Internal
 {
     public class PluginResponseAvailableEvent : ITinyMessage
     {

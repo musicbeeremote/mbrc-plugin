@@ -2,7 +2,7 @@
 
 namespace MusicBeeRemote.Core.Model
 {
-    internal class LyricsDataReadyEvent : ITinyMessage
+    public class LyricsDataReadyEvent : ITinyMessage
     {
         public LyricsDataReadyEvent(string lyrics)
         {

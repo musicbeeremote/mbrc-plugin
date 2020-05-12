@@ -2,7 +2,7 @@
 using System.Net;
 using MusicBeeRemote.Core.Commands;
 using MusicBeeRemote.Core.Commands.Logs;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Network

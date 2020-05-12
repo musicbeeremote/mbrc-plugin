@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using NLog;
 
 namespace MusicBeeRemote.Core.Network.Http
 {
@@ -27,8 +28,9 @@ namespace MusicBeeRemote.Core.Network.Http
     // for routing (no regex handling)
     public delegate void RouteAction(HttpListenerContext ctx, Dictionary<string, string> data);
 
-    public class WebServer : IDisposable
+    public sealed class WebServer : IDisposable
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private HttpListener _httpListener;
         private Router _router;
         private bool _isDisposed;
@@ -50,11 +52,11 @@ namespace MusicBeeRemote.Core.Network.Http
             _router.Add(path, fn);
         }
 
-        public void Start(bool async = false)
+        public void Start(bool asynchronous = false)
         {
             try
             {
-                RealStart(async);
+                RealStart(asynchronous);
             }
             catch (Exception e)
             {
@@ -73,7 +75,7 @@ namespace MusicBeeRemote.Core.Network.Http
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (_isDisposed)
             {
@@ -91,7 +93,7 @@ namespace MusicBeeRemote.Core.Network.Http
             _isDisposed = true;
         }
 
-        private void RealStart(bool async)
+        private void RealStart(bool asynchronous)
         {
             void WorkerFunction()
             {
@@ -104,7 +106,7 @@ namespace MusicBeeRemote.Core.Network.Http
 
             _httpListener.Start();
 
-            if (async)
+            if (asynchronous)
             {
                 ThreadPool.QueueUserWorkItem(_ => WorkerFunction());
             }
@@ -142,8 +144,9 @@ namespace MusicBeeRemote.Core.Network.Http
             {
                 ctx.Response.Close();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex);
             }
         }
     }

@@ -1,6 +1,6 @@
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Events.Internal
+namespace MusicBeeRemote.Core.Events.Status.Internal
 {
     internal class BroadcastEventAvailable : ITinyMessage
     {

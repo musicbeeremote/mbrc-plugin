@@ -2,6 +2,7 @@
 using MusicBeeRemote.Core.Events.Notifications;
 using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Network.Http;
 using MusicBeeRemote.Core.Windows;
 using TinyMessenger;
 

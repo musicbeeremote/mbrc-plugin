@@ -64,7 +64,7 @@ namespace MusicBeePlugin.ApiAdapters
         }
 
         /// <inheritdoc />
-        public IEnumerable<NowPlayingTrackInfo> GetTracks(int offset = 0, int limit = 4000)
+        public IEnumerable<NowPlayingTrackInfo> GetTracks(int offset = 0, int limit = 5000)
         {
             _api.NowPlayingList_QueryFilesEx(null, out var tracks);
 

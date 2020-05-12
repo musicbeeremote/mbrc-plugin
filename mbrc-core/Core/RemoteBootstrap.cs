@@ -11,6 +11,7 @@ using MusicBeeRemote.Core.Logging;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Network.Http;
 using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
