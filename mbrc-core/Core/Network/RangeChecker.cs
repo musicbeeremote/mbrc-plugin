@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using MusicBeeRemote.Core.Settings.Dialog.Validations;
 
 namespace MusicBeeRemote.Core.Network
@@ -7,10 +8,18 @@ namespace MusicBeeRemote.Core.Network
     {
         public static bool AddressInRange(string address, string firstRangeAddress, uint lastOctet)
         {
-            var validationRule = new AddressValidationRule();
+            if (address == null)
+            {
+                throw new ArgumentNullException(nameof(address));
+            }
 
-            var addressIsValid = validationRule.Validate(address);
-            var rangeStartIsValid = validationRule.Validate(firstRangeAddress);
+            if (firstRangeAddress == null)
+            {
+                throw new ArgumentNullException(nameof(firstRangeAddress));
+            }
+
+            var addressIsValid = AddressValidationRule.Validate(address);
+            var rangeStartIsValid = AddressValidationRule.Validate(firstRangeAddress);
             var lastOctetValid = lastOctet > 0 && lastOctet < 255;
             if (!addressIsValid || !rangeStartIsValid || !lastOctetValid)
             {
@@ -23,8 +32,8 @@ namespace MusicBeeRemote.Core.Network
             var firstOctetMatch = addressOctets[0] == startOctets[0];
             var secondOctetMatch = addressOctets[1] == startOctets[1];
             var thirdOctetMatch = addressOctets[2] == startOctets[2];
-            var finalOctet = uint.Parse(addressOctets[3]);
-            var finalStartRangeOcted = uint.Parse(startOctets[3]);
+            var finalOctet = uint.Parse(addressOctets[3], CultureInfo.CurrentCulture);
+            var finalStartRangeOcted = uint.Parse(startOctets[3], CultureInfo.CurrentCulture);
             var lastOctedInRange = finalOctet >= finalStartRangeOcted && finalOctet <= lastOctet;
 
             return firstOctetMatch & secondOctetMatch && thirdOctetMatch && lastOctedInRange;

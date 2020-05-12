@@ -7,7 +7,7 @@ namespace MusicBeeRemote.Core.Network.Http
     {
         [DataMember(Name = "code")]
         public int Code { get; set; }
-        
+
         [DataMember(Name = "description")]
         public string Description { get; set; }
     }

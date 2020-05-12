@@ -7,18 +7,6 @@ namespace MusicBeeRemote.Core.Model.Entities
     [DataContract]
     public class Track : IEquatable<Track>, IComparable<Track>
     {
-        public Track()
-        {
-        }
-
-        public Track(string artist, string title, int trackNo, string src)
-        {
-            Artist = artist;
-            Title = title;
-            Src = src;
-            Trackno = trackNo;
-        }
-        
         [BsonId]
         [DataMember(Name = "src")]
         public string Src { get; set; }
@@ -47,14 +35,56 @@ namespace MusicBeeRemote.Core.Model.Entities
         [DataMember(Name = "year")]
         public string Year { get; set; }
 
+        public static bool operator ==(Track left, Track right)
+        {
+            return left?.Equals(right) ?? ReferenceEquals(right, null);
+        }
+
+        public static bool operator !=(Track left, Track right)
+        {
+            return !(left == right);
+        }
+
+        public static bool operator <(Track left, Track right)
+        {
+            return ReferenceEquals(left, null) ? !ReferenceEquals(right, null) : left.CompareTo(right) < 0;
+        }
+
+        public static bool operator <=(Track left, Track right)
+        {
+            return ReferenceEquals(left, null) || left.CompareTo(right) <= 0;
+        }
+
+        public static bool operator >(Track left, Track right)
+        {
+            return !ReferenceEquals(left, null) && left.CompareTo(right) > 0;
+        }
+
+        public static bool operator >=(Track left, Track right)
+        {
+            return ReferenceEquals(left, null) ? ReferenceEquals(right, null) : left.CompareTo(right) >= 0;
+        }
+
         public bool Equals(Track other)
         {
-            return other != null && other.Artist.Equals(Artist) && other.Title.Equals(Title);
+            return other != null && other.Artist.Equals(Artist, StringComparison.InvariantCultureIgnoreCase) &&
+                   other.Title.Equals(Title, StringComparison.InvariantCultureIgnoreCase);
         }
 
         public int CompareTo(Track other)
         {
             return other == null ? 1 : Trackno.CompareTo(other.Trackno);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as Track);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            return Src != null ? Src.GetHashCode() : 0;
         }
     }
 }

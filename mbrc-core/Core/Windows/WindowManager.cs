@@ -1,12 +1,11 @@
-using MusicBeeRemote.Core.ApiAdapters;
-using MusicBeeRemote.Core.Settings.Dialog;
+﻿using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
-using MusicBeeRemote.Core.Settings.Dialog.PartyModePanel;
+using MusicBeeRemote.Core.Settings.Dialog.PartyMode;
 using StructureMap;
 
 namespace MusicBeeRemote.Core.Windows
 {
-    class WindowManager : IWindowManager
+    internal class WindowManager : IWindowManager
     {
         private readonly IInvokeHandler _invokeHandler;
         private readonly IContainer _container;
@@ -30,6 +29,7 @@ namespace MusicBeeRemote.Core.Windows
             {
                 _panel = _container.GetInstance<PartyModePanel>();
             }
+
             _panel.Show();
             _panel.Closed += (sender, args) => _panel = null;
         }
@@ -38,7 +38,7 @@ namespace MusicBeeRemote.Core.Windows
         {
             if (_window == null || !_window.Visible)
             {
-                _window = _container.GetInstance<ConfigurationPanel>();                
+                _window = _container.GetInstance<ConfigurationPanel>();
             }
 
             _window.Show();

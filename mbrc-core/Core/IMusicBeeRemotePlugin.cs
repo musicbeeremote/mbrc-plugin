@@ -2,9 +2,15 @@
 {
     public interface IMusicBeeRemotePlugin
     {
+        /// <summary>
+        /// Starts the plugin socket server and API monitoring.
+        /// </summary>
         void Start();
 
-        void Stop();
+        /// <summary>
+        /// Stops the plugin socket server and API monitoring.
+        /// </summary>
+        void Terminate();
 
         /// <summary>
         /// Shows the MusicBee Remote configuration panel.

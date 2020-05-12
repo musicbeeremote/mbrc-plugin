@@ -1,5 +1,14 @@
-﻿using MusicBeeRemote.Core.Commands.InstaReplies;
+﻿using MusicBeeRemote.Core.Commands.InstantReplies;
 using MusicBeeRemote.Core.Commands.Requests;
+using MusicBeeRemote.Core.Commands.Requests.Handshake;
+using MusicBeeRemote.Core.Commands.Requests.Library;
+using MusicBeeRemote.Core.Commands.Requests.NowPlaying;
+using MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands;
+using MusicBeeRemote.Core.Commands.Requests.Output;
+using MusicBeeRemote.Core.Commands.Requests.PlayerState;
+using MusicBeeRemote.Core.Commands.Requests.PlayingTrack;
+using MusicBeeRemote.Core.Commands.Requests.Playlists;
+using MusicBeeRemote.Core.Commands.Requests.Podcasts;
 using MusicBeeRemote.Core.Network;
 using StructureMap;
 
@@ -9,7 +18,7 @@ namespace MusicBeeRemote.Core.Commands
     {
         public static void Register(CommandExecutor commandExecutor, Container container)
         {
-            /** Protocol Related commands **/
+            // Protocol Related commands
             commandExecutor.AddCommand(Constants.Player, container.GetInstance<RequestPlayer>());
             commandExecutor.AddCommand(Constants.Protocol, container.GetInstance<RequestProtocol>());
             commandExecutor.AddCommand(Constants.PluginVersion, container.GetInstance<RequestPluginVersion>());
@@ -26,7 +35,8 @@ namespace MusicBeeRemote.Core.Commands
             commandExecutor.AddCommand(Constants.PlayerRepeat, container.GetInstance<RequestRepeat>());
             commandExecutor.AddCommand(Constants.PlayerMute, container.GetInstance<RequestMute>());
             commandExecutor.AddCommand(Constants.NowPlayingPosition, container.GetInstance<RequestPlaybackPosition>());
-            commandExecutor.AddCommand(Constants.NowPlayingListRemove,
+            commandExecutor.AddCommand(
+                Constants.NowPlayingListRemove,
                 container.GetInstance<RequestNowPlayingTrackRemoval>());
             commandExecutor.AddCommand(Constants.NowPlayingListPlay, container.GetInstance<RequestNowPlayingPlay>());
             commandExecutor.AddCommand(Constants.NowPlayingList, container.GetInstance<RequestNowPlayingList>());
@@ -34,49 +44,43 @@ namespace MusicBeeRemote.Core.Commands
             commandExecutor.AddCommand(Constants.NowPlayingTrack, container.GetInstance<RequestSongInfo>());
             commandExecutor.AddCommand(Constants.NowPlayingCover, container.GetInstance<RequestCover>());
             commandExecutor.AddCommand(Constants.NowPlayingLyrics, container.GetInstance<RequestLyrics>());
-            commandExecutor.AddCommand(Constants.NowPlayingRating, container.GetInstance<RequestRating>());           
-            commandExecutor.AddCommand(Constants.NowPlayingListMove,
+            commandExecutor.AddCommand(Constants.NowPlayingRating, container.GetInstance<RequestRating>());
+            commandExecutor.AddCommand(
+                Constants.NowPlayingListMove,
                 container.GetInstance<RequestNowPlayingMoveTrack>());
 
-            #region Protocol 2.1
-
+            // Protocol 2.1
             commandExecutor.AddCommand(Constants.Pong, container.GetInstance<HandlePong>());
             commandExecutor.AddCommand(Constants.Ping, container.GetInstance<PingReply>());
             commandExecutor.AddCommand(Constants.Init, container.GetInstance<ProcessInitRequest>());
             commandExecutor.AddCommand(Constants.PlayerPlay, container.GetInstance<RequestPlay>());
             commandExecutor.AddCommand(Constants.PlayerPause, container.GetInstance<RequestPause>());
 
-            #endregion
-
-            #region Protocol 3
-
+            // Protocol 3
             commandExecutor.AddCommand(Constants.PlaylistPlay, container.GetInstance<RequestPlaylistPlay>());
             commandExecutor.AddCommand(Constants.LibraryBrowseGenres, container.GetInstance<RequestBrowseGenres>());
             commandExecutor.AddCommand(Constants.LibraryBrowseArtists, container.GetInstance<RequestBrowseArtists>());
             commandExecutor.AddCommand(Constants.LibraryBrowseAlbums, container.GetInstance<RequestBrowseAlbums>());
             commandExecutor.AddCommand(Constants.LibraryBrowseTracks, container.GetInstance<RequestBrowseTracks>());
-            commandExecutor.AddCommand(Constants.NowPlayingQueue, container.GetInstance<RequestNowplayingQueue>());
+            commandExecutor.AddCommand(Constants.NowPlayingQueue, container.GetInstance<RequestNowPlayingQueue>());
 
-            #endregion
-
-            #region Protocol 4
-
+            // Protocol 4
             commandExecutor.AddCommand(Constants.PlayerOutput, container.GetInstance<RequestOutputDeviceList>());
-            commandExecutor.AddCommand(Constants.PlayerOutputSwitch,
+            commandExecutor.AddCommand(
+                Constants.PlayerOutputSwitch,
                 container.GetInstance<RequestPlayerOutputSwitch>());
             commandExecutor.AddCommand(Constants.RadioStations, container.GetInstance<RequestRadioStations>());
 
-            #endregion
-
-            #region Protocol 5
-
+            // Protocol 5
             commandExecutor.AddCommand(Constants.PodcastSubscriptions, container.GetInstance<RequestPodcastCommand>());
-            commandExecutor.AddCommand(Constants.PodcastEpisodes, container.GetInstance<RequestPodcastEpisodeCommand>());
+            commandExecutor.AddCommand(
+                Constants.PodcastEpisodes,
+                container.GetInstance<RequestPodcastEpisodeCommand>());
             commandExecutor.AddCommand(Constants.PodcastArtwork, container.GetInstance<RequestPodcastArtworkCommand>());
-            commandExecutor.AddCommand(Constants.NowPlayingCurrentPosition, container.GetInstance<RequestCurrentPosition>());
+            commandExecutor.AddCommand(
+                Constants.NowPlayingCurrentPosition,
+                container.GetInstance<RequestCurrentPosition>());
             commandExecutor.AddCommand(Constants.NowPlayingDetails, container.GetInstance<RequestDetails>());
-
-            #endregion
         }
     }
 }

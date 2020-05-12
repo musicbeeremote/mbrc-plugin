@@ -1,4 +1,5 @@
-﻿//===============================================================================
+﻿#pragma warning disable
+//===============================================================================
 // TinyIoC - TinyMessenger
 //
 // A simple messenger/event aggregator.
@@ -11,11 +12,9 @@
 // LIMITED TO THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
 // FITNESS FOR A PARTICULAR PURPOSE.
 //===============================================================================
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace TinyMessenger
 {
@@ -149,9 +148,9 @@ namespace TinyMessenger
 
                 if (hub != null)
                 {
-                    var unsubscribeMethod = typeof(ITinyMessengerHub).GetMethod("Unsubscribe", new Type[] {typeof(TinyMessageSubscriptionToken)});
+                    var unsubscribeMethod = typeof(ITinyMessengerHub).GetMethod("Unsubscribe", new Type[] { typeof(TinyMessageSubscriptionToken) });
                     unsubscribeMethod = unsubscribeMethod.MakeGenericMethod(_MessageType);
-                    unsubscribeMethod.Invoke(hub, new object[] {this});
+                    unsubscribeMethod.Invoke(hub, new object[] { this });
                 }
             }
 
@@ -790,3 +789,4 @@ namespace TinyMessenger
     }
     #endregion
 }
+#pragma warning restore

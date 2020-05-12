@@ -117,22 +117,7 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="InvalidPort" xml:space="preserve">
-    <value>"Invalid Port Number"</value>
-  </data>
-  <data name="minus" xml:space="preserve">
-    <value>-</value>
-  </data>
-  <data name="plus" xml:space="preserve">
-    <value>+</value>
-  </data>
-  <data name="ValidRange" xml:space="preserve">
-    <value>"A valid port number is a number from 1 to 65535"</value>
-  </data>
-  <data name="new_version">
-    <value xml:space="preserve">There is a new Version of MusicBee Remote plugin</value>
-  </data>
-  <data name="InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist" xml:space="preserve">
-    <value>Log file doesn't exist</value>
+  <data name="ExceptionAddressInvalidLength" xml:space="preserve">
+    <value>The mask and address lengths don't match</value>
   </data>
 </root>

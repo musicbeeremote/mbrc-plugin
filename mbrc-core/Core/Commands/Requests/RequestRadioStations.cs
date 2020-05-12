@@ -2,6 +2,7 @@
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
@@ -21,18 +22,17 @@ namespace MusicBeeRemote.Core.Commands.Requests
             _hub = hub;
         }
 
-        public void Execute(IEvent @event)
+        public void Execute(IEvent receivedEvent)
         {
-            var data = @event.Data as JObject;
-            if (data != null)
+            if (receivedEvent.Data is JObject data)
             {
-                var offset = (int) data["offset"];
-                var limit = (int) data["limit"];
-                GetPage(@event.ConnectionId, offset, limit);
+                var offset = (int)data["offset"];
+                var limit = (int)data["limit"];
+                GetPage(receivedEvent.ConnectionId, offset, limit);
             }
             else
             {
-                GetPage(@event.ConnectionId);
+                GetPage(receivedEvent.ConnectionId);
             }
         }
 
@@ -49,9 +49,9 @@ namespace MusicBeeRemote.Core.Commands.Requests
                     Data = offset > total ? new List<RadioStation>() : stations.GetRange(offset, realLimit),
                     Offset = offset,
                     Limit = limit,
-                    Total = total
+                    Total = total,
                 },
-                NewLineTerminated = true
+                NewLineTerminated = true,
             };
 
             _hub.Publish(new PluginResponseAvailableEvent(message, connectionId));

@@ -12,11 +12,6 @@ namespace MusicBeeRemote.Core.Events
             ClientId = clientId;
         }
 
-        public JToken DataToken()
-        {
-            return Data as JToken;
-        }
-
         public object Data { get; }
 
         public string Type { get; }
@@ -26,5 +21,10 @@ namespace MusicBeeRemote.Core.Events
         public string ClientId { get; }
 
         public object Sender { get; } = null;
+
+        public JToken DataToken()
+        {
+            return Data as JToken;
+        }
     }
 }

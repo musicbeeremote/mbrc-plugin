@@ -6,7 +6,7 @@ namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface ITrackApiAdapter
     {
-        TrackTemporalnformation GetTemporalInformation();
+        TrackTemporalInformation GetTemporalInformation();
 
         bool SeekTo(int position);
 

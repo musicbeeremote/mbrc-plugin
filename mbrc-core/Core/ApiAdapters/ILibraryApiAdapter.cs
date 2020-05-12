@@ -8,7 +8,7 @@ using MusicBeeRemote.Core.Podcasts;
 namespace MusicBeeRemote.Core.ApiAdapters
 {
     public interface ILibraryApiAdapter
-    {        
+    {
         IEnumerable<Track> GetTracks(string[] paths = null);
 
         Modifications GetSyncDelta(string[] cachedFiles, DateTime lastSync);
@@ -26,11 +26,11 @@ namespace MusicBeeRemote.Core.ApiAdapters
         IEnumerable<PodcastEpisode> GetEpisodes(string subscriptionId);
 
         byte[] GetPodcastSubscriptionArtwork(string subscriptionId);
-        
+
         IEnumerable<Playlist> GetPlaylists();
 
-        bool PlayPlaylist(string url);
-        
+        bool PlayPlaylist(string path);
+
         IEnumerable<string> GetTrackPaths();
     }
 }

@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using MusicBeeRemote.Core.Model.Entities;
@@ -10,7 +9,7 @@ namespace MbrcTester
 {
     public class MockLibrary
     {
-        private List<MockTrackMetadata> library;
+        private readonly List<MockTrackMetadata> _library;
 
         public MockLibrary()
         {
@@ -19,23 +18,23 @@ namespace MbrcTester
             // deserialize JSON directly from a file
             using (var file = File.OpenText($"{path}"))
             {
-                library = JsonConvert.DeserializeObject<List<MockTrackMetadata>>(file.ReadToEnd());
+                _library = JsonConvert.DeserializeObject<List<MockTrackMetadata>>(file.ReadToEnd());
             }
         }
 
         public IEnumerable<Track> GetTracks()
         {
-            return library.Select(metadata => new Track()
+            return _library.Select(metadata => new Track
             {
                 Album = metadata.Album,
                 AlbumArtist = metadata.AlbumArtist,
                 Disc = metadata.Disc,
                 Artist = metadata.Artist,
                 Genre = metadata.Genre,
-                Src = metadata._id,
                 Title = metadata.Title,
                 Trackno = metadata.TrackNo,
-                Year = metadata.Year
+                Year = metadata.Year,
+                Src = metadata._id,
             });
         }
     }

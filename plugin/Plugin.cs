@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using MusicBeePlugin.ApiAdapters;
@@ -11,13 +11,19 @@ namespace MusicBeePlugin
     /// </summary>
     public partial class Plugin
     {
-        private MusicBeeApiInterface _api;
         private readonly PluginInfo _about = new PluginInfo();
+        private MusicBeeApiInterface _api;
         private IMusicBeeRemotePlugin _musicBeeRemotePlugin;
+        private RemoteBootstrap _bootstrap;
 
+        /// <summary>
+        /// Initializes the MusicBee Remote plugin.
+        /// </summary>
+        /// <param name="apiInterfacePtr">The API interface of MusicBee.</param>
+        /// <returns>The plugin info.</returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            _api = new MusicBeeApiInterface();
+            _api = default;
             _api.Initialise(apiInterfacePtr);
 
             _about.PluginInfoVersion = PluginInfoVersion;
@@ -44,7 +50,6 @@ namespace MusicBeePlugin
             }
 
             // Initialize the required adapters for the plugin to operate.
-
             var libraryApiAdapter = new LibraryApiAdapter(_api);
             var nowPlayingApiAdapter = new NowPlayingApiAdapter(_api);
             var outputApiAdapter = new OutputApiAdapter(_api);
@@ -63,46 +68,44 @@ namespace MusicBeePlugin
                 trackApiAdapter,
                 invokeHandler,
                 baseStoragePath,
-                currentVersion
-            );
+                currentVersion);
 
-            var remoteBootstrap = new RemoteBootstrap();
-            _musicBeeRemotePlugin = remoteBootstrap.BootStrap(dependencies);
+            _bootstrap = new RemoteBootstrap();
+            _musicBeeRemotePlugin = _bootstrap.BootStrap(dependencies);
 
             const string menuItemDescription = "Information Panel of the MusicBee Remote";
-            _api.MB_AddMenuItem("mnuTools/MusicBee Remote", menuItemDescription, MenuItemClicked);
+            _api.MB_AddMenuItem("mnuTools/MusicBee Remote: Settings", menuItemDescription, MenuItemClicked);
+
+#if DEBUG
+            // Experimental feature only supported on debug
+            AddPartyMode();
+#endif
 
             _musicBeeRemotePlugin.Start();
 
             return _about;
         }
 
-        private void AddPartyMode()
-        {
-            const string description = "Control panel of the party mode functionality";
-            const string key = "mnuTools/MusicBee Remote/Party Mode";
-            _api.MB_AddMenuItem(key, description, (sender, args) =>
-            {
-                _musicBeeRemotePlugin.DisplayPartyModeWindow();
-            });
-
-        }
-
-        private void MenuItemClicked(object sender, EventArgs args)
-        {
-            _musicBeeRemotePlugin.DisplayInfoWindow();
-        }
-
+        /// <summary>
+        /// Called by MusicBee when the user presses configure in the plugin settings.
+        /// </summary>
+        /// <param name="panelHandle">A pointer to a panel handle.</param>
+        /// <returns>Always returns true.</returns>
         public bool Configure(IntPtr panelHandle)
         {
             _musicBeeRemotePlugin.DisplayInfoWindow();
             return true;
         }
 
+        /// <summary>
+        /// Called by MusicBee when it closes the Remote plugin for any reason.
+        /// </summary>
+        /// <param name="reason">The reason for the plugin close.</param>
         public void Close(PluginCloseReason reason)
         {
-            /** When the plugin closes for whatever reason the SocketServer must stop **/
-            _musicBeeRemotePlugin.Stop();
+            // Terminated the plugin core, when the plugin received the close event
+            _musicBeeRemotePlugin.Terminate();
+            _bootstrap.Dispose();
         }
 
         /// <summary>
@@ -129,11 +132,10 @@ namespace MusicBeePlugin
         /// <summary>
         /// Receives event Notifications from MusicBee. It is only required if the about.ReceiveNotificationFlags = PlayerEvents.
         /// </summary>
-        /// <param name="sourceFileUrl"></param>
-        /// <param name="type"></param>
+        /// <param name="sourceFileUrl">The path of the file responsible for generating then notification.</param>
+        /// <param name="type">The type of the notification.</param>
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
-            /** Perfom an action depending on the notification type **/
             switch (type)
             {
                 case NotificationType.TrackChanged:
@@ -154,10 +156,25 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingArtworkReady:
                     _musicBeeRemotePlugin.NotifyArtworkReady();
                     break;
-                case NotificationType.NowPlayingListChanged:
+                case NotificationType.PlayingTracksChanged:
                     _musicBeeRemotePlugin.NotifyNowPlayingListChanged();
                     break;
             }
+        }
+
+        private void AddPartyMode()
+        {
+            const string description = "Control panel of the party mode functionality";
+            const string key = "mnuTools/MusicBee Remote: Party Mode";
+            _api.MB_AddMenuItem(key, description, (sender, args) =>
+            {
+                _musicBeeRemotePlugin.DisplayPartyModeWindow();
+            });
+        }
+
+        private void MenuItemClicked(object sender, EventArgs args)
+        {
+            _musicBeeRemotePlugin.DisplayInfoWindow();
         }
     }
 }

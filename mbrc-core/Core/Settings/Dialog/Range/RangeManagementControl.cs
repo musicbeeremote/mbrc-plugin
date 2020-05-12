@@ -1,33 +1,34 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
 using MusicBeeRemote.Core.Settings.Dialog.Validations;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Range
 {
+    /// <summary>
+    /// A control used to insert an IP range.
+    /// </summary>
     public partial class RangeManagementControl : UserControl
     {
         private readonly RangeManagementViewModel _viewModel;
-        private readonly AddressValidationRule _addressValidationRule;
-        private readonly LastOctetValidator _lastOctetValidator;
 
         public RangeManagementControl(RangeManagementViewModel viewModel)
         {
-            _addressValidationRule = new AddressValidationRule();
-            _lastOctetValidator = new LastOctetValidator();
-            _viewModel = viewModel;
+            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             InitializeComponent();
             baseIpTextBox.Text = _viewModel.BaseIp;
-            
+
             if (_viewModel.LastOctetMax > 0)
             {
-                lastOctetTextBox.Text = _viewModel.LastOctetMax.ToString();
-            }            
+                lastOctetTextBox.Text = _viewModel.LastOctetMax.ToString(CultureInfo.CurrentCulture);
+            }
         }
 
-        private void BaseIpTextBox_TextChanged(object sender, System.EventArgs e)
+        private void BaseIpTextBoxTextChanged(object sender, EventArgs e)
         {
             var address = baseIpTextBox.Text;
-            if (_addressValidationRule.Validate(address))
+            if (AddressValidationRule.Validate(address))
             {
                 _viewModel.BaseIp = address;
                 baseIpTextBox.BackColor = DefaultBackColor;
@@ -38,12 +39,12 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
             }
         }
 
-        private void LastOctetTextBox_TextChanged(object sender, System.EventArgs e)
+        private void LastOctetTextBoxTextChanged(object sender, EventArgs e)
         {
-            if (_lastOctetValidator.Validate(baseIpTextBox.Text, lastOctetTextBox.Text))
+            if (LastOctetValidator.Validate(baseIpTextBox.Text, lastOctetTextBox.Text))
             {
                 lastOctetTextBox.BackColor = DefaultBackColor;
-                _viewModel.LastOctetMax = uint.Parse(lastOctetTextBox.Text);
+                _viewModel.LastOctetMax = uint.Parse(lastOctetTextBox.Text, CultureInfo.CurrentCulture);
             }
             else
             {

@@ -1,5 +1,7 @@
+﻿using System;
 using System.Collections.Generic;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using Newtonsoft.Json.Linq;
 using static MusicBeeRemote.Core.Commands.Requests.PaginatedData;
 
@@ -7,26 +9,30 @@ namespace MusicBeeRemote.Core.Commands.Requests
 {
     public abstract class PaginatedDataCommand<T> : ICommand
     {
-        public void Execute(IEvent @event)
+        public void Execute(IEvent receivedEvent)
         {
-            var data = @event.Data as JObject;
-            if (data != null)
+            if (receivedEvent == null)
             {
-                var offset = (int) data["offset"];
-                var limit = (int) data["limit"];
-                GetPage(@event.ConnectionId, offset, limit);
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
+            if (receivedEvent.Data is JObject data)
+            {
+                var offset = (int)data["offset"];
+                var limit = (int)data["limit"];
+                GetPage(receivedEvent.ConnectionId, offset, limit);
             }
             else
             {
-                GetPage(@event.ConnectionId);
+                GetPage(receivedEvent.ConnectionId);
             }
         }
+
+        internal abstract void Publish(PluginResponseAvailableEvent @event);
 
         protected abstract List<T> GetData();
 
         protected abstract string Context();
-
-        internal abstract void Publish(PluginResponseAvailableEvent @event);
 
         private void GetPage(string connectionId, int offset = 0, int limit = 800)
         {

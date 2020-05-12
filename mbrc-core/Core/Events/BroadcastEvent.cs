@@ -31,6 +31,7 @@ namespace MusicBeeRemote.Core.Events
                     break;
                 }
             }
+
             SocketMessage message;
             var retrieved = BroadcastMessages.TryGetValue(messageApi, out message);
             return retrieved ? message.ToJsonString() : string.Empty;

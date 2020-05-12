@@ -1,24 +1,37 @@
-namespace MusicBeeRemote.Core.Caching.Monitor
+﻿namespace MusicBeeRemote.Core.Caching.Monitor
 {
     public class Modifications
     {
+        private readonly string[] _deletedFiles;
+        private readonly string[] _newFiles;
+        private readonly string[] _updatedFiles;
+
         public Modifications(string[] deletedFiles, string[] newFiles, string[] updatedFiles)
         {
-            DeletedFiles = deletedFiles;
-            NewFiles = newFiles;
-            UpdatedFiles = updatedFiles;
+            _deletedFiles = deletedFiles;
+            _newFiles = newFiles;
+            _updatedFiles = updatedFiles;
         }
 
-        public string[] DeletedFiles { get; }
+        public string[] GetDeletedFiles()
+        {
+            return _deletedFiles;
+        }
 
-        public string[] NewFiles { get; }
+        public string[] GetNewFiles()
+        {
+            return _newFiles;
+        }
 
-        public string[] UpdatedFiles { get; }
+        public string[] GetUpdatedFiles()
+        {
+            return _updatedFiles;
+        }
 
         public override string ToString()
         {
             return
-                $"Found {NewFiles.Length} new, {DeletedFiles.Length} deleted and {UpdatedFiles.Length} updated files";
+                $"Found {_newFiles.Length} new, {_deletedFiles.Length} deleted and {_updatedFiles.Length} updated files";
         }
     }
 }

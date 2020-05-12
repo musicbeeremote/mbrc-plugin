@@ -9,7 +9,7 @@
         string GetPluginVersion();
     }
 
-    class VersionProvider : IVersionProvider
+    internal class VersionProvider : IVersionProvider
     {
         private readonly string _version;
 

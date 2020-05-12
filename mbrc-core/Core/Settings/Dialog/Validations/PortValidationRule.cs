@@ -1,13 +1,14 @@
 ﻿using System;
+using System.Globalization;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Validations
 {
-    public class PortValidationRule
+    public static class PortValidationRule
     {
-        public const uint MinPort = 1;
-        public const uint MaxPort = 65535;
+        private const uint MinPort = 1;
+        private const uint MaxPort = 65535;
 
-        public bool Validate(object value)
+        public static bool Validate(object value)
         {
             var port = 0;
 
@@ -17,10 +18,10 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Validations
 
                 if (!string.IsNullOrEmpty(input))
                 {
-                    port = int.Parse(input);
+                    port = int.Parse(input, CultureInfo.CurrentCulture);
                 }
             }
-            catch (Exception)
+            catch
             {
                 return false;
             }

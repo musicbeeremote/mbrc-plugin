@@ -1,7 +1,9 @@
-using Moq;
+﻿using Moq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Commands.Requests;
+using MusicBeeRemote.Core.Commands.Requests.NowPlaying;
 using MusicBeeRemote.Core.Events;
+using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -37,9 +39,8 @@ namespace MusicBeeRemote.Test.Core.Commands.Requests
             var messageEvent = new MessageEvent(
                 socketMessage.Context,
                 socketMessage.Data,
-                "",
-                "5"
-            );
+                string.Empty,
+                "5");
             _request.Execute(messageEvent);
             _apiAdapter.Verify(adapter => adapter.PlayPath("C:\\path\\song.mp3"));
             var captor = new ArgumentCaptor<PluginResponseAvailableEvent>();
@@ -60,9 +61,8 @@ namespace MusicBeeRemote.Test.Core.Commands.Requests
             var messageEvent = new MessageEvent(
                 socketMessage.Context,
                 socketMessage.Data,
-                "",
-                "5"
-            );
+                string.Empty,
+                "5");
             _request.Execute(messageEvent);
             _apiAdapter.Verify(adapter => adapter.PlayIndex(2));
             var captor = new ArgumentCaptor<PluginResponseAvailableEvent>();

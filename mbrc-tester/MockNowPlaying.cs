@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemote.Core.Model.Entities;
 
@@ -8,14 +8,14 @@ namespace MbrcTester
     {
         public List<MockTrackMetadata> NowPlayingList { get; } = new List<MockTrackMetadata>();
 
-        public IEnumerable<NowPlaying> GetNowPlaying()
+        public IEnumerable<NowPlayingTrackInfo> GetNowPlaying()
         {
-            return NowPlayingList.Select((metadata, index) => new NowPlaying()
+            return NowPlayingList.Select((metadata, index) => new NowPlayingTrackInfo()
             {
                 Artist = metadata.Artist,
                 Path = metadata._id,
                 Position = index,
-                Title = metadata.Title
+                Title = metadata.Title,
             });
         }
 
@@ -26,7 +26,7 @@ namespace MbrcTester
                 Artist = metadata.Artist,
                 Path = metadata.Album,
                 Position = index,
-                Title = metadata.Title
+                Title = metadata.Title,
             });
         }
     }

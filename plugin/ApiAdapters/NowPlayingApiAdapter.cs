@@ -6,36 +6,42 @@ using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin.ApiAdapters
 {
+    /// <inheritdoc />
     public class NowPlayingApiAdapter : INowPlayingApiAdapter
     {
         private readonly MusicBeeApiInterface _api;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NowPlayingApiAdapter"/> class.
+        /// </summary>
+        /// <param name="api">The MusicBee API.</param>
         public NowPlayingApiAdapter(MusicBeeApiInterface api)
         {
             _api = api;
         }
 
-        public bool MoveTrack(int from, int to)
+        /// <inheritdoc />
+        public bool MoveTrack(int startPosition, int endPosition)
         {
-            int[] aFrom = {from};
+            int[] aFrom = { startPosition };
             int dIn;
-            if (from > to)
+            if (startPosition > endPosition)
             {
-                dIn = to - 1;
+                dIn = endPosition - 1;
             }
             else
             {
-                dIn = to;
+                dIn = endPosition;
             }
 
             return _api.NowPlayingList_MoveFiles(aFrom, dIn);
         }
 
+        /// <inheritdoc />
         public bool PlayIndex(int index)
         {
             var success = false;
-            string[] tracks;
-            _api.NowPlayingList_QueryFilesEx(null, out tracks);
+            _api.NowPlayingList_QueryFilesEx(null, out var tracks);
 
             if (index >= 0 || index < tracks.Length)
             {
@@ -45,20 +51,22 @@ namespace MusicBeePlugin.ApiAdapters
             return success;
         }
 
+        /// <inheritdoc />
         public bool PlayPath(string path)
         {
             return _api.NowPlayingList_PlayNow(path);
         }
 
+        /// <inheritdoc />
         public bool RemoveIndex(int index)
         {
             return _api.NowPlayingList_RemoveAt(index);
         }
 
-        public IEnumerable<NowPlaying> GetTracks(int offset = 0, int limit = 4000)
+        /// <inheritdoc />
+        public IEnumerable<NowPlayingTrackInfo> GetTracks(int offset = 0, int limit = 4000)
         {
-            string[] tracks;
-            _api.NowPlayingList_QueryFilesEx(null, out tracks);
+            _api.NowPlayingList_QueryFilesEx(null, out var tracks);
 
             return tracks.Select((path, position) =>
             {
@@ -71,20 +79,20 @@ namespace MusicBeePlugin.ApiAdapters
                     title = path.Substring(index + 1);
                 }
 
-                return new NowPlaying
+                return new NowPlayingTrackInfo
                 {
                     Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
                     Title = title,
                     Position = position + 1,
-                    Path = path
+                    Path = path,
                 };
             }).ToList();
         }
 
+        /// <inheritdoc />
         public IEnumerable<NowPlayingListTrack> GetTracksLegacy(int offset = 0, int limit = 5000)
         {
-            string[] tracks;
-            _api.NowPlayingList_QueryFilesEx(null, out tracks);
+            _api.NowPlayingList_QueryFilesEx(null, out var tracks);
 
             return tracks.Select((path, position) =>
             {
@@ -102,7 +110,7 @@ namespace MusicBeePlugin.ApiAdapters
                     Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
                     Title = title,
                     Position = position + 1,
-                    Path = path
+                    Path = path,
                 };
             }).ToList();
         }

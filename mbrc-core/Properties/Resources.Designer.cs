@@ -9,6 +9,9 @@
 //------------------------------------------------------------------------------
 
 namespace MusicBeeRemote.Properties {
+    using System;
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -16,7 +19,7 @@ namespace MusicBeeRemote.Properties {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Resources {
@@ -36,7 +39,7 @@ namespace MusicBeeRemote.Properties {
         internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MusicBeePlugin.Properties.Resources", typeof(Resources).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MusicBeeRemote.Properties.Resources", typeof(Resources).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -58,56 +61,11 @@ namespace MusicBeeRemote.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Log file doesn&apos;t exist.
+        ///   Looks up a localized string similar to The mask and address lengths don&apos;t match.
         /// </summary>
-        internal static string InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist {
+        internal static string ExceptionAddressInvalidLength {
             get {
-                return ResourceManager.GetString("InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;Invalid Port Number&quot;.
-        /// </summary>
-        internal static string InvalidPort {
-            get {
-                return ResourceManager.GetString("InvalidPort", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to -.
-        /// </summary>
-        internal static string minus {
-            get {
-                return ResourceManager.GetString("minus", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to There is a new Version of MusicBee Remote plugin.
-        /// </summary>
-        internal static string new_version {
-            get {
-                return ResourceManager.GetString("new_version", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to +.
-        /// </summary>
-        internal static string plus {
-            get {
-                return ResourceManager.GetString("plus", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to &quot;A valid port number is a number from 1 to 65535&quot;.
-        /// </summary>
-        internal static string ValidRange {
-            get {
-                return ResourceManager.GetString("ValidRange", resourceCulture);
+                return ResourceManager.GetString("ExceptionAddressInvalidLength", resourceCulture);
             }
         }
     }

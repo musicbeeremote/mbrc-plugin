@@ -4,7 +4,8 @@ namespace MusicBeeRemote.Core
 {
     public class MusicBeeDependencies
     {
-        public MusicBeeDependencies(ILibraryApiAdapter libraryAdapter,
+        public MusicBeeDependencies(
+            ILibraryApiAdapter libraryAdapter,
             INowPlayingApiAdapter nowPlayingAdapter,
             IOutputApiAdapter outputAdapter,
             IPlayerApiAdapter playerAdapter,
@@ -26,13 +27,21 @@ namespace MusicBeeRemote.Core
         }
 
         public ILibraryApiAdapter LibraryAdapter { get; }
+
         public INowPlayingApiAdapter NowPlayingAdapter { get; }
+
         public IOutputApiAdapter OutputAdapter { get; }
+
         public IPlayerApiAdapter PlayerAdapter { get; }
+
         public IQueueAdapter QueueAdapter { get; }
+
         public ITrackApiAdapter TrackAdapter { get; }
+
         public IInvokeHandler InvokeHandler { get; }
+
         public string BaseStoragePath { get; }
+
         public string CurrentVersion { get; }
     }
 }

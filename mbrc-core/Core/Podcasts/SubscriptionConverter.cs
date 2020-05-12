@@ -1,9 +1,17 @@
-﻿namespace MusicBeeRemote.Core.Podcasts
+﻿using System;
+using System.Globalization;
+
+namespace MusicBeeRemote.Core.Podcasts
 {
-    public class SubscriptionConverter
+    public static class SubscriptionConverter
     {
-        public PodcastSubscription Convert(string[] metadata)
+        public static PodcastSubscription Convert(string[] metadata)
         {
+            if (metadata == null)
+            {
+                throw new ArgumentNullException(nameof(metadata));
+            }
+
             return new PodcastSubscription
             {
                 Id = metadata[0],
@@ -11,7 +19,7 @@
                 Grouping = metadata[2],
                 Genre = metadata[3],
                 Description = metadata[4],
-                Downloaded = uint.Parse(metadata[5])
+                Downloaded = uint.Parse(metadata[5], CultureInfo.CurrentCulture),
             };
         }
     }

@@ -16,11 +16,14 @@ namespace MusicBeeRemote.Core.Utilities
             const int size = maxSize;
             data = new byte[size];
             crypto.GetNonZeroBytes(data);
+            crypto.Dispose();
+
             var result = new StringBuilder(size);
             foreach (var b in data)
             {
-                result.Append(chars[b%(chars.Length - 1)]);
+                result.Append(chars[b % (chars.Length - 1)]);
             }
+
             return result.ToString();
         }
     }

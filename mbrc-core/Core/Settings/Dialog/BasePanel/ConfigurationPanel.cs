@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Windows.Forms;
 using MusicBeeRemote.Core.Settings.Dialog.Converters;
 using MusicBeeRemote.Core.Settings.Dialog.Range;
@@ -8,23 +9,23 @@ using MusicBeeRemote.Core.Settings.Dialog.Whitelist;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 {
+    /// <summary>
+    /// The configuration panel of the plugin.
+    /// </summary>
     public partial class ConfigurationPanel : Form, IConfigurationPanelView
     {
         private readonly IConfigurationPanelPresenter _presenter;
-        private readonly PortValidationRule _validationRule;
         private readonly WhitelistManagementControl _whitelistManagementControl;
         private readonly RangeManagementControl _rangeManagementControl;
 
         public ConfigurationPanel(
             IConfigurationPanelPresenter presenter,
             WhitelistManagementControl whitelistManagementControl,
-            RangeManagementControl rangeManagementControl
-        )
+            RangeManagementControl rangeManagementControl)
         {
             _whitelistManagementControl = whitelistManagementControl;
             _rangeManagementControl = rangeManagementControl;
-            _presenter = presenter;
-            _validationRule = new PortValidationRule();
+            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             InitializeComponent();
             _presenter.Attach(this);
             _presenter.Load();
@@ -37,11 +38,16 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         public void UpdateListeningPort(uint modelListeningPort)
         {
-            listeningPortNumber.Text = modelListeningPort.ToString();
+            listeningPortNumber.Text = modelListeningPort.ToString(CultureInfo.CurrentCulture);
         }
 
         public void UpdateStatus(SocketStatus socketStatus)
         {
+            if (socketStatus == null)
+            {
+                throw new ArgumentNullException(nameof(socketStatus));
+            }
+
             if (statusLabel.InvokeRequired)
             {
                 statusLabel.Invoke(new MethodInvoker(delegate
@@ -72,7 +78,8 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             versionValueLabel.Text = pluginVersion;
         }
 
-        public void UpdateFilteringData(IEnumerable<FilteringSelection> filteringData,
+        public void UpdateFilteringData(
+            IEnumerable<FilteringSelection> filteringData,
             FilteringSelection filteringSelection)
         {
             filteringOptionsComboBox.SelectedIndexChanged -= FilteringOptionsComboBox_SelectedIndexChanged;
@@ -84,7 +91,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         public void UpdateCachedTracks(int tracks)
         {
-            tracksNumber.Text = tracks.ToString();
+            tracksNumber.Text = tracks.ToString(CultureInfo.CurrentCulture);
         }
 
         private void OpenHelpButtonClick(object sender, EventArgs e)
@@ -112,14 +119,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
             _presenter.LoggingStatusChanged(enableDebugLoggingCheckbox.Checked);
         }
 
-        private void listeningPortNumber_TextChanged(object sender, EventArgs e)
+        private void ListeningPortNumberTextChanged(object sender, EventArgs e)
         {
             var portValue = listeningPortNumber.Text;
-            var isValid = _validationRule.Validate(portValue);
+            var isValid = PortValidationRule.Validate(portValue);
             if (isValid)
             {
                 listeningPortErrorProvider.Clear();
-                var listeningPort = uint.Parse(portValue);
+                var listeningPort = uint.Parse(portValue, CultureInfo.CurrentCulture);
                 _presenter.UpdateListeningPort(listeningPort);
             }
             else
@@ -130,7 +137,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
 
         private void FilteringOptionsComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var selected = (FilteringSelection) filteringOptionsComboBox.SelectedItem;
+            var selected = (FilteringSelection)filteringOptionsComboBox.SelectedItem;
             UpdateAddressFilteringPanel(selected);
             _presenter.UpdateFilteringSelection(selected);
         }

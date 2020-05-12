@@ -1,19 +1,27 @@
 ﻿using System;
 using System.IO;
 using MbrcTester.ApiAdapters;
+using MbrcTester.Properties;
 using MusicBeeRemote.Core;
 
 namespace MbrcTester
 {
+    /// <summary>
+    /// MusicBeeRemote tester. This is a utility that can run on both .NET and mono
+    /// And it provides the MusicBeeRemote API with mock library data.
+    /// </summary>
     internal class Program
     {
-        public static void Main(string[] args)
+        /// <summary>
+        /// The main function of the the tester program.
+        /// </summary>
+        public static void Main()
         {
             var playerState = new MockPlayerState();
             var nowPlaying = new MockNowPlaying();
             var player = new MockPlayer(playerState, nowPlaying);
             var library = new MockLibrary();
-            
+
             var libraryApiAdapter = new LibraryApiAdapter(library);
             var nowPlayingApiAdapter = new NowPlayingApiAdapter(nowPlaying, player);
             var outputApiAdapter = new MockOutputApiAdapter();
@@ -31,8 +39,7 @@ namespace MbrcTester
                 trackApiAdapter,
                 null,
                 baseStoragePath,
-                "1.0.0"
-            );
+                "1.0.0");
 
             var remoteBootstrap = new RemoteBootstrap();
             var musicBeeRemotePlugin = remoteBootstrap.BootStrap(dependencies);
@@ -40,10 +47,16 @@ namespace MbrcTester
 
             while (true)
             {
-                Console.WriteLine(@"Input:");
+                Console.WriteLine(Resources.Input);
                 var line = Console.ReadLine();
-                if (line != "q!") continue;
-                Console.WriteLine(@"Quiting");
+                if (line != "q!")
+                {
+                    continue;
+                }
+
+                musicBeeRemotePlugin.Terminate();
+                remoteBootstrap.Dispose();
+                Console.WriteLine(Resources.Quitting);
                 break;
             }
         }

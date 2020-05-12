@@ -15,32 +15,24 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         private readonly ITrackRepository _trackRepository;
 
         public ConfigurationPanelViewModel(
-            PersistanceManager persistanceManager,
-            IVersionProvider versionProvider, 
-            ITrackRepository trackRepository
-        )
+            PersistenceManager persistenceManager,
+            IVersionProvider versionProvider,
+            ITrackRepository trackRepository)
         {
             _versionProvider = versionProvider;
             _trackRepository = trackRepository;
-            _userSettings = persistanceManager.UserSettingsModel;
+            _userSettings = persistenceManager?.UserSettingsModel ??
+                            throw new ArgumentNullException(nameof(persistenceManager));
 
-            _socketTester = new SocketTester(persistanceManager);
+            _socketTester = new SocketTester(persistenceManager);
             _socketTester.ConnectionChangeListener += status =>
             {
                 ServiceStatus = status;
                 OnPropertyChanged(nameof(ServiceStatus));
             };
-            
+
             _socketTester.VerifyConnection();
         }
-
-        public void VerifyConnection()
-        {
-            _socketTester.VerifyConnection();
-        }
-
-        public IEnumerable<FilteringSelection> FilteringData => Enum.GetValues(typeof(FilteringSelection))
-            .Cast<FilteringSelection>();
 
         public FilteringSelection FilteringSelection
         {
@@ -64,7 +56,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
                         break;
                 }
 
-
                 OnPropertyChanged(nameof(FilteringSelection));
             }
         }
@@ -78,8 +69,6 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
                 OnPropertyChanged(nameof(DebugEnabled));
             }
         }
-
-        public List<string> LocalIpAddresses => Tools.GetPrivateAddressList();
 
         public bool FirewallUpdateEnabled
         {
@@ -106,5 +95,16 @@ namespace MusicBeeRemote.Core.Settings.Dialog.BasePanel
         public int CachedTracks => _trackRepository.Count();
 
         public bool ServiceStatus { get; set; }
+
+        public static List<string> GetLocalIpAddresses() => Tools.GetPrivateAddressList();
+
+        public static IEnumerable<FilteringSelection> GetFilteringData() =>
+            Enum.GetValues(typeof(FilteringSelection))
+                .Cast<FilteringSelection>();
+
+        public void VerifyConnection()
+        {
+            _socketTester.VerifyConnection();
+        }
     }
 }

@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.Windows.Mvvm;
 
 namespace MusicBeeRemote.Core.Settings.Dialog.Range
@@ -6,9 +7,14 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Range
     {
         private readonly UserSettingsModel _userSettingsModel;
 
-        public RangeManagementViewModel(PersistanceManager persistanceManager)
+        public RangeManagementViewModel(PersistenceManager persistenceManager)
         {
-            _userSettingsModel = persistanceManager.UserSettingsModel;
+            if (persistenceManager == null)
+            {
+                throw new ArgumentNullException(nameof(persistenceManager));
+            }
+
+            _userSettingsModel = persistenceManager.UserSettingsModel;
         }
 
         public uint LastOctetMax

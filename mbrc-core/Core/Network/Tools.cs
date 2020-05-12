@@ -5,14 +5,15 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using MusicBeeRemote.Properties;
 using NLog;
 
 namespace MusicBeeRemote.Core.Network
 {
     public static class Tools
     {
-        private static readonly Logger ToolsLogger = LogManager.GetCurrentClassLogger();
-        
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         public static List<string> GetPrivateAddressList()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
@@ -42,33 +43,46 @@ namespace MusicBeeRemote.Core.Network
             {
                 return information.IPv4Mask;
             }
+
             throw new ArgumentException($"unable to find subnet mask for '{address}'");
         }
 
         public static IPAddress GetNetworkAddress(IPAddress address, IPAddress subnetMask)
         {
+            if (address == null)
+            {
+                throw new ArgumentNullException(nameof(address));
+            }
+
+            if (subnetMask == null)
+            {
+                throw new ArgumentNullException(nameof(subnetMask));
+            }
+
             var addressBytes = address.GetAddressBytes();
             var maskBytes = subnetMask.GetAddressBytes();
 
             if (addressBytes.Length != maskBytes.Length)
             {
-                throw new ArgumentException("ip and mask lengths don't match");
+                throw new ArgumentException(Resources.ExceptionAddressInvalidLength);
             }
 
             var broadcastBytes = new byte[addressBytes.Length];
             for (var i = 0; i < broadcastBytes.Length; i++)
             {
-                broadcastBytes[i] = (byte) (addressBytes[i] & maskBytes[i]);
+                broadcastBytes[i] = (byte)(addressBytes[i] & maskBytes[i]);
             }
+
             return new IPAddress(broadcastBytes);
         }
 
-        [DllImport("iphlpapi.dll")]
-        private static extern long SendARP(int destIp, int scrIp, [Out] byte[] pMacAddr, ref int phyAddr);
-
         public static PhysicalAddress GetMacAddress(IPAddress ipAddress)
         {
-            if (ipAddress == null) return null;
+            if (ipAddress == null)
+            {
+                return null;
+            }
+
             try
             {
                 var bpMacAddr = new byte[6];
@@ -79,9 +93,12 @@ namespace MusicBeeRemote.Core.Network
             }
             catch (Exception e)
             {
-                ToolsLogger.Debug($"Get MAC address failed IP: {ipAddress}\n{e.Message} \n{e.StackTrace}");
+                _logger.Debug($"Get MAC address failed IP: {ipAddress}\n{e.Message} \n{e.StackTrace}");
                 throw;
             }
         }
+
+        [DllImport("iphlpapi.dll")]
+        private static extern long SendARP(int destIp, int scrIp, [Out] byte[] pMacAddr, ref int phyAddr);
     }
 }

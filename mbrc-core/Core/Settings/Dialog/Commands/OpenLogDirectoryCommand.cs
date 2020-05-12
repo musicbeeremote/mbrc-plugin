@@ -14,8 +14,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.Commands
 
         public void Execute()
         {
-            //todo create a proper log directory
-            var logDirectory = _storageLocationProvider.StorageLocation();
+            var logDirectory = _storageLocationProvider.LogLocation();
 
             if (Directory.Exists(logDirectory))
             {

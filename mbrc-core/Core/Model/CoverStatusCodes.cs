@@ -1,6 +1,6 @@
-namespace MusicBeeRemote.Core.Model
+﻿namespace MusicBeeRemote.Core.Model
 {
-    public class CoverStatusCodes
+    public static class CoverStatusCodes
     {
         public const int CoverReady = 1;
         public const int NotFound = 404;

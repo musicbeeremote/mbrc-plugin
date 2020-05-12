@@ -5,14 +5,14 @@ namespace MusicBeeRemote.Core.Model
     [DataContract]
     public class LyricsPayload
     {
+        public const int NotFound = 404;
+        public const int Success = 200;
+
         public LyricsPayload(string lyrics)
         {
             Lyrics = lyrics;
             Status = string.IsNullOrEmpty(lyrics) ? NotFound : Success;
         }
-
-        public const int NotFound = 404;
-        public const int Success = 200;
 
         [DataMember(Name = "status")]
         public int Status { get; set; }
