@@ -29,14 +29,14 @@ namespace MusicBeeRemote.Core.Model.Entities
                    && other.Name.Equals(Name, StringComparison.InvariantCultureIgnoreCase);
         }
 
-        public override int GetHashCode()
-        {
-            return Artist.GetHashCode() ^ Name.GetHashCode();
-        }
-
         public override bool Equals(object obj)
         {
             return Equals(obj as Album);
+        }
+
+        public override int GetHashCode()
+        {
+            return Artist.GetHashCode() ^ Name.GetHashCode();
         }
     }
 }

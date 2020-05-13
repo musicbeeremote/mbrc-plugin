@@ -10,7 +10,7 @@ namespace MbrcTester
     /// MusicBeeRemote tester. This is a utility that can run on both .NET and mono
     /// And it provides the MusicBeeRemote API with mock library data.
     /// </summary>
-    internal class Program
+    public static class Program
     {
         /// <summary>
         /// The main function of the the tester program.

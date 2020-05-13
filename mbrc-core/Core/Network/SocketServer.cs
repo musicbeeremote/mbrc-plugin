@@ -445,6 +445,45 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
+        /// <summary>
+        /// Sends a message to all the connections that are in broadcast mode.
+        /// The connections that are not in broadcast mode will be skipped.
+        /// </summary>
+        /// <param name="message">The message that will be send through the socket connection.</param>
+        private void Send(string message)
+        {
+            _logger.Debug($"sending-all: {message}");
+
+            try
+            {
+                var data = Encoding.UTF8.GetBytes(message + NewLine);
+
+                foreach (var key in _availableWorkerSockets.Keys)
+                {
+                    if (!_availableWorkerSockets.TryGetValue(key, out var worker))
+                    {
+                        continue;
+                    }
+
+                    var isConnected = worker != null && worker.Connected;
+                    if (!isConnected)
+                    {
+                        RemoveDeadSocket(key);
+                        _hub.Publish(new ClientDisconnectedEvent(key));
+                    }
+
+                    if (isConnected && _auth.CanConnectionReceive(key) && _auth.IsConnectionBroadcastEnabled(key))
+                    {
+                        worker.Send(data);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "While sending message to all available clients");
+            }
+        }
+
         private void RemoveDeadSocket(string connectionId)
         {
             _availableWorkerSockets.TryRemove(connectionId, out var worker);
@@ -482,45 +521,6 @@ namespace MusicBeeRemote.Core.Network
                     var message = broadcastEvent.GetMessage(clientProtocol);
                     var data = Encoding.UTF8.GetBytes(message + NewLine);
                     worker.Send(data);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "While sending message to all available clients");
-            }
-        }
-
-        /// <summary>
-        /// Sends a message to all the connections that are in broadcast mode.
-        /// The connections that are not in broadcast mode will be skipped.
-        /// </summary>
-        /// <param name="message">The message that will be send through the socket connection.</param>
-        private void Send(string message)
-        {
-            _logger.Debug($"sending-all: {message}");
-
-            try
-            {
-                var data = Encoding.UTF8.GetBytes(message + NewLine);
-
-                foreach (var key in _availableWorkerSockets.Keys)
-                {
-                    if (!_availableWorkerSockets.TryGetValue(key, out var worker))
-                    {
-                        continue;
-                    }
-
-                    var isConnected = worker != null && worker.Connected;
-                    if (!isConnected)
-                    {
-                        RemoveDeadSocket(key);
-                        _hub.Publish(new ClientDisconnectedEvent(key));
-                    }
-
-                    if (isConnected && _auth.CanConnectionReceive(key) && _auth.IsConnectionBroadcastEnabled(key))
-                    {
-                        worker.Send(data);
-                    }
                 }
             }
             catch (Exception ex)

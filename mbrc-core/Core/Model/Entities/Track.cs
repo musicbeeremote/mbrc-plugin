@@ -65,15 +65,15 @@ namespace MusicBeeRemote.Core.Model.Entities
             return ReferenceEquals(left, null) ? ReferenceEquals(right, null) : left.CompareTo(right) >= 0;
         }
 
+        public int CompareTo(Track other)
+        {
+            return other == null ? 1 : Trackno.CompareTo(other.Trackno);
+        }
+
         public bool Equals(Track other)
         {
             return other != null && other.Artist.Equals(Artist, StringComparison.InvariantCultureIgnoreCase) &&
                    other.Title.Equals(Title, StringComparison.InvariantCultureIgnoreCase);
-        }
-
-        public int CompareTo(Track other)
-        {
-            return other == null ? 1 : Trackno.CompareTo(other.Trackno);
         }
 
         public override bool Equals(object obj)
