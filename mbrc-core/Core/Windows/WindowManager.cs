@@ -5,7 +5,7 @@ using StructureMap;
 
 namespace MusicBeeRemote.Core.Windows
 {
-    internal class WindowManager : IWindowManager
+    public class WindowManager : IWindowManager
     {
         private readonly IInvokeHandler _invokeHandler;
         private readonly IContainer _container;

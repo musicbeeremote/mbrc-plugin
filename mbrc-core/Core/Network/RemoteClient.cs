@@ -9,7 +9,7 @@ using MusicBeeRemote.Core.Commands;
 namespace MusicBeeRemote.Core.Network
 {
     [DataContract(Name = "client")]
-    public class RemoteClient : IEquatable<RemoteClient>
+    public sealed class RemoteClient : IEquatable<RemoteClient>
     {
         private readonly PhysicalAddress _macAddress;
 
@@ -45,12 +45,12 @@ namespace MusicBeeRemote.Core.Network
         [DataMember(Name = "last_login")]
         public DateTime LastLogIn { get; set; }
 
-        public virtual void AddConnection()
+        public void AddConnection()
         {
             ActiveConnections++;
         }
 
-        public virtual void RemoveConnection()
+        public void RemoveConnection()
         {
             if (ActiveConnections > 0)
             {
@@ -58,17 +58,17 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
-        public virtual void ResetConnection()
+        public void ResetConnection()
         {
             ActiveConnections = 0;
         }
 
-        public virtual bool HasPermission(CommandPermissions permissions)
+        public bool HasPermission(CommandPermissions permissions)
         {
             return ClientPermissions.HasFlag(permissions);
         }
 
-        public virtual void SetPermission(CommandPermissions permissions, bool enable)
+        public void SetPermission(CommandPermissions permissions, bool enable)
         {
             if (enable)
             {
@@ -106,12 +106,12 @@ namespace MusicBeeRemote.Core.Network
                    $" {nameof(LastLogIn)}: {LastLogIn}";
         }
 
-        protected virtual void SetPermission(CommandPermissions permissions)
+        private void SetPermission(CommandPermissions permissions)
         {
             ClientPermissions |= permissions;
         }
 
-        protected virtual void RemovePermission(CommandPermissions permissions)
+        private void RemovePermission(CommandPermissions permissions)
         {
             ClientPermissions &= ~permissions;
         }

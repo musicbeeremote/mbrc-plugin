@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
@@ -6,9 +7,9 @@ using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.NowPlaying
+namespace MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands
 {
-    internal class RequestNowPlayingMoveTrack : ICommand
+    public class RequestNowPlayingMoveTrack : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
@@ -21,13 +22,17 @@ namespace MusicBeeRemote.Core.Commands.Requests.NowPlaying
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var from = -1;
             var to = -1;
 
             var success = false;
-            var token = receivedEvent.Data as JToken;
 
-            if (token != null && token.Type == JTokenType.Object)
+            if (receivedEvent.Data is JToken token && token.Type == JTokenType.Object)
             {
                 from = (int)token["from"];
                 to = (int)token["to"];

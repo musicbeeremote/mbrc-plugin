@@ -96,7 +96,7 @@
     <Compile Include="Core\Caching\Monitor\Modifications.cs" />
     <Compile Include="Core\Commands\CommandExecutor.cs" />
     <Compile Include="Core\Commands\CommandPermissions.cs" />
-    <Compile Include="Core\Commands\configuration.cs" />
+    <Compile Include="Core\Commands\ProtocolConfiguration.cs" />
     <Compile Include="Core\Commands\ExecutionStatus.cs" />
     <Compile Include="Core\Commands\ICommand.cs" />
     <Compile Include="Core\Commands\InstantReplies\HandlePong.cs" />

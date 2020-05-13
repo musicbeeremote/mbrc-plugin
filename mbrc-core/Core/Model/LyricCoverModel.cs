@@ -11,7 +11,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Model
 {
-    public class LyricCoverModel : IDisposable
+    public sealed class LyricCoverModel : IDisposable
     {
         private readonly ITinyMessengerHub _hub;
 
@@ -23,6 +23,7 @@ namespace MusicBeeRemote.Core.Model
 
         private string _xHash;
         private string _lyrics;
+        private bool _isDisposed;
 
         public LyricCoverModel(ITinyMessengerHub hub)
         {
@@ -33,6 +34,11 @@ namespace MusicBeeRemote.Core.Model
                 TaskCreationOptions.PreferFairness,
                 _scheduler));
             _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
+        }
+
+        ~LyricCoverModel()
+        {
+            Dispose(false);
         }
 
         public string Cover { get; private set; }
@@ -71,7 +77,23 @@ namespace MusicBeeRemote.Core.Model
 
         public void Dispose()
         {
-            _cts.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _cts.Dispose();
+            }
+
+            _isDisposed = true;
         }
 
         private void SetCover(string base64)

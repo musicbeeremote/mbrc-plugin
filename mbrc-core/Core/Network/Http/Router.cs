@@ -17,7 +17,7 @@ namespace MusicBeeRemote.Core.Network.Http
     // named captures will concatenate to "143526" for currently matched route key. The corresponding
     // entry in `_routes` has `GroupStart` to `GroupEnd` that are used to extract handler data
     // dictionary from the composite regex anonymous captures.
-    internal class Router : IDisposable
+    public sealed class Router : IDisposable
     {
         private const string KeyBase = "123456";
 
@@ -29,14 +29,15 @@ namespace MusicBeeRemote.Core.Network.Http
 
         private string[] _groupNames = new string[32];
         private Regex _pathParser;
+        private bool _isDisposed;
 
         private IEnumerator<IEnumerable<char>> _permEnum =
             GetPermutations(KeyBase.ToCharArray(), KeyBase.Length).GetEnumerator();
 
         public void Dispose()
         {
-            _permEnum?.Dispose();
-            _permEnum = null;
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         public void Add(string route, RouteAction handler)
@@ -118,6 +119,22 @@ namespace MusicBeeRemote.Core.Network.Http
                 t => list
                     .Where(o => !t.Contains(o)),
                 (t1, t2) => t1.Concat(new[] { t2 }));
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _permEnum?.Dispose();
+                _permEnum = null;
+            }
+
+            _isDisposed = true;
         }
 
         private Regex RebuildParser()

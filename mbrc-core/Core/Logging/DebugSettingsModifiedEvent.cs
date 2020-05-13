@@ -6,7 +6,7 @@ namespace MusicBeeRemote.Core.Logging
     /// Event dispatched by the configuration dialog to the log manager in order to change the logging mode.
     /// </summary>
     /// <seealso cref="ITinyMessage" />
-    internal class DebugSettingsModifiedEvent : ITinyMessage
+    public class DebugSettingsModifiedEvent : ITinyMessage
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="DebugSettingsModifiedEvent"/> class.

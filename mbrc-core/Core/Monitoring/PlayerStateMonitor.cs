@@ -9,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Monitoring
 {
-    internal class PlayerStateMonitor : IPlayerStateMonitor, System.IDisposable
+    public class PlayerStateMonitor : IPlayerStateMonitor, IDisposable
     {
         private readonly PlayerStateModel _stateModel;
         private readonly ITinyMessengerHub _hub;

@@ -10,7 +10,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 {
-    internal class RequestShuffle : LimitedCommand
+    public class RequestShuffle : LimitedCommand
     {
         private readonly Authenticator _auth;
         private readonly ITinyMessengerHub _hub;
@@ -31,6 +31,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 
         public override void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var isToggle = receivedEvent.Data is JToken token &&
                            ((string)token).Equals("toggle", StringComparison.InvariantCultureIgnoreCase);
 

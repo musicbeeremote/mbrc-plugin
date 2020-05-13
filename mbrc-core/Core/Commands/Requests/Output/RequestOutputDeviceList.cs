@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
@@ -7,7 +8,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Output
 {
-    internal class RequestOutputDeviceList : ICommand
+    public class RequestOutputDeviceList : ICommand
     {
         private readonly IOutputApiAdapter _apiAdapter;
         private readonly ITinyMessengerHub _hub;
@@ -20,6 +21,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.Output
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var message = new SocketMessage(Constants.PlayerOutput, _apiAdapter.GetOutputDevices())
             {
                 NewLineTerminated = true,

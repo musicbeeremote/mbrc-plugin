@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
@@ -6,7 +7,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Handshake
 {
-    internal class RequestPlayer : ICommand
+    public class RequestPlayer : ICommand
     {
         private readonly ITinyMessengerHub _hub;
 
@@ -17,6 +18,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.Handshake
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var message = new SocketMessage(Constants.Player, "MusicBee");
             _hub.Publish(new PluginResponseAvailableEvent(message, receivedEvent.ConnectionId));
         }

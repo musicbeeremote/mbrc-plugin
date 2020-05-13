@@ -2,7 +2,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events.Status.Internal
 {
-    internal class LyricsAvailable : ITinyMessage
+    public class LyricsAvailable : ITinyMessage
     {
         public LyricsAvailable(string lyrics)
         {

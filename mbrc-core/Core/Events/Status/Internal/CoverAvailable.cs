@@ -2,7 +2,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events.Status.Internal
 {
-    internal class CoverAvailable : ITinyMessage
+    public class CoverAvailable : ITinyMessage
     {
         public CoverAvailable(string cover)
         {

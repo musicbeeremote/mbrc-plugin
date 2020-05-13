@@ -1,4 +1,5 @@
-﻿using MusicBeeRemote.Core.ApiAdapters;
+﻿using System;
+using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Output
 {
-    internal class RequestPlayerOutputSwitch : ICommand
+    public class RequestPlayerOutputSwitch : ICommand
     {
         private readonly IOutputApiAdapter _apiAdapter;
         private readonly ITinyMessengerHub _hub;
@@ -21,6 +22,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.Output
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             if (receivedEvent.Data is JToken token && token.Type == JTokenType.String)
             {
                 var device = (string)token;

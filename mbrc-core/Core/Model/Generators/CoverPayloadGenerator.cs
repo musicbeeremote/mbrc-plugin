@@ -1,6 +1,6 @@
 ﻿namespace MusicBeeRemote.Core.Model.Generators
 {
-    internal class CoverPayloadGenerator
+    public static class CoverPayloadGenerator
     {
         public static CoverPayload Create(string cover, bool include)
         {

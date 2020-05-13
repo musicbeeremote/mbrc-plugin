@@ -1,11 +1,11 @@
-﻿using MusicBeeRemote.Core.ApiAdapters;
+﻿using System;
+using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using Newtonsoft.Json.Linq;
-using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 {
-    internal class RequestVolume : LimitedCommand
+    public class RequestVolume : LimitedCommand
     {
         private readonly IPlayerApiAdapter _apiAdapter;
 
@@ -18,6 +18,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 
         public override void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             if (!(receivedEvent.Data is JToken token) || token.Type != JTokenType.Integer)
             {
                 return;

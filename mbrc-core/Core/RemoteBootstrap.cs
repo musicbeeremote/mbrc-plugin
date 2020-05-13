@@ -149,7 +149,7 @@ namespace MusicBeeRemote.Core
             });
 
             var controller = _container.GetInstance<CommandExecutor>();
-            Configuration.Register(controller, _container);
+            ProtocolConfiguration.Register(controller, _container);
 
             return _container.GetInstance<IMusicBeeRemotePlugin>();
         }

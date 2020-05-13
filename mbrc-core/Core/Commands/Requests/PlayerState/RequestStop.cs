@@ -1,4 +1,5 @@
-﻿using MusicBeeRemote.Core.ApiAdapters;
+﻿using System;
+using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
@@ -7,7 +8,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 {
-    internal class RequestStop : LimitedCommand
+    public class RequestStop : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly IPlayerApiAdapter _apiAdapter;
@@ -26,6 +27,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 
         public override void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var message = new SocketMessage(Constants.PlayerStop, _apiAdapter.StopPlayback());
             _hub.Publish(new PluginResponseAvailableEvent(message, receivedEvent.ConnectionId));
         }

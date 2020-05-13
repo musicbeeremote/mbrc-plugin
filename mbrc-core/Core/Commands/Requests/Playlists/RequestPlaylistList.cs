@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
@@ -11,7 +12,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Playlists
 {
-    internal class RequestPlaylistList : ICommand
+    public class RequestPlaylistList : ICommand
     {
         private readonly Authenticator _auth;
         private readonly ILibraryApiAdapter _libraryApiAdapter;
@@ -26,6 +27,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.Playlists
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var socketClient = _auth.GetConnection(receivedEvent.ConnectionId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 

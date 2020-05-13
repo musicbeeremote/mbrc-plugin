@@ -1,6 +1,6 @@
 ﻿using Moq;
 using MusicBeeRemote.Core.ApiAdapters;
-using MusicBeeRemote.Core.Commands.Requests.NowPlaying;
+using MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;

@@ -3,16 +3,12 @@
 namespace MusicBeeRemote.Core.Network
 {
     /// <summary>
-    /// This class represents a socket client and keeps essential information abou the specific client.
-    /// The information consists of the client id, the number of packets send by the client (to handle the authenticication).
+    /// This class represents a socket client and keeps essential information about the specific client.
+    /// The information consists of the client id, the number of packets send by the client (to handle the authentication).
     /// And a flag representing the authentication status of the client.
     /// </summary>
     public class SocketConnection
     {
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="connectionId"></param>
         public SocketConnection(string connectionId)
         {
             ConnectionId = connectionId;
@@ -20,39 +16,39 @@ namespace MusicBeeRemote.Core.Network
         }
 
         /// <summary>
-        /// Unique Identifier of the Socket Connection. (A client might have multiple socket connections
+        /// Gets the unique Identifier of the Socket Connection. (A client might have multiple socket connections.
         /// </summary>
         public string ConnectionId { get; }
 
         /// <summary>
-        /// Represents the number of the packets received by the client.
+        /// Gets the number of the packets received by the client.
         /// </summary>
         public int PacketNumber { get; private set; }
 
         /// <summary>
-        /// This property represents the authentication status of the specified client. If false the client should not receive any broadcast
+        /// Gets or sets a value indicating whether authentication of the specified client is complete. If false the client should not receive any broadcast
         /// of status changes on the player.
         /// </summary>
         public bool Authenticated { get; set; }
 
         /// <summary>
-        /// Represents the version of the protocol supported by the client.
+        /// Gets or sets the version of the protocol supported by the client.
         /// </summary>
         public int ClientProtocolVersion { get; set; }
 
         /// <summary>
-        /// Represents if the client will receive broadcast actions from the service (like volume updates etc).
+        /// Gets or sets a value indicating whether the client will receive broadcast actions from the service (like volume updates etc).
         /// This property is by default enabled. If disable the client will receive only responses to specific requests.
         /// </summary>
         public bool BroadcastsEnabled { get; set; } = true;
 
         /// <summary>
-        /// Unique identifier of the Connected client. This value is reported by the client itself.
+        /// Gets or sets the unique identifier of the Connected client. This value is reported by the client itself.
         /// </summary>
         public string ClientId { get; set; }
 
         /// <summary>
-        /// The address of the connected client
+        /// Gets or sets The address of the connected client.
         /// </summary>
         public IPAddress IpAddress { get; set; }
 

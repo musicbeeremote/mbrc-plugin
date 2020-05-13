@@ -18,7 +18,7 @@ namespace MusicBeeRemote.Core.Caching.Monitor
         void RefreshLibrary();
     }
 
-    internal class LibraryScanner : ILibraryScanner, IDisposable
+    public class LibraryScanner : ILibraryScanner, IDisposable
     {
         private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();

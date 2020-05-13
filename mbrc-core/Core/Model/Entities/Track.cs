@@ -5,7 +5,7 @@ using LiteDB;
 namespace MusicBeeRemote.Core.Model.Entities
 {
     [DataContract]
-    public class Track : IEquatable<Track>, IComparable<Track>
+    public sealed class Track : IEquatable<Track>, IComparable<Track>
     {
         [BsonId]
         [DataMember(Name = "src")]

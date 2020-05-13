@@ -2,7 +2,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events.Status.Internal
 {
-    internal class SocketStatusChanged : ITinyMessage
+    public class SocketStatusChanged : ITinyMessage
     {
         // todo (window info should listen for this
         public SocketStatusChanged(bool isRunning)

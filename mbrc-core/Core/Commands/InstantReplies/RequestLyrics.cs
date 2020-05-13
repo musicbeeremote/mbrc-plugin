@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.InstantReplies
 {
-    internal class RequestLyrics : ICommand
+    public class RequestLyrics : ICommand
     {
         private readonly LyricCoverModel _model;
         private readonly ITinyMessengerHub _hub;
@@ -23,6 +24,11 @@ namespace MusicBeeRemote.Core.Commands.InstantReplies
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             if (_auth.ClientProtocolVersion(receivedEvent.ConnectionId) > 2)
             {
                 var lyricsPayload = new LyricsPayload(_model.Lyrics);

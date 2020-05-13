@@ -12,7 +12,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Monitoring
 {
-    internal class TrackStateMonitor : ITrackStateMonitor, System.IDisposable
+    public class TrackStateMonitor : ITrackStateMonitor, IDisposable
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;

@@ -43,7 +43,6 @@ namespace MusicBeeRemote.Core.Network
         /// </summary>
         private AsyncCallback _workerCallback;
 
-        private bool _isRunning;
         private bool _isDisposed;
         private Timer _pingTimer;
 
@@ -73,18 +72,6 @@ namespace MusicBeeRemote.Core.Network
         }
 
         /// <summary>
-        /// Sets a value indicating whether the socket server is running or not. (not completely reliable).
-        /// </summary>
-        private bool IsRunning
-        {
-            set
-            {
-                _isRunning = value;
-                _hub.Publish(new SocketStatusChanged(_isRunning));
-            }
-        }
-
-        /// <summary>
         /// It starts the SocketServer.
         /// </summary>
         public void Start()
@@ -105,7 +92,7 @@ namespace MusicBeeRemote.Core.Network
 
                 // Create the call back for any client connections.
                 _mainSocket.BeginAccept(OnClientConnect, null);
-                IsRunning = true;
+                _hub.Publish(new SocketStatusChanged(true));
 
                 _pingTimer = new Timer(15000);
                 _pingTimer.Elapsed += PingTimerOnElapsed;
@@ -146,7 +133,7 @@ namespace MusicBeeRemote.Core.Network
             }
             finally
             {
-                IsRunning = false;
+                _hub.Publish(new SocketStatusChanged(false));
             }
         }
 

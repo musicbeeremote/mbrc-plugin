@@ -4,7 +4,7 @@ using System.Runtime.Serialization;
 namespace MusicBeeRemote.Core.Model.Entities
 {
     [DataContract]
-    public class Album : IEquatable<Album>
+    public sealed class Album : IEquatable<Album>
     {
         public Album(string artist, string name)
         {

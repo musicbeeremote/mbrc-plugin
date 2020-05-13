@@ -3,7 +3,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events.Status.Internal
 {
-    internal class ConnectionReadyEvent : ITinyMessage
+    public class ConnectionReadyEvent : ITinyMessage
     {
         public ConnectionReadyEvent(SocketConnection client)
         {

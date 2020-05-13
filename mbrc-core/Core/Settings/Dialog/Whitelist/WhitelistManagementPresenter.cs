@@ -1,13 +1,15 @@
+﻿using System;
+
 namespace MusicBeeRemote.Core.Settings.Dialog.Whitelist
 {
-    internal class WhitelistManagementPresenter : IWhitelistManagementPresenter
+    public class WhitelistManagementPresenter : IWhitelistManagementPresenter
     {
         private readonly WhitelistManagementViewModel _viewModel;
         private IWhitelistManagementView _view;
 
         public WhitelistManagementPresenter(WhitelistManagementViewModel viewModel)
         {
-            _viewModel = viewModel;
+            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             _viewModel.PropertyChanged += ViewModelPropertyChanged;
         }
 

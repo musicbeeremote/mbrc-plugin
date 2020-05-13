@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 {
-    internal class RequestRating : ICommand
+    public class RequestRating : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;
@@ -21,6 +22,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             string result;
             var token = receivedEvent.DataToken();
             if (token != null)

@@ -19,7 +19,7 @@ namespace MusicBeeRemote.Core.Settings
         string CacheLocation();
     }
 
-    internal class StorageLocationProvider : IStorageLocationProvider
+    public class StorageLocationProvider : IStorageLocationProvider
     {
         private const string RemoteDataDirectory = "mb_remote";
         private const string CacheSubDir = "cache";

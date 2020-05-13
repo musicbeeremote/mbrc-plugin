@@ -50,7 +50,7 @@ namespace MusicBeeRemote.Core.Network.Http
                 var parms = method.GetParameters();
                 if (parms.Length == 1 && parms[0].GetType().Name == "RouteAction")
                 {
-                    server.AddHandler("/" + method.Name, (ctx, data) => method.Invoke(callback, new object[] { ctx }));
+                    server.AddHandler($"/{method.Name}", (ctx, data) => method.Invoke(callback, new object[] { ctx }));
                 }
             }
         }
@@ -70,59 +70,69 @@ namespace MusicBeeRemote.Core.Network.Http
             var path = Path.Combine(rootFolder, ctx.Request.Url.LocalPath.Substring(1).Replace('/', '\\'));
             if (File.Exists(path))
             {
-                var mimeType =
-                    Registry.GetValue(
-                        $"HKEY_CLASSES_ROOT\\{Path.GetExtension(path)}",
-                        "Content Type",
-                        null) as string ?? "application/octet-stream";
-                if (string.Equals(mimeType.Substring(0, 5), "text/", StringComparison.OrdinalIgnoreCase))
-                {
-                    ctx.OutputUtf8(File.ReadAllText(path), mimeType);
-                }
-                else
-                {
-                    ctx.OutputBinary(File.ReadAllBytes(path), mimeType);
-                }
+                WriteFile(ctx, path);
             }
             else if (Directory.Exists(path))
             {
-                var html = new StringBuilder($"<html>\n<body>\n<h1>Listing of {path}</h1>\n" +
-                                             "<table style=\"font-family: courier; padding: 10px;\">\n" +
-                                             "<th style=\"min-width: 300px;\">Name</th><th>Last modified</th><th style=\"min-width: 90px;\">Size</th>\n");
-                var dirInfo = new DirectoryInfo(path);
-                var url = dirInfo.Parent?.FullName;
-                if (!string.IsNullOrEmpty(url) && url.Length >= rootFolder.Length - 1)
-                {
-                    if (!url.EndsWith(@"\", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        url += @"\";
-                    }
-
-                    url = "/" + url.Substring(rootFolder.Length).Replace('\\', '/');
-                    html.AppendLine(
-                        $"<tr><td><a href=\"{url}\">Parent Directory</a></td><td>&nbsp;</td><td align=\"right\">&lt;DIR&gt;</td></tr>");
-                }
-
-                foreach (var dir in dirInfo.EnumerateDirectories())
-                {
-                    url = "/" + dir.FullName.Substring(rootFolder.Length).Replace('\\', '/');
-                    html.AppendLine($"<tr><td><a href=\"{url}\">{WebUtility.HtmlEncode(dir.Name)}</a></td>" +
-                                    $"<td>{dir.LastWriteTime:yyyy-MMM-dd hh:mm:ss}</td><td align=\"right\">&lt;DIR&gt;</td></tr>\n");
-                }
-
-                foreach (var file in dirInfo.EnumerateFiles())
-                {
-                    url = "/" + file.FullName.Substring(rootFolder.Length).Replace('\\', '/');
-                    html.AppendLine($"<tr><td><a href=\"{url}\">{WebUtility.HtmlEncode(file.Name)}</a></td>" +
-                                    $"<td>{file.LastWriteTime:yyyy-MMM-dd hh:mm:ss}</td><td align=\"right\">{file.Length:#,#}</td></tr>");
-                }
-
-                html.AppendLine("</table>\n</body>\n</html>");
-                ctx.OutputUtf8(html.ToString());
+                IndexDirectory(ctx, rootFolder, path);
             }
             else
             {
                 ctx.Response.StatusCode = (int)HttpStatusCode.NotFound;
+            }
+        }
+
+        private static void IndexDirectory(HttpListenerContext ctx, string rootFolder, string path)
+        {
+            var html = new StringBuilder($"<html>\n<body>\n<h1>Listing of {path}</h1>\n" +
+                                         "<table style=\"font-family: courier; padding: 10px;\">\n" +
+                                         "<th style=\"min-width: 300px;\">Name</th><th>Last modified</th><th style=\"min-width: 90px;\">Size</th>\n");
+            var dirInfo = new DirectoryInfo(path);
+            var url = dirInfo.Parent?.FullName;
+            if (!string.IsNullOrEmpty(url) && url.Length >= rootFolder.Length - 1)
+            {
+                if (!url.EndsWith(@"\", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    url += @"\";
+                }
+
+                url = "/" + url.Substring(rootFolder.Length).Replace('\\', '/');
+                html.AppendLine(
+                    $"<tr><td><a href=\"{url}\">Parent Directory</a></td><td>&nbsp;</td><td align=\"right\">&lt;DIR&gt;</td></tr>");
+            }
+
+            foreach (var dir in dirInfo.EnumerateDirectories())
+            {
+                url = "/" + dir.FullName.Substring(rootFolder.Length).Replace('\\', '/');
+                html.AppendLine($"<tr><td><a href=\"{url}\">{WebUtility.HtmlEncode(dir.Name)}</a></td>" +
+                                $"<td>{dir.LastWriteTime:yyyy-MMM-dd hh:mm:ss}</td><td align=\"right\">&lt;DIR&gt;</td></tr>\n");
+            }
+
+            foreach (var file in dirInfo.EnumerateFiles())
+            {
+                url = "/" + file.FullName.Substring(rootFolder.Length).Replace('\\', '/');
+                html.AppendLine($"<tr><td><a href=\"{url}\">{WebUtility.HtmlEncode(file.Name)}</a></td>" +
+                                $"<td>{file.LastWriteTime:yyyy-MMM-dd hh:mm:ss}</td><td align=\"right\">{file.Length:#,#}</td></tr>");
+            }
+
+            html.AppendLine("</table>\n</body>\n</html>");
+            ctx.OutputUtf8(html.ToString());
+        }
+
+        private static void WriteFile(HttpListenerContext ctx, string path)
+        {
+            var mimeType =
+                Registry.GetValue(
+                    $"HKEY_CLASSES_ROOT\\{Path.GetExtension(path)}",
+                    "Content Type",
+                    null) as string ?? "application/octet-stream";
+            if (string.Equals(mimeType.Substring(0, 5), "text/", StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.OutputUtf8(File.ReadAllText(path), mimeType);
+            }
+            else
+            {
+                ctx.OutputBinary(File.ReadAllBytes(path), mimeType);
             }
         }
     }

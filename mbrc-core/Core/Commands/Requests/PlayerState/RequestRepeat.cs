@@ -9,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 {
-    internal class RequestRepeat : LimitedCommand
+    public class RequestRepeat : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly IPlayerApiAdapter _apiAdapter;
@@ -27,6 +27,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 
         public override void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             if (receivedEvent.Data is JToken token &&
                 ((string)token).Equals("toggle", StringComparison.InvariantCultureIgnoreCase))
             {

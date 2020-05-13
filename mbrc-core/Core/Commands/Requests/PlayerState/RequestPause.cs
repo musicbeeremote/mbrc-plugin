@@ -3,7 +3,7 @@ using MusicBeeRemote.Core.Events;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
 {
-    internal class RequestPause : LimitedCommand
+    public class RequestPause : LimitedCommand
     {
         private readonly IPlayerApiAdapter _apiAdapter;
 

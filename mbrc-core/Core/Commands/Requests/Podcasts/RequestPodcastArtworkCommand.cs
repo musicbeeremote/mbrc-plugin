@@ -11,7 +11,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Podcasts
 {
-    internal class RequestPodcastArtworkCommand : ICommand
+    public class RequestPodcastArtworkCommand : ICommand
     {
         private readonly ILibraryApiAdapter _libraryApiAdapter;
         private readonly ITinyMessengerHub _hub;

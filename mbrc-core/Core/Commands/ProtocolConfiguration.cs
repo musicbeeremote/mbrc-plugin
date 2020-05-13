@@ -1,8 +1,8 @@
-﻿using MusicBeeRemote.Core.Commands.InstantReplies;
+﻿using System;
+using MusicBeeRemote.Core.Commands.InstantReplies;
 using MusicBeeRemote.Core.Commands.Requests;
 using MusicBeeRemote.Core.Commands.Requests.Handshake;
 using MusicBeeRemote.Core.Commands.Requests.Library;
-using MusicBeeRemote.Core.Commands.Requests.NowPlaying;
 using MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands;
 using MusicBeeRemote.Core.Commands.Requests.Output;
 using MusicBeeRemote.Core.Commands.Requests.PlayerState;
@@ -14,10 +14,20 @@ using StructureMap;
 
 namespace MusicBeeRemote.Core.Commands
 {
-    internal class Configuration
+    public static class ProtocolConfiguration
     {
         public static void Register(CommandExecutor commandExecutor, Container container)
         {
+            if (commandExecutor == null)
+            {
+                throw new ArgumentNullException(nameof(commandExecutor));
+            }
+
+            if (container == null)
+            {
+                throw new ArgumentNullException(nameof(container));
+            }
+
             // Protocol Related commands
             commandExecutor.AddCommand(Constants.Player, container.GetInstance<RequestPlayer>());
             commandExecutor.AddCommand(Constants.Protocol, container.GetInstance<RequestProtocol>());

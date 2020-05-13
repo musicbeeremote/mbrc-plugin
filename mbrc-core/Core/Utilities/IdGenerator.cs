@@ -3,7 +3,7 @@ using System.Text;
 
 namespace MusicBeeRemote.Core.Utilities
 {
-    internal class IdGenerator
+    public static class IdGenerator
     {
         public static string GetUniqueKey()
         {

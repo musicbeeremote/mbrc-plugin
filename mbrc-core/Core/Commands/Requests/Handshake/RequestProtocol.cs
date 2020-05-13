@@ -9,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Handshake
 {
-    internal class RequestProtocol : ICommand
+    public class RequestProtocol : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;

@@ -2,7 +2,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Events.Status.Internal
 {
-    internal class ClientDisconnectedEvent : ITinyMessage
+    public class ClientDisconnectedEvent : ITinyMessage
     {
         public ClientDisconnectedEvent(string connectionId)
         {

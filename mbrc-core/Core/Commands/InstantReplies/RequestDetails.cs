@@ -1,3 +1,4 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
@@ -7,7 +8,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.InstantReplies
 {
-    internal class RequestDetails : ICommand
+    public class RequestDetails : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;
@@ -20,6 +21,11 @@ namespace MusicBeeRemote.Core.Commands.InstantReplies
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var trackDetails = _apiAdapter.GetPlayingTrackDetails();
             var message = new SocketMessage(Constants.NowPlayingDetails, trackDetails);
             _hub.Publish(new PluginResponseAvailableEvent(message, receivedEvent.ConnectionId));
