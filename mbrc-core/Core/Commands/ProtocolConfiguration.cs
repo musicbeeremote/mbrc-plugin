@@ -5,7 +5,7 @@ using MusicBeeRemote.Core.Commands.Requests.Handshake;
 using MusicBeeRemote.Core.Commands.Requests.Library;
 using MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands;
 using MusicBeeRemote.Core.Commands.Requests.Output;
-using MusicBeeRemote.Core.Commands.Requests.PlayerState;
+using MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands;
 using MusicBeeRemote.Core.Commands.Requests.PlayingTrack;
 using MusicBeeRemote.Core.Commands.Requests.Playlists;
 using MusicBeeRemote.Core.Commands.Requests.Podcasts;

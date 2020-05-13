@@ -3,7 +3,7 @@ using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 using Newtonsoft.Json.Linq;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
     public class RequestVolume : LimitedCommand
     {

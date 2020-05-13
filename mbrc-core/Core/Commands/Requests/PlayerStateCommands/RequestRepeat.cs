@@ -7,7 +7,7 @@ using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
     public class RequestRepeat : LimitedCommand
     {

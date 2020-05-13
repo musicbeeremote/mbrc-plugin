@@ -8,7 +8,7 @@ using MusicBeeRemote.Core.Utilities;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
     public class RequestShuffle : LimitedCommand
     {

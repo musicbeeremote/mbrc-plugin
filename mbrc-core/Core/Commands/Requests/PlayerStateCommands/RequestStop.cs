@@ -4,17 +4,16 @@ using MusicBeeRemote.Core.Events;
 using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
-using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
-    public class RequestAutoDj : LimitedCommand
+    public class RequestStop : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestAutoDj(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        public RequestStop(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
             _apiAdapter = apiAdapter;
@@ -23,7 +22,7 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
         /// <inheritdoc />
         public override string Name()
         {
-            return "Player: AutoDJ";
+            return "Player: Stop";
         }
 
         public override void Execute(IEvent receivedEvent)
@@ -33,21 +32,13 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
                 throw new ArgumentNullException(nameof(receivedEvent));
             }
 
-            var isToggle = receivedEvent.Data is JToken token &&
-                           ((string)token).Equals("toggle", StringComparison.InvariantCultureIgnoreCase);
-
-            if (isToggle)
-            {
-                _apiAdapter.ToggleAutoDjLegacy();
-            }
-
-            var message = new SocketMessage(Constants.PlayerAutoDj, _apiAdapter.IsAutoDjEnabledLegacy());
-            _hub.Publish(new PluginResponseAvailableEvent(message));
+            var message = new SocketMessage(Constants.PlayerStop, _apiAdapter.StopPlayback());
+            _hub.Publish(new PluginResponseAvailableEvent(message, receivedEvent.ConnectionId));
         }
 
         protected override CommandPermissions GetPermissions()
         {
-            return CommandPermissions.ChangeShuffle;
+            return CommandPermissions.StopPlayback;
         }
     }
 }

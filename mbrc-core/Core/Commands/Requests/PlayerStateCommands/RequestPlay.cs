@@ -1,13 +1,13 @@
 ﻿using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
-    public class RequestPause : LimitedCommand
+    public class RequestPlay : LimitedCommand
     {
         private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPause(IPlayerApiAdapter playerApiAdapter)
+        public RequestPlay(IPlayerApiAdapter playerApiAdapter)
         {
             _apiAdapter = playerApiAdapter;
         }
@@ -15,17 +15,17 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
         /// <inheritdoc />
         public override string Name()
         {
-            return "Player: Pause";
+            return "Player: Play";
         }
 
         public override void Execute(IEvent receivedEvent)
         {
-            _apiAdapter.Pause();
+            _apiAdapter.Play();
         }
 
         protected override CommandPermissions GetPermissions()
         {
-            return CommandPermissions.StopPlayback;
+            return CommandPermissions.StartPlayback;
         }
     }
 }

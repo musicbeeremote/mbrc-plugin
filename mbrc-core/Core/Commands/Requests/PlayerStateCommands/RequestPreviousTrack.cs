@@ -6,23 +6,22 @@ using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
+namespace MusicBeeRemote.Core.Commands.Requests.PlayerStateCommands
 {
-    public class RequestPlayPause : LimitedCommand
+    public class RequestPreviousTrack : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly IPlayerApiAdapter _apiAdapter;
 
-        public RequestPlayPause(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
+        public RequestPreviousTrack(ITinyMessengerHub hub, IPlayerApiAdapter apiAdapter)
         {
             _hub = hub;
             _apiAdapter = apiAdapter;
         }
 
-        /// <inheritdoc />
         public override string Name()
         {
-            return "Player: Play/Pause";
+            return "Player: Play previous";
         }
 
         public override void Execute(IEvent receivedEvent)
@@ -32,14 +31,13 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayerState
                 throw new ArgumentNullException(nameof(receivedEvent));
             }
 
-            var message = new SocketMessage(Constants.PlayerPause, _apiAdapter.PlayPause());
+            var message = new SocketMessage(Constants.PlayerPrevious, _apiAdapter.PlayPrevious());
             _hub.Publish(new PluginResponseAvailableEvent(message, receivedEvent.ConnectionId));
         }
 
         protected override CommandPermissions GetPermissions()
         {
-            return CommandPermissions.StartPlayback |
-                   CommandPermissions.StopPlayback;
+            return CommandPermissions.PlayPrevious;
         }
     }
 }
