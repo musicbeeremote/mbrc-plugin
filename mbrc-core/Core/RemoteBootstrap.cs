@@ -105,6 +105,7 @@ namespace MusicBeeRemote.Core
 
                 c.For<SocketServer>().Use<SocketServer>().Singleton();
                 c.For<HttpSupport>().Use<HttpSupport>().Singleton();
+                c.For<IPluginNetworking>().Use<PluginNetworking>().Singleton();
                 c.For<LyricCoverModel>().Use<LyricCoverModel>().Singleton();
                 c.For<ServiceDiscovery>().Use<ServiceDiscovery>().Singleton();
 

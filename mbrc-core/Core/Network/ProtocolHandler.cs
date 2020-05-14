@@ -18,7 +18,9 @@ namespace MusicBeeRemote.Core.Network
         private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;
 
-        public ProtocolHandler(ITinyMessengerHub hub, Authenticator auth)
+        public ProtocolHandler(
+            ITinyMessengerHub hub,
+            Authenticator auth)
         {
             _hub = hub;
             _auth = auth;

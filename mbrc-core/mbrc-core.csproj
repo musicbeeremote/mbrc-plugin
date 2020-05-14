@@ -223,6 +223,7 @@
     <Compile Include="Core\Network\Http\HttpSupport.cs" />
     <Compile Include="Core\Network\Http\Extensions.cs" />
     <Compile Include="Core\Network\Http\Response.cs" />
+    <Compile Include="Core\Network\IPluginNetworking.cs" />
     <Compile Include="Core\Network\ProtocolHandler.cs" />
     <Compile Include="Core\Network\RangeChecker.cs" />
     <Compile Include="Core\Network\RemoteClient.cs" />
