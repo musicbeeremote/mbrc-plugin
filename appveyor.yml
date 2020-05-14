@@ -30,7 +30,7 @@
     - 
   
   test_script:
-  - OpenCover.Console.exe -register:administrator -target:"nunit3-console.exe" -targetargs:".\build\bin\Debug\mbrc_core.Test.dll --result:nunitTestResult.xml" -output:".\coverage.xml" "-filter:+[*]* -[*.Test]*"
+  - OpenCover.Console.exe -register:administrator -target:"nunit3-console.exe" -targetargs:".\build\bin\Debug\mbrc-core.Test.dll --result:nunitTestResult.xml" -output:".\coverage.xml" "-filter:+[*]* -[*.Test]*"
   - codecov -f "coverage.xml"
     
   after_test:
