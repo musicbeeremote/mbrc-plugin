@@ -1,7 +1,8 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Enumerations;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
@@ -9,7 +10,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 {
-    internal class RequestLfmLoveRating : ICommand
+    public class RequestLfmLoveRating : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;
@@ -22,6 +23,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var token = receivedEvent.DataToken();
             LastfmStatus lfmStatus;
             if (token != null && token.Type == JTokenType.String)

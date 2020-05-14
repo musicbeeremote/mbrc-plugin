@@ -2,8 +2,8 @@
 using System.Timers;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
 using MusicBeeRemote.Core.Events.Notifications;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Model.Generators;
@@ -12,7 +12,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Monitoring
 {
-    internal class TrackStateMonitor : ITrackStateMonitor, System.IDisposable
+    public class TrackStateMonitor : ITrackStateMonitor, IDisposable
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ITrackApiAdapter _apiAdapter;

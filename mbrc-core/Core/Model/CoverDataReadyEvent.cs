@@ -2,7 +2,7 @@
 
 namespace MusicBeeRemote.Core.Model
 {
-    internal class CoverDataReadyEvent : ITinyMessage
+    public class CoverDataReadyEvent : ITinyMessage
     {
         public CoverDataReadyEvent(string cover)
         {

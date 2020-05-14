@@ -1,6 +1,6 @@
 using System;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
@@ -9,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Handshake
 {
-    internal class RequestProtocol : ICommand
+    public class RequestProtocol : ICommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;

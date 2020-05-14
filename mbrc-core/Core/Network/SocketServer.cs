@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Threading;
@@ -43,7 +43,6 @@ namespace MusicBeeRemote.Core.Network
         /// </summary>
         private AsyncCallback _workerCallback;
 
-        private bool _isRunning;
         private bool _isDisposed;
         private Timer _pingTimer;
 
@@ -61,8 +60,6 @@ namespace MusicBeeRemote.Core.Network
             TaskScheduler scheduler = new LimitedTaskScheduler(2);
             _factory = new TaskFactory(scheduler);
 
-            _hub.Subscribe<StopSocketServer>(eEvent => Terminate());
-            _hub.Subscribe<StartSocketServerEvent>(eEvent => Start());
             _hub.Subscribe<RestartSocketEvent>(eEvent => RestartSocket());
             _hub.Subscribe<ForceClientDisconnect>(eEvent => DisconnectSocket(eEvent.ConnectionId));
             _hub.Subscribe<BroadcastEventAvailable>(eEvent => Broadcast(eEvent.BroadcastEvent));
@@ -72,18 +69,6 @@ namespace MusicBeeRemote.Core.Network
         ~SocketServer()
         {
             Dispose(false);
-        }
-
-        /// <summary>
-        /// Sets a value indicating whether the socket server is running or not. (not completely reliable).
-        /// </summary>
-        private bool IsRunning
-        {
-            set
-            {
-                _isRunning = value;
-                _hub.Publish(new SocketStatusChanged(_isRunning));
-            }
         }
 
         /// <summary>
@@ -107,7 +92,7 @@ namespace MusicBeeRemote.Core.Network
 
                 // Create the call back for any client connections.
                 _mainSocket.BeginAccept(OnClientConnect, null);
-                IsRunning = true;
+                _hub.Publish(new SocketStatusChanged(true));
 
                 _pingTimer = new Timer(15000);
                 _pingTimer.Elapsed += PingTimerOnElapsed;
@@ -148,7 +133,7 @@ namespace MusicBeeRemote.Core.Network
             }
             finally
             {
-                IsRunning = false;
+                _hub.Publish(new SocketStatusChanged(false));
             }
         }
 
@@ -460,6 +445,45 @@ namespace MusicBeeRemote.Core.Network
             }
         }
 
+        /// <summary>
+        /// Sends a message to all the connections that are in broadcast mode.
+        /// The connections that are not in broadcast mode will be skipped.
+        /// </summary>
+        /// <param name="message">The message that will be send through the socket connection.</param>
+        private void Send(string message)
+        {
+            _logger.Debug($"sending-all: {message}");
+
+            try
+            {
+                var data = Encoding.UTF8.GetBytes(message + NewLine);
+
+                foreach (var key in _availableWorkerSockets.Keys)
+                {
+                    if (!_availableWorkerSockets.TryGetValue(key, out var worker))
+                    {
+                        continue;
+                    }
+
+                    var isConnected = worker != null && worker.Connected;
+                    if (!isConnected)
+                    {
+                        RemoveDeadSocket(key);
+                        _hub.Publish(new ClientDisconnectedEvent(key));
+                    }
+
+                    if (isConnected && _auth.CanConnectionReceive(key) && _auth.IsConnectionBroadcastEnabled(key))
+                    {
+                        worker.Send(data);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "While sending message to all available clients");
+            }
+        }
+
         private void RemoveDeadSocket(string connectionId)
         {
             _availableWorkerSockets.TryRemove(connectionId, out var worker);
@@ -497,45 +521,6 @@ namespace MusicBeeRemote.Core.Network
                     var message = broadcastEvent.GetMessage(clientProtocol);
                     var data = Encoding.UTF8.GetBytes(message + NewLine);
                     worker.Send(data);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "While sending message to all available clients");
-            }
-        }
-
-        /// <summary>
-        /// Sends a message to all the connections that are in broadcast mode.
-        /// The connections that are not in broadcast mode will be skipped.
-        /// </summary>
-        /// <param name="message">The message that will be send through the socket connection.</param>
-        private void Send(string message)
-        {
-            _logger.Debug($"sending-all: {message}");
-
-            try
-            {
-                var data = Encoding.UTF8.GetBytes(message + NewLine);
-
-                foreach (var key in _availableWorkerSockets.Keys)
-                {
-                    if (!_availableWorkerSockets.TryGetValue(key, out var worker))
-                    {
-                        continue;
-                    }
-
-                    var isConnected = worker != null && worker.Connected;
-                    if (!isConnected)
-                    {
-                        RemoveDeadSocket(key);
-                        _hub.Publish(new ClientDisconnectedEvent(key));
-                    }
-
-                    if (isConnected && _auth.CanConnectionReceive(key) && _auth.IsConnectionBroadcastEnabled(key))
-                    {
-                        worker.Send(data);
-                    }
                 }
             }
             catch (Exception ex)

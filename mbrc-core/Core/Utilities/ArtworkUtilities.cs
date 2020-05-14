@@ -15,7 +15,6 @@ namespace MusicBeeRemote.Core.Utilities
     public static class ArtworkUtilities
     {
         private static readonly SHA1Managed _sha1 = new SHA1Managed();
-        private static byte[] _hash = new byte[20];
 
         /// <summary>
         /// Given a string it returns the SHA1 hash of the string.
@@ -30,9 +29,9 @@ namespace MusicBeeRemote.Core.Utilities
                 return mHash;
             }
 
-            _hash = _sha1.ComputeHash(Encoding.UTF8.GetBytes(value));
+            var hash = _sha1.ComputeHash(Encoding.UTF8.GetBytes(value));
             var sb = new StringBuilder();
-            foreach (var hex in _hash.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)))
+            foreach (var hex in hash.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)))
             {
                 sb.Append(hex);
             }
@@ -49,9 +48,9 @@ namespace MusicBeeRemote.Core.Utilities
         /// <returns>System.String.</returns>
         public static string Sha1Hash(FileStream fs)
         {
-            _hash = _sha1.ComputeHash(fs);
+            var hash = _sha1.ComputeHash(fs);
             var sb = new StringBuilder();
-            foreach (var hex in _hash.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)))
+            foreach (var hex in hash.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)))
             {
                 sb.Append(hex);
             }

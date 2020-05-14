@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using Newtonsoft.Json.Linq;
 using static MusicBeeRemote.Core.Commands.Requests.PaginatedData;
 

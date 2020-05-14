@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
@@ -11,7 +12,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests
 {
-    internal class RequestRadioStations : ICommand
+    public class RequestRadioStations : ICommand
     {
         private readonly ILibraryApiAdapter _libraryApiAdapter;
         private readonly ITinyMessengerHub _hub;
@@ -24,6 +25,11 @@ namespace MusicBeeRemote.Core.Commands.Requests
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             if (receivedEvent.Data is JObject data)
             {
                 var offset = (int)data["offset"];

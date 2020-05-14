@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Utilities;
 using Newtonsoft.Json.Linq;
@@ -18,7 +18,9 @@ namespace MusicBeeRemote.Core.Network
         private readonly ITinyMessengerHub _hub;
         private readonly Authenticator _auth;
 
-        public ProtocolHandler(ITinyMessengerHub hub, Authenticator auth)
+        public ProtocolHandler(
+            ITinyMessengerHub hub,
+            Authenticator auth)
         {
             _hub = hub;
             _auth = auth;

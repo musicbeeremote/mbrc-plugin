@@ -7,7 +7,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Logging
 {
-    internal class PluginLogManager : IPluginLogManager, IDisposable
+    internal sealed class PluginLogManager : IPluginLogManager, IDisposable
     {
         private readonly IStorageLocationProvider _storageLocationProvider;
         private bool _isDisposed;
@@ -22,6 +22,11 @@ namespace MusicBeeRemote.Core.Logging
             hub.Subscribe<DebugSettingsModifiedEvent>(OnDebugSettingsModifiedEvent);
         }
 
+        ~PluginLogManager()
+        {
+            Dispose(false);
+        }
+
         public void Initialize(LogLevel logLevel)
         {
             var config = new LoggingConfiguration();
@@ -30,13 +35,7 @@ namespace MusicBeeRemote.Core.Logging
                                      "${message}${newline}" +
                                      "${when:when=length('${exception}') > 0: ${exception}${newline}}";
 
-#if DEBUG
-            var debug = true;
-#else
-            var debug = false;
-#endif
-
-            if (debug)
+            if (logLevel == LogLevel.Debug)
             {
                 _consoleTarget = new ColoredConsoleTarget();
                 _debuggerTarget = new DebuggerTarget();
@@ -90,7 +89,7 @@ namespace MusicBeeRemote.Core.Logging
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (_isDisposed)
             {

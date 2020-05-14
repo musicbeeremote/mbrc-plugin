@@ -1,0 +1,15 @@
+{
+  "ServerUri": "https://sonarcloud.io/",
+  "Organization": {
+    "Key": "musicbeeremote",
+    "Name": "MusicBee Remote"
+  },
+  "ProjectKey": "musicbeeremote_plugin",
+  "ProjectName": "plugin",
+  "Profiles": {
+    "CSharp": {
+      "ProfileKey": "AW_tAt5OGuUKD4gRbuh8",
+      "ProfileTimestamp": "2020-05-13T13:48:31Z"
+    }
+  }
+}

@@ -28,7 +28,7 @@ namespace MusicBeeRemote.Core.Caching
         void Update(IEnumerable<Track> tracks);
     }
 
-    internal class TrackRepository : ITrackRepository
+    public class TrackRepository : ITrackRepository
     {
         private readonly IStorageLocationProvider _storageProvider;
 

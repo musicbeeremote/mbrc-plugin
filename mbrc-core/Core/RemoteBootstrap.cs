@@ -11,6 +11,7 @@ using MusicBeeRemote.Core.Logging;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Monitoring;
 using MusicBeeRemote.Core.Network;
+using MusicBeeRemote.Core.Network.Http;
 using MusicBeeRemote.Core.Podcasts;
 using MusicBeeRemote.Core.Settings;
 using MusicBeeRemote.Core.Settings.Dialog.BasePanel;
@@ -104,6 +105,7 @@ namespace MusicBeeRemote.Core
 
                 c.For<SocketServer>().Use<SocketServer>().Singleton();
                 c.For<HttpSupport>().Use<HttpSupport>().Singleton();
+                c.For<IPluginNetworking>().Use<PluginNetworking>().Singleton();
                 c.For<LyricCoverModel>().Use<LyricCoverModel>().Singleton();
                 c.For<ServiceDiscovery>().Use<ServiceDiscovery>().Singleton();
 
@@ -148,7 +150,7 @@ namespace MusicBeeRemote.Core
             });
 
             var controller = _container.GetInstance<CommandExecutor>();
-            Configuration.Register(controller, _container);
+            ProtocolConfiguration.Register(controller, _container);
 
             return _container.GetInstance<IMusicBeeRemotePlugin>();
         }

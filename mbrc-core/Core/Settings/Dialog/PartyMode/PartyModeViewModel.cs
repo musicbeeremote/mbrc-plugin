@@ -12,6 +12,7 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyMode
         private readonly ClientRepository _repository;
         private readonly LogRepository _logRepository;
         private RemoteClient _selectedClient;
+        private bool _isActive;
 
         public PartyModeViewModel(ClientRepository repository, LogRepository logRepository)
         {
@@ -25,8 +26,12 @@ namespace MusicBeeRemote.Core.Settings.Dialog.PartyMode
 
         public bool IsActive
         {
-            get => false;
-            set => OnPropertyChanged(nameof(IsActive));
+            get => _isActive;
+            set
+            {
+                _isActive = value;
+                OnPropertyChanged(nameof(IsActive));
+            }
         }
 
         public void SelectClient(int index)

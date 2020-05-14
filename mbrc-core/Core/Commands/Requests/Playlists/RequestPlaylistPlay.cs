@@ -1,6 +1,7 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Playlists
 {
-    internal class RequestPlaylistPlay : LimitedCommand
+    public class RequestPlaylistPlay : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly ILibraryApiAdapter _libraryApiAdapter;
@@ -26,6 +27,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.Playlists
 
         public override void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var success = false;
             var token = receivedEvent.DataToken();
             if (token != null && token.Type == JTokenType.String)

@@ -1,14 +1,15 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.NowPlaying
+namespace MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands
 {
-    internal class RequestNowPlayingTrackRemoval : LimitedCommand
+    public class RequestNowPlayingTrackRemoval : LimitedCommand
     {
         private readonly ITinyMessengerHub _hub;
         private readonly INowPlayingApiAdapter _nowPlayingApiAdapter;
@@ -27,11 +28,14 @@ namespace MusicBeeRemote.Core.Commands.Requests.NowPlaying
 
         public override void Execute(IEvent receivedEvent)
         {
-            var success = false;
-            var token = receivedEvent.Data as JToken;
-            var index = -1;
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
 
-            if (token != null && token.Type == JTokenType.Integer)
+            var success = false;
+            var index = -1;
+            if (receivedEvent.Data is JToken token && token.Type == JTokenType.Integer)
             {
                 index = (int)token;
                 success = _nowPlayingApiAdapter.RemoveIndex(index);

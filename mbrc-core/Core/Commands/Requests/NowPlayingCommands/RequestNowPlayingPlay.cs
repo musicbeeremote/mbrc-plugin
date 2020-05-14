@@ -1,13 +1,13 @@
 using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
-namespace MusicBeeRemote.Core.Commands.Requests.NowPlaying
+namespace MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands
 {
     public class RequestNowPlayingPlay : LimitedCommand
     {

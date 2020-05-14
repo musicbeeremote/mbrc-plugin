@@ -1,9 +1,8 @@
 ﻿using Moq;
 using MusicBeeRemote.Core.ApiAdapters;
-using MusicBeeRemote.Core.Commands.Requests;
-using MusicBeeRemote.Core.Commands.Requests.NowPlaying;
+using MusicBeeRemote.Core.Commands.Requests.NowPlayingCommands;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;

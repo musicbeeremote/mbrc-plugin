@@ -36,7 +36,7 @@ namespace MusicBeeRemote.Core.Network
             var finalStartRangeOcted = uint.Parse(startOctets[3], CultureInfo.CurrentCulture);
             var lastOctedInRange = finalOctet >= finalStartRangeOcted && finalOctet <= lastOctet;
 
-            return firstOctetMatch & secondOctetMatch && thirdOctetMatch && lastOctedInRange;
+            return firstOctetMatch && secondOctetMatch && thirdOctetMatch && lastOctedInRange;
         }
     }
 }

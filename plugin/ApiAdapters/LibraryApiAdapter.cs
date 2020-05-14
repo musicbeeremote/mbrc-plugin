@@ -28,7 +28,7 @@ namespace MusicBeePlugin.ApiAdapters
         }
 
         /// <inheritdoc/>
-        public IEnumerable<Track> GetTracks(string[] paths)
+        public IEnumerable<Track> GetTracks(string[] paths = null)
         {
             string[] files;
             if (paths == null)
@@ -60,7 +60,7 @@ namespace MusicBeePlugin.ApiAdapters
         }
 
         /// <inheritdoc/>
-        public IEnumerable<Genre> GetGenres(string filter)
+        public IEnumerable<Genre> GetGenres(string filter = "")
         {
             IEnumerable<Genre> genres = new List<Genre>();
 
@@ -81,7 +81,7 @@ namespace MusicBeePlugin.ApiAdapters
         }
 
         /// <inheritdoc/>
-        public IEnumerable<Artist> GetArtists(string filter)
+        public IEnumerable<Artist> GetArtists(string filter = "")
         {
             IEnumerable<Artist> artists = new List<Artist>();
 

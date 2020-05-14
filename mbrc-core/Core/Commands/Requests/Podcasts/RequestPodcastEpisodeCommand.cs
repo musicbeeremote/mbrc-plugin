@@ -1,14 +1,15 @@
+﻿using System;
 using System.Linq;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Network;
 using Newtonsoft.Json.Linq;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Podcasts
 {
-    internal class RequestPodcastEpisodeCommand : ICommand
+    public class RequestPodcastEpisodeCommand : ICommand
     {
         private readonly ILibraryApiAdapter _libraryApiAdapter;
         private readonly ITinyMessengerHub _hub;
@@ -21,8 +22,12 @@ namespace MusicBeeRemote.Core.Commands.Requests.Podcasts
 
         public void Execute(IEvent receivedEvent)
         {
-            var data = receivedEvent.Data as JObject;
-            if (data != null)
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
+            if (receivedEvent.Data is JObject data)
             {
                 var offset = (int)data["offset"];
                 var limit = (int)data["limit"];

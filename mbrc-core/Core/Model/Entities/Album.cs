@@ -4,7 +4,7 @@ using System.Runtime.Serialization;
 namespace MusicBeeRemote.Core.Model.Entities
 {
     [DataContract]
-    public class Album : IEquatable<Album>
+    public sealed class Album : IEquatable<Album>
     {
         public Album(string artist, string name)
         {
@@ -29,14 +29,14 @@ namespace MusicBeeRemote.Core.Model.Entities
                    && other.Name.Equals(Name, StringComparison.InvariantCultureIgnoreCase);
         }
 
-        public override int GetHashCode()
-        {
-            return Artist.GetHashCode() ^ Name.GetHashCode();
-        }
-
         public override bool Equals(object obj)
         {
             return Equals(obj as Album);
+        }
+
+        public override int GetHashCode()
+        {
+            return Artist.GetHashCode() ^ Name.GetHashCode();
         }
     }
 }

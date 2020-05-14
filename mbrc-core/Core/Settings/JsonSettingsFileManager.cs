@@ -1,15 +1,21 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using Newtonsoft.Json;
 
 namespace MusicBeeRemote.Core.Settings
 {
-    internal class JsonSettingsFileManager : IJsonSettingsFileManager
+    public class JsonSettingsFileManager : IJsonSettingsFileManager
     {
         private readonly string _storageFilePath;
         private readonly string _limitedFilePath;
 
         public JsonSettingsFileManager(IStorageLocationProvider storageLocationProvider)
         {
+            if (storageLocationProvider == null)
+            {
+                throw new ArgumentNullException(nameof(storageLocationProvider));
+            }
+
             _storageFilePath = storageLocationProvider.SettingsFile;
             _limitedFilePath = storageLocationProvider.LimitedSettings;
         }

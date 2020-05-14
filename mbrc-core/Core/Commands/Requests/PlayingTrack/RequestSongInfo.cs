@@ -1,6 +1,7 @@
+﻿using System;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Utilities;
@@ -8,7 +9,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 {
-    internal class RequestSongInfo : ICommand
+    public class RequestSongInfo : ICommand
     {
         private readonly Authenticator _auth;
         private readonly ITinyMessengerHub _hub;
@@ -23,6 +24,11 @@ namespace MusicBeeRemote.Core.Commands.Requests.PlayingTrack
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             var connectionId = receivedEvent.ConnectionId;
 
             var protocolVersion = _auth.ClientProtocolVersion(connectionId);

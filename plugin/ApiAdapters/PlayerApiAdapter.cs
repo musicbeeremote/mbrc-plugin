@@ -1,5 +1,4 @@
 ﻿using System;
-using MusicBeePlugin.Properties;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Enumerations;
 using MusicBeeRemote.Core.Model;
@@ -56,7 +55,8 @@ namespace MusicBeePlugin.ApiAdapters
                     repeatMode = Repeat.One;
                     break;
                 default:
-                    throw new Exception(Resources.InvalidRepeatMode);
+                    repeatMode = Repeat.None;
+                    break;
             }
 
             return repeatMode;
@@ -74,7 +74,7 @@ namespace MusicBeePlugin.ApiAdapters
                 case RepeatMode.One:
                     return _api.Player_SetRepeat(RepeatMode.None);
                 default:
-                    throw new Exception(Resources.InvalidRepeatMode);
+                    return false;
             }
         }
 
@@ -150,7 +150,7 @@ namespace MusicBeePlugin.ApiAdapters
                 case PlayState.Stopped:
                     return PlayerState.Paused;
                 default:
-                    throw new Exception(Resources.InvalidPlayState);
+                    return PlayerState.Undefined;
             }
         }
 

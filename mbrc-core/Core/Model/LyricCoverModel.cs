@@ -3,15 +3,15 @@ using System.Security;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Threading;
+using MusicBeeRemote.Core.Utilities;
 using NLog;
 using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Model
 {
-    internal class LyricCoverModel : IDisposable
+    public sealed class LyricCoverModel : IDisposable
     {
         private readonly ITinyMessengerHub _hub;
 
@@ -23,6 +23,7 @@ namespace MusicBeeRemote.Core.Model
 
         private string _xHash;
         private string _lyrics;
+        private bool _isDisposed;
 
         public LyricCoverModel(ITinyMessengerHub hub)
         {
@@ -33,6 +34,11 @@ namespace MusicBeeRemote.Core.Model
                 TaskCreationOptions.PreferFairness,
                 _scheduler));
             _hub.Subscribe<LyricsAvailable>(msg => Lyrics = msg.Lyrics);
+        }
+
+        ~LyricCoverModel()
+        {
+            Dispose(false);
         }
 
         public string Cover { get; private set; }
@@ -71,12 +77,28 @@ namespace MusicBeeRemote.Core.Model
 
         public void Dispose()
         {
-            _cts.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _cts.Dispose();
+            }
+
+            _isDisposed = true;
         }
 
         private void SetCover(string base64)
         {
-            var hash = Utilities.ArtworkUtilities.Sha1Hash(base64);
+            var hash = ArtworkUtilities.Sha1Hash(base64);
 
             if (_xHash != null && _xHash.Equals(hash, StringComparison.InvariantCultureIgnoreCase))
             {

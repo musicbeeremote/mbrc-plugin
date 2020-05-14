@@ -6,7 +6,6 @@ using System.Text;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Commands.Requests;
 using MusicBeeRemote.Core.Model;
-using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Network.Http;
 using Newtonsoft.Json;
 
@@ -28,106 +27,22 @@ namespace MusicBeeRemote.Core.Podcasts
                 throw new ArgumentNullException(nameof(httpSupport));
             }
 
-            httpSupport.AddRoute(@"/podcasts", (ctx, data) =>
-            {
-                var request = ctx.Request;
-                if (CheckIfNotPost(request, ctx))
-                {
-                    return;
-                }
+            AddPodcastsRoute(httpSupport);
 
-                if (CheckIfNotJson(request, ctx))
-                {
-                    return;
-                }
+            AddEpisodesRoute(httpSupport);
 
-                var requestPayload = ReadPayload(request);
-
-                if (CheckIfNotEmpty(requestPayload, ctx))
-                {
-                    return;
-                }
-
-                var requestData = JsonConvert.DeserializeObject<PaginatedRequest>(requestPayload);
-                var subscriptions = _adapter.GetPodcastSubscriptions().ToList();
-                var page = PaginatedData.CreatePage(requestData.Offset, requestData.Limit, subscriptions);
-                ctx.OutputUtf8(JsonConvert.SerializeObject(page), "application/json", Encoding.UTF8);
-            });
-
-            httpSupport.AddRoute(@"/episodes", (ctx, data) =>
-            {
-                var request = ctx.Request;
-                if (CheckIfNotPost(request, ctx))
-                {
-                    return;
-                }
-
-                if (CheckIfNotJson(request, ctx))
-                {
-                    return;
-                }
-
-                var requestPayload = ReadPayload(request);
-
-                if (CheckIfNotEmpty(requestPayload, ctx))
-                {
-                    return;
-                }
-
-                var requestData = JsonConvert.DeserializeObject<IdentifiablePaginatedRequest>(requestPayload);
-
-                if (string.IsNullOrWhiteSpace(requestData.Id))
-                {
-                    ctx.WriteError((int)HttpStatusCode.BadRequest, "invalid id");
-                    return;
-                }
-
-                var episodes = _adapter.GetEpisodes(requestData.Id).ToList();
-                var page = PaginatedData.CreatePage(requestData.Offset, requestData.Limit, episodes);
-                ctx.OutputUtf8(JsonConvert.SerializeObject(page), "application/json", Encoding.UTF8);
-            });
-
-            httpSupport.AddRoute(@"/subscription-artwork", (ctx, data) =>
-            {
-                var request = ctx.Request;
-                if (CheckIfNotPost(request, ctx))
-                {
-                    return;
-                }
-
-                if (CheckIfNotJson(request, ctx))
-                {
-                    return;
-                }
-
-                var requestPayload = ReadPayload(request);
-
-                if (CheckIfNotEmpty(requestPayload, ctx))
-                {
-                    return;
-                }
-
-                var requestData = JsonConvert.DeserializeObject<IdentifiableRequest>(requestPayload);
-
-                if (string.IsNullOrWhiteSpace(requestData.Id))
-                {
-                    ctx.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    return;
-                }
-
-                ctx.OutputBinary(_adapter.GetPodcastSubscriptionArtwork(requestData.Id), "image/jpeg");
-            });
+            AddArtworkRoute(httpSupport);
         }
 
         private static bool CheckIfNotEmpty(string requestPayload, HttpListenerContext ctx)
         {
-            if (string.IsNullOrEmpty(requestPayload))
+            if (!string.IsNullOrEmpty(requestPayload))
             {
-                ctx.WriteError((int)HttpStatusCode.BadRequest, "payload was empty");
-                return true;
+                return false;
             }
 
-            return false;
+            ctx.WriteError((int)HttpStatusCode.BadRequest, "payload was empty");
+            return true;
         }
 
         private static bool CheckIfNotJson(HttpListenerRequest request, HttpListenerContext ctx)
@@ -161,6 +76,105 @@ namespace MusicBeeRemote.Core.Podcasts
             }
 
             return requestPayload;
+        }
+
+        private void AddArtworkRoute(HttpSupport httpSupport)
+        {
+            httpSupport.AddRoute(@"/subscription-artwork", (ctx, data) =>
+            {
+                var request = ctx.Request;
+                if (CheckIfNotPost(request, ctx))
+                {
+                    return;
+                }
+
+                if (CheckIfNotJson(request, ctx))
+                {
+                    return;
+                }
+
+                var requestPayload = ReadPayload(request);
+
+                if (CheckIfNotEmpty(requestPayload, ctx))
+                {
+                    return;
+                }
+
+                var requestData = JsonConvert.DeserializeObject<IdentifiableRequest>(requestPayload);
+
+                if (string.IsNullOrWhiteSpace(requestData.Id))
+                {
+                    ctx.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    return;
+                }
+
+                ctx.OutputBinary(_adapter.GetPodcastSubscriptionArtwork(requestData.Id), "image/jpeg");
+            });
+        }
+
+        private void AddEpisodesRoute(HttpSupport httpSupport)
+        {
+            httpSupport.AddRoute(@"/episodes", (ctx, data) =>
+            {
+                var request = ctx.Request;
+                if (CheckIfNotPost(request, ctx))
+                {
+                    return;
+                }
+
+                if (CheckIfNotJson(request, ctx))
+                {
+                    return;
+                }
+
+                var requestPayload = ReadPayload(request);
+
+                if (CheckIfNotEmpty(requestPayload, ctx))
+                {
+                    return;
+                }
+
+                var requestData = JsonConvert.DeserializeObject<IdentifiablePaginatedRequest>(requestPayload);
+
+                if (string.IsNullOrWhiteSpace(requestData.Id))
+                {
+                    ctx.WriteError((int)HttpStatusCode.BadRequest, "invalid id");
+                    return;
+                }
+
+                var episodes = _adapter.GetEpisodes(requestData.Id).ToList();
+                var page = PaginatedData.CreatePage(requestData.Offset, requestData.Limit, episodes);
+                ctx.OutputUtf8(JsonConvert.SerializeObject(page), "application/json", Encoding.UTF8);
+            });
+        }
+
+        private void AddPodcastsRoute(HttpSupport httpSupport)
+        {
+            httpSupport.AddRoute(@"/podcasts", (ctx, data) =>
+            {
+                var request = ctx.Request;
+                if (CheckIfNotPost(request, ctx))
+                {
+                    return;
+                }
+
+                if (CheckIfNotJson(request, ctx))
+                {
+                    return;
+                }
+
+                var requestPayload = ReadPayload(request);
+
+                if (CheckIfNotEmpty(requestPayload, ctx))
+                {
+                    return;
+                }
+
+                var requestData = JsonConvert.DeserializeObject<PaginatedRequest>(requestPayload);
+                var subscriptions = _adapter.GetPodcastSubscriptions().ToList();
+                var page = PaginatedData.CreatePage(requestData.Offset, requestData.Limit, subscriptions);
+                ctx.OutputUtf8(JsonConvert.SerializeObject(page), "application/json", Encoding.UTF8);
+            });
         }
     }
 }

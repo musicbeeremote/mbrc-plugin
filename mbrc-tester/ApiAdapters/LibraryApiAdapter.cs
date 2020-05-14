@@ -19,7 +19,7 @@ namespace MbrcTester.ApiAdapters
             _mockLibrary = mockLibrary;
         }
 
-        public IEnumerable<Track> GetTracks(string[] paths)
+        public IEnumerable<Track> GetTracks(string[] paths = null)
         {
             return _mockLibrary.GetTracks();
         }
@@ -29,7 +29,7 @@ namespace MbrcTester.ApiAdapters
             throw new NotImplementedException();
         }
 
-        public IEnumerable<Genre> GetGenres(string filter)
+        public IEnumerable<Genre> GetGenres(string filter = "")
         {
             return from track in _mockLibrary.GetTracks()
                    where track.Genre.ToUpperInvariant().Contains(filter.ToUpperInvariant())
@@ -39,7 +39,7 @@ namespace MbrcTester.ApiAdapters
                    select new Genre(grp.Key, grp.Count());
         }
 
-        public IEnumerable<Artist> GetArtists(string filter)
+        public IEnumerable<Artist> GetArtists(string filter = "")
         {
             return from track in _mockLibrary.GetTracks()
                    where track.Artist.ToUpperInvariant().Contains(filter.ToUpperInvariant())

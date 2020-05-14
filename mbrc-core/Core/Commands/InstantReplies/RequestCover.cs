@@ -1,5 +1,6 @@
+using System;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Model.Generators;
@@ -9,7 +10,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.InstantReplies
 {
-    internal class RequestCover : ICommand
+    public class RequestCover : ICommand
     {
         private readonly LyricCoverModel _model;
         private readonly ITinyMessengerHub _hub;
@@ -24,6 +25,11 @@ namespace MusicBeeRemote.Core.Commands.InstantReplies
 
         public void Execute(IEvent receivedEvent)
         {
+            if (receivedEvent == null)
+            {
+                throw new ArgumentNullException(nameof(receivedEvent));
+            }
+
             SocketMessage message;
 
             if (_auth.ClientProtocolVersion(receivedEvent.ConnectionId) > 2)

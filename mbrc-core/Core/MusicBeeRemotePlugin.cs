@@ -9,35 +9,26 @@ namespace MusicBeeRemote.Core
 {
     public class MusicBeeRemotePlugin : IMusicBeeRemotePlugin
     {
-        private readonly SocketServer _socketServer;
-        private readonly ServiceDiscovery _serviceDiscovery;
-        private readonly HttpSupport _httpSupport;
         private readonly ITrackStateMonitor _trackStateMonitor;
         private readonly IPlayerStateMonitor _playerStateMonitor;
         private readonly ILibraryScanner _libraryScanner;
+        private readonly IPluginNetworking _pluginNetworking;
         private readonly IWindowManager _windowManager;
-        private readonly ClientManager _clientManager;
         private readonly ITinyMessengerHub _hub;
 
         public MusicBeeRemotePlugin(
-            SocketServer socketServer,
-            ServiceDiscovery serviceDiscovery,
-            HttpSupport httpSupport,
             ITrackStateMonitor trackStateMonitor,
             IPlayerStateMonitor playerStateMonitor,
             ILibraryScanner libraryScanner,
+            IPluginNetworking pluginNetworking,
             IWindowManager windowManager,
-            ClientManager clientManager,
             ITinyMessengerHub hub)
         {
-            _socketServer = socketServer;
-            _serviceDiscovery = serviceDiscovery;
-            _httpSupport = httpSupport;
             _trackStateMonitor = trackStateMonitor;
             _playerStateMonitor = playerStateMonitor;
             _libraryScanner = libraryScanner;
+            _pluginNetworking = pluginNetworking;
             _windowManager = windowManager;
-            _clientManager = clientManager;
             _hub = hub;
         }
 
@@ -45,25 +36,16 @@ namespace MusicBeeRemote.Core
         {
             _trackStateMonitor.Start();
             _playerStateMonitor.Start();
-            _serviceDiscovery.Start();
-            _socketServer.Start();
             _libraryScanner.Start();
-#if DEBUG
-            _httpSupport.Start();
-#endif
+            _pluginNetworking.Start();
         }
 
         public void Terminate()
         {
-            _socketServer.Terminate();
-            _serviceDiscovery.Terminate();
             _trackStateMonitor.Terminate();
             _playerStateMonitor.Terminate();
             _libraryScanner.Terminate();
-
-#if DEBUG
-            _httpSupport.Terminate();
-#endif
+            _pluginNetworking.Terminate();
         }
 
         public void DisplayInfoWindow()

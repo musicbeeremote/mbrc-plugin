@@ -2,7 +2,7 @@
 using System.Net;
 using MusicBeeRemote.Core.ApiAdapters;
 using MusicBeeRemote.Core.Events;
-using MusicBeeRemote.Core.Events.Internal;
+using MusicBeeRemote.Core.Events.Status.Internal;
 using MusicBeeRemote.Core.Model.Entities;
 using MusicBeeRemote.Core.Network;
 using MusicBeeRemote.Core.Podcasts;
@@ -11,7 +11,7 @@ using TinyMessenger;
 
 namespace MusicBeeRemote.Core.Commands.Requests.Podcasts
 {
-    internal class RequestPodcastArtworkCommand : ICommand
+    public class RequestPodcastArtworkCommand : ICommand
     {
         private readonly ILibraryApiAdapter _libraryApiAdapter;
         private readonly ITinyMessengerHub _hub;

@@ -17,17 +17,6 @@ namespace MbrcTester.ApiAdapters
 
         public bool MoveTrack(int startPosition, int endPosition)
         {
-            int[] aFrom = { startPosition };
-            int dIn;
-            if (startPosition > endPosition)
-            {
-                dIn = endPosition - 1;
-            }
-            else
-            {
-                dIn = endPosition;
-            }
-
             throw new System.NotImplementedException();
         }
 
@@ -48,7 +37,7 @@ namespace MbrcTester.ApiAdapters
             return true;
         }
 
-        public IEnumerable<NowPlayingTrackInfo> GetTracks(int offset = 0, int limit = 4000)
+        public IEnumerable<NowPlayingTrackInfo> GetTracks(int offset = 0, int limit = 5000)
         {
             return _mockNowPlaying.GetNowPlaying();
         }

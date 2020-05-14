@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using MusicBeeRemote.Core.Events;
 using NLog;
 
 namespace MusicBeeRemote.Core.Commands.InstantReplies
 {
-    internal class HandlePong : ICommand
+    public sealed class HandlePong : ICommand
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
