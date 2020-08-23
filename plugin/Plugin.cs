@@ -688,6 +688,59 @@ namespace MusicBeePlugin
                         _api.Player_GetRepeat()).ToJsonString()));
         }
 
+        public void RequestNowPlayingListOrdered(string clientId, int offset = 0, int limit = 4000)
+        {
+            limit = 100;
+            _api.NowPlayingList_QueryFiles(null);
+
+            var tracks = new List<NowPlaying>();
+            var position = 1;
+            var itemIndex = _api.NowPlayingList_GetCurrentIndex();
+            while (position <= limit)
+            {
+                var trackPath = _api.NowPlayingList_GetListFileUrl(itemIndex);
+
+                if (string.IsNullOrEmpty(trackPath))
+                    break;
+
+                var artist = _api.Library_GetFileTag(trackPath, MetaDataType.Artist);
+                var title = _api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
+
+                if (string.IsNullOrEmpty(title))
+                {
+                    var index = trackPath.LastIndexOf('\\');
+                    title = trackPath.Substring(index + 1);
+                }
+
+                var track = new NowPlaying
+                {
+                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
+                    Title = title,
+                    Position = itemIndex,
+                    Path = trackPath
+                };
+
+                tracks.Add(track);
+                itemIndex = _api.NowPlayingList_GetNextIndex(position);
+                position++;
+            }
+
+            var total = tracks.Count;
+            var message = new SocketMessage
+            {
+                Context = Constants.NowPlayingList,
+                Data = new Page<NowPlaying>
+                {
+                    Data = tracks,
+                    Offset = offset,
+                    Limit = limit,
+                    Total = total
+                }
+            };
+            var messageEvent = new MessageEvent(EventType.ReplyAvailable, message.ToJsonString(), clientId);
+            EventBus.FireEvent(messageEvent);
+        }
+
         public void RequestNowPlayingListPage(string clientId, int offset = 0, int limit = 4000)
         {
             _api.NowPlayingList_QueryFiles(null);
@@ -919,13 +972,7 @@ namespace MusicBeePlugin
             if (int.TryParse(index, out trackIndex))
             {
                 _api.NowPlayingList_QueryFiles(null);
-                var trackToPlay = string.Empty;
-                var lTrackIndex = 0;
-                while (trackIndex != lTrackIndex)
-                {
-                    trackToPlay = _api.NowPlayingList_QueryGetNextFile();
-                    lTrackIndex++;
-                }
+                var trackToPlay = _api.NowPlayingList_GetListFileUrl(trackIndex);
                 if (!string.IsNullOrEmpty(trackToPlay))
                     result = _api.NowPlayingList_PlayNow(trackToPlay);
             }
