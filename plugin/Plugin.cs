@@ -1202,6 +1202,87 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
+        public void SetTrackTag(string tagName, string value, string clientId)
+        {
+            var currentTrack = _api.NowPlaying_GetFileUrl();
+            var metadataType = MetaDataType.AlbumArtistRaw;
+            switch (tagName)
+            {
+                case "TrackTitle":
+                    metadataType = MetaDataType.TrackTitle;
+                    break;
+                case "Artist":
+                    metadataType = MetaDataType.Artist;
+                    break;
+                case "Album":
+                    metadataType = MetaDataType.Album;
+                    break;
+                case "Year":
+                    metadataType = MetaDataType.Year;
+                    break;
+                case "AlbumArtist":
+                    metadataType = MetaDataType.AlbumArtist;
+                    break;
+                case "Genre":
+                    metadataType = MetaDataType.Genre;
+                    break;
+                case "TrackNo":
+                    metadataType = MetaDataType.TrackNo;
+                    break;
+                case "TrackCount":
+                    metadataType = MetaDataType.TrackCount;
+                    break;
+                case "DiscNo":
+                    metadataType = MetaDataType.DiscNo;
+                    break;
+                case "DiscCount":
+                    metadataType = MetaDataType.DiscCount;
+                    break;
+                case "Grouping":
+                    metadataType = MetaDataType.Grouping;
+                    break;
+                case "Publisher":
+                    metadataType = MetaDataType.Publisher;
+                    break;
+                case "RatingAlbum":
+                    metadataType = MetaDataType.RatingAlbum;
+                    break;
+                case "Composer":
+                    metadataType = MetaDataType.Composer;
+                    break;
+                case "Comment":
+                    metadataType = MetaDataType.Comment;
+                    break;
+                case "Encoder":
+                    metadataType = MetaDataType.Encoder;
+                    break;
+                case "Lyrics":
+                    metadataType = MetaDataType.Lyrics;
+                    break;
+            }
+
+            if (metadataType == MetaDataType.AlbumArtistRaw)
+            {
+                _logger.Error("Requested tag type not found");
+                return;
+            }
+
+            try
+            {
+                _api.Library_SetFileTag(currentTrack, metadataType, value);
+                _api.Library_CommitTagsToFile(currentTrack);
+                _api.MB_RefreshPanels();
+
+                EventBus.FireEvent(
+                    new MessageEvent(EventType.ReplyAvailable,
+                        new SocketMessage(Constants.NowPlayingDetails, GetPlayingTrackDetails())));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "On Tag Change call");
+            }
+        }
+
         /// <summary>
         /// Moves a track of the now playing list to a new position.
         /// </summary>

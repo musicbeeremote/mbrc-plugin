@@ -89,6 +89,7 @@
         public const string RadioStations = "radiostations";
 
         public const string NowPlayingDetails = "nowplayingdetails";
+        public const string NowPlayingTagChange = "nowplayingtagchange";
 
         #endregion
 

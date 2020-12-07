@@ -89,6 +89,7 @@
             controller.AddCommand(Constants.RadioStations, typeof(RequestRadioStations));
 
             controller.AddCommand(Constants.NowPlayingDetails, typeof(RequestSongDetails));
+            controller.AddCommand(Constants.NowPlayingTagChange, typeof(RequestTagChange));
             #endregion
 
         }

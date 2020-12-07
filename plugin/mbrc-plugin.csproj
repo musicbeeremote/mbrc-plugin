@@ -166,6 +166,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestScrobble.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestShuffle.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestSongDetails.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestTagChange.cs" />
     <Compile Include="AndroidRemote\Commands\State\PCoverChanged.cs" />
     <Compile Include="AndroidRemote\Commands\State\PLyricsChanged.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingList.cs" />
@@ -250,8 +251,12 @@
     <Compile Include="Tools\NetworkTools.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
-    <None Include="packages.config" />
+    <None Include="app.config">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="packages.config">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config">
       <SubType>Designer</SubType>
     </None>
@@ -286,6 +291,7 @@
   <ItemGroup>
     <EmbeddedResource Include="InfoWindow.resx">
       <DependentUpon>InfoWindow.cs</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
