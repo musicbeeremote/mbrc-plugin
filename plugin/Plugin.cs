@@ -1676,14 +1676,19 @@ namespace MusicBeePlugin
                     var currentTrack = _api.Library_QueryGetNextFile();
                     if (string.IsNullOrEmpty(currentTrack)) break;
 
-                    int trackNumber;
-                    int.TryParse(_api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out trackNumber);
+                    int.TryParse(_api.Library_GetFileTag(currentTrack, MetaDataType.TrackNo), out var trackNumber);
+                    int.TryParse(_api.Library_GetFileTag(currentTrack, MetaDataType.DiscNo), out var discNumber);
                     var src = currentTrack;
 
-                    trackList.Add(new Track(_api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
-                        _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle), trackNumber, src));
+                    trackList.Add(new Track
+                    {
+                        Artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
+                        Title = _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
+                        Disc = discNumber,
+                        Trackno = trackNumber,
+                        Src = src,
+                    });
                 }
-                trackList.Sort();
             }
 
             EventBus.FireEvent(
