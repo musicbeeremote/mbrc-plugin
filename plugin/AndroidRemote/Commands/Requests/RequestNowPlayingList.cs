@@ -24,7 +24,15 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.RequestNowPlayingListOrdered(eEvent.ClientId, offset, limit);
+                var unordered = data.Get<bool>("unordered");
+                if (unordered)
+                {
+                    Plugin.Instance.RequestNowPlayingListPage(eEvent.ClientId, offset, limit);
+                }
+                else
+                {
+                    Plugin.Instance.RequestNowPlayingListOrdered(eEvent.ClientId, offset, limit);
+                }
             }
         }
     }

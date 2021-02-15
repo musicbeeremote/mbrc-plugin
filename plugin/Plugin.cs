@@ -688,9 +688,8 @@ namespace MusicBeePlugin
                         _api.Player_GetRepeat()).ToJsonString()));
         }
 
-        public void RequestNowPlayingListOrdered(string clientId, int offset = 0, int limit = 4000)
+        public void RequestNowPlayingListOrdered(string clientId, int offset = 0, int limit = 100)
         {
-            limit = 100;
             _api.NowPlayingList_QueryFiles(null);
 
             var tracks = new List<NowPlaying>();
