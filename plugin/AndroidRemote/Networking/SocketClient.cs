@@ -37,8 +37,12 @@
         /// Represents the version of the protocol supported by the client.
         /// </summary>
         public int ClientProtocolVersion { get; set; }
-
+        
         /// <summary>
+        /// The platform the client uses (Android/iOS/Unknown) this helps craft specific protocol responses for each different client.
+        /// </summary>
+        public ClientOS ClientPlatform  { get; set; }
+        
         /// Represents if the client will receive broadcast actions from the service (like volume updates etc).
         /// This property is by default enabled. If disable the client will receive only responses to specific requests.
         /// </summary>
