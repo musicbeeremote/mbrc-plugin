@@ -675,7 +675,7 @@ namespace MusicBeePlugin
                         _api.Player_SetRepeat(RepeatMode.All);
                         break;
                     case RepeatMode.All:
-                        _api.Player_SetRepeat(RepeatMode.None);
+                        _api.Player_SetRepeat(RepeatMode.One);
                         break;
                     case RepeatMode.One:
                         _api.Player_SetRepeat(RepeatMode.None);
