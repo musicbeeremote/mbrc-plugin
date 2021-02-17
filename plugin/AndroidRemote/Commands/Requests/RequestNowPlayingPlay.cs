@@ -1,3 +1,6 @@
+using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.AndroidRemote.Utilities;
+
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     using MusicBeePlugin.AndroidRemote.Interfaces;
@@ -10,7 +13,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.NowPlayingPlay(eEvent.DataToString());
+            var socketClient = Authenticator.Client(eEvent.ClientId);
+            var isAndroid = socketClient?.ClientPlatform == ClientOS.Android;
+            Plugin.Instance.NowPlayingPlay(eEvent.DataToString(), isAndroid);
         }
     }
 }

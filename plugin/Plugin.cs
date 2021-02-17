@@ -970,15 +970,15 @@ namespace MusicBeePlugin
         /// Searches in the Now playing list for the track specified and plays it.
         /// </summary>
         /// <param name="index">The track to play</param>
+        /// <param name="isAndroid"></param>
         /// <returns></returns>
-        public void NowPlayingPlay(string index)
+        public void NowPlayingPlay(string index, bool isAndroid)
         {
-            bool result = false;
-            int trackIndex;
-            if (int.TryParse(index, out trackIndex))
+            var result = false;
+            if (int.TryParse(index, out var trackIndex))
             {
                 _api.NowPlayingList_QueryFiles(null);
-                var trackToPlay = _api.NowPlayingList_GetListFileUrl(trackIndex);
+                var trackToPlay = _api.NowPlayingList_GetListFileUrl(isAndroid ? trackIndex - 1 : trackIndex);
                 if (!string.IsNullOrEmpty(trackToPlay))
                     result = _api.NowPlayingList_PlayNow(trackToPlay);
             }

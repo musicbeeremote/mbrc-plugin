@@ -1,4 +1,5 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using ServiceStack.Text;
 
@@ -24,8 +25,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                var unordered = data.Get<bool>("unordered");
-                if (unordered)
+                
+                if (socketClient?.ClientPlatform == ClientOS.Android)
                 {
                     Plugin.Instance.RequestNowPlayingListPage(eEvent.ClientId, offset, limit);
                 }
