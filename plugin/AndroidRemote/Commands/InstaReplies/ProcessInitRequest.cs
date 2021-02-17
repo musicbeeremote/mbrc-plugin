@@ -13,7 +13,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
             Plugin.Instance.RequestLoveStatus(eEvent.DataToString(), eEvent.ClientId);
             Plugin.Instance.RequestPlayerStatus(eEvent.ClientId);
             Plugin.BroadcastCover(LyricCoverModel.Instance.Cover);
-            Plugin.BroadcastLyrics(LyricCoverModel.Instance.Lyrics);
+            Plugin.Instance.RequestNowPlayingTrackLyrics();
         }
     }
 }
