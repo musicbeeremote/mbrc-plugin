@@ -894,18 +894,25 @@ namespace MusicBeePlugin
         /// </summary>
         public void RequestNowPlayingTrackLyrics()
         {
-            if (!string.IsNullOrEmpty(_api.NowPlaying_GetLyrics()))
+            var lyrics = _api.NowPlaying_GetLyrics();
+
+            if (!string.IsNullOrEmpty(lyrics))
             {
-                BroadcastLyrics(_api.NowPlaying_GetLyrics());
+                //no additional actions
             }
             else if (_api.ApiRevision >= 17)
             {
-                BroadcastLyrics(_api.NowPlaying_GetDownloadedLyrics());
+                lyrics = _api.NowPlaying_GetDownloadedLyrics();
             }
             else
             {
-                BroadcastLyrics(string.Empty);
+                lyrics = string.Empty;
             }
+
+            //update LyricsCoverModel cache
+            EventBus.FireEvent(new MessageEvent(EventType.NowPlayingLyricsChange, lyrics));
+
+            BroadcastLyrics(lyrics);
         }
 
         /// <summary>

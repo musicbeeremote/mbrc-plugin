@@ -16,16 +16,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.InstaReplies
 
         public void Execute(IEvent eEvent)
         {
-            if (Authenticator.ClientProtocolVersion(eEvent.ClientId) > 2)
-            {
-                var lyricsPayload = new LyricsPayload(LyricCoverModel.Instance.Lyrics);
-                SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, lyricsPayload).ToJsonString(), eEvent.ClientId);
-            }
-            else
-            {
-                SocketServer.Instance.Send(new SocketMessage(Constants.NowPlayingLyrics, LyricCoverModel.Instance.Lyrics).ToJsonString(), eEvent.ClientId);
-            }
-
+            Plugin.Instance.RequestNowPlayingTrackLyrics();
         }
     }
 }
