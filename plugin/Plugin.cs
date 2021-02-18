@@ -1547,11 +1547,16 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
-        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000, bool albumArtists = false)
         {
             var artists = new List<Artist>();
+            var artistType = "artist";
+            if (albumArtists)
+            {
+                artistType = "albumartist";
+            }
 
-            if (_api.Library_QueryLookupTable("artist", "count", null))
+            if (_api.Library_QueryLookupTable(artistType, "count", null))
             {
                 artists.AddRange(_api.Library_QueryGetLookupTableValue(null)
                     .Split(new[] {"\0\0"}, StringSplitOptions.None)
