@@ -90,6 +90,7 @@
 
         public const string NowPlayingDetails = "nowplayingdetails";
         public const string NowPlayingTagChange = "nowplayingtagchange";
+        public const string LibraryPlayAll = "libraryplayall";
 
         #endregion
 
