@@ -1162,6 +1162,39 @@ namespace MusicBeePlugin
             EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
         }
 
+        public void LibraryPlayAll(string clientId, bool shuffle = false)
+        {
+            bool success;
+
+            if (shuffle)
+            {
+                success = _api.NowPlayingList_PlayLibraryShuffled();
+            }
+            else
+            {
+                if (_api.Player_GetAutoDjEnabled())
+                {
+                    _api.Player_EndAutoDj();
+                }
+                _api.Player_SetShuffle(false);
+
+                string[] songsList = null;
+                _api.Library_QueryFilesEx(null, ref songsList);
+                if (songsList.Length > 0) {
+                    _api.NowPlayingList_Clear();
+                    success = _api.NowPlayingList_QueueFilesNext(songsList);
+                    _api.Player_PlayNextTrack();
+                }
+                else
+                {
+                    success = false;
+                }
+            }
+
+            var data = new SocketMessage(Constants.LibraryPlayAll, success).ToJsonString();
+            EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable, data, clientId));
+        }
+
         /// <summary>
         ///
         /// </summary>ea
@@ -1546,11 +1579,16 @@ namespace MusicBeePlugin
             EventBus.FireEvent(messageEvent);
         }
 
-        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000)
+        public void LibraryBrowseArtists(string clientId, int offset = 0, int limit = 4000, bool albumArtists = false)
         {
             var artists = new List<Artist>();
+            var artistType = "artist";
+            if (albumArtists)
+            {
+                artistType = "albumartist";
+            }
 
-            if (_api.Library_QueryLookupTable("artist", "count", null))
+            if (_api.Library_QueryLookupTable(artistType, "count", null))
             {
                 artists.AddRange(_api.Library_QueryGetLookupTableValue(null)
                     .Split(new[] {"\0\0"}, StringSplitOptions.None)

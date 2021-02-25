@@ -90,6 +90,7 @@
 
             controller.AddCommand(Constants.NowPlayingDetails, typeof(RequestSongDetails));
             controller.AddCommand(Constants.NowPlayingTagChange, typeof(RequestTagChange));
+            controller.AddCommand(Constants.LibraryPlayAll, typeof(RequestLibPlayAll));
             #endregion
 
         }

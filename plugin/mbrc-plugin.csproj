@@ -139,6 +139,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibAlbumTracks.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibArtistAlbums.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibGenreArtists.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestLibPlayAll.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueAlbum.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueArtist.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibQueueGenre.cs" />

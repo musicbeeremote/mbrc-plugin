@@ -12,7 +12,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                Plugin.Instance.LibraryBrowseArtists(eEvent.ClientId, offset, limit);
+                var type = data.Get<bool>("album_artists");
+                Plugin.Instance.LibraryBrowseArtists(eEvent.ClientId, offset, limit, type);
             }
             else
             {
