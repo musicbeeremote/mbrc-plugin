@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -13,6 +14,7 @@ using MusicBeePlugin.AndroidRemote.Controller;
 using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Model;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
@@ -73,7 +75,6 @@ namespace MusicBeePlugin
 
         private InfoWindow _mWindow;
         private bool _userChangingShuffle;
-
 
         /// <summary>
         /// This function initialized the Plugin.
@@ -136,6 +137,14 @@ namespace MusicBeePlugin
             _positionUpdateTimer = new Timer(20000);
             _positionUpdateTimer.Elapsed += PositionUpdateTimerOnElapsed;
             _positionUpdateTimer.Enabled = true;
+
+            Utilities.StoragePath = UserSettings.Instance.StoragePath;
+            
+            _api.MB_CreateBackgroundTask(() =>
+            {
+                PrepareCache();
+                BuildCoverCache();
+            }, Form.ActiveForm);
 
             return _about;
         }
@@ -390,6 +399,10 @@ namespace MusicBeePlugin
                 case NotificationType.NowPlayingListChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.NowPlayingListChanged, true).ToJsonString()));
+                    break;
+                case NotificationType.FileAddedToLibrary:
+                    var hash = CacheCover(sourceFileUrl);
+                    CoverCache.Instance.Update(key, hash);
                     break;
             }
         }
@@ -2108,6 +2121,189 @@ namespace MusicBeePlugin
         {
             _api.Player_SetOutputDevice(outputDevice);
             RequestOutputDevice(clientId);
+        }
+
+        private string CacheCover(string track)
+        {
+            var locations = PictureLocations.EmbedInFile |
+                            PictureLocations.LinkToSource |
+                            PictureLocations.LinkToOrganisedCopy;
+
+            var pictureUrl = string.Empty;
+            var data = new byte[] { };
+
+            _api.Library_GetArtworkEx(
+                track,
+                0,
+                true,
+                ref locations,
+                ref pictureUrl,
+                ref data
+            );
+                    
+            if (!pictureUrl.IsNullOrEmpty())
+            {
+                return Utilities.StoreCoverToCache(pictureUrl);
+            }
+
+            return data?.Length > 0 ? Utilities.StoreCoverToCache(data) : string.Empty;
+        }
+
+        private void PrepareCache()
+        {
+            var watch = Stopwatch.StartNew();
+            var identifiers = GetIdentifiers();
+
+            _logger.Debug($"Detected {identifiers.Count} albums");
+
+            _api.Library_QueryLookupTable(null, null, null);
+
+            if (!_api.Library_QueryFiles(null))
+            {
+                _logger.Debug($"No result in query");
+                return;
+            }
+
+            var paths = new Dictionary<string, string>();
+            
+            while (true)
+            {
+                var currentTrack = _api.Library_QueryGetNextFile();
+                if (string.IsNullOrEmpty(currentTrack)) break;
+
+                var album = GetAlbumForTrack(currentTrack);
+                var artist = GetAlbumArtistForTrack(currentTrack);
+
+                var key = Utilities.CoverIdentifier(artist, album);
+
+                if (!identifiers.Contains((key)))
+                {
+                    continue;
+                }
+
+                paths[key] = currentTrack;
+            }
+
+            CoverCache.Instance.SetPaths(paths);
+            watch.Stop();
+            _logger.Debug($"Cover cache preparation: {watch.ElapsedMilliseconds} ms");
+        }
+
+        private void BuildCoverCache()
+        {
+            var watch = Stopwatch.StartNew();
+            CoverCache.Instance.Build(CacheCover);
+            watch.Stop();
+            _logger.Debug($"Cover cache task complete after: {watch.ElapsedMilliseconds} ms");
+        }
+
+        private List<string> GetIdentifiers()
+        {
+            var identifiers = new List<string>();
+            if (!_api.Library_QueryLookupTable("album", "albumartist" + '\0' + "album", null)) return identifiers;
+            try
+            {
+                var data = _api.Library_QueryGetLookupTableValue(null)
+                    .Split(new[] {"\0\0"}, StringSplitOptions.None)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Select(s => s.Trim())
+                    .Select(CreateAlbum)
+                    .Select(album => Utilities.CoverIdentifier(album.artist, album.album))
+                    .Distinct()
+                    .ToList();
+
+                identifiers.AddRange(data);
+            }
+            catch (IndexOutOfRangeException ex)
+            {
+                _logger.Error(ex, "While loading album data");
+            }
+
+            return identifiers;
+        }
+
+        public void RequestCover(string clientId, string artist, string album, string clientHash)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            AlbumCoverPayload payload;
+            
+            try
+            {
+
+                if (artist == null)
+                {
+                    payload = GetAlbumCoverStatusPayload(500);
+                }
+                else if (album.IsNullOrEmpty())
+                {
+                    payload = GetAlbumCoverStatusPayload(400);
+                }
+                else
+                {
+                    payload = GetAlbumCover(artist, album, clientHash);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e);
+                payload = GetAlbumCoverStatusPayload(500);
+            }
+
+            var message = new SocketMessage(Constants.LibraryAlbumCover, payload);
+            SendReply(message.ToJsonString(), clientId);
+            stopwatch.Stop();
+            _logger.Debug($"cover request took {stopwatch.Elapsed} ms");
+        }
+
+        private AlbumCoverPayload GetAlbumCover(string artist, string album, string clientHash)
+        {
+            var cache = CoverCache.Instance;
+            var key = Utilities.CoverIdentifier(artist, album);
+            string hash;
+            if (cache.IsCached(key))
+            {
+                hash = cache.GetCoverHash(key);
+                return hash.IsEmpty() ? GetAlbumCoverStatusPayload(404) : GetAlbumCoverFromCache(clientHash, hash);
+            }
+
+            var path = cache.Lookup(key);
+            if (path.IsNullOrEmpty())
+            {
+                return GetAlbumCoverStatusPayload(404);
+            }
+            
+            hash = CacheCover(path);
+            if (hash.IsEmpty())
+            {
+                return GetAlbumCoverStatusPayload(404);
+            }
+            
+            
+            cache.Update(key, hash);
+            return GetAlbumCoverFromCache(clientHash, hash);
+        }
+
+        private static AlbumCoverPayload GetAlbumCoverStatusPayload(uint status)
+        {
+            return new AlbumCoverPayload
+            {
+                Status = status
+            };
+        }
+
+        private static AlbumCoverPayload GetAlbumCoverFromCache(string clientHash, string hash)
+        {
+            if (clientHash.IsEmpty() || clientHash != hash)
+            {
+                return new AlbumCoverPayload
+                {
+                    Cover = Utilities.GetCoverFromCache(hash),
+                    Status = 200,
+                    Hash = hash
+                };
+            }
+
+            return GetAlbumCoverStatusPayload(304);
         }
     }
 }

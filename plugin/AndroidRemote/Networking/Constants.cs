@@ -94,15 +94,20 @@
 
         #endregion
 
+        #region Protocol 5
+
+        public static string LibraryAlbumCover = "libraryalbumcover";
+
+        #endregion
+
 
         #region ProtocolVersion
 
         public const int V2 = 2;
         public const int V3 = 3;
         public const int V4 = 4;
+        public const int V5 = 5;
 
         #endregion
-
-
     }
 }
