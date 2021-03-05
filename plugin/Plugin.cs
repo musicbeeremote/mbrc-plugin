@@ -402,6 +402,9 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.FileAddedToLibrary:
                     var hash = CacheCover(sourceFileUrl);
+                    var artist = GetAlbumArtistForTrack(sourceFileUrl);
+                    var album = GetAlbumForTrack(sourceFileUrl);
+                    var key = Utilities.CoverIdentifier(artist, album);
                     CoverCache.Instance.Update(key, hash);
                     break;
             }
