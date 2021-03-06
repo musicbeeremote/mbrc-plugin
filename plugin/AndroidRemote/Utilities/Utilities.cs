@@ -231,7 +231,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <param name="filepath">The path where the file will be saved</param>
         /// <param name="width">The max width of the file saved</param>
         /// <param name="height">The max height of the file saved</param>
-        private static bool StoreResizedStream(Stream stream, string filepath, int width = 400, int height = 400)
+        private static bool StoreResizedStream(Stream stream, string filepath, int width = 150, int height = 150)
         {
             var success = true;
             try
@@ -256,7 +256,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <param name="width">The max width of the new image</param>
         /// <param name="height">The max height of the new image</param>
         /// <returns>String SHA1 hash of the image.</returns>
-        public static string StoreCoverToCache(byte[] imageData, int width = 400, int height = 400)
+        public static string StoreCoverToCache(byte[] imageData, int width = 150, int height = 150)
         {
             var hash = string.Empty;
             if (imageData == null)
@@ -293,7 +293,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <returns>
         ///     System.String. The SHA1 hash representing the image
         /// </returns>
-        public static string StoreCoverToCache(string url, int width = 400, int height = 400)
+        public static string StoreCoverToCache(string url, int width = 150, int height = 150)
         {
             var hash = string.Empty;
             if (string.IsNullOrEmpty(url))
