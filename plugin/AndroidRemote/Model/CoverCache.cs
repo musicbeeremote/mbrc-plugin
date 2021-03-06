@@ -53,7 +53,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         public string Lookup(string key)
         {
-            return _paths.ContainsKey(key) ? _paths.Get(key) : string.Empty;
+            return _paths.ContainsKey(key) ? _paths[key] : string.Empty;
         }
     }
 }

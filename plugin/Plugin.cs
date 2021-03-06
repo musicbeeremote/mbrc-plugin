@@ -2225,10 +2225,79 @@ namespace MusicBeePlugin
             return identifiers;
         }
 
-        public void RequestCover(string clientId, string artist, string album, string clientHash)
+        private AlbumCoverPayload GetCoverSize(string artist, string album, string size)
+        {
+            AlbumCoverPayload payload;
+            var isNumeric = int.TryParse(size, out var coverSize);
+            var original = size == "original";
+            if (!original && !isNumeric)
+            {
+                payload = GetAlbumCoverStatusPayload(400);
+            }
+            else
+            {
+                var key = Utilities.CoverIdentifier(artist, album);
+                var path = CoverCache.Instance.Lookup(key);
+                if (path.IsNullOrEmpty())
+                {
+                    payload = GetAlbumCoverStatusPayload(404);
+                }
+                else
+                {
+                    var locations = PictureLocations.EmbedInFile |
+                                    PictureLocations.LinkToSource |
+                                    PictureLocations.LinkToOrganisedCopy;
+
+                    var pictureUrl = string.Empty;
+                    var data = new byte[] { };
+
+                    _api.Library_GetArtworkEx(
+                        path,
+                        0,
+                        true,
+                        ref locations,
+                        ref pictureUrl,
+                        ref data
+                    );
+
+                    if (!pictureUrl.IsNullOrEmpty())
+                    {
+                        payload = new AlbumCoverPayload
+                        {
+                            Cover = original
+                                ? Utilities.FileToBase64(pictureUrl)
+                                : Utilities.ImageResizeFile(pictureUrl, coverSize, coverSize),
+                            Status = 200,
+                            Hash = Utilities.Sha1HashFile(pictureUrl) 
+                        };
+                    }
+                    else if (data?.Length > 0)
+                    {
+                        payload = new AlbumCoverPayload
+                        {
+                            Cover = original
+                                ? Convert.ToBase64String(data)
+                                : Utilities.ImageResize(data, coverSize, coverSize),
+                            Status = 200,
+                            Hash = Utilities.Sha1Hash(data)
+                        };
+                    }
+                    else
+                    {
+                        payload = GetAlbumCoverStatusPayload(404);
+                    }
+                }
+            }
+
+            return payload;
+        }
+
+        public void RequestCover(string clientId, string artist, string album, string clientHash, string size)
         {
             var stopwatch = Stopwatch.StartNew();
             AlbumCoverPayload payload;
+
+            
             
             try
             {
@@ -2243,7 +2312,9 @@ namespace MusicBeePlugin
                 }
                 else
                 {
-                    payload = GetAlbumCover(artist, album, clientHash);
+                    payload = size != null
+                        ? GetCoverSize(artist, album, size)
+                        : GetAlbumCover(artist, album, clientHash);
                 }
             }
             catch (Exception e)

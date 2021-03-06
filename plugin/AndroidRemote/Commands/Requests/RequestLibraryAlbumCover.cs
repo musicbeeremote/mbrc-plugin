@@ -12,7 +12,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             var album = data.Get<string>("album");
             var artist = data.Get<string>("artist") ?? string.Empty;
             var hash = data.Get<string>("hash") ?? string.Empty;
-            Plugin.Instance.RequestCover(eEvent.ClientId, artist, album, hash);
+            var size = data.Get<string>("size");
+            Plugin.Instance.RequestCover(eEvent.ClientId, artist, album, hash, size);
         }
     }
 }

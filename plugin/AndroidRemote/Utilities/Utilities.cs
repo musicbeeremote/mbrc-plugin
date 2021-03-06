@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.ServiceModel;
 using System.Text;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using NLog;
@@ -71,14 +72,9 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             return mHash;
         }
 
-        /// <summary>
-        /// Given a filestream it returns the SHA1 hash of the string
-        /// </summary>
-        /// <param name="fs">The fs.</param>
-        /// <returns>System.String.</returns>
-        private static string Sha1Hash(FileStream fs)
+        public static string Sha1Hash(byte[] data)
         {
-            _hash = Sha1.ComputeHash(fs);
+            _hash = Sha1.ComputeHash(data);
             var sb = new StringBuilder();
             foreach (var hex in _hash.Select(b => b.ToString("x2")))
             {
@@ -87,6 +83,18 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
 
             return sb.ToString();
         }
+
+        public static string Sha1HashFile(string filePath)
+        {
+            string hash;
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                hash = Sha1Hash(fs);
+            }
+
+            return hash;
+        }
+        
         
         /// <summary>
         ///     Opens a <see cref="Stream" /> and calculates the SHA1 hash for the stream.
@@ -128,36 +136,10 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
                 {
                     return cover;
                 }
+
                 using (var ms = new MemoryStream(Convert.FromBase64String(base64)))
-                using (var albumCover = Image.FromStream(ms, true))
                 {
-                    ms.Flush();
-                    var sourceWidth = albumCover.Width;
-                    var sourceHeight = albumCover.Height;
-
-                    var nPercentW = (width / (float)sourceWidth);
-                    var nPercentH = (height / (float)sourceHeight);
-
-                    var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                    var destWidth = (int)(sourceWidth * nPercent);
-                    var destHeight = (int)(sourceHeight * nPercent);
-                    using (var bmp = new Bitmap(destWidth, destHeight))
-                    using (var ms2 = new MemoryStream())
-                    {
-                        var graph = Graphics.FromImage(bmp);
-                        graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                        graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
-                        graph.Dispose();
-
-                        var mInfo = GetEncoder(ImageFormat.Jpeg);
-                        var mEncoder = Encoder.Quality;
-                        var mParams = new EncoderParameters(1);
-                        var mParam = new EncoderParameter(mEncoder, 80L);
-                        mParams.Param[0] = mParam;
-
-                        bmp.Save(ms2, mInfo, mParams);
-                        cover = Convert.ToBase64String(ms2.ToArray());
-                    }
+                    cover = ResizeStream(width, height, ms);
                 }
             }
             catch (Exception ex)
@@ -166,7 +148,76 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             }
             return cover;
         }
+
+        public static string ImageResize(byte[] data, int width = 600, int height = 600)
+        {
+            string cover;
+            using (var ms = new MemoryStream(data))
+            {
+                cover = ResizeStream(width, height, ms);
+            }
+            return cover;
+        }
         
+        public static string ImageResizeFile(string file, int width = 600, int height = 600)
+        {
+            string cover;
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read))
+            {
+                cover = ResizeStream(width, height, fs);
+            }
+            return cover;
+        }
+
+        private static string ResizeStream(int width, int height, Stream stream)
+        {
+            string cover;
+            using (var albumCover = Image.FromStream(stream, true))
+            {
+                stream.Flush();
+                var sourceWidth = albumCover.Width;
+                var sourceHeight = albumCover.Height;
+
+                var nPercentW = sourceWidth < width ? 1 : (width / (float) sourceWidth);
+                var nPercentH = sourceHeight < height ? 1 : (height / (float) sourceHeight);
+
+                var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
+                var destWidth = (int) (sourceWidth * nPercent);
+                var destHeight = (int) (sourceHeight * nPercent);
+                using (var bmp = new Bitmap(destWidth, destHeight))
+                using (var ms2 = new MemoryStream())
+                {
+                    var graph = Graphics.FromImage(bmp);
+                    graph.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    graph.DrawImage(albumCover, 0, 0, destWidth, destHeight);
+                    graph.Dispose();
+
+                    var mInfo = GetEncoder(ImageFormat.Jpeg);
+                    var mEncoder = Encoder.Quality;
+                    var mParams = new EncoderParameters(1);
+                    var mParam = new EncoderParameter(mEncoder, 80L);
+                    mParams.Param[0] = mParam;
+
+                    bmp.Save(ms2, mInfo, mParams);
+                    cover = Convert.ToBase64String(ms2.ToArray());
+                }
+            }
+
+            return cover;
+        }
+
+        public static string FileToBase64(string filepath)
+        {
+            using (var fs = new FileStream(filepath, FileMode.Open, FileAccess.Read))
+            {
+                using (var ms = new MemoryStream())
+                {
+                    fs.CopyTo(ms);
+                    return Convert.ToBase64String(ms.ToArray());
+                }
+            }
+        }
+
         /// <summary>
         ///     Given an <paramref name="filepath" />, an <paramref name="image" />
         ///     and the dimensions it will store the <see cref="Image" /> to the
@@ -337,19 +388,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var directory = StoragePath + CoverCachePath;
             var filepath = directory + hash;
-            if (!File.Exists(filepath))
-            {
-                return string.Empty;
-            }
-            
-            using (var fs = new FileStream(filepath, FileMode.Open, FileAccess.Read))
-            {
-                using (var ms = new MemoryStream())
-                {
-                    fs.CopyTo(ms);
-                    return Convert.ToBase64String(ms.ToArray());
-                }
-            }
+            return !File.Exists(filepath) ? string.Empty : FileToBase64(filepath);
         }
 
         public static string CoverIdentifier(string artist, string album)
