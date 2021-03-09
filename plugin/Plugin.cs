@@ -2297,8 +2297,6 @@ namespace MusicBeePlugin
             var stopwatch = Stopwatch.StartNew();
             AlbumCoverPayload payload;
 
-            
-            
             try
             {
 
@@ -2357,7 +2355,7 @@ namespace MusicBeePlugin
             return GetAlbumCoverFromCache(clientHash, hash);
         }
 
-        private static AlbumCoverPayload GetAlbumCoverStatusPayload(uint status)
+        private static AlbumCoverPayload GetAlbumCoverStatusPayload(int status)
         {
             return new AlbumCoverPayload
             {
@@ -2378,6 +2376,42 @@ namespace MusicBeePlugin
             }
 
             return GetAlbumCoverStatusPayload(304);
+        }
+
+        public void RequestCoverPage(string clientId, int offset, int limit)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var keys = CoverCache.Instance.Keys();
+            var page = keys.Skip(offset).Take(limit);
+            
+            var data = (from key in page
+            let hash = CoverCache.Instance.GetCoverHash(key)
+            let path = CoverCache.Instance.Lookup(key)
+            let cover = Utilities.GetCoverFromCache(hash)
+            select new AlbumCoverPayload
+            {
+                Artist = GetAlbumArtistForTrack(path),
+                Album = GetAlbumForTrack(path),
+                Cover = cover,
+                Hash = hash,
+                Status = cover.IsEmpty() ? 404 : 200
+            }).ToList();
+
+            var message = new SocketMessage
+            {
+                Context = Constants.LibraryAlbumCover,
+                Data = new Page<AlbumCoverPayload>
+                {
+                    Data = offset > keys.Count ? new List<AlbumCoverPayload>() : data,
+                    Offset = offset,
+                    Limit = limit,
+                    Total = keys.Count
+                }
+            };
+            
+            SendReply(message.ToJsonString(), clientId);
+            stopwatch.Stop();
+            _logger.Debug($"cover page from: {offset} with {limit} limit, request took {stopwatch.Elapsed} ms");
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NLog;
 using ServiceStack.Text;
 using static MusicBeePlugin.AndroidRemote.Utilities.Utilities;
@@ -39,6 +40,11 @@ namespace MusicBeePlugin.AndroidRemote.Model
         public bool IsCached(string key)
         {
             return _covers.ContainsKey(key);
+        }
+
+        public List<string> Keys()
+        {
+            return _covers.Keys.ToList();
         }
 
         public string GetCoverHash(string key)
