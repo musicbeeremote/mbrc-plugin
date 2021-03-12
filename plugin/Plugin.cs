@@ -67,6 +67,8 @@ namespace MusicBeePlugin
         /// </summary>
         private bool _scrobble;
 
+        private bool BuildingCoverCache { get; set; }
+
         /// <summary>
         /// Returns the plugin instance (Singleton);
         /// </summary>
@@ -75,6 +77,22 @@ namespace MusicBeePlugin
 
         private InfoWindow _mWindow;
         private bool _userChangingShuffle;
+
+        private void InitializeCoverCache()
+        {
+            BuildingCoverCache = true;
+            BroadcastCoverCacheBuildStatus();
+            PrepareCache();
+            BuildCoverCache();
+            BuildingCoverCache = false;
+            BroadcastCoverCacheBuildStatus();
+        }
+
+        public void BroadcastCoverCacheBuildStatus(string clientId = null)
+        {
+            var message = new SocketMessage(Constants.LibraryCoverCacheBuildStatus, BuildingCoverCache);
+            SendReply(message.ToJsonString(), clientId);
+        }
 
         /// <summary>
         /// This function initialized the Plugin.
@@ -123,7 +141,6 @@ namespace MusicBeePlugin
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
 
-
             StartPlayerStatusMonitoring();
 
             _api.MB_AddMenuItem("mnuTools/MusicBee Remote", "Information Panel of the MusicBee Remote",
@@ -139,12 +156,11 @@ namespace MusicBeePlugin
             _positionUpdateTimer.Enabled = true;
 
             Utilities.StoragePath = UserSettings.Instance.StoragePath;
-            
-            _api.MB_CreateBackgroundTask(() =>
+
+            if (!BuildingCoverCache)
             {
-                PrepareCache();
-                BuildCoverCache();
-            }, Form.ActiveForm);
+                _api.MB_CreateBackgroundTask(InitializeCoverCache, Form.ActiveForm);    
+            }
 
             return _about;
         }
@@ -377,8 +393,8 @@ namespace MusicBeePlugin
                 case NotificationType.PlayStateChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
                         new SocketMessage(Constants.PlayerState,
-                                _api
-                                    .Player_GetPlayState
+                            _api
+                                .Player_GetPlayState
                                     ()).ToJsonString
                             ()));
                     break;
@@ -388,6 +404,7 @@ namespace MusicBeePlugin
                         EventBus.FireEvent(new MessageEvent(EventType.NowPlayingLyricsChange,
                             _api.NowPlaying_GetDownloadedLyrics()));
                     }
+
                     break;
                 case NotificationType.NowPlayingArtworkReady:
                     if (_api.ApiRevision >= 17)
@@ -395,6 +412,7 @@ namespace MusicBeePlugin
                         EventBus.FireEvent(new MessageEvent(EventType.NowPlayingCoverChange,
                             _api.NowPlaying_GetDownloadedArtwork()));
                     }
+
                     break;
                 case NotificationType.NowPlayingListChanged:
                     EventBus.FireEvent(new MessageEvent(EventType.ReplyAvailable,
@@ -698,6 +716,7 @@ namespace MusicBeePlugin
                         break;
                 }
             }
+
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerRepeat,
@@ -880,9 +899,9 @@ namespace MusicBeePlugin
 
                 if (fRating >= 0 && fRating <= 5 || rating == "")
                 {
-                    var value = rating == "" ? 
-                        rating.ToString(CultureInfo.CurrentCulture) : 
-                        fRating.ToString(CultureInfo.CurrentCulture);
+                    var value = rating == ""
+                        ? rating.ToString(CultureInfo.CurrentCulture)
+                        : fRating.ToString(CultureInfo.CurrentCulture);
                     _api.Library_SetFileTag(currentTrack, MetaDataType.Rating, value);
                     _api.Library_CommitTagsToFile(currentTrack);
                     _api.Player_GetShowRatingTrack();
@@ -968,6 +987,7 @@ namespace MusicBeePlugin
                     _api.Player_SetPosition(newPosition);
                 }
             }
+
             var currentPosition = _api.Player_GetPosition();
             var totalDuration = _api.NowPlaying_GetDuration();
 
@@ -1042,6 +1062,7 @@ namespace MusicBeePlugin
                     _api.Player_EndAutoDj();
                 }
             }
+
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.PlayerAutoDj,
@@ -1137,6 +1158,7 @@ namespace MusicBeePlugin
             {
                 lastfmStatus = LastfmStatus.Normal;
             }
+
             return lastfmStatus;
         }
 
@@ -1192,11 +1214,13 @@ namespace MusicBeePlugin
                 {
                     _api.Player_EndAutoDj();
                 }
+
                 _api.Player_SetShuffle(false);
 
                 string[] songsList = null;
                 _api.Library_QueryFilesEx(null, ref songsList);
-                if (songsList.Length > 0) {
+                if (songsList.Length > 0)
+                {
                     _api.NowPlayingList_Clear();
                     success = _api.NowPlayingList_QueueFilesNext(songsList);
                     _api.Player_PlayNextTrack();
@@ -1357,6 +1381,7 @@ namespace MusicBeePlugin
             {
                 dIn = to;
             }
+
             result = _api.NowPlayingList_MoveFiles(aFrom, dIn);
 
             var reply = new
@@ -1382,9 +1407,9 @@ namespace MusicBeePlugin
             {
                 var userDefaults = UserSettings.Instance.Source != SearchSource.None;
                 src = (short)
-                (userDefaults
-                    ? UserSettings.Instance.Source
-                    : SearchSource.Library);
+                    (userDefaults
+                        ? UserSettings.Instance.Source
+                        : SearchSource.Library);
             }
 
 
@@ -1401,6 +1426,7 @@ namespace MusicBeePlugin
                     new XAttribute("Value", query));
                 conditions.Add(condition);
             }
+
             filter.Add(conditions);
 
             return filter.ToString();
@@ -1484,6 +1510,7 @@ namespace MusicBeePlugin
                     }
                 }
             }
+
             EventBus.FireEvent(
                 new MessageEvent(EventType.ReplyAvailable,
                     new SocketMessage(Constants.LibraryArtistAlbums,
@@ -1556,6 +1583,7 @@ namespace MusicBeePlugin
                     .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
                     .Select(genreInfo => new Genre(genreInfo[0], int.Parse(genreInfo[1]))));
             }
+
             _api.Library_QueryLookupTable(null, null, null);
 
             EventBus.FireEvent(
@@ -1574,6 +1602,7 @@ namespace MusicBeePlugin
                     .Select(entry => entry.Split(new[] {'\0'}, StringSplitOptions.None))
                     .Select(genreInfo => new Genre(genreInfo[0].Cleanup(), int.Parse(genreInfo[1]))));
             }
+
             _api.Library_QueryLookupTable(null, null, null);
 
             var total = genres.Count;
@@ -1641,6 +1670,7 @@ namespace MusicBeePlugin
             {
                 return new Album(albumInfo[0], string.Empty);
             }
+
             if (albumInfo.Length == 2 && queryResult.StartsWith("\0"))
             {
                 return new Album(albumInfo[1], string.Empty);
@@ -1844,14 +1874,12 @@ namespace MusicBeePlugin
             List<RadioStation> stations;
             if (success)
             {
-
                 stations = radioStations.Select(s => new RadioStation
                     {
                         Url = s,
                         Name = _api.Library_GetFileTag(s, MetaDataType.TrackTitle)
                     })
                     .ToList();
-
             }
             else
             {
@@ -1871,7 +1899,7 @@ namespace MusicBeePlugin
                     Total = total
                 }
             };
-            
+
             SendReply(message.ToJsonString(), clientId);
         }
 
@@ -2143,13 +2171,15 @@ namespace MusicBeePlugin
                 ref pictureUrl,
                 ref data
             );
-                    
+            
+
             if (!pictureUrl.IsNullOrEmpty())
             {
                 return Utilities.StoreCoverToCache(pictureUrl);
             }
 
-            return data?.Length > 0 ? Utilities.StoreCoverToCache(data) : string.Empty;
+            var hash = data?.Length > 0 ? Utilities.StoreCoverToCache(data) : string.Empty;
+            return hash;
         }
 
         private void PrepareCache()
@@ -2168,7 +2198,7 @@ namespace MusicBeePlugin
             }
 
             var paths = new Dictionary<string, string>();
-            
+
             while (true)
             {
                 var currentTrack = _api.Library_QueryGetNextFile();
@@ -2268,7 +2298,7 @@ namespace MusicBeePlugin
                                 ? Utilities.FileToBase64(pictureUrl)
                                 : Utilities.ImageResizeFile(pictureUrl, coverSize, coverSize),
                             Status = 200,
-                            Hash = Utilities.Sha1HashFile(pictureUrl) 
+                            Hash = Utilities.Sha1HashFile(pictureUrl)
                         };
                     }
                     else if (data?.Length > 0)
@@ -2299,7 +2329,6 @@ namespace MusicBeePlugin
 
             try
             {
-
                 if (artist == null)
                 {
                     payload = GetAlbumCoverStatusPayload(500);
@@ -2343,14 +2372,14 @@ namespace MusicBeePlugin
             {
                 return GetAlbumCoverStatusPayload(404);
             }
-            
+
             hash = CacheCover(path);
             if (hash.IsEmpty())
             {
                 return GetAlbumCoverStatusPayload(404);
             }
-            
-            
+
+
             cache.Update(key, hash);
             return GetAlbumCoverFromCache(clientHash, hash);
         }
@@ -2383,19 +2412,19 @@ namespace MusicBeePlugin
             var stopwatch = Stopwatch.StartNew();
             var keys = CoverCache.Instance.Keys();
             var page = keys.Skip(offset).Take(limit);
-            
+
             var data = (from key in page
-            let hash = CoverCache.Instance.GetCoverHash(key)
-            let path = CoverCache.Instance.Lookup(key)
-            let cover = Utilities.GetCoverFromCache(hash)
-            select new AlbumCoverPayload
-            {
-                Artist = GetAlbumArtistForTrack(path),
-                Album = GetAlbumForTrack(path),
-                Cover = cover,
-                Hash = hash,
-                Status = cover.IsEmpty() ? 404 : 200
-            }).ToList();
+                let hash = CoverCache.Instance.GetCoverHash(key)
+                let path = CoverCache.Instance.Lookup(key)
+                let cover = Utilities.GetCoverFromCache(hash)
+                select new AlbumCoverPayload
+                {
+                    Artist = GetAlbumArtistForTrack(path),
+                    Album = GetAlbumForTrack(path),
+                    Cover = cover,
+                    Hash = hash,
+                    Status = cover.IsEmpty() ? 404 : 200
+                }).ToList();
 
             var message = new SocketMessage
             {
@@ -2408,7 +2437,7 @@ namespace MusicBeePlugin
                     Total = keys.Count
                 }
             };
-            
+
             SendReply(message.ToJsonString(), clientId);
             stopwatch.Stop();
             _logger.Debug($"cover page from: {offset} with {limit} limit, request took {stopwatch.Elapsed} ms");

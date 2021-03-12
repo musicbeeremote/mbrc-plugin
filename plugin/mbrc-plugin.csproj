@@ -134,6 +134,7 @@
     <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseTracks.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseArtists.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestBrowseGenres.cs" />
+    <Compile Include="AndroidRemote\Commands\Requests\RequestCoverCacheBuildStatus.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLfmLoveRating.cs" />
     <Compile Include="AndroidRemote\Commands\InstaReplies\RequestLyrics.cs" />
     <Compile Include="AndroidRemote\Commands\Requests\RequestLibAlbumTracks.cs" />

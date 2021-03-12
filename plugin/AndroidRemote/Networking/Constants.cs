@@ -92,6 +92,7 @@
         public const string NowPlayingTagChange = "nowplayingtagchange";
         public const string LibraryPlayAll = "libraryplayall";
         public const string LibraryAlbumCover = "libraryalbumcover";
+        public const string LibraryCoverCacheBuildStatus = "librarycovercachebuildstatus";
 
         #endregion
 
