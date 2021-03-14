@@ -719,6 +719,8 @@ namespace MusicBeePlugin
                     break;
 
                 var artist = _api.Library_GetFileTag(trackPath, MetaDataType.Artist);
+                var album = _api.Library_GetFileTag(trackPath, MetaDataType.Album);
+                var albumArtist = _api.Library_GetFileTag(trackPath, MetaDataType.AlbumArtist);
                 var title = _api.Library_GetFileTag(trackPath, MetaDataType.TrackTitle);
 
                 if (string.IsNullOrEmpty(title))
@@ -727,13 +729,31 @@ namespace MusicBeePlugin
                     title = trackPath.Substring(index + 1);
                 }
 
-                var track = new NowPlaying
+                NowPlaying track;
+                if (Utilities.IsAndroid(clientId))
                 {
-                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
-                    Title = title,
-                    Position = itemIndex,
-                    Path = trackPath
-                };
+                    track = new NowPlaying
+                    {
+                        Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
+                        Album = album,
+                        AlbumArtist = albumArtist,
+                        Title = title,
+                        Position = itemIndex,
+                        Path = trackPath
+                    };
+                }
+                else
+                {
+                    track = new NowPlaying
+                    {
+                        Artist = artist,
+                        Album = album,
+                        AlbumArtist = albumArtist,
+                        Title = title,
+                        Position = itemIndex,
+                        Path = trackPath
+                    };
+                }
 
                 tracks.Add(track);
                 itemIndex = _api.NowPlayingList_GetNextIndex(position);
