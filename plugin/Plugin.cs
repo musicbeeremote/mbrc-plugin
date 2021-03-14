@@ -1661,13 +1661,27 @@ namespace MusicBeePlugin
             {
                 try
                 {
-                    var data = _api.Library_QueryGetLookupTableValue(null)
-                        .Split(new[] {"\0\0"}, StringSplitOptions.None)
-                        .Where(s => !string.IsNullOrEmpty(s))
-                        .Select(s => s.Trim())
-                        .Select(CreateAlbum)
-                        .Distinct()
-                        .ToList();
+                    List<Album> data;
+
+                    if (Utilities.IsAndroid(clientId))
+                    {
+                        data = _api.Library_QueryGetLookupTableValue(null)
+                            .Split(new[] { "\0\0" }, StringSplitOptions.None)
+                            .Where(s => !string.IsNullOrEmpty(s))
+                            .Select(s => s.Trim())
+                            .Select(CreateAlbum)
+                            .Distinct()
+                            .ToList();
+                    }
+                    else
+                    {
+                        data = _api.Library_QueryGetLookupTableValue(null)
+                            .Split(new[] { "\0\0" }, StringSplitOptions.None)
+                            .Select(s => s.Trim())
+                            .Select(CreateAlbum)
+                            .Distinct()
+                            .ToList();
+                    }
 
                     albums.AddRange(data);
                 }

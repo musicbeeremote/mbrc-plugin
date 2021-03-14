@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.ServiceModel;
 using System.Text;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
+using MusicBeePlugin.AndroidRemote.Networking;
 using NLog;
 using Encoder = System.Drawing.Imaging.Encoder;
 
@@ -394,6 +395,12 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public static string CoverIdentifier(string artist, string album)
         {
             return Sha1Hash($"{artist.ToLowerInvariant()} {album.ToLowerInvariant()}");
+        }
+
+        public static bool IsAndroid(string clientId)
+        {
+            var socketClient = Authenticator.Client(clientId);
+            return socketClient?.ClientPlatform == ClientOS.Android;
         }
     }
 }
