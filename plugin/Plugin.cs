@@ -1889,6 +1889,7 @@ namespace MusicBeePlugin
                     {
                         Artist = _api.Library_GetFileTag(currentTrack, MetaDataType.Artist),
                         Title = _api.Library_GetFileTag(currentTrack, MetaDataType.TrackTitle),
+                        AlbumArtist = _api.Library_GetFileTag(currentTrack, MetaDataType.AlbumArtist),
                         Disc = discNumber,
                         Trackno = trackNumber,
                         Src = src,
