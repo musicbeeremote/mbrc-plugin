@@ -2,6 +2,39 @@ Change Log
 ---------
 # Versions
 
+## 1.4.0
+### Changed
+- Fixes status displaying as stopped when range filtering is active.
+- Adds pagination to the radio station api
+- Adds support for different behavior on different client platforms (Android/iOS)
+- Fixes repeat one functionality.
+- Fixes issue with lyrics initialization on direct request.
+- Fixes off by one now playing play on Android clients
+- Adds Album Artist info to `nowplayinglist` and `libraryalbumtracks` commands.
+
+### Added
+- Adds support for requesting list of Album Artists instead of Artists.
+- Adds support for shuffle/non-shuffle play all command. 
+- Adds support for Album covers.
+
+## 1.3.0-ios
+### Changed
+- Adds disk number to `libraryalbumtracks`.
+
+### Added
+- Introduces tag manipulation command.
+
+## 1.2.1-ios
+### Changed
+- Introduces ordering into the now playing list and a limit of 100 entries.
+
+## 1.2.0-ios
+### Changed
+- Allows the reset of a track's rating by sending an empty string.
+
+### Added
+- Introduces support for playing track details.
+
 ## 1.1.0
 - Adds a check to avoid a case where invalid characters in the tags would result in a sync failure.
 - Adds a proper socket checker to update the status.
