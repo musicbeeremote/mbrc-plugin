@@ -387,9 +387,17 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         /// <returns></returns>
         public static string GetCoverFromCache(string hash)
         {
-            var directory = StoragePath + CoverCachePath;
-            var filepath = directory + hash;
-            return !File.Exists(filepath) ? string.Empty : FileToBase64(filepath);
+            try
+            {
+                var directory = StoragePath + CoverCachePath;
+                var filepath = directory + hash;
+                return !File.Exists(filepath) ? string.Empty : FileToBase64(filepath);
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e, $"Failed to retrieve cover ${hash}");
+                return string.Empty;
+            }
         }
 
         public static string CoverIdentifier(string artist, string album)

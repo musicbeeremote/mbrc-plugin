@@ -196,6 +196,7 @@
     <Compile Include="AndroidRemote\Entities\RadioStation.cs" />
     <Compile Include="AndroidRemote\Events\BroadcastEvent.cs" />
     <Compile Include="AndroidRemote\Model\CoverCache.cs" />
+    <Compile Include="AndroidRemote\Model\CoverCacheState.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Album.cs" />
     <Compile Include="AndroidRemote\Model\Entities\AlbumCoverPayload.cs" />
     <Compile Include="AndroidRemote\Model\Entities\Artist.cs" />

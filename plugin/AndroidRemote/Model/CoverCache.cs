@@ -12,29 +12,40 @@ namespace MusicBeePlugin.AndroidRemote.Model
     {
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private Dictionary<string, string> _covers = new Dictionary<string, string>();
+
+        private readonly string _state = StoragePath + @"cache\state.json";
+        private readonly Dictionary<string, string> _covers = new Dictionary<string, string>();
         private Dictionary<string, string> _paths = new Dictionary<string, string>();
         public static CoverCache Instance { get; } = new CoverCache();
 
-        public void SetPaths(Dictionary<string,string> paths)
-        {
-            _paths = paths;
-        }
-
         public void Build(Func<string, string> cacheCover)
         {
-            foreach (var pair in _paths)
+            var missingCovers = _paths.Where(path =>
+                !_covers.TryGetValue(path.Key, out _)
+            ).ToList();
+            foreach (var pair in missingCovers)
             {
                 _covers[pair.Key] = cacheCover(pair.Value);
             }
 
+            _logger.Debug($"Added {missingCovers.LongCount()} missing covers to cache");
+
             foreach (var path in Directory.GetFiles(CoverStorage))
             {
-                var filename = Path.GetFileName(path);
-                if (_covers.ContainsValue(filename)) continue;
-                _logger.Debug($"Deleting not found {filename}");
-                File.Delete(path);
+                try
+                {
+                    var filename = Path.GetFileName(path);
+                    if (_covers.ContainsValue(filename)) continue;
+                    _logger.Debug($"Removing {filename} since it should not be in cache");
+                    File.Delete(path);
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, $"There was an error deleting {path}");
+                }
             }
+
+            PersistCache();
         }
 
         public bool IsCached(string key)
@@ -60,6 +71,87 @@ namespace MusicBeePlugin.AndroidRemote.Model
         public string Lookup(string key)
         {
             return _paths.ContainsKey(key) ? _paths[key] : string.Empty;
+        }
+
+        private CoverCacheState LoadCache()
+        {
+            if (!File.Exists(_state))
+            {
+                return new CoverCacheState();
+            }
+
+            try
+            {
+                using (var sr = new StreamReader(_state))
+                {
+                    return JsonSerializer.DeserializeFromReader<CoverCacheState>(sr);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read from {_state}");
+                return new CoverCacheState();
+            }
+        }
+
+
+        private void PersistCache()
+        {
+            var state = new CoverCacheState
+            {
+                Covers = _covers,
+                LastCheck = DateTime.Now.ToUnixTime()
+            };
+
+            try
+            {
+                var backup = $"{_state}.bak";
+                if (File.Exists(backup))
+                {
+                    File.Delete(backup);
+                }
+
+                if (File.Exists(_state))
+                {
+                    File.Move(_state, backup);
+                }
+
+                _logger.Debug($"Preparing to persist cache state to {_state}");
+
+                using (var sw = File.CreateText(_state))
+                {
+                    JsonSerializer.SerializeToWriter(state, sw);
+                }
+
+                if (File.Exists(backup))
+                {
+                    File.Delete(backup);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Could not persist the state");
+            }
+        }
+
+        public void WarmUpCache(Dictionary<string, string> paths, Dictionary<string, string> modified)
+        {
+            _paths = paths;
+            var state = LoadCache();          
+            if (state.Covers == null)
+            {
+                _logger.Debug("No cached state found. State needs to be build.");
+                return;
+            }
+            var cachedCovers = state.Covers;
+            var lastCheck = state.LastCheck.FromUnixTime();
+            foreach (var path in paths)
+            {
+                if (!cachedCovers.TryGetValue(path.Key, out var cover)) continue;
+                if (!DateTime.TryParse(modified[path.Key], out var lastModified)) continue;
+                if (DateTime.Compare(lastModified, lastCheck) >= 0) continue;
+                _covers[path.Key] = cover;
+            }
         }
     }
 }

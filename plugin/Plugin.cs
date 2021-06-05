@@ -2233,6 +2233,7 @@ namespace MusicBeePlugin
             }
 
             var paths = new Dictionary<string, string>();
+            var modified = new Dictionary<string, string>();
 
             while (true)
             {
@@ -2241,18 +2242,27 @@ namespace MusicBeePlugin
 
                 var album = GetAlbumForTrack(currentTrack);
                 var artist = GetAlbumArtistForTrack(currentTrack);
+                var fileModified = _api.Library_GetFileProperty(currentTrack, FilePropertyType.DateModified);
 
-                var key = Utilities.CoverIdentifier(artist, album);
-
-                if (!identifiers.Contains((key)))
+                try
                 {
-                    continue;
-                }
+                    var key = Utilities.CoverIdentifier(artist, album);
 
-                paths[key] = currentTrack;
+                    if (!identifiers.Contains((key)))
+                    {
+                        continue;
+                    }
+
+                    paths[key] = currentTrack;
+                    modified[key] = fileModified;
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, $"Failed creating identifier for {album} by {artist}");
+                }
             }
 
-            CoverCache.Instance.SetPaths(paths);
+            CoverCache.Instance.WarmUpCache(paths, modified);
             watch.Stop();
             _logger.Debug($"Cover cache preparation: {watch.ElapsedMilliseconds} ms");
         }
