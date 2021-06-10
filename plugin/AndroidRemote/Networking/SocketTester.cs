@@ -100,7 +100,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         public interface IConnectionListener
         {
-            void OnConnectionResult(bool isConnnected);
+            void OnConnectionResult(bool isConnected);
         }
     }
 }

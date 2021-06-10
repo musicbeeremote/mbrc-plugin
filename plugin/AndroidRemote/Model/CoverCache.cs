@@ -17,6 +17,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
         private readonly Dictionary<string, string> _covers = new Dictionary<string, string>();
         private Dictionary<string, string> _paths = new Dictionary<string, string>();
         public static CoverCache Instance { get; } = new CoverCache();
+        public string State => _covers.Count.ToString();
 
         public void Build(Func<string, string> cacheCover)
         {
@@ -137,12 +138,13 @@ namespace MusicBeePlugin.AndroidRemote.Model
         public void WarmUpCache(Dictionary<string, string> paths, Dictionary<string, string> modified)
         {
             _paths = paths;
-            var state = LoadCache();          
+            var state = LoadCache();
             if (state.Covers == null)
             {
                 _logger.Debug("No cached state found. State needs to be build.");
                 return;
             }
+
             var cachedCovers = state.Covers;
             var lastCheck = state.LastCheck.FromUnixTime();
             foreach (var path in paths)
@@ -151,6 +153,32 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 if (!DateTime.TryParse(modified[path.Key], out var lastModified)) continue;
                 if (DateTime.Compare(lastModified, lastCheck) >= 0) continue;
                 _covers[path.Key] = cover;
+            }
+        }
+
+        public void Invalidate()
+        {
+            try
+            {
+                if (File.Exists(_state))
+                {
+                    _logger.Debug("Deleting cover state file");
+                    File.Delete(_state);
+                }
+
+                var coversPath = StoragePath + @"cache\covers";
+                if (Directory.Exists(coversPath))
+                {
+                    _logger.Debug("Deleting cached covers");
+                    Directory.Delete(coversPath, true);
+                }
+
+                _covers.Clear();
+                _paths.Clear();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Invalidate cache failed");
             }
         }
     }

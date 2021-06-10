@@ -54,6 +54,11 @@ namespace MusicBeePlugin
             this.debugEnabled = new System.Windows.Forms.CheckBox();
             this.openLogButton = new System.Windows.Forms.Button();
             this.firewallCheckbox = new System.Windows.Forms.CheckBox();
+            this.invalidateCache = new System.Windows.Forms.Button();
+            this.label4 = new System.Windows.Forms.Label();
+            this.cacheLabel = new System.Windows.Forms.Label();
+            this.coversCacheLabel = new System.Windows.Forms.Label();
+            this.coversCacheValue = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.rangeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.portNumericUpDown)).BeginInit();
             this.SuspendLayout();
@@ -61,7 +66,7 @@ namespace MusicBeePlugin
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(20, 304);
+            this.label1.Location = new System.Drawing.Point(12, 357);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(77, 13);
             this.label1.TabIndex = 0;
@@ -70,7 +75,7 @@ namespace MusicBeePlugin
             // versionLabel
             // 
             this.versionLabel.AutoSize = true;
-            this.versionLabel.Location = new System.Drawing.Point(115, 304);
+            this.versionLabel.Location = new System.Drawing.Point(95, 357);
             this.versionLabel.Name = "versionLabel";
             this.versionLabel.Size = new System.Drawing.Size(40, 13);
             this.versionLabel.TabIndex = 1;
@@ -116,7 +121,7 @@ namespace MusicBeePlugin
             // 
             // helpButton
             // 
-            this.helpButton.Location = new System.Drawing.Point(324, 299);
+            this.helpButton.Location = new System.Drawing.Point(324, 344);
             this.helpButton.Name = "helpButton";
             this.helpButton.Size = new System.Drawing.Size(119, 23);
             this.helpButton.TabIndex = 9;
@@ -291,7 +296,7 @@ namespace MusicBeePlugin
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(208, 299);
+            this.saveButton.Location = new System.Drawing.Point(208, 344);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(75, 23);
             this.saveButton.TabIndex = 35;
@@ -302,7 +307,7 @@ namespace MusicBeePlugin
             // debugEnabled
             // 
             this.debugEnabled.AutoSize = true;
-            this.debugEnabled.Location = new System.Drawing.Point(23, 241);
+            this.debugEnabled.Location = new System.Drawing.Point(12, 292);
             this.debugEnabled.Name = "debugEnabled";
             this.debugEnabled.Size = new System.Drawing.Size(79, 17);
             this.debugEnabled.TabIndex = 36;
@@ -312,7 +317,7 @@ namespace MusicBeePlugin
             // 
             // openLogButton
             // 
-            this.openLogButton.Location = new System.Drawing.Point(22, 265);
+            this.openLogButton.Location = new System.Drawing.Point(12, 315);
             this.openLogButton.Name = "openLogButton";
             this.openLogButton.Size = new System.Drawing.Size(75, 23);
             this.openLogButton.TabIndex = 37;
@@ -323,18 +328,68 @@ namespace MusicBeePlugin
             // firewallCheckbox
             // 
             this.firewallCheckbox.AutoSize = true;
-            this.firewallCheckbox.Location = new System.Drawing.Point(208, 270);
+            this.firewallCheckbox.Location = new System.Drawing.Point(208, 321);
             this.firewallCheckbox.Name = "firewallCheckbox";
             this.firewallCheckbox.Size = new System.Drawing.Size(99, 17);
             this.firewallCheckbox.TabIndex = 38;
             this.firewallCheckbox.Text = "Update Firewall";
             this.firewallCheckbox.UseVisualStyleBackColor = true;
             // 
+            // invalidateCache
+            // 
+            this.invalidateCache.Location = new System.Drawing.Point(208, 255);
+            this.invalidateCache.Name = "invalidateCache";
+            this.invalidateCache.Size = new System.Drawing.Size(75, 23);
+            this.invalidateCache.TabIndex = 39;
+            this.invalidateCache.Text = "Invalidate";
+            this.invalidateCache.UseVisualStyleBackColor = true;
+            this.invalidateCache.Click += new System.EventHandler(this.OnCacheInvalidateButtonPressed);
+            // 
+            // label4
+            // 
+            this.label4.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.label4.Location = new System.Drawing.Point(15, 245);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(268, 1);
+            this.label4.TabIndex = 40;
+            // 
+            // cacheLabel
+            // 
+            this.cacheLabel.AutoSize = true;
+            this.cacheLabel.Location = new System.Drawing.Point(20, 232);
+            this.cacheLabel.Name = "cacheLabel";
+            this.cacheLabel.Size = new System.Drawing.Size(38, 13);
+            this.cacheLabel.TabIndex = 41;
+            this.cacheLabel.Text = "Cache";
+            // 
+            // coversCacheLabel
+            // 
+            this.coversCacheLabel.AutoSize = true;
+            this.coversCacheLabel.Location = new System.Drawing.Point(20, 260);
+            this.coversCacheLabel.Name = "coversCacheLabel";
+            this.coversCacheLabel.Size = new System.Drawing.Size(40, 13);
+            this.coversCacheLabel.TabIndex = 42;
+            this.coversCacheLabel.Text = "Covers";
+            // 
+            // coversCacheValue
+            // 
+            this.coversCacheValue.AutoSize = true;
+            this.coversCacheValue.Location = new System.Drawing.Point(121, 260);
+            this.coversCacheValue.Name = "coversCacheValue";
+            this.coversCacheValue.Size = new System.Drawing.Size(13, 13);
+            this.coversCacheValue.TabIndex = 43;
+            this.coversCacheValue.Text = "0";
+            // 
             // InfoWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(452, 339);
+            this.ClientSize = new System.Drawing.Size(452, 379);
+            this.Controls.Add(this.coversCacheValue);
+            this.Controls.Add(this.coversCacheLabel);
+            this.Controls.Add(this.cacheLabel);
+            this.Controls.Add(this.label4);
+            this.Controls.Add(this.invalidateCache);
             this.Controls.Add(this.firewallCheckbox);
             this.Controls.Add(this.openLogButton);
             this.Controls.Add(this.debugEnabled);
@@ -403,5 +458,10 @@ namespace MusicBeePlugin
         private System.Windows.Forms.CheckBox debugEnabled;
         private System.Windows.Forms.Button openLogButton;
         private System.Windows.Forms.CheckBox firewallCheckbox;
+        private System.Windows.Forms.Button invalidateCache;
+        private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.Label cacheLabel;
+        private System.Windows.Forms.Label coversCacheLabel;
+        private System.Windows.Forms.Label coversCacheValue;
     }
 }

@@ -31,7 +31,7 @@ namespace MusicBeePlugin
     /// <summary>
     /// The MusicBee Plugin class. Used to communicate with the MusicBee API.
     /// </summary>
-    public partial class Plugin : InfoWindow.IOnDebugSelectionChanged
+    public partial class Plugin : InfoWindow.IOnDebugSelectionChanged, InfoWindow.IOnInvalidateCacheListener
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -81,11 +81,14 @@ namespace MusicBeePlugin
         private void InitializeCoverCache()
         {
             BuildingCoverCache = true;
+            _api.MB_SetBackgroundTaskMessage("MusicBee Remote: Caching album covers.");
             BroadcastCoverCacheBuildStatus();
             PrepareCache();
             BuildCoverCache();
             BuildingCoverCache = false;
             BroadcastCoverCacheBuildStatus();
+            _mWindow?.UpdateCacheState(CoverCache.Instance.State);
+            _api.MB_SetBackgroundTaskMessage($"MusicBee Remote: Done. {CoverCache.Instance.State} album covers are now cached.");
         }
 
         public void BroadcastCoverCacheBuildStatus(string clientId = null)
@@ -280,6 +283,7 @@ namespace MusicBeePlugin
             {
                 _mWindow = new InfoWindow();
                 _mWindow.SetOnDebugSelectionListener(this);
+                _mWindow.SetOnInvalidateCacheListener(this);
             }
 
             _mWindow.Show();
@@ -2114,6 +2118,12 @@ namespace MusicBeePlugin
         {
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath,
                 enabled ? LogLevel.Debug : LogLevel.Error);
+        }
+
+        public void InvalidateCache()
+        {
+            CoverCache.Instance.Invalidate();
+            _api.MB_CreateBackgroundTask(InitializeCoverCache, Form.ActiveForm);  
         }
 
         /// <summary>

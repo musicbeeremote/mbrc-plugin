@@ -6,6 +6,7 @@ using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using MusicBeePlugin.AndroidRemote.Model;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.Properties;
@@ -21,7 +22,8 @@ namespace MusicBeePlugin
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private BindingList<string> _ipAddressBinding;
-        private IOnDebugSelectionChanged listener;
+        private IOnDebugSelectionChanged _onDebugSelectionChangedListener;
+        private IOnInvalidateCacheListener _onInvalidateCacheListener;
         private SocketTester _socketTester;
 
         /// <summary>
@@ -55,9 +57,20 @@ namespace MusicBeePlugin
             }
         }
 
+        public void UpdateCacheState(string cached)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new MethodInvoker(() => UpdateCacheState(cached)));
+                return;
+            }
+
+            coversCacheValue.Text = cached;
+        }
+
         private void HelpButtonClick(object sender, EventArgs e)
         {
-            Process.Start("http://kelsos.net/musicbeeremote/help/");
+            Process.Start("https://mbrc.kelsos.net/help/");
         }
 
         private void InfoWindowLoad(object sender, EventArgs e)
@@ -83,6 +96,7 @@ namespace MusicBeePlugin
 
             _socketTester = new SocketTester {ConnectionListener = this};
             _socketTester.VerifyConnection();
+            coversCacheValue.Text = CoverCache.Instance.State;
         }
 
         private void SelectionFilteringComboBoxSelectedIndexChanged(object sender, EventArgs e)
@@ -207,7 +221,7 @@ namespace MusicBeePlugin
         {
             var settings = UserSettings.Instance;
             settings.DebugLogEnabled = debugEnabled.Checked;
-            listener?.SelectionChanged(settings.DebugLogEnabled);
+            _onDebugSelectionChangedListener?.SelectionChanged(settings.DebugLogEnabled);
         }
 
         private void OpenLogButtonClick(object sender, EventArgs e)
@@ -222,35 +236,53 @@ namespace MusicBeePlugin
             }
         }
 
+        private void OnCacheInvalidateButtonPressed(object sender, EventArgs e)
+        {
+            _onInvalidateCacheListener?.InvalidateCache();         
+        }
+
         public interface IOnDebugSelectionChanged
         {
             void SelectionChanged(bool enabled);
         }
 
-        public void SetOnDebugSelectionListener(IOnDebugSelectionChanged listener)
+        public void SetOnDebugSelectionListener(IOnDebugSelectionChanged onDebugSelectionChangedListener)
         {
-            this.listener = listener;
+            _onDebugSelectionChangedListener = onDebugSelectionChangedListener;
         }
 
         /// <summary>
         ///     When called it will execute the firewall-utility passing the port settings
         ///     needed by the plugin.
         /// </summary>
-        public void UpdateFirewallRules(uint port)
+        private void UpdateFirewallRules(uint port)
         {
-            var startInfo = new ProcessStartInfo(
-                $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe")
+            var cmd = $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe";
+            if (!File.Exists(cmd))
+            {
+                return;
+            }
+            var startInfo = new ProcessStartInfo(cmd)
             {
                 Verb = "runas",
-                Arguments =
-                    $"-s {port}"
+                Arguments = $"-s {port}"
             };
             Process.Start(startInfo);
         }
 
-        public void OnConnectionResult(bool isConnnected)
+        public void OnConnectionResult(bool isConnected)
         {
-            UpdateSocketStatus(isConnnected);
+            UpdateSocketStatus(isConnected);
+        }
+        
+        public interface IOnInvalidateCacheListener
+        {
+            void InvalidateCache();
+        }
+
+        public void SetOnInvalidateCacheListener(IOnInvalidateCacheListener onInvalidateCacheListener)
+        {
+            _onInvalidateCacheListener = onInvalidateCacheListener;
         }
     }
 }
