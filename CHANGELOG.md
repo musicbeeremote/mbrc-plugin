@@ -2,6 +2,13 @@ Change Log
 ---------
 # Versions
 
+## 1.4.1 - 2021/06/12
+### Changed
+- Introduces state persistence for the cover caching mechanism to improve performance.
+
+### Added
+- Adds a button in the control panel to allow for easy cache invalidation.
+
 ## 1.4.0
 ### Changed
 - Fixes status displaying as stopped when range filtering is active.
