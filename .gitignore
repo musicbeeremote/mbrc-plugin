@@ -154,3 +154,6 @@ MB_REMOTE.XML
 .idea
 *.iml
 *.dll
+
+app/MusicBee
+tools
