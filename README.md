@@ -1,6 +1,3 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/awvi78psj8gtay89/branch/master?svg=true)](https://ci.appveyor.com/project/kelsos/plugin/branch/master)
-[![codecov](https://codecov.io/gh/musicbeeremote/mbrc-plugin/branch/master/graph/badge.svg)](https://codecov.io/gh/musicbeeremote/plugin)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=musicbeeremote_plugin&metric=alert_status)](https://sonarcloud.io/dashboard?id=musicbeeremote_plugin)
 [![Discord](https://img.shields.io/discord/420977901215678474.svg?style=popout)](https://discordapp.com/invite/rceTb57)
 
 <br/>
@@ -51,10 +48,8 @@ The plugin is an essential part of [MusicBee Remote](https://github.com/musicbee
 the Android application to communicate with [MusicBee](http://getmusicbee.com/). The plugin exposes a socket server (TCP) that
 listens for incoming connections from the plugin.
 
-It uses a text based protocol that is uses newline separated JSON messages. Thoses messages are then translated to
+It uses a text based protocol that is uses newline separated JSON messages. Those messages are then translated to
 calls of the MusicBee API.
-
-The plugin also implements an intermediate caching layer for library metadata.
 
 ### Built With
 
@@ -63,7 +58,10 @@ The plugin also implements an intermediate caching layer for library metadata.
 
 ## Getting Started
 
-In order to get started with the project as a developer there are a few steps you need to follow.
+If you are an end user you can download the plugin from [releases](https://github.com/musicbeeremote/mbrc-plugin/releases).
+You can find an installer for a regular installation of MusicBee along with a zip that can be used with the store version.
+
+As a developer there are a few steps you need to follow to get started:
 
 ### Prerequisites
 
@@ -72,7 +70,7 @@ The project requires [Visual Studio 2022 Community](https://visualstudio.microso
 After getting the basic environment setup you just need to clone the project from command line:
 
 ```bash
-git clone https://github.com/musicbeeremote/mbrc.git
+git clone https://github.com/musicbeeremote/mbrc-plugin.git
 ```
 
 or you could use your visual Git interface to clone the repository.
