@@ -27,7 +27,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <BaseIntermediateOutputPath>..\build\obj\firewall-utility\Debug\</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\firewall-utility\</BaseIntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -37,7 +37,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <BaseIntermediateOutputPath>..\build\obj\firewall-utility\Release\</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath>..\build\obj\firewall-utility\</BaseIntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup />
   <ItemGroup>

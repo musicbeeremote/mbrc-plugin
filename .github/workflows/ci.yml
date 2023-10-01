@@ -1,0 +1,40 @@
+﻿name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+        
+      - name: setup NuGet
+        uses: nuget/setup-nuget@v1
+        
+      - name: restore packages
+        run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive
+        
+      - name: build
+        run: msbuild MBRC.sln /p:Configuration="Release" /m /v:M /fl /nr:false
+        
+      - name: copy to dist
+        run: |
+          mkdir -p build/dist
+          cp build/bin/plugin/Release/mb_remote.dll build/dist
+          cp build/bin/firewall-utility/Release/firewall-utility.exe build/dist
+          cp LICENSE build/dist
+          
+      - uses: actions/upload-artifact@v3
+        with:
+          name: mbrc-plugin-dev
+          path: build/dist
+          

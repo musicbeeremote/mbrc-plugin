@@ -67,9 +67,9 @@
             }
             catch (COMException ex)
             {
-#if DEBUG
                 Console.WriteLine("A COMException happened will creating rule {0} for port {1}.", ruleName, portNumber);
                 Console.WriteLine(ex);
+#if DEBUG
                 Console.ReadLine();
 #endif
             }
@@ -77,8 +77,8 @@
             {
                 // I suppose it was a rights exception
                 Console.WriteLine("The application requires administrative rights. Please run as administrator.");
-#if DEBUG
                 Console.WriteLine(ex);
+#if DEBUG
                 Console.ReadLine();
 #endif
             }
