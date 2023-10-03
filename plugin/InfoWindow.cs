@@ -34,6 +34,11 @@ namespace MusicBeePlugin
             _ipAddressBinding = new BindingList<string>();
         }
 
+        public void OnConnectionResult(bool isConnected)
+        {
+            UpdateSocketStatus(isConnected);
+        }
+
         /// <summary>
         ///     Updates the visual indicator with the current Socket server status.
         /// </summary>
@@ -45,6 +50,7 @@ namespace MusicBeePlugin
                 Invoke(new MethodInvoker(() => UpdateSocketStatus(isRunning)));
                 return;
             }
+
             if (isRunning)
             {
                 statusLabel.Text = @"Running";
@@ -84,17 +90,14 @@ namespace MusicBeePlugin
             UpdateSocketStatus(SocketServer.Instance.IsRunning);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
-            if (settings.Source == SearchSource.None)
-            {
-                settings.Source |= SearchSource.Library;
-            }
+            if (settings.Source == SearchSource.None) settings.Source |= SearchSource.Library;
 
             debugEnabled.Checked = settings.DebugLogEnabled;
             firewallCheckbox.Checked = settings.UpdateFirewall;
 
             _logger.Debug($"Selected source is -> {settings.Source}");
 
-            _socketTester = new SocketTester {ConnectionListener = this};
+            _socketTester = new SocketTester { ConnectionListener = this };
             _socketTester.VerifyConnection();
             coversCacheValue.Text = CoverCache.Instance.State;
         }
@@ -160,7 +163,7 @@ namespace MusicBeePlugin
 
         private void HandleSaveButtonClick(object sender, EventArgs e)
         {
-            UserSettings.Instance.ListeningPort = (uint) portNumericUpDown.Value;
+            UserSettings.Instance.ListeningPort = (uint)portNumericUpDown.Value;
 
             switch (selectionFilteringComboBox.SelectedIndex)
             {
@@ -168,7 +171,7 @@ namespace MusicBeePlugin
                     break;
                 case 1:
                     UserSettings.Instance.BaseIp = ipAddressInputTextBox.Text;
-                    UserSettings.Instance.LastOctetMax = (uint) rangeNumericUpDown.Value;
+                    UserSettings.Instance.LastOctetMax = (uint)rangeNumericUpDown.Value;
                     break;
                 case 2:
                     UserSettings.Instance.IpAddressList = new List<string>(_ipAddressBinding);
@@ -178,10 +181,7 @@ namespace MusicBeePlugin
             UserSettings.Instance.UpdateFirewall = firewallCheckbox.Checked;
             UserSettings.Instance.SaveSettings();
 
-            if (firewallCheckbox.Checked)
-            {
-                UpdateFirewallRules(UserSettings.Instance.ListeningPort);
-            }
+            if (firewallCheckbox.Checked) UpdateFirewallRules(UserSettings.Instance.ListeningPort);
 
             _socketTester.VerifyConnection();
         }
@@ -190,9 +190,7 @@ namespace MusicBeePlugin
         {
             if (!IsAddressValid()) return;
             if (!_ipAddressBinding.Contains(ipAddressInputTextBox.Text))
-            {
                 _ipAddressBinding.Add(ipAddressInputTextBox.Text);
-            }
         }
 
         private void RemoveAddressButtonClick(object sender, EventArgs e)
@@ -227,23 +225,14 @@ namespace MusicBeePlugin
         private void OpenLogButtonClick(object sender, EventArgs e)
         {
             if (File.Exists(UserSettings.Instance.FullLogPath))
-            {
                 Process.Start(UserSettings.Instance.FullLogPath);
-            }
             else
-            {
                 MessageBox.Show(Resources.InfoWindow_OpenLogButtonClick_Log_file_doesn_t_exist);
-            }
         }
 
         private void OnCacheInvalidateButtonPressed(object sender, EventArgs e)
         {
-            _onInvalidateCacheListener?.InvalidateCache();         
-        }
-
-        public interface IOnDebugSelectionChanged
-        {
-            void SelectionChanged(bool enabled);
+            _onInvalidateCacheListener?.InvalidateCache();
         }
 
         public void SetOnDebugSelectionListener(IOnDebugSelectionChanged onDebugSelectionChangedListener)
@@ -258,10 +247,7 @@ namespace MusicBeePlugin
         private void UpdateFirewallRules(uint port)
         {
             var cmd = $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe";
-            if (!File.Exists(cmd))
-            {
-                return;
-            }
+            if (!File.Exists(cmd)) return;
             var startInfo = new ProcessStartInfo(cmd)
             {
                 Verb = "runas",
@@ -270,19 +256,19 @@ namespace MusicBeePlugin
             Process.Start(startInfo);
         }
 
-        public void OnConnectionResult(bool isConnected)
-        {
-            UpdateSocketStatus(isConnected);
-        }
-        
-        public interface IOnInvalidateCacheListener
-        {
-            void InvalidateCache();
-        }
-
         public void SetOnInvalidateCacheListener(IOnInvalidateCacheListener onInvalidateCacheListener)
         {
             _onInvalidateCacheListener = onInvalidateCacheListener;
+        }
+
+        public interface IOnDebugSelectionChanged
+        {
+            void SelectionChanged(bool enabled);
+        }
+
+        public interface IOnInvalidateCacheListener
+        {
+            void InvalidateCache();
         }
     }
 }

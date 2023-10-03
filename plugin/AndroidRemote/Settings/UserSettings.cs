@@ -9,7 +9,7 @@ using MusicBeePlugin.AndroidRemote.Events;
 namespace MusicBeePlugin.AndroidRemote.Settings
 {
     /// <summary>
-    /// Represents the settings along with all the settings related functionality
+    ///     Represents the settings along with all the settings related functionality
     /// </summary>
     public class UserSettings
     {
@@ -33,96 +33,75 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private const string UpdateFirewallNode = "update_firewall";
 
+        public static string LogFilePath = "\\mbrc.log";
+
+
         private uint listeningPort;
-
-       
-        private SearchSource _source;
-
-        public SearchSource Source
-        {
-            get { return _source; }
-            set { _source = value; }
-        }
-
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public string StoragePath { get; private set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public uint ListeningPort
-        {
-            get
-            {
-                return listeningPort;
-            }
-            set
-            {
-                listeningPort = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public FilteringSelection FilterSelection { get; set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public string BaseIp { get; set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public uint LastOctetMax { get; set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public List<string> IpAddressList { get; set; }
 
         private UserSettings()
         {
             // Private constructor to enforce singleton
         }
 
+        public SearchSource Source { get; set; }
+
+
         /// <summary>
-        /// 
+        /// </summary>
+        public string StoragePath { get; private set; }
+
+        /// <summary>
+        /// </summary>
+        public uint ListeningPort
+        {
+            get => listeningPort;
+            set => listeningPort = value;
+        }
+
+        /// <summary>
+        /// </summary>
+        public FilteringSelection FilterSelection { get; set; }
+
+        /// <summary>
+        /// </summary>
+        public string BaseIp { get; set; }
+
+        /// <summary>
+        /// </summary>
+        public uint LastOctetMax { get; set; }
+
+        /// <summary>
+        /// </summary>
+        public List<string> IpAddressList { get; set; }
+
+        /// <summary>
         /// </summary>
         public static UserSettings Instance { get; } = new UserSettings();
 
         /// <summary>
-        /// 
         /// </summary>
         public string CurrentVersion { get; set; }
 
         /// <summary>
-        /// Since there is an issue with the existing search for a number of users
-        /// an alternative implementation exists.
+        ///     Since there is an issue with the existing search for a number of users
+        ///     an alternative implementation exists.
         /// </summary>
         public bool AlternativeSearch { get; set; } = false;
 
         /// <summary>
-        /// Enables Debug logging to the production version of the plugin
+        ///     Enables Debug logging to the production version of the plugin
         /// </summary>
         public bool DebugLogEnabled { get; set; }
-
-        public static string LogFilePath = "\\mbrc.log";
 
         public string FullLogPath => StoragePath + LogFilePath;
         public bool UpdateFirewall { get; set; }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="path"></param>
         public void SetStoragePath(string path)
         {
-            this.StoragePath = path + SFolder;
+            StoragePath = path + SFolder;
         }
 
         private string GetSettingsFile()
@@ -132,7 +111,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
 
         /// <summary>
-        /// Writes an XML node.
+        ///     Writes an XML node.
         /// </summary>
         /// <param name="document">The XML document.</param>
         /// <param name="name">Name of the node.</param>
@@ -155,7 +134,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         }
 
         /// <summary>
-        /// Determines if it is the first run of the application.
+        ///     Determines if it is the first run of the application.
         /// </summary>
         /// <returns></returns>
         public bool IsFirstRun()
@@ -172,10 +151,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 document.Load(GetSettingsFile());
                 var lastRun = ReadNodeValue(document, LastRunVersion);
 
-                if (string.IsNullOrEmpty(lastRun))
-                {
-                    isFirst = true;
-                }    
+                if (string.IsNullOrEmpty(lastRun)) isFirst = true;
             }
 
             if (isFirst)
@@ -184,21 +160,18 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 WriteNodeValue(document, LastRunVersion, CurrentVersion);
                 document.Save(GetSettingsFile());
             }
-            
+
             return isFirst;
         }
 
         /// <summary>
-        /// Saves the settings.
+        ///     Saves the settings.
         /// </summary>
         /// <remarks></remarks>
         public void SaveSettings()
         {
-            if (!File.Exists(GetSettingsFile()))
-            {
-                CreateEmptySettingsFile(Application);
-            }
-            XmlDocument document = new XmlDocument();
+            if (!File.Exists(GetSettingsFile())) CreateEmptySettingsFile(Application);
+            var document = new XmlDocument();
             document.Load(GetSettingsFile());
             WriteApplicationSetting(document);
             document.Save(GetSettingsFile());
@@ -207,13 +180,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
 
         private void CreateEmptySettingsFile(string application)
         {
-            if (!Directory.Exists(StoragePath))
-            {
-                Directory.CreateDirectory(StoragePath);
-            }
-            XmlDocument document = new XmlDocument();
-            XmlDeclaration declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
-            XmlElement root = document.CreateElement(application);
+            if (!Directory.Exists(StoragePath)) Directory.CreateDirectory(StoragePath);
+            var document = new XmlDocument();
+            var declaration = document.CreateXmlDeclaration("1.0", "utf-8", "yes");
+            var root = document.CreateElement(application);
             document.InsertBefore(declaration, document.DocumentElement);
             document.AppendChild(root);
             document.Save(GetSettingsFile());
@@ -222,12 +192,10 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         private void WriteApplicationSetting(XmlDocument document)
         {
             if (listeningPort < 65535)
-            {
                 WriteNodeValue(document, PortNumber, listeningPort.ToString(CultureInfo.InvariantCulture));
-            }
             WriteNodeValue(document, Values, GetValues());
             WriteNodeValue(document, Selection, FilterSelection.ToString());
-            WriteNodeValue(document, LibrarySource, ((short) Source).ToString());
+            WriteNodeValue(document, LibrarySource, ((short)Source).ToString());
             WriteNodeValue(document, LogsEnabled, DebugLogEnabled.ToString());
             WriteNodeValue(document, UpdateFirewallNode, UpdateFirewall.ToString());
         }
@@ -239,7 +207,7 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         }
 
         /// <summary>
-        /// Loads the settings.
+        ///     Loads the settings.
         /// </summary>
         /// <remarks></remarks>
         public void LoadSettings()
@@ -253,32 +221,27 @@ namespace MusicBeePlugin.AndroidRemote.Settings
                 var document = new XmlDocument();
                 document.Load(GetSettingsFile());
                 listeningPort = uint.TryParse(ReadNodeValue(document, PortNumber), out listeningPort)
-                                                  ? listeningPort
-                                                  : 3000;
+                    ? listeningPort
+                    : 3000;
                 UpdateFilteringSelection(ReadNodeValue(document, Selection));
                 SetValues(ReadNodeValue(document, Values));
-                bool debugEnabled;
-                bool.TryParse(ReadNodeValue(document, LogsEnabled), out debugEnabled);
+                bool.TryParse(ReadNodeValue(document, LogsEnabled), out var debugEnabled);
                 DebugLogEnabled = debugEnabled;
 
-                bool updateFirewall;
-                bool.TryParse(ReadNodeValue(document, UpdateFirewallNode), out updateFirewall);
+                bool.TryParse(ReadNodeValue(document, UpdateFirewallNode), out var updateFirewall);
                 UpdateFirewall = updateFirewall;
-      
-
-                short source;
-                Source = (SearchSource) (short.TryParse(ReadNodeValue(document, LibrarySource), out source) ? source : 1);
 
 
-
+                Source = (SearchSource)(short.TryParse(ReadNodeValue(document, LibrarySource), out var source)
+                    ? source
+                    : 1);
             }
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <returns></returns>
-        public string GetValues()
+        private string GetValues()
         {
             switch (FilterSelection)
             {
@@ -294,10 +257,9 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="values"></param>
-        public void SetValues(string values)
+        private void SetValues(string values)
         {
             switch (FilterSelection)
             {
@@ -313,51 +275,39 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <returns></returns>
-        public string FlattenAllowedRange()
+        private string FlattenAllowedRange()
         {
             if (!string.IsNullOrEmpty(BaseIp) && (LastOctetMax > 1 || LastOctetMax < 255))
-            {
                 return BaseIp + "," + LastOctetMax;
-            }
             return string.Empty;
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="range"></param>
-        public void UnFlattenAllowedRange(string range)
+        private void UnFlattenAllowedRange(string range)
         {
-            if (string.IsNullOrEmpty(range))
-            {
-                return;
-            }
+            if (string.IsNullOrEmpty(range)) return;
             var splitRange = range.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             BaseIp = splitRange[0];
             LastOctetMax = uint.Parse(splitRange[1]);
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <returns></returns>
-        public string FlattenAllowedAddressList()
+        private string FlattenAllowedAddressList()
         {
-            if (IpAddressList == null)
-            {
-                IpAddressList = new List<string>();
-            }
-            return IpAddressList.Aggregate<string, string>(null, (current, s) => current + (s + ","));
+            if (IpAddressList == null) IpAddressList = new List<string>();
+            return IpAddressList.Aggregate<string, string>(null, (current, s) => current + s + ",");
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="selection"></param>
-        public void UpdateFilteringSelection(string selection)
+        private void UpdateFilteringSelection(string selection)
         {
             switch (selection)
             {
@@ -374,10 +324,9 @@ namespace MusicBeePlugin.AndroidRemote.Settings
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="allowedAddresses"></param>
-        public void UnflattenAllowedAddressList(string allowedAddresses)
+        private void UnflattenAllowedAddressList(string allowedAddresses)
         {
             IpAddressList =
                 new List<string>(

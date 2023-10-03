@@ -5,30 +5,28 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.ServiceModel;
 using System.Text;
-using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using NLog;
 using Encoder = System.Drawing.Imaging.Encoder;
 
 namespace MusicBeePlugin.AndroidRemote.Utilities
 {
-    internal class Utilities
+    internal static class Utilities
     {
+        private const string CoverCachePath = @"\cache\covers\";
         private static readonly SHA1Managed Sha1 = new SHA1Managed();
         private static byte[] _hash = new byte[20];
-        
+
+        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
         /// <summary>
-        /// Base path where the files of the plugin are stored.
+        ///     Base path where the files of the plugin are stored.
         /// </summary>
         public static string StoragePath { get; set; }
-        private const string CoverCachePath = @"\cache\covers\";
 
         public static string CoverStorage => StoragePath + CoverCachePath;
 
-        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        
         /// <summary>
         ///     Given a <paramref name="subdirectory" /> it will return the full
         ///     path where the files will be stored. If the directory does not exist
@@ -45,16 +43,13 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             var directory = StoragePath + subdirectory;
 
-            if (!System.IO.Directory.Exists(directory))
-            {
-                System.IO.Directory.CreateDirectory(directory);
-            }
+            if (!System.IO.Directory.Exists(directory)) System.IO.Directory.CreateDirectory(directory);
 
             return directory;
         }
 
         /// <summary>
-        /// Given a string it returns the SHA1 hash of the string
+        ///     Given a string it returns the SHA1 hash of the string
         /// </summary>
         /// <param name="value">The value.</param>
         /// <returns>System.String.</returns>
@@ -64,10 +59,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             if (string.IsNullOrEmpty(value)) return mHash;
             _hash = Sha1.ComputeHash(Encoding.UTF8.GetBytes(value));
             var sb = new StringBuilder();
-            foreach (var hex in _hash.Select(b => b.ToString("x2")))
-            {
-                sb.Append(hex);
-            }
+            foreach (var hex in _hash.Select(b => b.ToString("x2"))) sb.Append(hex);
             mHash = sb.ToString();
 
             return mHash;
@@ -77,10 +69,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             _hash = Sha1.ComputeHash(data);
             var sb = new StringBuilder();
-            foreach (var hex in _hash.Select(b => b.ToString("x2")))
-            {
-                sb.Append(hex);
-            }
+            foreach (var hex in _hash.Select(b => b.ToString("x2"))) sb.Append(hex);
 
             return sb.ToString();
         }
@@ -95,8 +84,8 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
 
             return hash;
         }
-        
-        
+
+
         /// <summary>
         ///     Opens a <see cref="Stream" /> and calculates the SHA1 hash for the stream.
         /// </summary>
@@ -106,10 +95,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         {
             _hash = Sha1.ComputeHash(stream);
             var sb = new StringBuilder();
-            foreach (var hex in _hash.Select(b => b.ToString("x2")))
-            {
-                sb.Append(hex);
-            }
+            foreach (var hex in _hash.Select(b => b.ToString("x2"))) sb.Append(hex);
 
             return sb.ToString();
         }
@@ -121,8 +107,8 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         }
 
         /// <summary>
-        /// Given a base64 encoded image it resizes the image and returns the resized image
-        /// in a base64 encoded JPEG.
+        ///     Given a base64 encoded image it resizes the image and returns the resized image
+        ///     in a base64 encoded JPEG.
         /// </summary>
         /// <param name="base64">The base64.</param>
         /// <param name="width">The width.</param>
@@ -133,10 +119,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             var cover = string.Empty;
             try
             {
-                if (string.IsNullOrEmpty(base64))
-                {
-                    return cover;
-                }
+                if (string.IsNullOrEmpty(base64)) return cover;
 
                 using (var ms = new MemoryStream(Convert.FromBase64String(base64)))
                 {
@@ -147,6 +130,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             {
                 Logger.Error(ex);
             }
+
             return cover;
         }
 
@@ -157,9 +141,10 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             {
                 cover = ResizeStream(width, height, ms);
             }
+
             return cover;
         }
-        
+
         public static string ImageResizeFile(string file, int width = 600, int height = 600)
         {
             string cover;
@@ -167,6 +152,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             {
                 cover = ResizeStream(width, height, fs);
             }
+
             return cover;
         }
 
@@ -179,12 +165,12 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
                 var sourceWidth = albumCover.Width;
                 var sourceHeight = albumCover.Height;
 
-                var nPercentW = sourceWidth < width ? 1 : (width / (float) sourceWidth);
-                var nPercentH = sourceHeight < height ? 1 : (height / (float) sourceHeight);
+                var nPercentW = sourceWidth < width ? 1 : width / (float)sourceWidth;
+                var nPercentH = sourceHeight < height ? 1 : height / (float)sourceHeight;
 
                 var nPercent = nPercentH < nPercentW ? nPercentH : nPercentW;
-                var destWidth = (int) (sourceWidth * nPercent);
-                var destHeight = (int) (sourceHeight * nPercent);
+                var destWidth = (int)(sourceWidth * nPercent);
+                var destHeight = (int)(sourceHeight * nPercent);
                 using (var bmp = new Bitmap(destWidth, destHeight))
                 using (var ms2 = new MemoryStream())
                 {
@@ -245,7 +231,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
                 bmp.Save(filepath, info, @params);
             }
         }
-        
+
         /// <summary>
         /// </summary>
         /// <param name="width"></param>
@@ -259,10 +245,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             var newWidth = sourceWidth;
             var newHeight = sourceHeight;
 
-            if (sourceWidth <= width && sourceHeight <= height)
-            {
-                return new Size(newWidth, newHeight);
-            }
+            if (sourceWidth <= width && sourceHeight <= height) return new Size(newWidth, newHeight);
 
             var nPercentW = width / (float)sourceWidth;
             var nPercentH = height / (float)sourceHeight;
@@ -272,7 +255,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             newHeight = (int)(sourceHeight * nPercent);
             return new Size(newWidth, newHeight);
         }
-        
+
         /// <summary>
         ///     Given a Stream that is supposedly an image that function will try to
         ///     resize the image to the supplied <paramref name="width" /> and
@@ -300,9 +283,9 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
 
             return success;
         }
-        
+
         /// <summary>
-        /// Resizes an image to specific dimensions and stores it to the plugin Cover cache.
+        ///     Resizes an image to specific dimensions and stores it to the plugin Cover cache.
         /// </summary>
         /// <param name="imageData"></param>
         /// <param name="width">The max width of the new image</param>
@@ -311,10 +294,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public static string StoreCoverToCache(byte[] imageData, int width = 150, int height = 150)
         {
             var hash = string.Empty;
-            if (imageData == null)
-            {
-                return hash;
-            }
+            if (imageData == null) return hash;
 
             var directory = Directory(CoverCachePath);
 
@@ -322,17 +302,14 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
             {
                 hash = Sha1Hash(ms);
                 var filepath = directory + hash;
-                if (File.Exists(filepath))
-                {
-                    return hash;
-                }
+                if (File.Exists(filepath)) return hash;
 
                 StoreResizedStream(ms, filepath, width, height);
             }
 
             return hash;
         }
-        
+
         /// <summary>
         ///     Resizes the cover and stores it to cache and returns the hash code
         ///     for the image.
@@ -348,10 +325,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
         public static string StoreCoverToCache(string url, int width = 150, int height = 150)
         {
             var hash = string.Empty;
-            if (string.IsNullOrEmpty(url))
-            {
-                return hash;
-            }
+            if (string.IsNullOrEmpty(url)) return hash;
 
             try
             {
@@ -361,15 +335,9 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
                 {
                     hash = Sha1Hash(fs);
                     var filepath = directory + hash;
-                    if (File.Exists(filepath))
-                    {
-                        return hash;
-                    }
+                    if (File.Exists(filepath)) return hash;
 
-                    if (!StoreResizedStream(fs, filepath, width, height))
-                    {
-                        hash = new string('0', 40);
-                    }
+                    if (!StoreResizedStream(fs, filepath, width, height)) hash = new string('0', 40);
                 }
             }
             catch (Exception ex)
@@ -379,7 +347,7 @@ namespace MusicBeePlugin.AndroidRemote.Utilities
 
             return hash;
         }
-        
+
         /// <summary>
         ///     Reads an image file from the filesystem and returns a base64 string.
         /// </summary>

@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestPlaylistPlay : ICommand
+    internal class RequestPlaylistPlay : ICommand
     {
         public void Execute(IEvent eEvent)
         {

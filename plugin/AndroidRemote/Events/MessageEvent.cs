@@ -1,70 +1,43 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Events
+﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+
+namespace MusicBeePlugin.AndroidRemote.Events
 {
-    using System;
-    using Interfaces;
-
-    class MessageEvent:IEvent
+    internal class MessageEvent : IEvent
     {
-        private readonly string type;
-        private readonly object data;
-        private readonly string clientId;
-        private readonly string extraData;
-
         public MessageEvent(string type, object data)
         {
-            this.data = data;
-            this.type = type;
-            clientId = "all";
-            extraData = String.Empty;
+            Data = data;
+            Type = type;
+            ClientId = "all";
+            ExtraData = string.Empty;
         }
 
         public MessageEvent(string type, object data, string clientId)
         {
-            this.type = type;
-            this.data = data;
-            this.clientId = clientId;
-            extraData = String.Empty;
+            Type = type;
+            Data = data;
+            ClientId = clientId;
+            ExtraData = string.Empty;
         }
 
         public MessageEvent(string type)
         {
-            this.type = type;
-            data = extraData = String.Empty;
-            clientId = string.Empty;
+            Type = type;
+            Data = ExtraData = string.Empty;
+            ClientId = string.Empty;
         }
 
-        public MessageEvent(string type, object data, string clientId, string extraData)
-        {
-            this.type = type;
-            this.data = data;
-            this.clientId = clientId;
-            this.extraData = extraData;
-        }
-        
         public string DataToString()
         {
-            return (string) ((data is string) ? data : String.Empty);
+            return (string)(Data is string ? Data : string.Empty);
         }
 
-        public object Data
-        {
-            get { return data; }
-        }
+        public object Data { get; }
 
-        public string Type
-        {
-            get { return type; }
-        }
+        public string Type { get; }
 
-        public string ClientId
-        {
-            get { return clientId; }
-        }
+        public string ClientId { get; }
 
-        public string ExtraData
-        {
-            get { return extraData; }
-        }
-
+        public string ExtraData { get; }
     }
 }

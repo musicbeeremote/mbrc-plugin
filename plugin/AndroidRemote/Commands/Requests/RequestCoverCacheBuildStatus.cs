@@ -1,7 +1,7 @@
+using MusicBeePlugin.AndroidRemote.Interfaces;
+
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    using Interfaces;
-
     internal class RequestCoverCacheBuildStatus : ICommand
     {
         public void Execute(IEvent eEvent)

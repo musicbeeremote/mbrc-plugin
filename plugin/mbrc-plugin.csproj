@@ -138,7 +138,7 @@
         <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingMoveTrack.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestMute.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingPlay.cs"/>
-        <Compile Include="AndroidRemote\Commands\Requests\RequestNowplayingQueue.cs"/>
+        <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingQueue.cs" />
         <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingSearch.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestNowPlayingTrackRemoval.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestOutputDeviceList.cs"/>
@@ -172,20 +172,20 @@
         <Compile Include="AndroidRemote\Commands\Requests\RequestSongInfo.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestPlayerStatus.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestPlay.cs"/>
-        <Compile Include="AndroidRemote\Commands\Requests\RequestPreviousTrackCommand.cs"/>
         <Compile Include="AndroidRemote\Commands\Internal\InitializeModelStateCommand.cs"/>
         <Compile Include="AndroidRemote\Commands\Requests\RequestNextTrack.cs"/>
         <Compile Include="AndroidRemote\configuration.cs"/>
         <Compile Include="AndroidRemote\Controller\Controller.cs"/>
         <Compile Include="AndroidRemote\ControlRemoveExtension.cs"/>
         <Compile Include="AndroidRemote\Entities\RadioStation.cs"/>
+        <Compile Include="AndroidRemote\Enumerations\QueueType.cs" />
         <Compile Include="AndroidRemote\Events\BroadcastEvent.cs"/>
         <Compile Include="AndroidRemote\Model\CoverCache.cs"/>
         <Compile Include="AndroidRemote\Model\CoverCacheState.cs"/>
-        <Compile Include="AndroidRemote\Model\Entities\Album.cs"/>
+        <Compile Include="AndroidRemote\Model\Entities\AlbumData.cs"/>
         <Compile Include="AndroidRemote\Model\Entities\AlbumCoverPayload.cs"/>
-        <Compile Include="AndroidRemote\Model\Entities\Artist.cs"/>
-        <Compile Include="AndroidRemote\Model\Entities\Genre.cs"/>
+        <Compile Include="AndroidRemote\Model\Entities\ArtistData.cs"/>
+        <Compile Include="AndroidRemote\Model\Entities\GenreData.cs"/>
         <Compile Include="AndroidRemote\Model\Entities\MetaData.cs"/>
         <Compile Include="AndroidRemote\Model\Entities\NowPlaying.cs"/>
         <Compile Include="AndroidRemote\Model\Entities\NowPlayingDetails.cs"/>
@@ -201,9 +201,6 @@
         <Compile Include="AndroidRemote\Enumerations\ShuffleState.cs"/>
         <Compile Include="AndroidRemote\Enumerations\MetaTag.cs"/>
         <Compile Include="AndroidRemote\Enumerations\LastfmStatus.cs"/>
-        <Compile Include="AndroidRemote\Enumerations\PlayerState.cs"/>
-        <Compile Include="AndroidRemote\Enumerations\QueueType.cs"/>
-        <Compile Include="AndroidRemote\Enumerations\Repeat.cs"/>
         <Compile Include="AndroidRemote\Events\EventBus.cs"/>
         <Compile Include="AndroidRemote\Events\EventType.cs"/>
         <Compile Include="AndroidRemote\Events\MessageEvent.cs"/>
@@ -215,7 +212,6 @@
         <Compile Include="AndroidRemote\Networking\SocketTester.cs"/>
         <Compile Include="AndroidRemote\Utilities\IdGenerator.cs"/>
         <Compile Include="AndroidRemote\Utilities\Utilities.cs"/>
-        <Compile Include="CheckboxExtension.cs"/>
         <Compile Include="FilteringSelection.cs"/>
         <Compile Include="InfoWindow.cs">
             <SubType>Form</SubType>

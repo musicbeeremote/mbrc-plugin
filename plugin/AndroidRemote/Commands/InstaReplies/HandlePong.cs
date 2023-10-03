@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using NLog;
 

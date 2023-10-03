@@ -1,22 +1,22 @@
-﻿namespace MusicBeePlugin.AndroidRemote
-{
-    using Commands;
-    using Commands.InstaReplies;
-    using Commands.Internal;
-    using Commands.Requests;
-    using Commands.State;
-    using Networking;
-    using Events;
+﻿using MusicBeePlugin.AndroidRemote.Commands;
+using MusicBeePlugin.AndroidRemote.Commands.InstaReplies;
+using MusicBeePlugin.AndroidRemote.Commands.Internal;
+using MusicBeePlugin.AndroidRemote.Commands.Requests;
+using MusicBeePlugin.AndroidRemote.Commands.State;
+using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Networking;
 
-    internal class Configuration
+namespace MusicBeePlugin.AndroidRemote
+{
+    internal static class Configuration
     {
         public static void Register(Controller.Controller controller)
         {
-            controller.AddCommand(EventType.ActionSocketStart, typeof (StartSocketServer));
-            controller.AddCommand(EventType.ActionSocketStop, typeof (StopSocketServer));
-            controller.AddCommand(EventType.ActionClientConnected, typeof (ClientConnected));
-            controller.AddCommand(EventType.ActionClientDisconnected, typeof (ClientDisconnected));
-            controller.AddCommand(EventType.ActionForceClientDisconnect, typeof (ForceClientDisconnect));
+            controller.AddCommand(EventType.ActionSocketStart, typeof(StartSocketServer));
+            controller.AddCommand(EventType.ActionSocketStop, typeof(StopSocketServer));
+            controller.AddCommand(EventType.ActionClientConnected, typeof(ClientConnected));
+            controller.AddCommand(EventType.ActionClientDisconnected, typeof(ClientDisconnected));
+            controller.AddCommand(EventType.ActionForceClientDisconnect, typeof(ForceClientDisconnect));
             controller.AddCommand(EventType.InitializeModel, typeof(InitializeModelStateCommand));
             controller.AddCommand(EventType.NowPlayingCoverChange, typeof(PCoverChanged));
             controller.AddCommand(EventType.NowPlayingLyricsChange, typeof(PLyricsChanged));
@@ -25,10 +25,10 @@
             controller.AddCommand(EventType.RestartSocket, typeof(RestartSocketCommand));
             controller.AddCommand(EventType.ShowFirstRunDialog, typeof(ShowFirstRunDialogCommand));
             /** Protocol Related commands **/
-            controller.AddCommand(Constants.Player, typeof (RequestPlayer));
-            controller.AddCommand(Constants.Protocol, typeof (RequestProtocol));            
-            controller.AddCommand(Constants.PluginVersion, typeof (RequestPluginVersion));
-            controller.AddCommand(Constants.PlaylistList, typeof (RequestPlaylistList));
+            controller.AddCommand(Constants.Player, typeof(RequestPlayer));
+            controller.AddCommand(Constants.Protocol, typeof(RequestProtocol));
+            controller.AddCommand(Constants.PluginVersion, typeof(RequestPluginVersion));
+            controller.AddCommand(Constants.PlaylistList, typeof(RequestPlaylistList));
             controller.AddCommand(Constants.PlayerNext, typeof(RequestNextTrack));
             controller.AddCommand(Constants.PlayerPlayPause, typeof(RequestPlayPause));
             controller.AddCommand(Constants.PlayerPrevious, typeof(RequestPreviousTrack));
@@ -65,25 +65,29 @@
             controller.AddCommand(Constants.LibraryGenreArtists, typeof(RequestLibGenreArtists));
 
             #region Protocol 2.1
+
             controller.AddCommand(Constants.Pong, typeof(HandlePong));
             controller.AddCommand(Constants.Ping, typeof(PingReply));
             controller.AddCommand(Constants.Init, typeof(ProcessInitRequest));
             controller.AddCommand(Constants.PlayerPlay, typeof(RequestPlay));
-            controller.AddCommand(Constants.PlayerPause, typeof (RequestPause));
+            controller.AddCommand(Constants.PlayerPause, typeof(RequestPause));
 
             #endregion
 
             #region Protocol 3
+
             controller.AddCommand(Constants.PlaylistPlay, typeof(RequestPlaylistPlay));
             controller.AddCommand(Constants.LibraryBrowseGenres, typeof(RequestBrowseGenres));
             controller.AddCommand(Constants.LibraryBrowseArtists, typeof(RequestBrowseArtists));
             controller.AddCommand(Constants.LibraryBrowseAlbums, typeof(RequestBrowseAlbums));
             controller.AddCommand(Constants.LibraryBrowseTracks, typeof(RequestBrowseTracks));
             controller.AddCommand(EventType.BroadcastEvent, typeof(BroadcastEventAvailable));
-            controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowplayingQueue));
+            controller.AddCommand(Constants.NowPlayingQueue, typeof(RequestNowPlayingQueue));
+
             #endregion
 
             #region Protocol 4
+
             controller.AddCommand(Constants.PlayerOutput, typeof(RequestOutputDeviceList));
             controller.AddCommand(Constants.PlayerOutputSwitch, typeof(RequestPlayerOutputSwitch));
             controller.AddCommand(Constants.RadioStations, typeof(RequestRadioStations));
@@ -93,8 +97,8 @@
             controller.AddCommand(Constants.LibraryPlayAll, typeof(RequestLibPlayAll));
             controller.AddCommand(Constants.LibraryAlbumCover, typeof(RequestLibraryAlbumCover));
             controller.AddCommand(Constants.LibraryCoverCacheBuildStatus, typeof(RequestCoverCacheBuildStatus));
-            #endregion
 
+            #endregion
         }
     }
 }

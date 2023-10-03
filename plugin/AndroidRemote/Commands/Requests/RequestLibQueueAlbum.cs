@@ -4,18 +4,12 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibQueueAlbum : ICommand
+    internal class RequestLibQueueAlbum : ICommand
     {
-        public void Dispose()
-        {
-        }
-
         public void Execute(IEvent eEvent)
         {
-            string type, query;
-
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>) eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("type", out var type);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("query", out var query);
             QueueType qType;
             switch (type)
             {
@@ -35,7 +29,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-            Plugin.Instance.RequestQueueFiles(qType, MetaTag.album, query);
+
+            Plugin.Instance.RequestQueueFiles(qType, MetaTag.Album, query);
         }
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Enumerations
 {
-    enum LastfmStatus
+    internal enum LastfmStatus
     {
         Normal,
         Love,

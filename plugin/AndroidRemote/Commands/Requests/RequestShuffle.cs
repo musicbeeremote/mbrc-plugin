@@ -5,10 +5,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestShuffle : ICommand
     {
-        public void Dispose()
-        {
-        }
-
         public void Execute(IEvent eEvent)
         {
             var stateAction = eEvent.Data.Equals("toggle")
@@ -16,13 +12,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 : StateAction.State;
 
             if (Authenticator.ClientProtocolMisMatch(eEvent.ClientId))
-            {
                 Plugin.Instance.RequestShuffleState(stateAction);
-            }
             else
-            {
                 Plugin.Instance.RequestAutoDjShuffleState(stateAction);
-            }
         }
     }
 }

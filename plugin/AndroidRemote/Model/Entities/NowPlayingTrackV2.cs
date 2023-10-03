@@ -1,13 +1,12 @@
 ﻿using System.Runtime.Serialization;
-using MusicBeePlugin.AndroidRemote.Entities;
 
 namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     [DataContract]
     public class NowPlayingTrackV2 : NowPlayingTrackBase
     {
-        private string _artist;
         private string _album;
+        private string _artist;
 
 
         public NowPlayingTrackV2()
@@ -18,24 +17,21 @@ namespace MusicBeePlugin.AndroidRemote.Model.Entities
         [DataMember(Name = "artist")]
         public override string Artist
         {
-            get { return _artist; }
-            set { _artist = GetArtistText(value); }
+            get => _artist;
+            set => _artist = GetArtistText(value);
         }
 
-        [DataMember(Name = "title")]
-        public override string Title { get; set; }
+        [DataMember(Name = "title")] public sealed override string Title { get; set; }
 
         [DataMember(Name = "album")]
         public override string Album
         {
-            get { return _album; }
-            set { _album = GetAlbumValue(value); }
+            get => _album;
+            set => _album = GetAlbumValue(value);
         }
 
-        [DataMember(Name = "year")]
-        public sealed override string Year { get; set; }
+        [DataMember(Name = "year")] public sealed override string Year { get; set; }
 
-        [DataMember(Name = "path")]
-        public string Path { get; set; }
+        [DataMember(Name = "path")] public string Path { get; set; }
     }
 }

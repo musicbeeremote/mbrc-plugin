@@ -3,7 +3,7 @@ using ServiceStack;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibPlayAll : ICommand
+    internal class RequestLibPlayAll : ICommand
     {
         public void Execute(IEvent eEvent)
         {

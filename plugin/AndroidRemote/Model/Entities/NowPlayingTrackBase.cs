@@ -1,27 +1,23 @@
-namespace MusicBeePlugin.AndroidRemote.Entities
+namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
     public abstract class NowPlayingTrackBase
     {
-        public const string UnknownAlbum = "Unknown Album";
-        public const string UnknownArtist = "Unknown Artist";
+        private const string UnknownAlbum = "Unknown Album";
+        private const string UnknownArtist = "Unknown Artist";
 
         /// <summary>
-        /// 
         /// </summary>
         public abstract string Artist { get; set; }
 
         /// <summary>
-        /// 
         /// </summary>
         public abstract string Title { get; set; }
 
         /// <summary>
-        /// 
         /// </summary>
         public abstract string Album { get; set; }
 
         /// <summary>
-        /// 
         /// </summary>
         public abstract string Year { get; set; }
 
@@ -31,7 +27,6 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="title"></param>
         /// <param name="fileUrl"></param>
@@ -43,7 +38,7 @@ namespace MusicBeePlugin.AndroidRemote.Entities
         private static string GetTitleValue(string title, string fileUrl)
         {
             return string.IsNullOrEmpty(title)
-                ? (string.IsNullOrEmpty(fileUrl) ? "" : fileUrl.Substring(fileUrl.LastIndexOf('\\') + 1))
+                ? string.IsNullOrEmpty(fileUrl) ? "" : fileUrl.Substring(fileUrl.LastIndexOf('\\') + 1)
                 : title;
         }
 

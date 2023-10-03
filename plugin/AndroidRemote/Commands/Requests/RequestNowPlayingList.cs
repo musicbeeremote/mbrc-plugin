@@ -5,12 +5,8 @@ using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestNowPlayingList : ICommand
+    internal class RequestNowPlayingList : ICommand
     {
-        public void Dispose()
-        {
-        }
-
         public void Execute(IEvent eEvent)
         {
             var socketClient = Authenticator.Client(eEvent.ClientId);
@@ -25,15 +21,11 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
-                
+
                 if (socketClient?.ClientPlatform == ClientOS.Android)
-                {
                     Plugin.Instance.RequestNowPlayingListPage(eEvent.ClientId, offset, limit);
-                }
                 else
-                {
                     Plugin.Instance.RequestNowPlayingListOrdered(eEvent.ClientId, offset, limit);
-                }
             }
         }
     }

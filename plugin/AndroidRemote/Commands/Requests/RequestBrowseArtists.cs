@@ -7,8 +7,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
     {
         public void Execute(IEvent eEvent)
         {
-            var data = eEvent.Data as JsonObject;
-            if (data != null)
+            if (eEvent.Data is JsonObject data)
             {
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");

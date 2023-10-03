@@ -1,9 +1,14 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Enumerations
+﻿using System.Runtime.Serialization;
+
+namespace MusicBeePlugin.AndroidRemote.Enumerations
 {
-    enum ShuffleState
+    internal enum ShuffleState
     {
-        off,
-        shuffle,
-        autodj
+        [EnumMember(Value = "off")]
+        Off,
+        [EnumMember(Value = "shuffle")]
+        Shuffle,
+        [EnumMember(Value = "autodj")]
+        AutoDj
     }
 }

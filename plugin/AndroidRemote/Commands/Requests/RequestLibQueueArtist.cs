@@ -1,22 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibQueueArtist:ICommand
+    internal class RequestLibQueueArtist : ICommand
     {
-        public void Dispose()
-        {
-        }
-
         public void Execute(IEvent eEvent)
         {
-            string type, query;
-
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("type", out type);
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("query", out query);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("type", out var type);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("query", out var query);
 
             QueueType qType;
             switch (type)
@@ -34,8 +27,8 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                     qType = QueueType.Next;
                     break;
             }
-           
-            Plugin.Instance.RequestQueueFiles(qType, MetaTag.artist, query);
+
+            Plugin.Instance.RequestQueueFiles(qType, MetaTag.Artist, query);
         }
     }
 }

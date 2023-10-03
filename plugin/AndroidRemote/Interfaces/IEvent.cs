@@ -1,6 +1,4 @@
-﻿using MusicBeePlugin.AndroidRemote.Entities;
-
-namespace MusicBeePlugin.AndroidRemote.Interfaces
+﻿namespace MusicBeePlugin.AndroidRemote.Interfaces
 {
     public interface IEvent
     {

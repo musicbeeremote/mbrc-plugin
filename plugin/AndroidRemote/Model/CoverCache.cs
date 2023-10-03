@@ -10,11 +10,12 @@ namespace MusicBeePlugin.AndroidRemote.Model
 {
     public class CoverCache
     {
+        private readonly Dictionary<string, string> _covers = new Dictionary<string, string>();
+
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly string _state = StoragePath + @"cache\state.json";
-        private readonly Dictionary<string, string> _covers = new Dictionary<string, string>();
         private Dictionary<string, string> _paths = new Dictionary<string, string>();
         public static CoverCache Instance { get; } = new CoverCache();
         public string State => _covers.Count.ToString();
@@ -24,15 +25,11 @@ namespace MusicBeePlugin.AndroidRemote.Model
             var missingCovers = _paths.Where(path =>
                 !_covers.TryGetValue(path.Key, out _)
             ).ToList();
-            foreach (var pair in missingCovers)
-            {
-                _covers[pair.Key] = cacheCover(pair.Value);
-            }
+            foreach (var pair in missingCovers) _covers[pair.Key] = cacheCover(pair.Value);
 
             _logger.Debug($"Added {missingCovers.LongCount()} missing covers to cache");
 
             foreach (var path in Directory.GetFiles(CoverStorage))
-            {
                 try
                 {
                     var filename = Path.GetFileName(path);
@@ -44,7 +41,6 @@ namespace MusicBeePlugin.AndroidRemote.Model
                 {
                     _logger.Error(e, $"There was an error deleting {path}");
                 }
-            }
 
             PersistCache();
         }
@@ -71,15 +67,12 @@ namespace MusicBeePlugin.AndroidRemote.Model
 
         public string Lookup(string key)
         {
-            return _paths.ContainsKey(key) ? _paths[key] : string.Empty;
+            return _paths.TryGetValue(key, out var path) ? path : string.Empty;
         }
 
         private CoverCacheState LoadCache()
         {
-            if (!File.Exists(_state))
-            {
-                return new CoverCacheState();
-            }
+            if (!File.Exists(_state)) return new CoverCacheState();
 
             try
             {
@@ -107,15 +100,9 @@ namespace MusicBeePlugin.AndroidRemote.Model
             try
             {
                 var backup = $"{_state}.bak";
-                if (File.Exists(backup))
-                {
-                    File.Delete(backup);
-                }
+                if (File.Exists(backup)) File.Delete(backup);
 
-                if (File.Exists(_state))
-                {
-                    File.Move(_state, backup);
-                }
+                if (File.Exists(_state)) File.Move(_state, backup);
 
                 _logger.Debug($"Preparing to persist cache state to {_state}");
 
@@ -124,10 +111,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     JsonSerializer.SerializeToWriter(state, sw);
                 }
 
-                if (File.Exists(backup))
-                {
-                    File.Delete(backup);
-                }
+                if (File.Exists(backup)) File.Delete(backup);
             }
             catch (Exception e)
             {

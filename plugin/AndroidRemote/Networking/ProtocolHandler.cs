@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.NetworkInformation;
-using MusicBeePlugin.AndroidRemote.Entities;
 using MusicBeePlugin.AndroidRemote.Events;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Utilities;
 using NLog;
 using ServiceStack.Text;
@@ -26,16 +25,13 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             try
             {
                 var msgList = new List<SocketMessage>();
-                if (string.IsNullOrEmpty(incomingMessage))
-                {
-                    return;
-                }
+                if (string.IsNullOrEmpty(incomingMessage)) return;
                 try
                 {
                     msgList.AddRange(from msg
-                        in incomingMessage
-                            .Split(new[] {"\r\n"},
-                                StringSplitOptions.RemoveEmptyEntries)
+                            in incomingMessage
+                                .Split(new[] { "\r\n" },
+                                    StringSplitOptions.RemoveEmptyEntries)
                         where !msg.Equals("\n")
                         select new SocketMessage(JsonObject.Parse(msg)));
                 }
@@ -71,15 +67,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                         return;
                     }
 
-                    if (msg.Context == Constants.Protocol && msg.Data is JsonObject)
+                    if (msg.Context == Constants.Protocol && msg.Data is JsonObject data)
                     {
-                        var data = (JsonObject) msg.Data;
                         client.BroadcastsEnabled = !data.Get<bool>("no_broadcast");
                         client.ClientProtocolVersion = data.Get<int>("protocol_version");
                     }
 
                     EventBus.FireEvent(new MessageEvent(msg.Context, msg.Data, clientId));
                 }
+
                 client.IncreasePacketNumber();
             }
             catch (Exception ex)
