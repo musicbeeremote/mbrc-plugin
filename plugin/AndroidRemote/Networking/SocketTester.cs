@@ -2,7 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Settings;
 using NLog;
 using ServiceStack.Text;
@@ -11,23 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 {
     public class SocketTester
     {
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        // State object for receiving data from remote device.
-        public class StateObject
-        {
-            // Client socket.
-            public Socket WorkSocket;
-
-            // Size of receive buffer.
-            public const int BufferSize = 256;
-
-            // Receive buffer.
-            public byte[] Buffer = new byte[BufferSize];
-
-            // Received data string.
-            public StringBuilder Sb = new StringBuilder();
-        }
 
         public IConnectionListener ConnectionListener { get; set; }
 
@@ -36,7 +20,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             try
             {
                 var port = UserSettings.Instance.ListeningPort;
-                var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int) port);
+                var ipEndpoint = new IPEndPoint(IPAddress.Loopback, (int)port);
                 var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 client.BeginConnect(ipEndpoint, ConnectCallback, client);
             }
@@ -51,7 +35,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             try
             {
-                var state = (StateObject) ar.AsyncState;
+                var state = (StateObject)ar.AsyncState;
                 var client = state.WorkSocket;
                 var received = client.EndReceive(ar);
                 var chars = new char[received + 1];
@@ -77,9 +61,9 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             try
             {
-                var client = (Socket) ar.AsyncState;
+                var client = (Socket)ar.AsyncState;
                 client.EndConnect(ar);
-                var state = new StateObject {WorkSocket = client};
+                var state = new StateObject { WorkSocket = client };
                 client.BeginReceive(state.Buffer, 0, StateObject.BufferSize, 0, ReceiveCallback, state);
                 client.ReceiveTimeout = 3000;
                 client.Send(Payload());
@@ -96,6 +80,22 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             var socketMessage = new SocketMessage(Constants.VerifyConnection, string.Empty);
             var payload = Encoding.UTF8.GetBytes(socketMessage.ToJsonString() + "\r\n");
             return payload;
+        }
+
+        // State object for receiving data from remote device.
+        private class StateObject
+        {
+            // Size of receive buffer.
+            public const int BufferSize = 256;
+
+            // Receive buffer.
+            public readonly byte[] Buffer = new byte[BufferSize];
+
+            // Received data string.
+            public StringBuilder Sb = new StringBuilder();
+
+            // Client socket.
+            public Socket WorkSocket;
         }
 
         public interface IConnectionListener

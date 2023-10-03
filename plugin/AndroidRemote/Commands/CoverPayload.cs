@@ -5,6 +5,10 @@ namespace MusicBeePlugin.AndroidRemote.Commands
     [DataContract]
     public class CoverPayload
     {
+        private const int CoverReady = 1;
+        private const int NotFound = 404;
+        private const int CoverAvailable = 200;
+
         public CoverPayload(string cover, bool include)
         {
             if (string.IsNullOrEmpty(cover))
@@ -25,16 +29,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands
             }
         }
 
+        [DataMember(Name = "status")] public int Status { get; set; }
 
-        public const int CoverReady = 1;
-        public const int NotFound = 404;
-        public const int CoverAvailable = 200;
-
-        [DataMember(Name = "status")]
-        public int Status { get; set; }
-
-        [DataMember(Name = "cover")]
-        public string Cover { get; set; }
+        [DataMember(Name = "cover")] public string Cover { get; set; }
 
         public override string ToString()
         {

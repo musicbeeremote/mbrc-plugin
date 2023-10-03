@@ -3,21 +3,14 @@ using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestNowPlayingMoveTrack : ICommand
+    internal class RequestNowPlayingMoveTrack : ICommand
     {
-        public void Dispose()
-        {  
-        }
-
         public void Execute(IEvent eEvent)
         {
-            int from, to;
-            string sFrom, sTo;
-
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("from",out sFrom);
-            ((Dictionary<string, string>)eEvent.Data).TryGetValue("to", out sTo);
-            int.TryParse(sFrom, out from);
-            int.TryParse(sTo, out to);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("from", out var sFrom);
+            ((Dictionary<string, string>)eEvent.Data).TryGetValue("to", out var sTo);
+            int.TryParse(sFrom, out var from);
+            int.TryParse(sTo, out var to);
             Plugin.Instance.RequestNowPlayingMove(eEvent.ClientId, from, to);
         }
     }

@@ -11,10 +11,8 @@ namespace MusicBeePlugin.AndroidRemote.Entities
             ActiveDeviceName = activeDeviceName;
         }
 
-        [DataMember(Name = "active")]
-        public string ActiveDeviceName { get; set; }
+        [DataMember(Name = "active")] public string ActiveDeviceName { get; set; }
 
-        [DataMember(Name = "devices")]
-        public string[] DeviceNames { get; set; }
+        [DataMember(Name = "devices")] public string[] DeviceNames { get; set; }
     }
 }

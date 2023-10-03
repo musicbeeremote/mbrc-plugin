@@ -2,7 +2,7 @@
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    public class RequestPlayerOutputSwitch: ICommand
+    public class RequestPlayerOutputSwitch : ICommand
     {
         public void Execute(IEvent eEvent)
         {

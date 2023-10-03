@@ -1,15 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using MusicBeePlugin.AndroidRemote.Entities;
+﻿using System.Collections.Generic;
 using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using ServiceStack;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    public class RequestNowplayingQueue : ICommand
+    public class RequestNowPlayingQueue : ICommand
     {
         public void Execute(IEvent eEvent)
         {
@@ -24,19 +23,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 SendResponse(eEvent.ClientId, code);
                 return;
             }
+
             var queue = QueueType.PlayNow;
             if (queueType.Equals("next"))
-            {
                 queue = QueueType.Next;
-            }
             else if (queueType.Equals("last"))
-            {
                 queue = QueueType.Last;
-            }
-            else if (queueType.Equals("add-all"))
-            {
-                queue = QueueType.AddAndPlay;
-            }
+            else if (queueType.Equals("add-all")) queue = QueueType.AddAndPlay;
 
             var success = Plugin.Instance.QueueFiles(queue, data.ToArray(), play);
 

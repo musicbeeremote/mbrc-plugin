@@ -1,45 +1,25 @@
-﻿using MusicBeePlugin.AndroidRemote.Entities;
-using MusicBeePlugin.AndroidRemote.Networking;
+﻿using System;
+using System.Security;
+using System.Text.RegularExpressions;
 using NLog;
 
 namespace MusicBeePlugin.AndroidRemote.Model
 {
-    using System;
-    using System.Security;
-    using System.Text.RegularExpressions;
-    using Events;
-
     internal class LyricCoverModel
     {
         /** Singleton **/
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-
-        private string _xHash;
         private string _lyrics;
 
-        public static LyricCoverModel Instance { get; } = new LyricCoverModel();
+
+        private string _xHash;
 
         private LyricCoverModel()
         {
         }
 
-        public void SetCover(string base64)
-        {
-            var hash = Utilities.Utilities.Sha1Hash(base64);
-
-            if (_xHash != null && _xHash.Equals(hash))
-            {
-                return;
-            }
-
-            Cover = string.IsNullOrEmpty(base64)
-                ? string.Empty
-                : Utilities.Utilities.ImageResize(base64);
-            _xHash = hash;
-
-            Plugin.BroadcastCover(Cover);
-        }
+        public static LyricCoverModel Instance { get; } = new LyricCoverModel();
 
         public string Cover { get; private set; }
 
@@ -56,6 +36,7 @@ namespace MusicBeePlugin.AndroidRemote.Model
                         lStr = lStr.Replace("\r\r\n\r\r\n", " \r\n ");
                         lStr = lStr.Replace("\r\r\n", " \n ");
                     }
+
                     lStr = lStr.Replace("\0", " ");
                     //lStr = lStr.Replace("\r\n", "&lt;p&gt;");
                     //lStr = lStr.Replace("\n", "&lt;br&gt;");
@@ -73,7 +54,21 @@ namespace MusicBeePlugin.AndroidRemote.Model
                     Plugin.BroadcastLyrics(_lyrics);
                 }
             }
-            get { return _lyrics; }
+            get => _lyrics;
+        }
+
+        public void SetCover(string base64)
+        {
+            var hash = Utilities.Utilities.Sha1Hash(base64);
+
+            if (_xHash != null && _xHash.Equals(hash)) return;
+
+            Cover = string.IsNullOrEmpty(base64)
+                ? string.Empty
+                : Utilities.Utilities.ImageResize(base64);
+            _xHash = hash;
+
+            Plugin.BroadcastCover(Cover);
         }
     }
 }

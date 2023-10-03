@@ -1,6 +1,6 @@
 ﻿namespace MusicBeePlugin.AndroidRemote.Model.Entities
 {
-    class NowPlayingListTrack
+    internal class NowPlayingListTrack
     {
         public NowPlayingListTrack(string artist, string title, int position)
         {

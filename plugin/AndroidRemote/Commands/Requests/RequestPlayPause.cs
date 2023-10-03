@@ -2,16 +2,11 @@
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestPlayPause:ICommand
+    internal class RequestPlayPause : ICommand
     {
-        public void Dispose()
-        {
-            
-        }
-
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.RequestPlayPauseTrack(eEvent.ClientId);   
+            Plugin.Instance.RequestPlayPauseTrack(eEvent.ClientId);
         }
     }
 }

@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using MusicBeePlugin.AndroidRemote.Commands;
-using MusicBeePlugin.AndroidRemote.Entities;
+using MusicBeePlugin.AndroidRemote.Model.Entities;
 
-namespace MusicBeePlugin.AndroidRemote.Networking
+namespace MusicBeePlugin.AndroidRemote.Events
 {
     public class BroadcastEvent
     {
@@ -22,22 +21,15 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             var apiVersions = BroadcastMessages.Keys.OrderBy(d => d);
             var messageApi = 2;
             foreach (var version in apiVersions)
-            {
                 if (clientVersion >= version)
-                {
                     messageApi = version;
-                }
                 else
-                {
                     break;
-                }
-            }
-            SocketMessage message;
-            var retrieved = BroadcastMessages.TryGetValue(messageApi, out message);
+            var retrieved = BroadcastMessages.TryGetValue(messageApi, out var message);
             return retrieved ? message.ToJsonString() : string.Empty;
         }
 
-        public void addPayload(int apiVersion, object payload)
+        public void AddPayload(int apiVersion, object payload)
         {
             var socketMessage = new SocketMessage(_content, payload);
             BroadcastMessages.Add(apiVersion, socketMessage);

@@ -10,7 +10,7 @@
     /// <summary>
     ///     Firewall Utility
     /// </summary>
-    internal class Program
+    internal static class Program
     {
 
         /// <summary>
@@ -95,12 +95,10 @@
             if (args.Length == 2)
             {
                 var key = args[0];
-                int val;
-                int.TryParse(args[0 + 1], out val);
+                int.TryParse(args[0 + 1], out var val);
                 dictionary.Add(key, val);
 
-                int socketPort;
-                if (dictionary.TryGetValue(Socket, out socketPort))
+                if (dictionary.TryGetValue(Socket, out var socketPort))
                 {
                     CreateFirewallRuleForPort(socketPort, SocketRule);
                     return;

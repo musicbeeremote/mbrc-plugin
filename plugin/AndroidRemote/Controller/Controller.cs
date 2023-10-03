@@ -1,28 +1,32 @@
-﻿using System.Diagnostics;
-using System.Threading;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
 {
-    using System;
-    using System.Collections.Generic;
-    using Interfaces;
- 
     internal class Controller
     {
         private readonly Dictionary<string, Type> _commandMap;
 
+
+        private Controller()
+        {
+            _commandMap = new Dictionary<string, Type>();
+        }
+
         public static Controller Instance { get; } = new Controller();
 
-        public void AddCommand(string eventType,Type command)
+        public void AddCommand(string eventType, Type command)
         {
             if (_commandMap.ContainsKey(eventType)) return;
-            _commandMap.Add(eventType,command);
+            _commandMap.Add(eventType, command);
         }
 
         public void RemoveCommand(string eventType)
         {
             if (_commandMap.ContainsKey(eventType))
-                _commandMap.Remove(eventType);    
+                _commandMap.Remove(eventType);
         }
 
         public void CommandExecute(IEvent e)
@@ -37,7 +41,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
 
             if (!_commandMap.ContainsKey(e.Type)) return;
             var commandType = _commandMap[e.Type];
-            var command = (ICommand) Activator.CreateInstance(commandType);
+            var command = (ICommand)Activator.CreateInstance(commandType);
             try
             {
                 command.Execute(e);
@@ -46,12 +50,6 @@ namespace MusicBeePlugin.AndroidRemote.Controller
             {
                 // Oh noes something went wrong... let's ignore the exception?
             }
-        }
-
-
-        private Controller()
-        {
-            _commandMap = new Dictionary<string, Type>();
         }
     }
 }

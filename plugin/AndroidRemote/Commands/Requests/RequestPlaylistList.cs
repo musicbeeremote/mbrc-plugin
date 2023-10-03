@@ -11,8 +11,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             var socketClient = Authenticator.Client(eEvent.ClientId);
             var clientProtocol = socketClient?.ClientProtocolVersion ?? 2.1;
 
-            var data = eEvent.Data as JsonObject;
-            if (clientProtocol < 2.2 || data == null)
+            if (clientProtocol < 2.2 || !(eEvent.Data is JsonObject data))
             {
                 Plugin.Instance.GetAvailablePlaylistUrls(eEvent.ClientId);
             }
@@ -23,7 +22,6 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 
                 Plugin.Instance.GetAvailablePlaylistUrls(eEvent.ClientId, offset, limit);
             }
-
         }
     }
 }

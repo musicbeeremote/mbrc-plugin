@@ -1,10 +1,9 @@
-using System;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
-    class RequestLibraryAlbumCover : ICommand
+    internal class RequestLibraryAlbumCover : ICommand
     {
         public void Execute(IEvent eEvent)
         {
@@ -16,13 +15,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             var limit = data.Get<int?>("limit");
             var offset = data.Get<int?>("offset");
             if (limit != null && offset != null)
-            {
-                Plugin.Instance.RequestCoverPage(eEvent.ClientId, (int) offset, (int) limit);
-            }
+                Plugin.Instance.RequestCoverPage(eEvent.ClientId, (int)offset, (int)limit);
             else
-            {
-                Plugin.Instance.RequestCover(eEvent.ClientId, artist, album, hash, size);    
-            }
+                Plugin.Instance.RequestCover(eEvent.ClientId, artist, album, hash, size);
         }
     }
 }

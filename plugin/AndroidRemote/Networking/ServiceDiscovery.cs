@@ -12,16 +12,16 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 {
     internal class ServiceDiscovery
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int Port = 45345;
         private static readonly IPAddress MulticastAddress = IPAddress.Parse("239.1.5.10");
-
-
-        public static ServiceDiscovery Instance { get; } = new ServiceDiscovery();
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private ServiceDiscovery()
         {
         }
+
+
+        public static ServiceDiscovery Instance { get; } = new ServiceDiscovery();
 
         public void Start()
         {
@@ -30,7 +30,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
             ips.ForEach(address =>
             {
                 _logger.Debug($"Starting discovery listener at {MulticastAddress}:{Port} for interface {address}");
-                var udpClient = new UdpClient(AddressFamily.InterNetwork) {EnableBroadcast = true};
+                var udpClient = new UdpClient(AddressFamily.InterNetwork) { EnableBroadcast = true };
                 udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 udpClient.Client.Bind(new IPEndPoint(address, Port));
                 udpClient.JoinMulticastGroup(MulticastAddress, address);
@@ -40,7 +40,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
 
         private void OnDataReceived(IAsyncResult ar)
         {
-            var udpClient = (UdpClient) ar.AsyncState;
+            var udpClient = (UdpClient)ar.AsyncState;
             var mEndPoint = new IPEndPoint(IPAddress.Any, Port);
             var request = udpClient.EndReceive(ar, ref mEndPoint);
             var mRequest = Encoding.UTF8.GetString(request);
@@ -71,6 +71,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 var notify = ErrorMessage("unsupported action");
                 SendResponse(notify, mEndPoint, udpClient);
             }
+
             udpClient.BeginReceive(OnDataReceived, udpClient);
         }
 
@@ -84,8 +85,8 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             var notify = new Dictionary<string, object>
             {
-                {"context", "error"},
-                {"description", errorMessage},
+                { "context", "error" },
+                { "description", errorMessage }
             };
             return notify;
         }
@@ -94,10 +95,10 @@ namespace MusicBeePlugin.AndroidRemote.Networking
         {
             var notify = new Dictionary<string, object>
             {
-                {"context", "notify"},
-                {"address", interfaceAddress},
-                {"name", Environment.GetEnvironmentVariable("COMPUTERNAME")},
-                {"port", UserSettings.Instance.ListeningPort}
+                { "context", "notify" },
+                { "address", interfaceAddress },
+                { "name", Environment.GetEnvironmentVariable("COMPUTERNAME") },
+                { "port", UserSettings.Instance.ListeningPort }
             };
             return notify;
         }
@@ -117,6 +118,7 @@ namespace MusicBeePlugin.AndroidRemote.Networking
                 interfaceAddress = ifAddress.ToString();
                 break;
             }
+
             return interfaceAddress;
         }
     }

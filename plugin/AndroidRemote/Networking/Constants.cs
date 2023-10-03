@@ -2,8 +2,8 @@
 {
     internal static class Constants
     {
-
         #region Protocol 2. Basic functionality
+
         public const string Error = "error";
         public const string Player = "player";
         public const string Protocol = "protocol";
@@ -11,9 +11,11 @@
         public const int ProtocolVersion = 4;
         public const string PluginVersion = "pluginversion";
         public const string NotAllowed = "notallowed";
+
         #endregion
 
         #region Protocol 2. API calls
+
         public const string PlayerStatus = "playerstatus";
         public const string PlayerRepeat = "playerrepeat";
         public const string PlayerScrobble = "scrobbler";
@@ -30,7 +32,7 @@
         public const string NowPlayingTrack = "nowplayingtrack";
         public const string NowPlayingCover = "nowplayingcover";
         public const string NowPlayingPosition = "nowplayingposition";
-        public const string NowPlayingLyrics = "nowplayinglyrics"; 
+        public const string NowPlayingLyrics = "nowplayinglyrics";
         public const string NowPlayingRating = "nowplayingrating";
         public const string NowPlayingLfmRating = "nowplayinglfmrating";
         public const string NowPlayingList = "nowplayinglist";
@@ -39,8 +41,7 @@
         public const string NowPlayingListRemove = "nowplayinglistremove";
         public const string NowPlayingListMove = "nowplayinglistmove";
         public const string NowPlayingListSearch = "nowplayinglistsearch";
-        public const string NowPlayingListQueue = "nowplayinglistqueue";
-        
+
         public const string LibrarySearchArtist = "librarysearchartist";
         public const string LibrarySearchAlbum = "librarysearchalbum";
         public const string LibrarySearchGenre = "librarysearchgenre";
@@ -49,17 +50,17 @@
         public const string LibraryArtistAlbums = "libraryartistalbums";
         public const string LibraryGenreArtists = "librarygenreartists";
         public const string LibraryAlbumTracks = "libraryalbumtracks";
-        
+
         public const string LibraryQueueGenre = "libraryqueuegenre";
         public const string LibraryQueueArtist = "libraryqueueartist";
         public const string LibraryQueueAlbum = "libraryqueuealbum";
         public const string LibraryQueueTrack = "libraryqueuetrack";
 
-        public const string PlaylistList = "playlistlist"; 
+        public const string PlaylistList = "playlistlist";
 
         #endregion
-        
-        #region Protocol 2.1 
+
+        #region Protocol 2.1
 
         public const string Ping = "ping";
         public const string Pong = "pong";

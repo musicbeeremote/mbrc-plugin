@@ -1,8 +1,8 @@
-﻿namespace MusicBeePlugin.AndroidRemote.Events
-{
-    using Interfaces;
+﻿using MusicBeePlugin.AndroidRemote.Interfaces;
 
-    class EventBus
+namespace MusicBeePlugin.AndroidRemote.Events
+{
+    internal static class EventBus
     {
         public static void FireEvent(IEvent e)
         {
