@@ -1,10 +1,18 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using MusicBeePlugin.Services.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestShuffle : ICommand
     {
+        private readonly IPlayerService _playerService;
+
+        public RequestShuffle(IPlayerService playerService)
+        {
+            _playerService = playerService;
+        }
+
         public void Execute(IEvent eEvent)
         {
             var stateAction = eEvent.Data.Equals("toggle")
@@ -12,9 +20,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 : StateAction.State;
 
             if (Authenticator.ClientProtocolMisMatch(eEvent.ClientId))
-                Plugin.Instance.RequestShuffleState(stateAction);
+                _playerService.SetShuffleState(stateAction);
             else
-                Plugin.Instance.RequestAutoDjShuffleState(stateAction);
+                _playerService.SetAutoDjShuffleState(stateAction);
         }
     }
 }

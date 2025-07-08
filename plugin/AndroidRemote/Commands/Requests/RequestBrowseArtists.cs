@@ -1,10 +1,18 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.Services.Interfaces;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     public class RequestBrowseArtists : ICommand
     {
+        private readonly ILibraryService _libraryService;
+
+        public RequestBrowseArtists(ILibraryService libraryService)
+        {
+            _libraryService = libraryService;
+        }
+
         public void Execute(IEvent eEvent)
         {
             if (eEvent.Data is JsonObject data)
@@ -12,11 +20,11 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 var offset = data.Get<int>("offset");
                 var limit = data.Get<int>("limit");
                 var type = data.Get<bool>("album_artists");
-                Plugin.Instance.LibraryBrowseArtists(eEvent.ClientId, offset, limit, type);
+                _libraryService.BrowseArtists(eEvent.ClientId, offset, limit, type);
             }
             else
             {
-                Plugin.Instance.LibraryBrowseArtists(eEvent.ClientId);
+                _libraryService.BrowseArtists(eEvent.ClientId);
             }
         }
     }

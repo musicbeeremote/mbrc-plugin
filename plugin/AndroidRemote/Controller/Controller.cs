@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using MusicBeePlugin.AndroidRemote.Commands;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Controller
@@ -8,7 +9,7 @@ namespace MusicBeePlugin.AndroidRemote.Controller
     internal class Controller
     {
         private readonly Dictionary<string, Type> _commandMap;
-
+        private CommandFactory _commandFactory;
 
         private Controller()
         {
@@ -16,6 +17,15 @@ namespace MusicBeePlugin.AndroidRemote.Controller
         }
 
         public static Controller Instance { get; } = new Controller();
+
+        /// <summary>
+        /// Sets the command factory for dependency injection
+        /// </summary>
+        /// <param name="commandFactory">Command factory instance</param>
+        public void SetCommandFactory(CommandFactory commandFactory)
+        {
+            _commandFactory = commandFactory;
+        }
 
         public void AddCommand(string eventType, Type command)
         {
@@ -41,7 +51,10 @@ namespace MusicBeePlugin.AndroidRemote.Controller
 
             if (!_commandMap.ContainsKey(e.Type)) return;
             var commandType = _commandMap[e.Type];
-            var command = (ICommand)Activator.CreateInstance(commandType);
+            
+            // Use command factory if available, otherwise fallback to Activator
+            var command = _commandFactory?.CreateCommand(commandType) ?? (ICommand)Activator.CreateInstance(commandType);
+            
             try
             {
                 command.Execute(e);

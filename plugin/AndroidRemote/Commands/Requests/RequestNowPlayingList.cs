@@ -1,12 +1,20 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using MusicBeePlugin.Services.Interfaces;
 using ServiceStack.Text;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestNowPlayingList : ICommand
     {
+        private readonly INowPlayingService _nowPlayingService;
+
+        public RequestNowPlayingList(INowPlayingService nowPlayingService)
+        {
+            _nowPlayingService = nowPlayingService;
+        }
+
         public void Execute(IEvent eEvent)
         {
             var socketClient = Authenticator.Client(eEvent.ClientId);
@@ -15,7 +23,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
             var data = eEvent.Data as JsonObject;
             if (clientProtocol < 2.2 || data == null)
             {
-                Plugin.Instance.RequestNowPlayingList(eEvent.ClientId);
+                _nowPlayingService.GetNowPlayingList(eEvent.ClientId);
             }
             else
             {
@@ -23,9 +31,9 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 var limit = data.Get<int>("limit");
 
                 if (socketClient?.ClientPlatform == ClientOS.Android)
-                    Plugin.Instance.RequestNowPlayingListPage(eEvent.ClientId, offset, limit);
+                    _nowPlayingService.GetNowPlayingListPage(eEvent.ClientId, offset, limit);
                 else
-                    Plugin.Instance.RequestNowPlayingListOrdered(eEvent.ClientId, offset, limit);
+                    _nowPlayingService.GetNowPlayingListOrdered(eEvent.ClientId, offset, limit);
             }
         }
     }
