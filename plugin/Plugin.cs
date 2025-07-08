@@ -19,6 +19,9 @@ using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
 using MusicBeePlugin.AndroidRemote.Settings;
 using MusicBeePlugin.AndroidRemote.Utilities;
+using MusicBeePlugin.Services;
+using MusicBeePlugin.Services.Implementations;
+using MusicBeePlugin.Services.Interfaces;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
@@ -48,6 +51,11 @@ namespace MusicBeePlugin
         private InfoWindow _mWindow;
 
         private Timer _positionUpdateTimer;
+
+        /// <summary>
+        /// Service container for dependency injection
+        /// </summary>
+        private ServiceContainer _serviceContainer;
 
         /// <summary>
         ///     Represents the current repeat mode.
@@ -154,6 +162,9 @@ namespace MusicBeePlugin
             var logLevel = UserSettings.Instance.DebugLogEnabled ? LogLevel.Debug : LogLevel.Error;
             InitializeLoggingConfiguration(UserSettings.Instance.FullLogPath, logLevel);
 #endif
+
+            // Initialize service container and register services
+            InitializeServices();
 
             StartPlayerStatusMonitoring();
 
@@ -2302,5 +2313,27 @@ namespace MusicBeePlugin
             stopwatch.Stop();
             _logger.Debug($"cover page from: {offset} with {limit} limit, request took {stopwatch.Elapsed} ms");
         }
+
+        /// <summary>
+        /// Initializes the service container and registers all services
+        /// </summary>
+        private void InitializeServices()
+        {
+            _serviceContainer = new ServiceContainer();
+            
+            // Register service implementations
+            _serviceContainer.RegisterType<IPlayerService, PlayerService>();
+            _serviceContainer.RegisterType<ILibraryService, LibraryService>();
+            _serviceContainer.RegisterType<INowPlayingService, NowPlayingService>();
+            _serviceContainer.RegisterType<IPlaylistService, PlaylistService>();
+            _serviceContainer.RegisterType<ISettingsService, SettingsService>();
+            
+            _logger.Debug("Services initialized and registered");
+        }
+
+        /// <summary>
+        /// Gets the service container instance
+        /// </summary>
+        public IServiceLocator Services => _serviceContainer;
     }
 }
