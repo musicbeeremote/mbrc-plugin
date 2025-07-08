@@ -21,5 +21,15 @@ namespace MusicBeePlugin.Services.Implementations
         {
             Plugin.Instance.PlayPlaylist(clientId, url);
         }
+
+        public void GetAvailablePlaylistUrls(string clientId)
+        {
+            Plugin.Instance.GetAvailablePlaylistUrls(clientId);
+        }
+
+        public void GetAvailablePlaylistUrls(string clientId, int offset, int limit)
+        {
+            Plugin.Instance.GetAvailablePlaylistUrls(clientId, offset, limit);
+        }
     }
 }

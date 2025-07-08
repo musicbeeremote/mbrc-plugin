@@ -19,5 +19,11 @@ namespace MusicBeePlugin.Services.Interfaces
         /// Plays a specific playlist
         /// </summary>
         void PlayPlaylist(string clientId, string url);
+        
+        /// <summary>
+        /// Gets available playlist URLs
+        /// </summary>
+        void GetAvailablePlaylistUrls(string clientId);
+        void GetAvailablePlaylistUrls(string clientId, int offset, int limit);
     }
 }

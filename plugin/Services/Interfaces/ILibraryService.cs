@@ -96,5 +96,30 @@ namespace MusicBeePlugin.Services.Interfaces
         /// Gets a page of covers
         /// </summary>
         void GetCoverPage(string clientId, int offset, int limit);
+        
+        /// <summary>
+        /// Library search methods
+        /// </summary>
+        void LibrarySearchTitle(string query, string clientId);
+        void LibrarySearchArtist(string query, string clientId);
+        void LibrarySearchAlbums(string query, string clientId);
+        void LibrarySearchGenres(string query, string clientId);
+        
+        /// <summary>
+        /// Library browse methods
+        /// </summary>
+        void LibraryGetGenreArtists(string genre, string clientId);
+        void LibraryGetArtistAlbums(string artist, string clientId);
+        void LibraryGetAlbumTracks(string album, string clientId);
+        
+        /// <summary>
+        /// Library actions
+        /// </summary>
+        void LibraryPlayAll(string clientId, bool shuffle);
+        void RequestQueueFiles(QueueType queueType, MetaTag tag, string query);
+        void RequestCover(string clientId, string artist, string album, string hash, string size);
+        void RequestCoverPage(string clientId, int offset, int limit);
+        void RequestRadioStations(string clientId, int offset = 0, int limit = 4000);
+        void RequestRadioStations(string clientId);
     }
 }

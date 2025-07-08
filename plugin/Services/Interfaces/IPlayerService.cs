@@ -92,5 +92,13 @@ namespace MusicBeePlugin.Services.Interfaces
         /// Gets current player status
         /// </summary>
         void GetPlayerStatus(string clientId);
+        
+        /// <summary>
+        /// Additional player methods
+        /// </summary>
+        void RequestPlayerStatus(string clientId);
+        void RequestOutputDevice(string clientId);
+        void SetTrackTag(string tagName, string newValue, string clientId);
+        void RequestLoveStatus(string status, string clientId);
     }
 }

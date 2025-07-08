@@ -2328,7 +2328,27 @@ namespace MusicBeePlugin
             _serviceContainer.RegisterType<IPlaylistService, PlaylistService>();
             _serviceContainer.RegisterType<ISettingsService, SettingsService>();
             
+            // Initialize command factory with service injection
+            InitializeCommandFactory();
+            
             _logger.Debug("Services initialized and registered");
+        }
+
+        /// <summary>
+        /// Initializes the command factory and registers refactored commands
+        /// </summary>
+        private void InitializeCommandFactory()
+        {
+            var commandFactory = new AndroidRemote.Commands.CommandFactory(_serviceContainer);
+            
+            // Use CommandRegistrar to register all commands
+            var commandRegistrar = new AndroidRemote.Commands.CommandRegistrar(commandFactory, _serviceContainer);
+            commandRegistrar.RegisterAllCommands();
+            
+            // Set the command factory in the Controller
+            AndroidRemote.Controller.Controller.Instance.SetCommandFactory(commandFactory);
+            
+            _logger.Debug("Command factory initialized with dependency injection");
         }
 
         /// <summary>

@@ -93,5 +93,25 @@ namespace MusicBeePlugin.Services.Implementations
         {
             Plugin.Instance.RequestPlayerStatus(clientId);
         }
+
+        public void RequestPlayerStatus(string clientId)
+        {
+            Plugin.Instance.RequestPlayerStatus(clientId);
+        }
+
+        public void RequestOutputDevice(string clientId)
+        {
+            Plugin.Instance.RequestOutputDevice(clientId);
+        }
+
+        public void SetTrackTag(string tagName, string newValue, string clientId)
+        {
+            Plugin.Instance.SetTrackTag(tagName, newValue, clientId);
+        }
+
+        public void RequestLoveStatus(string status, string clientId)
+        {
+            Plugin.Instance.RequestLoveStatus(status, clientId);
+        }
     }
 }

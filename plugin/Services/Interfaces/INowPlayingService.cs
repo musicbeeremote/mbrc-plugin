@@ -1,3 +1,4 @@
+using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Model;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 
@@ -82,5 +83,18 @@ namespace MusicBeePlugin.Services.Interfaces
         /// Searches the now playing list
         /// </summary>
         void SearchNowPlayingList(string query, string clientId);
+        
+        /// <summary>
+        /// Additional now playing methods
+        /// </summary>
+        void RequestNowPlayingMove(string clientId, int from, int to);
+        void NowPlayingPlay(string index, bool isAndroid);
+        bool QueueFiles(QueueType queue, string[] data, string play);
+        void NowPlayingSearch(string query, string clientId);
+        void NowPlayingListRemoveTrack(int index, string clientId);
+        void RequestNowPlayingTrackCover();
+        void RequestNowPlayingTrackLyrics();
+        void RequestTrackInfo(string clientId);
+        void RequestTrackRating(string rating, string clientId);
     }
 }

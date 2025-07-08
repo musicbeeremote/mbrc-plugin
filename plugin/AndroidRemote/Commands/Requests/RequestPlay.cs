@@ -1,12 +1,20 @@
 ﻿using MusicBeePlugin.AndroidRemote.Interfaces;
+using MusicBeePlugin.Services.Interfaces;
 
 namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     internal class RequestPlay : ICommand
     {
+        private readonly IPlayerService _playerService;
+
+        public RequestPlay(IPlayerService playerService)
+        {
+            _playerService = playerService;
+        }
+
         public void Execute(IEvent eEvent)
         {
-            Plugin.Instance.RequestPlay(eEvent.ClientId);
+            _playerService.Play(eEvent.ClientId);
         }
     }
 }

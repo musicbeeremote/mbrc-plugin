@@ -3,6 +3,7 @@ using MusicBeePlugin.AndroidRemote.Enumerations;
 using MusicBeePlugin.AndroidRemote.Interfaces;
 using MusicBeePlugin.AndroidRemote.Model.Entities;
 using MusicBeePlugin.AndroidRemote.Networking;
+using MusicBeePlugin.Services.Interfaces;
 using ServiceStack;
 using ServiceStack.Text;
 
@@ -10,6 +11,13 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
 {
     public class RequestNowPlayingQueue : ICommand
     {
+        private readonly INowPlayingService _nowPlayingService;
+
+        public RequestNowPlayingQueue(INowPlayingService nowPlayingService)
+        {
+            _nowPlayingService = nowPlayingService;
+        }
+
         public void Execute(IEvent eEvent)
         {
             var payload = eEvent.Data as JsonObject;
@@ -31,7 +39,7 @@ namespace MusicBeePlugin.AndroidRemote.Commands.Requests
                 queue = QueueType.Last;
             else if (queueType.Equals("add-all")) queue = QueueType.AddAndPlay;
 
-            var success = Plugin.Instance.QueueFiles(queue, data.ToArray(), play);
+            var success = _nowPlayingService.QueueFiles(queue, data.ToArray(), play);
 
             SendResponse(eEvent.ClientId, success ? 200 : 500);
         }
