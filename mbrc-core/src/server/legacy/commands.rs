@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tracing::{info, warn};
 
+use crate::ffi::callbacks::LibraryQueueTarget;
 use crate::ffi::types::QueryType;
 use crate::protocol::constants;
 use crate::protocol::messages::SocketMessage;
@@ -224,6 +225,56 @@ pub async fn dispatch_command(
             }
             vec![]
         }
+
+        // ── Library queue (fire-and-forget with {query, type} payload) ──
+        constants::LIBRARY_QUEUE_GENRE => {
+            handle_library_queue(data, state, LibraryQueueTarget::Genre).await
+        }
+        constants::LIBRARY_QUEUE_ARTIST => {
+            handle_library_queue(data, state, LibraryQueueTarget::Artist).await
+        }
+        constants::LIBRARY_QUEUE_ALBUM => {
+            handle_library_queue(data, state, LibraryQueueTarget::Album).await
+        }
+        constants::LIBRARY_QUEUE_TRACK => {
+            handle_library_queue(data, state, LibraryQueueTarget::Track).await
+        }
+
+        // ── Now playing list mutations ──────────────────────────────
+        constants::NOW_PLAYING_LIST_MOVE => {
+            if let (Some(from), Some(to)) = (
+                data.get("from").and_then(|v| v.as_i64()).map(|n| n as i32),
+                data.get("to").and_then(|v| v.as_i64()).map(|n| n as i32),
+            ) {
+                let s = Arc::clone(state);
+                let _ = tokio::task::spawn_blocking(move || {
+                    s.callbacks().now_playing_list_move(from, to)
+                })
+                .await;
+            }
+            vec![]
+        }
+
+        constants::NOW_PLAYING_LIST_SEARCH => {
+            // Fixture shows the payload is a plain string query (`"who"`).
+            if let Some(query) = parse_string_from_data(data) {
+                let s = Arc::clone(state);
+                let _ = tokio::task::spawn_blocking(move || {
+                    s.callbacks().now_playing_list_search(&query)
+                })
+                .await;
+            }
+            vec![]
+        }
+
+        // ── Tag change (fire-and-forget, C# server sends no echo) ────
+        //
+        // TODO(w2): there is no `CommandType::NowPlayingTagChange` in the
+        // FFI yet, so we acknowledge the frame at the wire level but can't
+        // propagate the state change to the host. Matches current C#
+        // silent-response behavior on the wire; the state gap is tracked
+        // separately under the W2 surface.
+        constants::NOW_PLAYING_TAG_CHANGE => vec![],
 
         // ── Commands we know about but can't service yet ────────────
         constants::PLUGIN_VERSION => {
@@ -450,6 +501,34 @@ fn parse_bool_from_data(data: &serde_json::Value) -> Option<bool> {
         };
     }
     None
+}
+
+/// Fire-and-forget dispatch for `libraryqueue{genre,artist,album,track}`.
+/// Payload shape (from fixtures): `{"query": "<text>", "type": "<now|next|last|add|...>"}`.
+async fn handle_library_queue(
+    data: &serde_json::Value,
+    state: &Arc<AppState>,
+    target: LibraryQueueTarget,
+) -> Vec<SocketMessage> {
+    let query = data
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_owned();
+    let queue_type = data
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("next")
+        .to_owned();
+
+    if query.is_empty() {
+        return vec![];
+    }
+
+    let s = Arc::clone(state);
+    let _ = tokio::task::spawn_blocking(move || s.callbacks().library_queue(target, &queue_type, &query))
+        .await;
+    vec![]
 }
 
 /// Build the legacy-wire `playerstatus` payload.
