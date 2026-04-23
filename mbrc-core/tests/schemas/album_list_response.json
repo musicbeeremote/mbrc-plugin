@@ -1,0 +1,6 @@
+{
+  "albums": [
+    { "artist": "Miles Davis", "album": "Kind of Blue", "count": 5 },
+    { "artist": "Miles Davis", "album": "Bitches Brew", "count": 6 }
+  ]
+}

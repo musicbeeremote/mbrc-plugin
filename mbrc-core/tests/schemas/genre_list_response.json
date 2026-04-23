@@ -1,0 +1,6 @@
+{
+  "genres": [
+    { "genre": "Jazz", "count": 1247 },
+    { "genre": "Ambient", "count": 312 }
+  ]
+}

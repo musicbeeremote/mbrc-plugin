@@ -1,0 +1,14 @@
+{
+  "tracks": [
+    {
+      "src": "C:\\Music\\KindOfBlue\\01.flac",
+      "artist": "Miles Davis",
+      "title": "So What",
+      "trackno": 1,
+      "disc": 1,
+      "album": "Kind of Blue",
+      "album_artist": "Miles Davis",
+      "genre": "Jazz"
+    }
+  ]
+}

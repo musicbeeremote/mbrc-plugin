@@ -1,0 +1,20 @@
+{
+  "tracks": [
+    {
+      "artist": "Miles Davis",
+      "album": "Kind of Blue",
+      "album_artist": "Miles Davis",
+      "title": "So What",
+      "path": "C:\\Music\\KindOfBlue\\01.flac",
+      "position": 0
+    },
+    {
+      "artist": "Miles Davis",
+      "album": "Kind of Blue",
+      "album_artist": "Miles Davis",
+      "title": "Freddie Freeloader",
+      "path": "C:\\Music\\KindOfBlue\\02.flac",
+      "position": 1
+    }
+  ]
+}

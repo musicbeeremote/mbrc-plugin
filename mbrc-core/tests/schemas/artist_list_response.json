@@ -1,0 +1,6 @@
+{
+  "artists": [
+    { "artist": "Miles Davis", "count": 47 },
+    { "artist": "John Coltrane", "count": 23 }
+  ]
+}

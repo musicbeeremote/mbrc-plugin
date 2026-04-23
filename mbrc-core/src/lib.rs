@@ -1,0 +1,308 @@
+// extern "C" FFI functions that take raw pointers are the entire point of this
+// crate — the C# host dereferences them on our behalf. Marking each fn `unsafe`
+// would change the Rust-side ABI exposed to tests and break the pattern
+// csbindgen mirrors into C#. Scope the allow to the crate root.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
+mod discovery;
+mod ffi;
+mod logging;
+mod protocol;
+mod server;
+mod state;
+
+#[doc(hidden)]
+pub mod replay_support;
+
+// Re-export DTOs so drift-guard integration tests can construct and
+// round-trip them without touching internal module paths.
+pub use ffi::dtos::{
+    AlbumCoverParams, BrowseParams, IndexParams, LibraryQueueParams, MoveParams, PaginationParams,
+    QueryParams, SetBoolParams, SetLfmRatingParams, SetRepeatParams, StringValueParams,
+};
+pub use server::{
+    AlbumCoverResponse, AlbumDto, AlbumListResponse, ArtistDto, ArtistListResponse,
+    CoverCacheBuildStatusResponse, GenreDto, GenreListResponse, NowPlayingDetailsResponse,
+    NowPlayingListResponse, NowPlayingTrackDto, OutputDevicesResponse, PlayerStateResponse,
+    PlaylistDto, PlaylistListResponse, RadioStationDto, RadioStationsResponse, TrackDto,
+    TrackInfoResponse, TrackListResponse,
+};
+
+use std::ffi::{c_char, c_int, CStr};
+use std::sync::Arc;
+
+use tracing::{info, warn};
+
+use ffi::callbacks::SafeCallbacks;
+use ffi::types::{MbrcCallbacks, MbrcResult, NotificationType, QueryType};
+use protocol::constants;
+use protocol::messages::{BroadcastEvent, SocketMessage};
+use state::MbrcCore;
+
+/// Initialize the Rust core with callbacks and storage path.
+///
+/// Must be called exactly once before any other `mbrc_*` function.
+/// `storage_path` must be a valid null-terminated UTF-8 string.
+/// `callbacks` is copied — the caller can free it after this returns.
+///
+/// Returns: 0 on success, negative error code on failure.
+#[no_mangle]
+pub extern "C" fn mbrc_initialize(callbacks: MbrcCallbacks, storage_path: *const c_char) -> c_int {
+    // Validate storage_path
+    if storage_path.is_null() {
+        return MbrcResult::NullPointer as c_int;
+    }
+
+    let storage = match unsafe { CStr::from_ptr(storage_path) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => return MbrcResult::InvalidArgument as c_int,
+    };
+
+    // Initialize logging first so subsequent operations are logged
+    logging::init(&storage);
+
+    info!(storage_path = %storage, "mbrc_initialize called");
+
+    let safe_callbacks = SafeCallbacks::new(callbacks);
+
+    match MbrcCore::initialize(safe_callbacks, storage) {
+        Ok(()) => MbrcResult::Ok as c_int,
+        Err(e) => e as c_int,
+    }
+}
+
+/// Shut down the Rust core. Stops networking and releases resources.
+///
+/// After this call, no other `mbrc_*` functions should be called.
+/// Returns: 0 on success, negative error code on failure.
+#[no_mangle]
+pub extern "C" fn mbrc_shutdown() -> c_int {
+    info!("mbrc_shutdown called");
+
+    match MbrcCore::get() {
+        Ok(core) => {
+            core.shutdown();
+            MbrcResult::Ok as c_int
+        }
+        Err(e) => e as c_int,
+    }
+}
+
+/// Start the HTTP server on the given port.
+///
+/// Requires `mbrc_initialize` to have been called first.
+/// Returns: 0 on success, negative error code on failure.
+#[no_mangle]
+pub extern "C" fn mbrc_start_networking(port: c_int) -> c_int {
+    info!(port, "mbrc_start_networking called");
+
+    if port <= 0 || port > 65535 {
+        return MbrcResult::InvalidArgument as c_int;
+    }
+
+    match MbrcCore::get() {
+        Ok(core) => match core.start_networking(port as u16) {
+            Ok(()) => MbrcResult::Ok as c_int,
+            Err(e) => e as c_int,
+        },
+        Err(e) => e as c_int,
+    }
+}
+
+/// Stop the HTTP server gracefully.
+///
+/// Returns: 0 on success, negative error code on failure.
+#[no_mangle]
+pub extern "C" fn mbrc_stop_networking() -> c_int {
+    info!("mbrc_stop_networking called");
+
+    match MbrcCore::get() {
+        Ok(core) => match core.stop_networking() {
+            Ok(()) => MbrcResult::Ok as c_int,
+            Err(e) => e as c_int,
+        },
+        Err(e) => e as c_int,
+    }
+}
+
+/// Forward a MusicBee notification to the Rust core.
+///
+/// `notification_type` maps to `NotificationType` enum values.
+/// Currently used to trigger state refresh in the Rust side.
+///
+/// Returns: 0 on success, negative error code on failure.
+#[no_mangle]
+pub extern "C" fn mbrc_handle_notification(notification_type: c_int) -> c_int {
+    // Convert the raw i32 to our enum
+    let _notification = match notification_type {
+        0 => NotificationType::TrackChanged,
+        1 => NotificationType::PlayStateChanged,
+        2 => NotificationType::VolumeLevelChanged,
+        3 => NotificationType::VolumeMuteChanged,
+        4 => NotificationType::NowPlayingLyricsReady,
+        5 => NotificationType::NowPlayingArtworkReady,
+        6 => NotificationType::NowPlayingListChanged,
+        7 => NotificationType::FileAddedToLibrary,
+        _ => return MbrcResult::InvalidArgument as c_int,
+    };
+
+    match MbrcCore::get() {
+        Ok(core) => {
+            info!(?_notification, "Received notification");
+            let state = Arc::clone(core.state());
+            let notification = _notification;
+            core.runtime().spawn(async move {
+                if let Some(event) = build_broadcast(notification, &state).await {
+                    // Ignore send error — means no receivers are subscribed
+                    let _ = state.event_tx().send(event);
+                }
+            });
+            MbrcResult::Ok as c_int
+        }
+        Err(e) => e as c_int,
+    }
+}
+
+/// Free a string previously returned by the Rust core.
+///
+/// The pointer must have been allocated by Rust (e.g. via `CString::into_raw`).
+/// Passing a null pointer is a no-op.
+#[no_mangle]
+pub extern "C" fn mbrc_free_string(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = std::ffi::CString::from_raw(ptr);
+        }
+    }
+}
+
+/// Build a broadcast event for a given notification by querying MusicBee via callbacks.
+/// Returns `None` for notifications that don't produce broadcasts (e.g. FileAddedToLibrary).
+async fn build_broadcast(
+    notification: NotificationType,
+    state: &Arc<state::AppState>,
+) -> Option<BroadcastEvent> {
+    match notification {
+        NotificationType::TrackChanged => {
+            let state2 = Arc::clone(state);
+            let track = tokio::task::spawn_blocking(move || {
+                state2
+                    .callbacks()
+                    .query_no_params::<TrackInfoResponse>(QueryType::TrackInfo)
+            })
+            .await
+            .ok()?
+            .ok();
+
+            let messages = match track {
+                Some(t) => vec![SocketMessage::new(
+                    constants::NOW_PLAYING_TRACK,
+                    serde_json::to_value(&t).unwrap_or_default(),
+                )],
+                None => {
+                    warn!("Failed to query track info for TrackChanged broadcast");
+                    return None;
+                }
+            };
+            Some(BroadcastEvent::multi(notification, messages))
+        }
+
+        NotificationType::PlayStateChanged => {
+            let state2 = Arc::clone(state);
+            let player = tokio::task::spawn_blocking(move || {
+                state2
+                    .callbacks()
+                    .query_no_params::<PlayerStateResponse>(QueryType::PlayerState)
+            })
+            .await
+            .ok()?
+            .ok();
+
+            match player {
+                Some(p) => Some(BroadcastEvent::single(
+                    notification,
+                    constants::PLAYER_STATE,
+                    serde_json::to_value(&p.play_state).unwrap_or_default(),
+                )),
+                None => {
+                    warn!("Failed to query player state for PlayStateChanged broadcast");
+                    None
+                }
+            }
+        }
+
+        NotificationType::VolumeLevelChanged => {
+            let state2 = Arc::clone(state);
+            let player = tokio::task::spawn_blocking(move || {
+                state2
+                    .callbacks()
+                    .query_no_params::<PlayerStateResponse>(QueryType::PlayerState)
+            })
+            .await
+            .ok()?
+            .ok();
+
+            match player {
+                Some(p) => Some(BroadcastEvent::single(
+                    notification,
+                    constants::PLAYER_VOLUME,
+                    serde_json::json!(p.volume),
+                )),
+                None => {
+                    warn!("Failed to query player state for VolumeLevelChanged broadcast");
+                    None
+                }
+            }
+        }
+
+        NotificationType::VolumeMuteChanged => {
+            let state2 = Arc::clone(state);
+            let player = tokio::task::spawn_blocking(move || {
+                state2
+                    .callbacks()
+                    .query_no_params::<PlayerStateResponse>(QueryType::PlayerState)
+            })
+            .await
+            .ok()?
+            .ok();
+
+            match player {
+                Some(p) => Some(BroadcastEvent::single(
+                    notification,
+                    constants::PLAYER_MUTE,
+                    serde_json::json!(p.mute),
+                )),
+                None => {
+                    warn!("Failed to query player state for VolumeMuteChanged broadcast");
+                    None
+                }
+            }
+        }
+
+        NotificationType::NowPlayingLyricsReady => {
+            // Lyrics ready — broadcast empty context; actual lyrics fetched on demand
+            Some(BroadcastEvent::single(
+                notification,
+                constants::NOW_PLAYING_LYRICS,
+                serde_json::Value::String(String::new()),
+            ))
+        }
+
+        NotificationType::NowPlayingArtworkReady => Some(BroadcastEvent::single(
+            notification,
+            constants::NOW_PLAYING_COVER,
+            serde_json::Value::String(String::new()),
+        )),
+
+        NotificationType::NowPlayingListChanged => Some(BroadcastEvent::single(
+            notification,
+            constants::NOW_PLAYING_LIST_CHANGED,
+            serde_json::Value::String(String::new()),
+        )),
+
+        NotificationType::FileAddedToLibrary => {
+            // No broadcast for library file additions
+            None
+        }
+    }
+}
