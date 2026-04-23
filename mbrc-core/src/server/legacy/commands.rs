@@ -301,6 +301,148 @@ pub async fn dispatch_command(
             .await
         }
 
+        // ── Paginated list queries (data/limit/offset/total envelope) ──
+        constants::PLAYLIST_LIST => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().query_playlists()).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::PLAYLIST_LIST,
+                    paginated_envelope(r.playlists, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("PlaylistList query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::NOW_PLAYING_LIST => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().query_now_playing_list(offset, limit)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::NOW_PLAYING_LIST,
+                    paginated_envelope(r.tracks, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("NowPlayingList query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::RADIO_STATIONS => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().query_radio_stations(offset, limit)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::RADIO_STATIONS,
+                    paginated_envelope(r.stations, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("RadioStations query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::LIBRARY_BROWSE_GENRES => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_browse_genres(offset, limit)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_BROWSE_GENRES,
+                    paginated_envelope(r.genres, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("LibraryBrowseGenres query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::LIBRARY_BROWSE_ARTISTS => {
+            let (offset, limit) = parse_pagination(data);
+            let album_artists = data
+                .get("album_artists")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || {
+                s.callbacks().library_browse_artists(offset, limit, album_artists)
+            })
+            .await
+            {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_BROWSE_ARTISTS,
+                    paginated_envelope(r.artists, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("LibraryBrowseArtists query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::LIBRARY_BROWSE_ALBUMS => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_browse_albums(offset, limit)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_BROWSE_ALBUMS,
+                    paginated_envelope(r.albums, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("LibraryBrowseAlbums query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
+        constants::LIBRARY_BROWSE_TRACKS => {
+            let (offset, limit) = parse_pagination(data);
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_browse_tracks(offset, limit)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_BROWSE_TRACKS,
+                    paginated_envelope(r.tracks, offset, limit),
+                )],
+                Ok(Err(e)) => {
+                    warn!("LibraryBrowseTracks query failed: {}", e);
+                    vec![]
+                }
+                Err(e) => {
+                    warn!("spawn_blocking panicked: {}", e);
+                    vec![]
+                }
+            }
+        }
+
         // ── Commands we know about but can't service yet ────────────
         constants::PLUGIN_VERSION => {
             vec![SocketMessage::new(constants::NOT_ALLOWED, "not available")]
@@ -526,6 +668,42 @@ fn parse_bool_from_data(data: &serde_json::Value) -> Option<bool> {
         };
     }
     None
+}
+
+/// Extract `{offset, limit}` from a request payload. Defaults mirror
+/// what MusicBee's legacy server uses when a client omits them.
+fn parse_pagination(data: &serde_json::Value) -> (i32, i32) {
+    let offset = data
+        .get("offset")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let limit = data
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(5000) as i32;
+    (offset, limit)
+}
+
+/// Wrap a collection in the legacy paginated response envelope.
+///
+/// `total` is reported as the position of the last returned item
+/// (`offset + data.len()`). The real C# server tracks the total
+/// independently of the returned page; the internal DTOs currently
+/// don't carry that number, so this is the best the wire can express
+/// without extending the FFI. Tier A shape-diff is unaffected; a
+/// future Tier B+ might want a richer DTO with explicit `total`.
+fn paginated_envelope<T: serde::Serialize>(
+    data: Vec<T>,
+    offset: i32,
+    limit: i32,
+) -> serde_json::Value {
+    let total = offset + data.len() as i32;
+    serde_json::json!({
+        "data": data,
+        "offset": offset,
+        "limit": limit,
+        "total": total,
+    })
 }
 
 /// Shared query-and-emit helper for no-params queries.
