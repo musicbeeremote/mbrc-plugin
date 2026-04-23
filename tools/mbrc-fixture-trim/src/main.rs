@@ -73,6 +73,11 @@ fn main() -> std::io::Result<()> {
         buckets.entry(conn.bucket_name()).or_default().push(conn);
     }
 
+    // Pre-v4 connections are rejected by the server at handshake time
+    // and have no long-term fixture value. Skip their buckets so the
+    // emitted golden set matches what the Rust server actually serves.
+    buckets.retain(|bucket, _| !bucket.starts_with("legacy-v2") && !bucket.starts_with("legacy-v3"));
+
     let mut total_kept = 0usize;
     for (bucket, conns) in &buckets {
         let path = Path::new(OUTPUT_DIR).join(format!("{}.jsonl", bucket));
