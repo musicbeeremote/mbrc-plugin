@@ -276,6 +276,31 @@ pub async fn dispatch_command(
         // separately under the W2 surface.
         constants::NOW_PLAYING_TAG_CHANGE => vec![],
 
+        // ── Simple no-param queries ─────────────────────────────────
+        constants::PLAYER_OUTPUT => {
+            simple_query(state, QueryType::OutputDevices, constants::PLAYER_OUTPUT, |r: crate::server::OutputDevicesResponse| {
+                serde_json::json!({ "active": r.active, "devices": r.devices })
+            })
+            .await
+        }
+
+        constants::NOW_PLAYING_DETAILS => {
+            simple_query(state, QueryType::NowPlayingDetails, constants::NOW_PLAYING_DETAILS, |r: crate::server::NowPlayingDetailsResponse| {
+                // Flat camelCase object — serde rename rules on the DTO
+                // already produce the exact wire keys (`albumArtist`,
+                // `trackNo`, etc.).
+                serde_json::to_value(&r).unwrap_or(serde_json::Value::Null)
+            })
+            .await
+        }
+
+        constants::LIBRARY_COVER_CACHE_BUILD_STATUS => {
+            simple_query(state, QueryType::CoverCacheBuildStatus, constants::LIBRARY_COVER_CACHE_BUILD_STATUS, |r: crate::server::CoverCacheBuildStatusResponse| {
+                serde_json::json!({ "building": r.building })
+            })
+            .await
+        }
+
         // ── Commands we know about but can't service yet ────────────
         constants::PLUGIN_VERSION => {
             vec![SocketMessage::new(constants::NOT_ALLOWED, "not available")]
@@ -501,6 +526,33 @@ fn parse_bool_from_data(data: &serde_json::Value) -> Option<bool> {
         };
     }
     None
+}
+
+/// Shared query-and-emit helper for no-params queries.
+/// `transform` converts the typed callback response into the exact
+/// legacy wire-format `data` payload.
+async fn simple_query<T, F>(
+    state: &Arc<AppState>,
+    query_type: QueryType,
+    response_context: &'static str,
+    transform: F,
+) -> Vec<SocketMessage>
+where
+    T: serde::de::DeserializeOwned + Send + 'static,
+    F: FnOnce(T) -> serde_json::Value + Send + 'static,
+{
+    let s = Arc::clone(state);
+    match tokio::task::spawn_blocking(move || s.callbacks().query_no_params::<T>(query_type)).await {
+        Ok(Ok(resp)) => vec![SocketMessage::new(response_context, transform(resp))],
+        Ok(Err(e)) => {
+            warn!(context = response_context, error = %e, "query failed");
+            vec![]
+        }
+        Err(e) => {
+            warn!(context = response_context, error = %e, "spawn_blocking panicked");
+            vec![]
+        }
+    }
 }
 
 /// Fire-and-forget dispatch for `libraryqueue{genre,artist,album,track}`.
