@@ -156,7 +156,6 @@ MB_REMOTE.XML
 *.dll
 
 app/MusicBee
-tools
 
 # Windows reserved device names (can appear as phantom files)
 nul
@@ -164,3 +163,6 @@ NUL
 
 # Test results
 TestResults/
+
+# Rust build artifacts
+target/

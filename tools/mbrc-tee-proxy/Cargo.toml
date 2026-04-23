@@ -1,0 +1,17 @@
+[package]
+name = "mbrc-tee-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "Transparent TCP tee proxy for capturing MBRC legacy-protocol traces"
+
+[[bin]]
+name = "mbrc-tee-proxy"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "fs", "macros", "sync", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pinned to match the toolchain pin documented in memory (Rust 1.87 ≤ 1.88).
+time = { version = "=0.3.37", features = ["formatting", "macros"] }
