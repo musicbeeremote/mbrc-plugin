@@ -42,4 +42,15 @@
     <ProjectReference Include="..\core\MusicBeeRemote.Core.csproj" />
   </ItemGroup>
 
+  <!-- Shared canonical JSON schemas for the DTO drift guard. Both the Rust
+       integration test and the C# drift test round-trip these. See
+       tests/Serialization/NativeDtoDriftTests.cs and
+       mbrc-core/tests/schema_drift.rs. -->
+  <ItemGroup>
+    <Content Include="..\mbrc-core\tests\schemas\*.json">
+      <Link>schemas\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

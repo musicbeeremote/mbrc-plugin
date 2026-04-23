@@ -85,6 +85,7 @@ Section "MainSection" SEC01
 	SetOverwrite on
 	SetOutPath "$INSTDIR\Plugins"
 	File ..\build\dist\mb_remote.dll
+	File ..\build\dist\mbrc_core.dll
 	File ..\build\dist\firewall-utility.exe
 	SetOverwrite off
 SectionEnd
@@ -112,6 +113,7 @@ FunctionEnd
 
 Section Uninstall
 	Delete "$INSTDIR\mb_remote.dll"
+	Delete "$INSTDIR\mbrc_core.dll"
 	Delete "$INSTDIR\firewall-utility.exe"
 	Delete "$INSTDIR\mbremoteuninstall.exe"
 	RmDir /r "$APPDATA\MusicBee\mb_remote"

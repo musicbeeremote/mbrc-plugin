@@ -23,6 +23,46 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: setup Rust (i686-pc-windows-msvc)
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup target add i686-pc-windows-msvc
+          rustc --version
+
+      - name: cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            mbrc-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('mbrc-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: rust fmt check
+        working-directory: mbrc-core
+        run: cargo fmt --all -- --check
+
+      - name: rust clippy
+        working-directory: mbrc-core
+        run: cargo clippy --target i686-pc-windows-msvc --all-targets -- -D warnings
+
+      - name: rust tests
+        working-directory: mbrc-core
+        run: cargo test --target i686-pc-windows-msvc
+
+      - name: rust release build
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./build-rust.ps1 -Configuration release
+
+      - name: check generated C# bindings are up-to-date
+        run: |
+          git diff --exit-code -- plugin/Services/Generated/NativeBridge.Generated.cs
+          if ($LASTEXITCODE -ne 0) {
+            echo "::error::plugin/Services/Generated/NativeBridge.Generated.cs is stale. Run 'cargo build -p mbrc_core' and commit the regenerated file."
+            exit 1
+          }
+
       - name: setup NuGet
         uses: nuget/setup-nuget@v2
 
@@ -83,6 +123,7 @@ jobs:
         run: |
           mkdir -p build/dist
           cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
+          cp build/bin/plugin/Release/net48/mbrc_core.dll build/dist
           cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
           cp LICENSE build/dist
 
@@ -134,7 +175,7 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
           cp installer\README.txt build\dist\
-          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
+          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\mbrc_core.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: generate checksums
         run: |

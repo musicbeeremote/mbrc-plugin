@@ -26,6 +26,10 @@ namespace MusicBeePlugin.Core
         private readonly IWindowManager _windowManager;
         private readonly IStateMonitor _stateMonitor;
 
+        public IUserSettings UserSettings => _userSettingsService;
+
+        public ICoverService CoverService => _container.Resolve<ICoverService>();
+
         public PluginCore(IMusicBeeApiAdapter adapters, IDataProviders dataProviders, string storagePath, Version version)
         {
             var builder = new ContainerBuilder();

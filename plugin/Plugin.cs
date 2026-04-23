@@ -4,6 +4,7 @@ using System.Reflection;
 using MusicBeePlugin.Adapters.Implementations;
 using MusicBeePlugin.Core;
 using MusicBeePlugin.DataProviders;
+using MusicBeePlugin.Services;
 using MusicBeePlugin.Services.Core;
 
 namespace MusicBeePlugin
@@ -26,6 +27,11 @@ namespace MusicBeePlugin
         ///     The plugin core for dependency injection.
         /// </summary>
         private Core.PluginCore _pluginCore;
+
+        /// <summary>
+        ///     Native bridge to the Rust HTTP server.
+        /// </summary>
+        private NativeBridge _nativeBridge;
 
         /// <summary>
         ///     This function initialized the Plugin.
@@ -94,6 +100,17 @@ namespace MusicBeePlugin
                 _pluginCore.Initialize();
                 _pluginCore.StartNetworking();
 
+                // Initialize Rust core with data providers for callbacks
+                _nativeBridge = new NativeBridge(
+                    dataProviders.Player,
+                    dataProviders.Track,
+                    dataProviders.Playlist,
+                    dataProviders.Library,
+                    _pluginCore.UserSettings,
+                    _pluginCore.CoverService);
+                _nativeBridge.Initialize(_api.Setting_GetPersistentStoragePath());
+                _nativeBridge.StartNetworking(8080);
+
                 // Add MusicBee menu item for settings
                 _api.MB_AddMenuItem(
                     "mnuTools/MusicBee Remote",
@@ -145,6 +162,9 @@ namespace MusicBeePlugin
         /// <param name="reason">The reason for closing.</param>
         public void Close(PluginCloseReason reason)
         {
+            _nativeBridge?.Dispose();
+            _nativeBridge = null;
+
             _pluginCore?.StopNetworking();
             _pluginCore?.Dispose();
             _pluginCore = null;
@@ -182,6 +202,9 @@ namespace MusicBeePlugin
             if (notificationHandler == null)
                 return;
 
+            // Forward notification to Rust core
+            ForwardNotificationToRust(type);
+
             switch (type)
             {
                 case NotificationType.TrackChanged:
@@ -209,6 +232,46 @@ namespace MusicBeePlugin
                     notificationHandler.HandleFileAddedToLibrary(sourceFileUrl);
                     break;
             }
+        }
+
+        /// <summary>
+        ///     Maps MusicBee NotificationType to Rust NotificationType int values
+        ///     and forwards to the native bridge.
+        /// </summary>
+        private void ForwardNotificationToRust(NotificationType type)
+        {
+            int rustType;
+            switch (type)
+            {
+                case NotificationType.TrackChanged:
+                    rustType = 0;
+                    break;
+                case NotificationType.PlayStateChanged:
+                    rustType = 1;
+                    break;
+                case NotificationType.VolumeLevelChanged:
+                    rustType = 2;
+                    break;
+                case NotificationType.VolumeMuteChanged:
+                    rustType = 3;
+                    break;
+                case NotificationType.NowPlayingLyricsReady:
+                    rustType = 4;
+                    break;
+                case NotificationType.NowPlayingArtworkReady:
+                    rustType = 5;
+                    break;
+                case NotificationType.PlayingTracksChanged:
+                    rustType = 6;
+                    break;
+                case NotificationType.FileAddedToLibrary:
+                    rustType = 7;
+                    break;
+                default:
+                    return;
+            }
+
+            _nativeBridge?.HandleNotification(rustType);
         }
     }
 }

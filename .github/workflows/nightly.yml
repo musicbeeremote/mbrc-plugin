@@ -73,6 +73,25 @@ jobs:
       - name: setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: setup Rust (i686-pc-windows-msvc)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add i686-pc-windows-msvc
+
+      - name: cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            mbrc-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('mbrc-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: rust release build
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./build-rust.ps1 -Configuration release
+
       - name: setup NuGet
         uses: nuget/setup-nuget@v2
 
@@ -88,6 +107,7 @@ jobs:
         run: |
           mkdir -p build/dist
           cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
+          cp build/bin/plugin/Release/net48/mbrc_core.dll build/dist
           cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
           cp LICENSE build/dist
           cp installer/README.txt build/dist
@@ -112,7 +132,7 @@ jobs:
       - name: create zip
         run: |
           $version = "${{ steps.version_prefix.outputs.PREFIX }}-nightly.${{ needs.check.outputs.version }}"
-          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
+          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\mbrc_core.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: upload artifacts
         uses: actions/upload-artifact@v6

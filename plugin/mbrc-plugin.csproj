@@ -85,6 +85,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="MessagePack" Version="2.5.187" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="NLog" Version="5.3.4" />
   </ItemGroup>
@@ -110,6 +111,18 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
 
+  <!-- Build the Rust mbrc_core.dll before the C# plugin, so the generated
+       NativeBridge.Generated.cs is up-to-date when C# compiles and the native
+       DLL lands next to mb_remote.dll for post-build copy. -->
+  <Target Name="BuildRustCore" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <RustConfiguration Condition="'$(Configuration)'=='Debug'">debug</RustConfiguration>
+      <RustConfiguration Condition="'$(Configuration)'!='Debug'">release</RustConfiguration>
+    </PropertyGroup>
+    <Message Text="Building Rust mbrc_core ($(RustConfiguration))" Importance="high" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\build-rust.ps1&quot; -Configuration $(RustConfiguration)" />
+  </Target>
+
   <!-- ILRepack: Merge Core assembly into Plugin (configuration in ILRepack.targets) -->
   <Target Name="MergeCore" AfterTargets="Build">
     <PropertyGroup>
@@ -123,6 +136,9 @@
       <ILRepackAssemblies Include="$(ILRepackInputAssembly)" />
       <ILRepackAssemblies Include="$(ILRepackCoreAssembly)" />
     </ItemGroup>
+    <ItemGroup>
+      <ILRepackSearchDirs Include="$(OutputPath)" />
+    </ItemGroup>
     <ILRepack
       InputAssemblies="@(ILRepackAssemblies)"
       OutputFile="$(ILRepackOutputAssembly)"
@@ -130,6 +146,7 @@
       Parallel="true"
       DebugInfo="true"
       Internalize="true"
+      LibraryPath="@(ILRepackSearchDirs)"
     />
     <!-- Replace original with merged -->
     <Delete Files="$(ILRepackInputAssembly)" />

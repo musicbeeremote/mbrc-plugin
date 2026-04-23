@@ -1,3 +1,6 @@
+using MusicBeePlugin.Services.Configuration;
+using MusicBeePlugin.Services.Media;
+
 namespace MusicBeePlugin.Services.Core
 {
     /// <summary>
@@ -5,6 +8,20 @@ namespace MusicBeePlugin.Services.Core
     /// </summary>
     public interface IPluginCore
     {
+        /// <summary>
+        ///     Read-only access to user-configured settings. Exposed so that
+        ///     the Rust-FFI bridge can query the configured search source
+        ///     without taking a second dependency on the DI container.
+        /// </summary>
+        IUserSettings UserSettings { get; }
+
+        /// <summary>
+        ///     Album-cover service used by the Rust FFI bridge to answer
+        ///     AlbumCover and CoverCacheBuildStatus queries without leaking
+        ///     the DI container out of the plugin assembly.
+        /// </summary>
+        ICoverService CoverService { get; }
+
         void Initialize();
 
         /// <summary>
