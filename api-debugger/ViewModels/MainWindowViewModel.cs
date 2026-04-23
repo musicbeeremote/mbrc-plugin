@@ -23,7 +23,7 @@ namespace MusicBeeRemote.ApiDebugger.ViewModels;
 public partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] ClientTypeItems = ["Android", "iOS", "Windows", "Generic"];
-    private static readonly string[] ProtocolVersionItems = ["2.1", "3", "4"];
+    private static readonly string[] ProtocolVersionItems = ["2", "2.1", "3", "4"];
     private static readonly string[] DataTypeItems = ["Empty", "String", "Boolean", "Number", "JSON"];
 
     private TcpClient? _tcpClient;
@@ -592,15 +592,19 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private Task SendProtocolMessage()
     {
-        var protocolMessage = new
-        {
-            context = "protocol",
-            data = new
+        // V2 predates the extended handshake object — data is a bare integer.
+        // "2.1" is still protocol 2 on the wire, so use the same legacy shape.
+        var versionInt = int.Parse(
+            _pendingProtocolVersion!.Split('.')[0],
+            CultureInfo.InvariantCulture);
+
+        object protocolMessage = versionInt == 2
+            ? (object)new { context = "protocol", data = versionInt }
+            : new
             {
-                protocol_version = int.Parse(_pendingProtocolVersion!, CultureInfo.InvariantCulture),
-                no_broadcast = NoBroadcast
-            }
-        };
+                context = "protocol",
+                data = new { protocol_version = versionInt, no_broadcast = NoBroadcast }
+            };
 
         var jsonMessage = JsonConvert.SerializeObject(protocolMessage);
         AddLogMessage($"protocol: v{_pendingProtocolVersion}, no_broadcast={NoBroadcast}", LogMessageType.Sent);
