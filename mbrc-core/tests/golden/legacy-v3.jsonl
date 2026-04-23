@@ -1,0 +1,21 @@
+{"conn_id":0,"dir":"c2s","elapsed_ms":1023025,"frame":{"context":"player","data":"Android"},"seq":233,"ts":"2026-04-23T19:18:19.1758385Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1023025,"frame":{"context":"player","data":"MusicBee"},"seq":234,"ts":"2026-04-23T19:18:19.1762225Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1023044,"frame":{"context":"protocol","data":{"no_broadcast":true,"protocol_version":3}},"seq":235,"ts":"2026-04-23T19:18:19.194925Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1023044,"frame":{"context":"protocol","data":4},"seq":236,"ts":"2026-04-23T19:18:19.1952324Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1023088,"frame":{"context":"verifyconnection","data":{}},"seq":237,"ts":"2026-04-23T19:18:19.2394327Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1023089,"frame":{"context":"verifyconnection","data":""},"seq":238,"ts":"2026-04-23T19:18:19.2397336Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1023195,"frame":{"context":"player","data":{}},"seq":239,"ts":"2026-04-23T19:18:19.3459232Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1023303,"frame":{"context":"playervolume","data":{}},"seq":241,"ts":"2026-04-23T19:18:19.4537352Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1090166,"frame":{"context":"playerstatus","data":{}},"seq":242,"ts":"2026-04-23T19:19:26.3172047Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1090167,"frame":{"context":"playerstatus","data":{"playermute":false,"playerrepeat":"None","playershuffle":false,"playerstate":"Playing","playervolume":"72","scrobbler":false}},"seq":243,"ts":"2026-04-23T19:19:26.3180196Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1100034,"frame":{"context":"playerstop","data":{}},"seq":244,"ts":"2026-04-23T19:19:36.1854669Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1113849,"frame":{"context":"playerautodj","data":"toggle"},"seq":245,"ts":"2026-04-23T19:19:50.0002248Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1123684,"frame":{"context":"playerautodj","data":true},"seq":246,"ts":"2026-04-23T19:19:59.8348922Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1132863,"frame":{"context":"playerautodj","data":false},"seq":247,"ts":"2026-04-23T19:20:09.0144255Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1141038,"frame":{"context":"playerplay","data":{}},"seq":248,"ts":"2026-04-23T19:20:17.1893014Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1145981,"frame":{"context":"playerpause","data":{}},"seq":249,"ts":"2026-04-23T19:20:22.1323381Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1155716,"frame":{"context":"nowplayingtrack","data":{}},"seq":250,"ts":"2026-04-23T19:20:31.8673382Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1155717,"frame":{"context":"nowplayingtrack","data":{"album":"Live: Collector's Edition","artist":"AC/DC","path":"\\\\yggdrasil\\music\\library\\Music Library\\Hard Rock\\AC,DC\\10,27,1992 - Live- Collector's Edition\\Disk 1\\04 - Sin City.mp3","title":"Sin City","year":"10/27/1992"}},"seq":251,"ts":"2026-04-23T19:20:31.8678523Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1162384,"frame":{"context":"nowplayinglyrics","data":{}},"seq":252,"ts":"2026-04-23T19:20:38.5349638Z"}
+{"conn_id":0,"dir":"c2s","elapsed_ms":1172269,"frame":{"context":"librarycovercachebuildstatus","data":{}},"seq":253,"ts":"2026-04-23T19:20:48.4204892Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":1172270,"frame":{"context":"librarycovercachebuildstatus","data":false},"seq":254,"ts":"2026-04-23T19:20:48.4210069Z"}

@@ -166,3 +166,7 @@ TestResults/
 
 # Rust build artifacts
 target/
+
+# Raw tee-proxy captures — source material for the trimmed fixtures
+# under mbrc-core/tests/golden/. Regenerate with tools/mbrc-tee-proxy.
+tests/captures/

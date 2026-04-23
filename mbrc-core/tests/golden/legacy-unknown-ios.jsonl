@@ -1,0 +1,2 @@
+{"conn_id":0,"dir":"c2s","elapsed_ms":605493,"frame":{"context":"player","data":"iOS"},"seq":3860,"ts":"2026-04-23T18:38:55.6954703Z"}
+{"conn_id":0,"dir":"s2c","elapsed_ms":605493,"frame":{"context":"player","data":"MusicBee"},"seq":3861,"ts":"2026-04-23T18:38:55.6957313Z"}
