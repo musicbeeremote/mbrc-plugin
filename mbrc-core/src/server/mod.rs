@@ -74,9 +74,13 @@ pub struct PlaylistListResponse {
 pub struct NowPlayingTrackDto {
     #[serde(default)]
     pub artist: String,
-    #[serde(default)]
+    // `album` and `album_artist` are omitted when empty to mirror the
+    // C# `NullValueHandling.Ignore` global setting — MusicBee returns
+    // null for tracks whose tags aren't populated, and the legacy wire
+    // strips those keys entirely rather than emitting `""`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub album: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub album_artist: String,
     #[serde(default)]
     pub title: String,
