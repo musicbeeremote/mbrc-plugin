@@ -524,6 +524,54 @@ pub async fn dispatch_command(
             }
         }
 
+        // ── Single-album cover lookup (Android-v4 shape) ────────────
+        //
+        // Android request: `{"artist":"…","album":"…"}` → response
+        // `{"cover":"<b64>","hash":"…","status":200}`. Empty album
+        // shortcuts to `{"status":400}` without a callback (matches
+        // fixture byte-for-byte).
+        //
+        // TODO(w3d-ios): iOS v4 uses a paginated batch variant of the
+        // same command (`{"offset":N,"limit":M}` →
+        // `{"data":[{album,artist,cover,hash,status},…],offset,limit,
+        // total}`). Wants a new `QueryType::AlbumCoverBatch` + C# path
+        // that enumerates the cover cache. Tracked as its own follow-up.
+        constants::LIBRARY_ALBUM_COVER => {
+            let artist = data.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+            let album = data.get("album").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+            let client_hash = data.get("hash").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+            if album.is_empty() {
+                vec![SocketMessage::new(
+                    constants::LIBRARY_ALBUM_COVER,
+                    serde_json::json!({ "status": 400 }),
+                )]
+            } else {
+                let s = Arc::clone(state);
+                match tokio::task::spawn_blocking(move || {
+                    s.callbacks().query_album_cover(&artist, &album, &client_hash)
+                })
+                .await
+                {
+                    Ok(Ok(r)) => vec![SocketMessage::new(
+                        constants::LIBRARY_ALBUM_COVER,
+                        serde_json::json!({
+                            "cover": r.cover,
+                            "hash": r.hash,
+                            "status": r.status,
+                        }),
+                    )],
+                    Ok(Err(e)) => {
+                        warn!("AlbumCover query failed: {}", e);
+                        vec![SocketMessage::new(
+                            constants::LIBRARY_ALBUM_COVER,
+                            serde_json::json!({ "status": 404 }),
+                        )]
+                    }
+                    Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+                }
+            }
+        }
+
         constants::LIBRARY_SEARCH_TITLE => {
             let query = parse_string_from_data(data).unwrap_or_default();
             let s = Arc::clone(state);
