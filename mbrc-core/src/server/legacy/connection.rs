@@ -12,7 +12,7 @@ use crate::state::AppState;
 
 use super::codec::{MessageReader, MessageWriter};
 use super::commands;
-use super::handshake::{process_handshake, ClientState, HandshakeResult};
+use super::handshake::{process_handshake, ClientPlatform, ClientState, HandshakeResult};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -38,8 +38,14 @@ pub async fn handle_connection(stream: TcpStream, peer: SocketAddr, state: Arc<A
 
     loop {
         tokio::select! {
-            // Read from client
-            msg_opt = reader.read_message() => {
+            // Read from client. Only authenticated iOS v4 connections opt
+            // into the `\'` sanitizer — pre-auth frames are tightly
+            // controlled by the handshake FSM.
+            msg_opt = reader.read_message(
+                client.is_authenticated()
+                    && client.platform == ClientPlatform::Ios
+                    && client.protocol_version == 4,
+            ) => {
                 match msg_opt {
                     Some(msg) => {
                         if !handle_message(&mut client, &msg, &mut writer, &state).await {

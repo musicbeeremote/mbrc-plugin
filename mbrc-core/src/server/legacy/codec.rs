@@ -19,7 +19,14 @@ impl MessageReader {
     }
 
     /// Read the next message. Returns `None` on clean disconnect or read error.
-    pub async fn read_message(&mut self) -> Option<SocketMessage> {
+    ///
+    /// `lenient_ios_quotes` should be set only on authenticated iOS v4
+    /// connections; when true, a parse failure triggers a retry with
+    /// `\'` escapes rewritten to `'` (the iOS client sends malformed
+    /// JSON on frames like `nowplayingqueue` where track titles contain
+    /// apostrophes — `\'` is never a valid JSON escape so rescuing it
+    /// is lossless for well-formed input).
+    pub async fn read_message(&mut self, lenient_ios_quotes: bool) -> Option<SocketMessage> {
         loop {
             self.buf.clear();
             match self.reader.read_line(&mut self.buf).await {
@@ -33,6 +40,26 @@ impl MessageReader {
                     match serde_json::from_str::<SocketMessage>(trimmed) {
                         Ok(msg) => return Some(msg),
                         Err(e) => {
+                            if lenient_ios_quotes {
+                                let sanitized = sanitize_ios_quotes(trimmed);
+                                if sanitized != trimmed {
+                                    match serde_json::from_str::<SocketMessage>(&sanitized) {
+                                        Ok(msg) => {
+                                            tracing::debug!(
+                                                "Recovered iOS-v4 frame after \\' sanitize"
+                                            );
+                                            return Some(msg);
+                                        }
+                                        Err(e2) => {
+                                            tracing::warn!(
+                                                error = %e2, raw = trimmed,
+                                                "iOS sanitize retry also failed"
+                                            );
+                                            return None;
+                                        }
+                                    }
+                                }
+                            }
                             tracing::warn!(error = %e, raw = trimmed, "Failed to parse message JSON");
                             return None;
                         }
@@ -44,6 +71,64 @@ impl MessageReader {
                 }
             }
         }
+    }
+}
+
+/// Rewrite the invalid JSON escape `\'` to `'`, leaving other escapes
+/// (including `\\`) intact. `\'` is never valid JSON, so this is a
+/// lossless transform for any well-formed input. Only applied to iOS
+/// v4 connections where the client ships malformed strings containing
+/// apostrophes.
+fn sanitize_ios_quotes(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut iter = s.chars().peekable();
+    while let Some(c) = iter.next() {
+        if c == '\\' {
+            match iter.peek() {
+                Some('\'') => {
+                    // Drop the backslash; the quote is emitted next iteration.
+                    continue;
+                }
+                Some('\\') => {
+                    // Preserve escaped backslash atomically so we don't
+                    // collapse `\\'` into `\'` and then into `'`.
+                    out.push('\\');
+                    out.push('\\');
+                    iter.next();
+                }
+                _ => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_ios_quotes;
+
+    #[test]
+    fn replaces_bare_escaped_quote() {
+        assert_eq!(sanitize_ios_quotes(r#""it\'s""#), r#""it's""#);
+    }
+
+    #[test]
+    fn preserves_escaped_backslash_followed_by_quote() {
+        assert_eq!(sanitize_ios_quotes(r#""path\\'tail""#), r#""path\\'tail""#);
+    }
+
+    #[test]
+    fn leaves_valid_escapes_untouched() {
+        assert_eq!(sanitize_ios_quotes(r#""\n\r\t""#), r#""\n\r\t""#);
+        assert_eq!(sanitize_ios_quotes(r#""a\"b""#), r#""a\"b""#);
+    }
+
+    #[test]
+    fn noop_on_clean_input() {
+        let s = r#"{"context":"ping","data":""}"#;
+        assert_eq!(sanitize_ios_quotes(s), s);
     }
 }
 
