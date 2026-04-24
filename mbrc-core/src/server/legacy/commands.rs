@@ -443,6 +443,100 @@ pub async fn dispatch_command(
             }
         }
 
+        // ── Bare-array drill-down queries (no envelope) ─────────────
+        // Request payload is a plain string (e.g. `"data": "AC/DC"`).
+        // Response `data` is a bare JSON array of DTO entries.
+        constants::LIBRARY_ARTIST_ALBUMS => {
+            let artist = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_artist_albums(&artist)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_ARTIST_ALBUMS,
+                    serde_json::to_value(&r.albums).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibraryArtistAlbums query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_GENRE_ARTISTS => {
+            let genre = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_genre_artists(&genre)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_GENRE_ARTISTS,
+                    serde_json::to_value(&r.artists).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibraryGenreArtists query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_ALBUM_TRACKS => {
+            let album = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_album_tracks(&album)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_ALBUM_TRACKS,
+                    serde_json::to_value(&r.tracks).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibraryAlbumTracks query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_SEARCH_ARTIST => {
+            let query = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_search_artists(&query)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_SEARCH_ARTIST,
+                    serde_json::to_value(&r.artists).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibrarySearchArtist query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_SEARCH_ALBUM => {
+            let query = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_search_albums(&query)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_SEARCH_ALBUM,
+                    serde_json::to_value(&r.albums).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibrarySearchAlbum query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_SEARCH_GENRE => {
+            let query = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_search_genres(&query)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_SEARCH_GENRE,
+                    serde_json::to_value(&r.genres).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibrarySearchGenre query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
+        constants::LIBRARY_SEARCH_TITLE => {
+            let query = parse_string_from_data(data).unwrap_or_default();
+            let s = Arc::clone(state);
+            match tokio::task::spawn_blocking(move || s.callbacks().library_search_titles(&query)).await {
+                Ok(Ok(r)) => vec![SocketMessage::new(
+                    constants::LIBRARY_SEARCH_TITLE,
+                    serde_json::to_value(&r.tracks).unwrap_or(serde_json::Value::Array(vec![])),
+                )],
+                Ok(Err(e)) => { warn!("LibrarySearchTitle query failed: {}", e); vec![] }
+                Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+            }
+        }
+
         // ── Commands we know about but can't service yet ────────────
         constants::PLUGIN_VERSION => {
             vec![SocketMessage::new(constants::NOT_ALLOWED, "not available")]
@@ -450,15 +544,9 @@ pub async fn dispatch_command(
 
         // ── Unhandled commands ──────────────────────────────────────
         //
-        // TODO(golden-trace): the remaining legacy commands — list
-        // queries (playlistlist, nowplayinglist, radiostations,
-        // playeroutput, nowplayingdetails, librarycovercachebuildstatus,
-        // library{search,browse,artistalbums,genreartists,albumtracks}),
-        // composite payloads (libraryqueue*, nowplayinglistsearch/move,
-        // libraryalbumcover, nowplayingtagchange), rating setters, and
-        // verifyconnection — are all backed by W2 callbacks but their
-        // exact legacy wire shape must be pinned against a golden-trace
-        // fixture before we commit to a response format.
+        // TODO(golden-trace): remaining legacy commands — libraryalbumcover
+        // (W3 batch 3d), rating setters, verifyconnection — are backed by W2
+        // callbacks but still need wire shape pinned against fixtures.
         _ => {
             info!("Unhandled command: {}", context);
             vec![]
