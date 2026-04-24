@@ -1,3 +1,4 @@
+pub mod api;
 pub mod legacy;
 
 use std::sync::Arc;
@@ -377,7 +378,8 @@ fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .route("/debug/player", get(debug_player_handler))
-        .with_state(state)
+        .with_state(Arc::clone(&state))
+        .nest("/api/v1", api::router(state))
 }
 
 /// How the first peeked bytes classify an incoming connection.
