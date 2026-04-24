@@ -91,6 +91,7 @@ namespace MusicBeePlugin.Services
         private const int QueryNowPlayingDetails = 20;
         private const int QueryAlbumCover = 21;
         private const int QueryCoverCacheBuildStatus = 22;
+        private const int QueryPlaybackPosition = 23;
 
         // Must match CommandType in mbrc-core/src/ffi/types.rs.
         private const int CmdSetMute = 1;
@@ -446,6 +447,9 @@ namespace MusicBeePlugin.Services
                         break;
                     case QueryCoverCacheBuildStatus:
                         resultBytes = SerializeCoverCacheBuildStatus();
+                        break;
+                    case QueryPlaybackPosition:
+                        resultBytes = SerializePlaybackPosition();
                         break;
                     default:
                         Logger.Warn("Unknown query type: {0}", queryType);
@@ -943,6 +947,17 @@ namespace MusicBeePlugin.Services
         private byte[] SerializeCoverCacheBuildStatus()
         {
             var dto = new CoverCacheBuildStatusResponse { building = _coverService.IsBuildingCache };
+            return MessagePackSerializer.Serialize(dto, MsgPackOptions);
+        }
+
+        private byte[] SerializePlaybackPosition()
+        {
+            var pos = _track.GetPlaybackPosition();
+            var dto = new PlaybackPositionResponse
+            {
+                current = pos?.Current ?? 0,
+                total = pos?.Total ?? 0,
+            };
             return MessagePackSerializer.Serialize(dto, MsgPackOptions);
         }
 

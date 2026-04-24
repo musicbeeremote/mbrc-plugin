@@ -279,6 +279,17 @@ pub struct CoverCacheBuildStatusResponse {
     pub building: bool,
 }
 
+/// Response payload for `QueryType::PlaybackPosition`. Mirrors the C#
+/// `PlaybackPosition` entity (`current` / `total` in milliseconds).
+/// `total` is 0 for radio streams with unknown duration.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlaybackPositionResponse {
+    #[serde(default)]
+    pub current: i32,
+    #[serde(default)]
+    pub total: i32,
+}
+
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,

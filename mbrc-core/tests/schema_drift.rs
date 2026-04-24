@@ -10,8 +10,9 @@ use mbrc_core::{
     AlbumCoverParams, AlbumCoverResponse, AlbumListResponse, ArtistListResponse, BrowseParams,
     CoverCacheBuildStatusResponse, GenreListResponse, IndexParams, LibraryQueueParams, MoveParams,
     NowPlayingDetailsResponse, NowPlayingListResponse, OutputDevicesResponse, PaginationParams,
-    PlayerStateResponse, PlaylistListResponse, QueryParams, RadioStationsResponse, SetBoolParams,
-    SetLfmRatingParams, SetRepeatParams, StringValueParams, TrackInfoResponse, TrackListResponse,
+    PlaybackPositionResponse, PlayerStateResponse, PlaylistListResponse, QueryParams,
+    RadioStationsResponse, SetBoolParams, SetLfmRatingParams, SetRepeatParams, StringValueParams,
+    TrackInfoResponse, TrackListResponse,
 };
 use serde_json::Value;
 
@@ -157,5 +158,12 @@ fn album_cover_response_roundtrips() {
 fn cover_cache_build_status_response_roundtrips() {
     assert_roundtrip::<CoverCacheBuildStatusResponse>(
         "tests/schemas/cover_cache_build_status_response.json",
+    );
+}
+
+#[test]
+fn playback_position_response_roundtrips() {
+    assert_roundtrip::<PlaybackPositionResponse>(
+        "tests/schemas/playback_position_response.json",
     );
 }

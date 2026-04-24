@@ -12,7 +12,7 @@ use crate::ffi::types::{CommandType, MbrcCallbacks, QueryType};
 use crate::server::{
     AlbumCoverResponse, AlbumListResponse, ArtistListResponse, CoverCacheBuildStatusResponse,
     GenreListResponse, NowPlayingDetailsResponse, NowPlayingListResponse, OutputDevicesResponse,
-    PlaylistListResponse, RadioStationsResponse, TrackListResponse,
+    PlaybackPositionResponse, PlaylistListResponse, RadioStationsResponse, TrackListResponse,
 };
 
 /// Safe wrapper around raw C function pointers in `MbrcCallbacks`.
@@ -499,6 +499,10 @@ impl SafeCallbacks {
 
     pub fn query_cover_cache_build_status(&self) -> Result<CoverCacheBuildStatusResponse, String> {
         self.query_no_params(QueryType::CoverCacheBuildStatus)
+    }
+
+    pub fn query_playback_position(&self) -> Result<PlaybackPositionResponse, String> {
+        self.query_no_params(QueryType::PlaybackPosition)
     }
 
     pub fn library_queue(

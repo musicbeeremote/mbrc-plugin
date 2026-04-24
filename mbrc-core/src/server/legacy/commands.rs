@@ -677,21 +677,30 @@ async fn handle_volume(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<S
 
 /// Get/set position. Empty or default data → return current position. Otherwise set it.
 ///
-/// Wire shape: `{"current": <ms>, "total": <ms>}`. `total` is the
-/// active track's duration — not currently surfaced by
-/// `PlayerStateResponse`, so we emit 0 until the FFI carries it.
+/// Wire shape: `{"current": <ms>, "total": <ms>}`, mirroring the C#
+/// `PlaybackPosition` entity. `total` is 0 for radio streams without a
+/// known duration.
 async fn handle_position(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
     if let Some(pos) = parse_int_from_data(data) {
         let s = Arc::clone(state);
         let _ = tokio::task::spawn_blocking(move || s.callbacks().player_set_position(pos)).await;
     }
 
-    query_player_field(
-        state,
-        |ps| serde_json::json!({ "current": ps.position, "total": 0 }),
-        constants::NOW_PLAYING_POSITION,
-    )
-    .await
+    let s = Arc::clone(state);
+    match tokio::task::spawn_blocking(move || s.callbacks().query_playback_position()).await {
+        Ok(Ok(p)) => vec![SocketMessage::new(
+            constants::NOW_PLAYING_POSITION,
+            serde_json::json!({ "current": p.current, "total": p.total }),
+        )],
+        Ok(Err(e)) => {
+            warn!("PlaybackPosition query failed: {}", e);
+            vec![]
+        }
+        Err(e) => {
+            warn!("spawn_blocking panicked: {}", e);
+            vec![]
+        }
+    }
 }
 
 /// Full state push: queries all 4 types and returns multiple messages.

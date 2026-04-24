@@ -176,5 +176,12 @@ namespace MusicBeeRemote.Core.Tests.Serialization
             AssertRoundTrip<CoverCacheBuildStatusResponse>(
                 "cover_cache_build_status_response.json");
         }
+
+        [Fact]
+        public void PlaybackPositionResponse_roundtrips_canonical_schema()
+        {
+            AssertRoundTrip<PlaybackPositionResponse>(
+                "playback_position_response.json");
+        }
     }
 }

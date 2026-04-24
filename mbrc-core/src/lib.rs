@@ -23,9 +23,9 @@ pub use ffi::dtos::{
 pub use server::{
     AlbumCoverResponse, AlbumDto, AlbumListResponse, ArtistDto, ArtistListResponse,
     CoverCacheBuildStatusResponse, GenreDto, GenreListResponse, NowPlayingDetailsResponse,
-    NowPlayingListResponse, NowPlayingTrackDto, OutputDevicesResponse, PlayerStateResponse,
-    PlaylistDto, PlaylistListResponse, RadioStationDto, RadioStationsResponse, TrackDto,
-    TrackInfoResponse, TrackListResponse,
+    NowPlayingListResponse, NowPlayingTrackDto, OutputDevicesResponse, PlaybackPositionResponse,
+    PlayerStateResponse, PlaylistDto, PlaylistListResponse, RadioStationDto, RadioStationsResponse,
+    TrackDto, TrackInfoResponse, TrackListResponse,
 };
 
 use std::ffi::{c_char, c_int, CStr};

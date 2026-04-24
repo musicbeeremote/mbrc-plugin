@@ -58,6 +58,7 @@ pub enum QueryType {
     NowPlayingDetails = 20,
     AlbumCover = 21,
     CoverCacheBuildStatus = 22,
+    PlaybackPosition = 23,
 }
 
 /// Command types for the fat `execute_command` callback.

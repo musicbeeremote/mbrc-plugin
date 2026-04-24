@@ -16,9 +16,9 @@ pub use crate::state::AppState;
 pub use crate::server::{
     AlbumCoverResponse, AlbumDto, AlbumListResponse, ArtistDto, ArtistListResponse,
     CoverCacheBuildStatusResponse, GenreDto, GenreListResponse, NowPlayingDetailsResponse,
-    NowPlayingListResponse, NowPlayingTrackDto, OutputDevicesResponse, PlayerStateResponse,
-    PlaylistDto, PlaylistListResponse, RadioStationDto, RadioStationsResponse, TrackDto,
-    TrackInfoResponse, TrackListResponse,
+    NowPlayingListResponse, NowPlayingTrackDto, OutputDevicesResponse, PlaybackPositionResponse,
+    PlayerStateResponse, PlaylistDto, PlaylistListResponse, RadioStationDto, RadioStationsResponse,
+    TrackDto, TrackInfoResponse, TrackListResponse,
 };
 
 /// Placeholder PNG (1×1 transparent) matching the one written by
@@ -240,6 +240,13 @@ fn seed_response(ty: i32) -> Option<Vec<u8>> {
     if ty == QueryType::CoverCacheBuildStatus as i32 {
         return rmp_serde::to_vec_named(&CoverCacheBuildStatusResponse { building: false })
             .ok();
+    }
+    if ty == QueryType::PlaybackPosition as i32 {
+        return rmp_serde::to_vec_named(&PlaybackPositionResponse {
+            current: 12345,
+            total: 192136,
+        })
+        .ok();
     }
     None
 }

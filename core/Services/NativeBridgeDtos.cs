@@ -273,4 +273,10 @@ namespace MusicBeePlugin.Services
     {
         public bool building { get; set; }
     }
+
+    public class PlaybackPositionResponse
+    {
+        public int current { get; set; }
+        public int total { get; set; }
+    }
 }
