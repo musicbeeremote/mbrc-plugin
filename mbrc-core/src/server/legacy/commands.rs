@@ -476,10 +476,24 @@ pub async fn dispatch_command(
             let album = parse_string_from_data(data).unwrap_or_default();
             let s = Arc::clone(state);
             match tokio::task::spawn_blocking(move || s.callbacks().library_album_tracks(&album)).await {
-                Ok(Ok(r)) => vec![SocketMessage::new(
-                    constants::LIBRARY_ALBUM_TRACKS,
-                    serde_json::to_value(&r.tracks).unwrap_or(serde_json::Value::Array(vec![])),
-                )],
+                Ok(Ok(r)) => {
+                    // Drill-down wire shape omits the `album` and `genre`
+                    // columns that the shared TrackDto carries — the
+                    // caller already knows the album, and genre isn't
+                    // part of the legacy album-tracks frame.
+                    let arr: Vec<serde_json::Value> = r.tracks.iter().map(|t| serde_json::json!({
+                        "album_artist": t.album_artist,
+                        "artist": t.artist,
+                        "disc": t.disc,
+                        "src": t.src,
+                        "title": t.title,
+                        "trackno": t.trackno,
+                    })).collect();
+                    vec![SocketMessage::new(
+                        constants::LIBRARY_ALBUM_TRACKS,
+                        serde_json::Value::Array(arr),
+                    )]
+                }
                 Ok(Err(e)) => { warn!("LibraryAlbumTracks query failed: {}", e); vec![] }
                 Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
             }
@@ -662,17 +676,19 @@ async fn handle_volume(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<S
 }
 
 /// Get/set position. Empty or default data → return current position. Otherwise set it.
+///
+/// Wire shape: `{"current": <ms>, "total": <ms>}`. `total` is the
+/// active track's duration — not currently surfaced by
+/// `PlayerStateResponse`, so we emit 0 until the FFI carries it.
 async fn handle_position(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
-    // If data contains a numeric value, set position first
     if let Some(pos) = parse_int_from_data(data) {
         let s = Arc::clone(state);
         let _ = tokio::task::spawn_blocking(move || s.callbacks().player_set_position(pos)).await;
     }
 
-    // Always return current position
     query_player_field(
         state,
-        |ps| ps.position.into(),
+        |ps| serde_json::json!({ "current": ps.position, "total": 0 }),
         constants::NOW_PLAYING_POSITION,
     )
     .await
@@ -724,9 +740,10 @@ async fn handle_init(state: &Arc<AppState>) -> Vec<SocketMessage> {
     })
     .await
     {
-        if let Ok(val) = serde_json::to_value(&ps) {
-            messages.push(SocketMessage::new(constants::PLAYER_STATUS, val));
-        }
+        messages.push(SocketMessage::new(
+            constants::PLAYER_STATUS,
+            legacy_player_status_payload(&ps),
+        ));
     }
 
     messages
