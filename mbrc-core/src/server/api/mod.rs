@@ -14,6 +14,9 @@
 //! The v1 schema is the long-lived contract — new endpoints MUST be
 //! added, existing endpoints MUST NOT be reshaped without a `/api/v2`.
 
+mod error;
+mod player;
+
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -48,6 +51,7 @@ async fn version_handler(State(_state): State<Arc<AppState>>) -> Json<VersionRes
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/version", get(version_handler))
+        .nest("/player", player::routes())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
