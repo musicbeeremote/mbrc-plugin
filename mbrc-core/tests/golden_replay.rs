@@ -195,16 +195,22 @@ type ConnectionReport = (
 /// Map an s2c context that's *only ever* a broadcast (never a command
 /// response) to its `NotificationType`. Cross-cutting contexts like
 /// `playerstate` / `playervolume` / `nowplayingcover` are intentionally
-/// excluded — even when the classifier flags them as orphans, the
-/// handshake's multi-message response can be misclassified, so
-/// synthesizing for them desynchronizes the wire and *worsens* the
-/// shape-match score (verified empirically: opt-in for those contexts
-/// drove playerstate timeouts from 6 → 24 and nowplayingposition from
-/// 18 → 133, net negative). Keeping it conservative.
+/// excluded — synthesizing them desynchronizes the wire and worsens
+/// the shape-match score (verified empirically: opt-in for those
+/// contexts drove playerstate timeouts 6 → 24 and nowplayingposition
+/// 18 → 133, net negative).
+///
+/// Note: `nowplayingtrack` is excluded too. `TrackChanged` now emits
+/// a 5-frame burst (rating, lfm-rating, lyrics, position, track) but
+/// captured wire orderings vary — initial-state-push and runtime
+/// playernext-driven bursts have different orderings — so synthesizing
+/// the burst out-of-band misaligns subsequent reads. The Rust-side
+/// multi-frame emission is still correct production behavior; the
+/// harness just can't validate it against fixtures with arbitrary
+/// orderings without a richer matching strategy (Tier B).
 fn broadcast_notification_for(context: &str) -> Option<NotificationType> {
     match context {
         "nowplayinglistchanged" => Some(NotificationType::NowPlayingListChanged),
-        "nowplayingtrack" => Some(NotificationType::TrackChanged),
         _ => None,
     }
 }

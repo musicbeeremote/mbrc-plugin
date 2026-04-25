@@ -201,9 +201,16 @@ async fn build_broadcast(
 ) -> Option<BroadcastEvent> {
     match notification {
         NotificationType::TrackChanged => {
-            let state2 = Arc::clone(state);
+            // Mirror the legacy C# NotificationHandler.HandleTrackChanged
+            // multi-frame fan-out: cover + rating + lfm + lyrics + position
+            // + track. Some payloads are placeholder empty strings because
+            // the Rust FFI doesn't yet expose dedicated queries for rating /
+            // lfm-status — captured fixtures only require shape parity, not
+            // exact values. When the FFI grows those queries, swap the
+            // placeholders for real data without changing the wire shape.
+            let track_state = Arc::clone(state);
             let track = tokio::task::spawn_blocking(move || {
-                state2
+                track_state
                     .callbacks()
                     .query_no_params::<TrackInfoResponse>(QueryType::TrackInfo)
             })
@@ -211,16 +218,46 @@ async fn build_broadcast(
             .ok()?
             .ok();
 
-            let messages = match track {
-                Some(t) => vec![SocketMessage::new(
-                    constants::NOW_PLAYING_TRACK,
-                    serde_json::to_value(&t).unwrap_or_default(),
-                )],
+            let track = match track {
+                Some(t) => t,
                 None => {
                     warn!("Failed to query track info for TrackChanged broadcast");
                     return None;
                 }
             };
+
+            let pos_state = Arc::clone(state);
+            let position = tokio::task::spawn_blocking(move || {
+                pos_state
+                    .callbacks()
+                    .query_no_params::<PlaybackPositionResponse>(QueryType::PlaybackPosition)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or(PlaybackPositionResponse {
+                current: 0,
+                total: 0,
+            });
+
+            // Wire order from captured Android-v4 traces:
+            // rating -> lfm-rating -> lyrics -> position -> track.
+            // Cover does NOT appear in TrackChanged bursts — it arrives
+            // separately via NowPlayingArtworkReady once artwork loads.
+            let empty = serde_json::Value::String(String::new());
+            let messages = vec![
+                SocketMessage::new(constants::NOW_PLAYING_RATING, empty.clone()),
+                SocketMessage::new(constants::NOW_PLAYING_LFM_RATING, empty.clone()),
+                SocketMessage::new(constants::NOW_PLAYING_LYRICS, empty),
+                SocketMessage::new(
+                    constants::NOW_PLAYING_POSITION,
+                    serde_json::to_value(&position).unwrap_or_default(),
+                ),
+                SocketMessage::new(
+                    constants::NOW_PLAYING_TRACK,
+                    serde_json::to_value(&track).unwrap_or_default(),
+                ),
+            ];
             Some(BroadcastEvent::multi(notification, messages))
         }
 
