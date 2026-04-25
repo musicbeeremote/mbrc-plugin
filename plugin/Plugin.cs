@@ -120,10 +120,30 @@ namespace MusicBeePlugin
                 // SocketRestart trigger fed the C# SocketServer which is now
                 // gone; subscribe directly so no protocol-layer event is
                 // needed for a runtime concern.
+                //
+                // Runs on a background thread so the WinForms save handler
+                // doesn't block. The 150 ms gap between stop and start is
+                // there because mbrc_stop_networking only *signals* the
+                // shutdown — the listener task tears down asynchronously,
+                // and a back-to-back StartNetworking can race the OS port
+                // release. 150 ms is empirically enough on Windows for the
+                // TIME_WAIT-free SO_REUSEADDR rebind we don't yet do.
                 _pluginCore.EventAggregator.Subscribe<CoreRestartRequestedEvent>(_ =>
                 {
-                    _nativeBridge?.StopNetworking();
-                    _nativeBridge?.StartNetworking();
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            _nativeBridge?.StopNetworking();
+                            System.Threading.Thread.Sleep(150);
+                            _nativeBridge?.StartNetworking();
+                        }
+                        catch
+                        {
+                            // Restart failures must never crash MusicBee.
+                            // The user can re-open settings and retry.
+                        }
+                    });
                 });
 
                 // Add MusicBee menu item for settings
