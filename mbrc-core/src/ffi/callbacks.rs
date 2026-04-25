@@ -141,8 +141,12 @@ impl SafeCallbacks {
             .free_buffer
             .ok_or_else(|| "free_buffer callback is null".to_string())?;
 
-        // Serialize params to msgpack
-        let params_buf = rmp_serde::to_vec(params)
+        // Serialize params to msgpack as a NAMED map. MessagePack-CSharp's
+        // ContractlessStandardResolver on the C# side reads structs as maps
+        // keyed by property name; rmp_serde's plain `to_vec` writes them
+        // positionally as arrays which fails with "Unexpected msgpack code
+        // 147 (fixarray)" on the C# read.
+        let params_buf = rmp_serde::to_vec_named(params)
             .map_err(|e| format!("Failed to serialize query params: {}", e))?;
 
         let mut result_buf: *mut u8 = std::ptr::null_mut();
@@ -203,7 +207,9 @@ impl SafeCallbacks {
             .free_buffer
             .ok_or_else(|| "free_buffer callback is null".to_string())?;
 
-        let params_buf = rmp_serde::to_vec(params)
+        // Same map-vs-array reasoning as `query` above — must use
+        // to_vec_named so the C# contractless resolver can read the params.
+        let params_buf = rmp_serde::to_vec_named(params)
             .map_err(|e| format!("Failed to serialize command params: {}", e))?;
 
         let mut result_buf: *mut u8 = std::ptr::null_mut();
