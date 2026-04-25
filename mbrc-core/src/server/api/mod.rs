@@ -15,6 +15,7 @@
 //! added, existing endpoints MUST NOT be reshaped without a `/api/v2`.
 
 mod error;
+mod events;
 mod library;
 mod now_playing;
 mod outputs;
@@ -64,6 +65,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .nest("/playlists", playlists::routes())
         .nest("/outputs", outputs::routes())
         .nest("/radio", radio::routes())
+        .nest("/events", events::routes())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
