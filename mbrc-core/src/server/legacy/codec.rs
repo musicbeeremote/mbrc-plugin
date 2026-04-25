@@ -41,12 +41,22 @@ impl MessageReader {
                         Ok(msg) => return Some(msg),
                         Err(e) => {
                             if lenient_ios_quotes {
-                                let sanitized = sanitize_ios_quotes(trimmed);
+                                // Two iOS-v4 wire bugs to recover from:
+                                //   1. `\'` escape sequences in strings.
+                                //   2. Unquoted barewords after `"data":`,
+                                //      e.g. `{"context":"nowplayingposition",
+                                //      "data":status}` — Swift enum-case
+                                //      string-interpolation slipping through.
+                                // Both transforms are idempotent on well-formed
+                                // JSON so applying them speculatively is safe.
+                                let sanitized = sanitize_ios_data_bareword(
+                                    &sanitize_ios_quotes(trimmed),
+                                );
                                 if sanitized != trimmed {
                                     match serde_json::from_str::<SocketMessage>(&sanitized) {
                                         Ok(msg) => {
                                             tracing::debug!(
-                                                "Recovered iOS-v4 frame after \\' sanitize"
+                                                "Recovered iOS-v4 frame after sanitize"
                                             );
                                             return Some(msg);
                                         }
@@ -105,9 +115,62 @@ fn sanitize_ios_quotes(s: &str) -> String {
     out
 }
 
+/// Recover from the iOS-v4 `"data":<bareword>` wire bug by quoting any
+/// alphabetic-only bareword that follows `"data":` and is terminated by
+/// `,` or `}`. Captured fixture pattern: iOS sends
+/// `{"context":"nowplayingposition","data":status}` — the unquoted
+/// `status` token is invalid JSON and would otherwise drop the frame
+/// (and disconnect the client). Quoting yields `"data":"status"`,
+/// which the handler ignores when the data isn't relevant for the
+/// command.
+///
+/// Lossless on well-formed input: the function only transforms
+/// when `"data":` is immediately followed by an alphabetic character
+/// (i.e. clearly not a number, string, object, or array).
+fn sanitize_ios_data_bareword(s: &str) -> String {
+    let needle = r#""data":"#;
+    let Some(start) = s.find(needle) else {
+        return s.to_owned();
+    };
+    let value_start = start + needle.len();
+    let rest = &s[value_start..];
+    let first = match rest.chars().next() {
+        Some(c) => c,
+        None => return s.to_owned(),
+    };
+    // Only intervene on bareword starts. Numbers, quotes, brackets,
+    // braces, and `null/true/false` (also barewords but valid JSON)
+    // are left alone — `null`, `true`, `false` parse fine on their
+    // own so reaching this path means the rest of the document broke,
+    // not that token.
+    if !first.is_ascii_alphabetic() {
+        return s.to_owned();
+    }
+    let token_end = rest
+        .find(|c: char| c == ',' || c == '}')
+        .unwrap_or(rest.len());
+    let token = &rest[..token_end];
+    // Whitelist alphanumeric+underscore only — protects against weirder
+    // payloads we haven't seen in the wild.
+    if token.is_empty() || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return s.to_owned();
+    }
+    // Skip the known-good JSON literals so they aren't double-quoted.
+    if matches!(token, "null" | "true" | "false") {
+        return s.to_owned();
+    }
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push_str(&s[..value_start]);
+    out.push('"');
+    out.push_str(token);
+    out.push('"');
+    out.push_str(&rest[token_end..]);
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::sanitize_ios_quotes;
+    use super::{sanitize_ios_data_bareword, sanitize_ios_quotes};
 
     #[test]
     fn replaces_bare_escaped_quote() {
@@ -129,6 +192,47 @@ mod tests {
     fn noop_on_clean_input() {
         let s = r#"{"context":"ping","data":""}"#;
         assert_eq!(sanitize_ios_quotes(s), s);
+    }
+
+    #[test]
+    fn quotes_data_bareword() {
+        assert_eq!(
+            sanitize_ios_data_bareword(r#"{"context":"nowplayingposition","data":status}"#),
+            r#"{"context":"nowplayingposition","data":"status"}"#
+        );
+    }
+
+    #[test]
+    fn ios_bareword_sanitize_makes_it_parse() {
+        let raw = r#"{"context":"nowplayingposition","data":status}"#;
+        let fixed = sanitize_ios_data_bareword(raw);
+        let parsed: serde_json::Value = serde_json::from_str(&fixed).unwrap();
+        assert_eq!(parsed["context"], "nowplayingposition");
+        assert_eq!(parsed["data"], "status");
+    }
+
+    #[test]
+    fn leaves_quoted_data_untouched() {
+        let s = r#"{"context":"ping","data":""}"#;
+        assert_eq!(sanitize_ios_data_bareword(s), s);
+    }
+
+    #[test]
+    fn leaves_numeric_data_untouched() {
+        let s = r#"{"context":"protocol","data":4}"#;
+        assert_eq!(sanitize_ios_data_bareword(s), s);
+    }
+
+    #[test]
+    fn leaves_object_data_untouched() {
+        let s = r#"{"context":"q","data":{"a":1}}"#;
+        assert_eq!(sanitize_ios_data_bareword(s), s);
+    }
+
+    #[test]
+    fn leaves_null_data_untouched() {
+        let s = r#"{"context":"q","data":null}"#;
+        assert_eq!(sanitize_ios_data_bareword(s), s);
     }
 }
 
