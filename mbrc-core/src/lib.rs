@@ -202,12 +202,9 @@ async fn build_broadcast(
     match notification {
         NotificationType::TrackChanged => {
             // Mirror the legacy C# NotificationHandler.HandleTrackChanged
-            // multi-frame fan-out: cover + rating + lfm + lyrics + position
-            // + track. Some payloads are placeholder empty strings because
-            // the Rust FFI doesn't yet expose dedicated queries for rating /
-            // lfm-status — captured fixtures only require shape parity, not
-            // exact values. When the FFI grows those queries, swap the
-            // placeholders for real data without changing the wire shape.
+            // multi-frame fan-out: rating + lfm-rating + lyrics + position
+            // + track. Lyrics is left empty — NowPlayingLyricsReady fires
+            // its own broadcast once the lyrics actually load.
             let track_state = Arc::clone(state);
             let track = tokio::task::spawn_blocking(move || {
                 track_state
@@ -240,15 +237,45 @@ async fn build_broadcast(
                 total: 0,
             });
 
+            let rating_state = Arc::clone(state);
+            let rating = tokio::task::spawn_blocking(move || {
+                rating_state
+                    .callbacks()
+                    .query_no_params::<String>(QueryType::NowPlayingRating)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or_default();
+
+            let lfm_state = Arc::clone(state);
+            let lfm = tokio::task::spawn_blocking(move || {
+                lfm_state
+                    .callbacks()
+                    .query_no_params::<String>(QueryType::NowPlayingLfmRating)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or_default();
+
             // Wire order from captured Android-v4 traces:
             // rating -> lfm-rating -> lyrics -> position -> track.
             // Cover does NOT appear in TrackChanged bursts — it arrives
             // separately via NowPlayingArtworkReady once artwork loads.
-            let empty = serde_json::Value::String(String::new());
             let messages = vec![
-                SocketMessage::new(constants::NOW_PLAYING_RATING, empty.clone()),
-                SocketMessage::new(constants::NOW_PLAYING_LFM_RATING, empty.clone()),
-                SocketMessage::new(constants::NOW_PLAYING_LYRICS, empty),
+                SocketMessage::new(
+                    constants::NOW_PLAYING_RATING,
+                    serde_json::Value::String(rating),
+                ),
+                SocketMessage::new(
+                    constants::NOW_PLAYING_LFM_RATING,
+                    serde_json::Value::String(lfm),
+                ),
+                SocketMessage::new(
+                    constants::NOW_PLAYING_LYRICS,
+                    serde_json::Value::String(String::new()),
+                ),
                 SocketMessage::new(
                     constants::NOW_PLAYING_POSITION,
                     serde_json::to_value(&position).unwrap_or_default(),

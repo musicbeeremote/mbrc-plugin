@@ -60,6 +60,8 @@ pub enum QueryType {
     CoverCacheBuildStatus = 22,
     PlaybackPosition = 23,
     AlbumCoverBatch = 24,
+    NowPlayingRating = 25,
+    NowPlayingLfmRating = 26,
 }
 
 /// Command types for the fat `execute_command` callback.

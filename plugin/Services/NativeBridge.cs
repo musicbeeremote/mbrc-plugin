@@ -95,6 +95,8 @@ namespace MusicBeePlugin.Services
         private const int QueryCoverCacheBuildStatus = 22;
         private const int QueryPlaybackPosition = 23;
         private const int QueryAlbumCoverBatch = 24;
+        private const int QueryNowPlayingRating = 25;
+        private const int QueryNowPlayingLfmRating = 26;
 
         // Must match CommandType in mbrc-core/src/ffi/types.rs.
         private const int CmdSetMute = 1;
@@ -495,6 +497,12 @@ namespace MusicBeePlugin.Services
                     case QueryAlbumCoverBatch:
                         resultBytes = SerializeAlbumCoverBatch(paramsBuf, paramsLen);
                         break;
+                    case QueryNowPlayingRating:
+                        resultBytes = SerializeNowPlayingRating();
+                        break;
+                    case QueryNowPlayingLfmRating:
+                        resultBytes = SerializeNowPlayingLfmRating();
+                        break;
                     default:
                         Logger.Warn("Unknown query type: {0}", queryType);
                         return -1;
@@ -739,6 +747,21 @@ namespace MusicBeePlugin.Services
         {
             var lyrics = _track.GetNowPlayingLyrics() ?? string.Empty;
             return MessagePackSerializer.Serialize(lyrics, MsgPackOptions);
+        }
+
+        private byte[] SerializeNowPlayingRating()
+        {
+            var rating = _track.GetNowPlayingRating() ?? string.Empty;
+            return MessagePackSerializer.Serialize(rating, MsgPackOptions);
+        }
+
+        private byte[] SerializeNowPlayingLfmRating()
+        {
+            // ITrackDataProvider returns the typed enum; the wire wants the
+            // PascalCase name (Normal/Love/Ban) just like the legacy
+            // protocol. ToString() gives that without an extra mapping.
+            var status = _track.GetNowPlayingLastfmStatus().ToString();
+            return MessagePackSerializer.Serialize(status, MsgPackOptions);
         }
 
         private byte[] SerializePlaylistList()
