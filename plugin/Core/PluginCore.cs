@@ -5,11 +5,11 @@ using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Events.Infrastructure;
 using MusicBeePlugin.Infrastructure.DependencyInjection;
+using MusicBeePlugin.Infrastructure.Logging.Implementations;
 using MusicBeePlugin.Services.Configuration;
 using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Services.UI;
-using NLog;
 
 namespace MusicBeePlugin.Core
 {
@@ -100,14 +100,16 @@ namespace MusicBeePlugin.Core
         }
 
         /// <summary>
-        ///     Enables or disables logging.
+        ///     Toggle debug-level logging at runtime by reconfiguring
+        ///     the Rust <c>EnvFilter</c> through the FFI. Mirrors the
+        ///     legacy NLog-toggle behaviour from the settings UI:
+        ///     <c>true</c> → <c>"debug"</c>, <c>false</c> → <c>"info"</c>.
+        ///     Silent if the core isn't initialised yet — the requested
+        ///     level will be re-applied on the next call.
         /// </summary>
-        /// <param name="enabled">True to enable logging, false to disable.</param>
         public void SetLogging(bool enabled)
         {
-            LoggingService.InitializeLoggingConfiguration(
-                _userSettingsService.FullLogPath,
-                enabled ? LogLevel.Debug : LogLevel.Error);
+            RustLogBridge.TrySetLevel(enabled ? "debug" : "info");
         }
 
         public void Uninstall()

@@ -2,9 +2,9 @@
 using Autofac;
 using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
+using MusicBeePlugin.Infrastructure.Logging.Implementations;
 using MusicBeePlugin.Services.Configuration;
 using MusicBeePlugin.Services.Media;
-using NLog;
 
 namespace MusicBeePlugin.Infrastructure.DependencyInjection
 {
@@ -73,15 +73,17 @@ namespace MusicBeePlugin.Infrastructure.DependencyInjection
         }
 
         /// <summary>
-        ///     Enables or disables logging.
+        ///     Apply the user's debug-logging preference to the Rust
+        ///     <c>EnvFilter</c>. The actual sink (file path, format,
+        ///     rotation) is owned by the Rust core; this entry point
+        ///     just nudges the level. The <c>userSettingsService</c>
+        ///     parameter is retained so the call signature matches the
+        ///     legacy NLog wiring callers expect.
         /// </summary>
-        /// <param name="userSettingsService">The user settings service</param>
-        /// <param name="enabled">True to enable logging, false to disable.</param>
         private static void InitializeLogging(UserSettingsService userSettingsService, bool enabled)
         {
-            LoggingService.InitializeLoggingConfiguration(
-                userSettingsService.FullLogPath,
-                enabled ? LogLevel.Debug : LogLevel.Error);
+            _ = userSettingsService;
+            RustLogBridge.TrySetLevel(enabled ? "debug" : "info");
         }
     }
 }

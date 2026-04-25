@@ -72,6 +72,34 @@ namespace MusicBeePlugin.Services.Generated
         internal static extern int mbrc_handle_notification(int notification_type);
 
         /// <summary>
+        ///  Forward a log line from the C# host into the Rust `tracing`
+        ///  pipeline so the plugin only writes one log file.
+        ///
+        ///  `level` follows the same numeric ladder used everywhere else in
+        ///  this FFI: 0 = TRACE, 1 = DEBUG, 2 = INFO, 3 = WARN, 4 = ERROR.
+        ///  `target` is the structured `target` field (typically the C# class
+        ///  name). `message` is the rendered log message — formatting and
+        ///  exception flattening happen on the C# side.
+        ///
+        ///  Returns 0 on success, -1 if the Rust core has not been initialised
+        ///  yet (the C# side must fall back to its bootstrap file logger when
+        ///  this happens). Passing a null `target` or `message` is treated as
+        ///  an empty string. Invalid UTF-8 is replaced lossily.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "mbrc_log", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int mbrc_log(int level, byte* target, byte* message);
+
+        /// <summary>
+        ///  Adjust the active log-level filter at runtime. `directive` is
+        ///  anything `EnvFilter` accepts — typically `"info"` or `"debug"`,
+        ///  driven by the plugin's debug-logging UI checkbox. Returns 0 on
+        ///  success, -1 if logging isn't initialised yet, and -2 if the
+        ///  directive failed to parse.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "mbrc_set_log_level", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int mbrc_set_log_level(byte* directive);
+
+        /// <summary>
         ///  Free a string previously returned by the Rust core.
         ///
         ///  The pointer must have been allocated by Rust (e.g. via `CString::into_raw`).

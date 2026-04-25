@@ -5,6 +5,7 @@ using MusicBeePlugin.Adapters.Implementations;
 using MusicBeePlugin.Core;
 using MusicBeePlugin.DataProviders;
 using MusicBeePlugin.Events.Messages;
+using MusicBeePlugin.Infrastructure.Logging.Implementations;
 using MusicBeePlugin.Services;
 using MusicBeePlugin.Services.Core;
 
@@ -43,6 +44,12 @@ namespace MusicBeePlugin
         {
             _api = new MusicBeeApiInterface();
             _api.Initialise(apiInterfacePtr);
+
+            // Point the bootstrap logger at the plugin storage folder
+            // before any other code can call Logger.* — anything that
+            // fires before Rust is up lands in mb_remote/bootstrap.log
+            // instead of being lost.
+            BootstrapLogger.Configure(_api.Setting_GetPersistentStoragePath());
 
             var version = Assembly.GetExecutingAssembly().GetName().Version;
 

@@ -4,7 +4,10 @@
       "commandName": "Executable",
       "executablePath": "$(SolutionDir)app\\MusicBee\\MusicBee.exe",
       "workingDirectory": "$(SolutionDir)app\\MusicBee",
-      "remoteDebugEnabled": false
+      "remoteDebugEnabled": false,
+      "environmentVariables": {
+        "RUST_LOG": "mbrc_core=debug,mbrc_core::server::legacy=trace"
+      }
     }
   }
 }

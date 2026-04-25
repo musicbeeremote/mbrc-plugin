@@ -8,12 +8,13 @@ using MessagePack.Resolvers;
 using System.Linq;
 using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Enumerations;
+using MusicBeePlugin.Infrastructure.Logging.Contracts;
+using MusicBeePlugin.Infrastructure.Logging.Implementations;
 using MusicBeePlugin.Services.Configuration;
 using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Generated;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Utilities.Data;
-using NLog;
 
 namespace MusicBeePlugin.Services
 {
@@ -26,7 +27,11 @@ namespace MusicBeePlugin.Services
     /// </summary>
     public sealed class NativeBridge : INativeBridge, IDisposable
     {
-        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+        // NativeBridge fires several log lines while the Rust core is
+        // still booting (DLL preload, mbrc_init result) — PluginLogger
+        // routes those through RustLogBridge with a BootstrapLogger
+        // fallback, so nothing is lost in the init/shutdown windows.
+        private static readonly IPluginLogger Logger = new PluginLogger(typeof(NativeBridge));
 
         #region FFI Delegate Types
 
@@ -250,17 +255,17 @@ namespace MusicBeePlugin.Services
                     }
                     else
                     {
-                        Logger.Error("Rust core initialization failed (error code: {0})", result);
+                        Logger.LogError("Rust core initialization failed (error code: {0})", result);
                     }
                 }
             }
             catch (DllNotFoundException ex)
             {
-                Logger.Error(ex, "mbrc_core.dll not found — Rust core will not be available");
+                Logger.LogError(ex, "mbrc_core.dll not found — Rust core will not be available");
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Failed to initialize Rust core");
+                Logger.LogError(ex, "Failed to initialize Rust core");
             }
         }
 
@@ -287,12 +292,12 @@ namespace MusicBeePlugin.Services
                 }
                 else
                 {
-                    Logger.Error("Failed to start Rust HTTP server (error code: {0})", result);
+                    Logger.LogError("Failed to start Rust HTTP server (error code: {0})", result);
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Failed to start Rust networking");
+                Logger.LogError(ex, "Failed to start Rust networking");
             }
         }
 
@@ -314,7 +319,7 @@ namespace MusicBeePlugin.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Failed to stop Rust networking");
+                Logger.LogError(ex, "Failed to stop Rust networking");
             }
         }
 
@@ -331,7 +336,7 @@ namespace MusicBeePlugin.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Failed to forward notification {0} to Rust core", notificationType);
+                Logger.LogError(ex, "Failed to forward notification {0} to Rust core", notificationType);
             }
         }
 
@@ -351,7 +356,7 @@ namespace MusicBeePlugin.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error during Rust core shutdown");
+                Logger.LogError(ex, "Error during Rust core shutdown");
             }
 
             if (_libraryHandle != IntPtr.Zero)
@@ -377,37 +382,37 @@ namespace MusicBeePlugin.Services
         private int OnPlayPause()
         {
             try { return _player.PlayPause() ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "PlayPause callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "PlayPause callback error"); return -1; }
         }
 
         private int OnStop()
         {
             try { return _player.StopPlayback() ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "Stop callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "Stop callback error"); return -1; }
         }
 
         private int OnNext()
         {
             try { return _player.PlayNext() ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "Next callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "Next callback error"); return -1; }
         }
 
         private int OnPrevious()
         {
             try { return _player.PlayPrevious() ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "Previous callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "Previous callback error"); return -1; }
         }
 
         private int OnSetVolume(int volume)
         {
             try { return _player.SetVolume(volume) ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "SetVolume callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "SetVolume callback error"); return -1; }
         }
 
         private int OnSetPosition(int position)
         {
             try { return _player.SetPosition(position) ? 0 : 1; }
-            catch (Exception ex) { Logger.Error(ex, "SetPosition callback error"); return -1; }
+            catch (Exception ex) { Logger.LogError(ex, "SetPosition callback error"); return -1; }
         }
 
         #endregion
@@ -520,7 +525,7 @@ namespace MusicBeePlugin.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Query callback error for type {0}", queryType);
+                Logger.LogError(ex, "Query callback error for type {0}", queryType);
                 return -1;
             }
         }
@@ -578,7 +583,7 @@ namespace MusicBeePlugin.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Command callback error for type {0}", commandType);
+                Logger.LogError(ex, "Command callback error for type {0}", commandType);
                 return -1;
             }
         }
@@ -1101,7 +1106,7 @@ namespace MusicBeePlugin.Services
             if (_libraryHandle == IntPtr.Zero)
             {
                 var errorCode = Marshal.GetLastWin32Error();
-                Logger.Error("Failed to pre-load mbrc_core.dll (Win32 error: {0})", errorCode);
+                Logger.LogError("Failed to pre-load mbrc_core.dll (Win32 error: {0})", errorCode);
             }
             else
             {

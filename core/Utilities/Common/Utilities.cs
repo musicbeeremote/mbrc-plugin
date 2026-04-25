@@ -4,7 +4,8 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using NLog;
+using MusicBeePlugin.Infrastructure.Logging.Contracts;
+using MusicBeePlugin.Infrastructure.Logging.Implementations;
 using Encoder = System.Drawing.Imaging.Encoder;
 
 namespace MusicBeePlugin.Utilities.Common
@@ -18,7 +19,7 @@ namespace MusicBeePlugin.Utilities.Common
         private const int DefaultCacheSize = 150;
         private const int DefaultResizeSize = 600;
 
-        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly IPluginLogger Logger = new PluginLogger(typeof(Utilities));
 
         /// <summary>
         ///     Gets the cover storage path for a given storage base path
@@ -133,7 +134,7 @@ namespace MusicBeePlugin.Utilities.Common
             }
             catch (Exception ex)
             {
-                Logger.Error(ex);
+                Logger.LogError(ex);
             }
 
             return cover;
@@ -233,7 +234,7 @@ namespace MusicBeePlugin.Utilities.Common
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, $"Failed to convert file to base64: {filepath}");
+                Logger.LogError(ex, $"Failed to convert file to base64: {filepath}");
                 return string.Empty;
             }
         }
@@ -366,7 +367,7 @@ namespace MusicBeePlugin.Utilities.Common
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex);
+                Logger.Debug(ex.ToString());
             }
 
             return hash;
@@ -388,7 +389,7 @@ namespace MusicBeePlugin.Utilities.Common
             }
             catch (Exception e)
             {
-                Logger.Error(e, $"Failed to retrieve cover ${hash}");
+                Logger.LogError(e, $"Failed to retrieve cover ${hash}");
                 return string.Empty;
             }
         }

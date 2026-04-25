@@ -2,7 +2,29 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tracing::trace;
 
+use crate::protocol::constants;
 use crate::protocol::messages::SocketMessage;
+
+/// Trace-friendly form of an outbound JSON frame: cover payloads carry
+/// hundreds of KB of base64 that bloats logs and obscures real traffic,
+/// so we elide their `data` and report the size instead.
+fn loggable_json<'a>(msg: &SocketMessage, json: &'a str) -> std::borrow::Cow<'a, str> {
+    if msg.context == constants::NOW_PLAYING_COVER
+        || msg.context == constants::LIBRARY_ALBUM_COVER
+    {
+        let bytes = msg
+            .data
+            .as_str()
+            .map(|s| s.len())
+            .unwrap_or_else(|| msg.data.to_string().len());
+        std::borrow::Cow::Owned(format!(
+            "{{\"context\":\"{}\",\"data\":\"<redacted: {} bytes>\"}}",
+            msg.context, bytes
+        ))
+    } else {
+        std::borrow::Cow::Borrowed(json)
+    }
+}
 
 /// Reads CRLF-delimited JSON messages from a TCP stream.
 pub struct MessageReader {
@@ -182,7 +204,7 @@ impl MessageWriter {
     pub async fn write_message(&mut self, msg: &SocketMessage) -> Result<(), std::io::Error> {
         let json = serde_json::to_string(msg)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        trace!(json = json.as_str(), "Sending message");
+        trace!(json = loggable_json(msg, &json).as_ref(), "Sending message");
         self.writer.write_all(json.as_bytes()).await?;
         self.writer.write_all(b"\r\n").await?;
         self.writer.flush().await?;

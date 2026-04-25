@@ -90,20 +90,16 @@ pub async fn dispatch_command(
         }
 
         constants::PLAYER_MUTE => handle_mute(data, state).await,
-        // TODO(golden-trace): `playershuffle` has a v2 boolean / v3+ string
-        // branch documented in the rollout plan. Hold the set-path until a
-        // golden trace pins the exact wire format we need to emit.
-        constants::PLAYER_SHUFFLE => {
-            query_player_field(
-                state,
-                |ps| ps.shuffle.clone().into(),
-                constants::PLAYER_SHUFFLE,
-            )
-            .await
-        }
+        constants::PLAYER_SHUFFLE => handle_shuffle(data, state).await,
         constants::PLAYER_REPEAT => handle_repeat(data, state).await,
         constants::PLAYER_SCROBBLE => handle_scrobble(data, state).await,
         constants::PLAYER_AUTO_DJ => handle_auto_dj(data, state).await,
+        constants::NOW_PLAYING_RATING => handle_rating(data, state).await,
+        constants::NOW_PLAYING_LFM_RATING => handle_lfm_rating(data, state).await,
+        constants::VERIFY_CONNECTION => vec![SocketMessage::new(
+            constants::VERIFY_CONNECTION,
+            serde_json::Value::String(String::new()),
+        )],
 
         // ── Now playing queries ─────────────────────────────────────
         constants::NOW_PLAYING_TRACK => {
@@ -653,9 +649,8 @@ pub async fn dispatch_command(
 
         // ── Unhandled commands ──────────────────────────────────────
         //
-        // TODO(golden-trace): remaining legacy commands — libraryalbumcover
-        // (W3 batch 3d), rating setters, verifyconnection — are backed by W2
-        // callbacks but still need wire shape pinned against fixtures.
+        // TODO(golden-trace): `nowplayingqueue` still needs an FFI
+        // command (queue file URLs into now playing) plus a handler.
         _ => {
             info!("Unhandled command: {}", context);
             vec![]
@@ -664,21 +659,59 @@ pub async fn dispatch_command(
 }
 
 /// `playermute` hybrid. Any data value sets the mute flag; the current
-/// mute state is always returned.
+/// mute state is always returned. The `"toggle"` sentinel flips the
+/// current value, mirroring the legacy C# `StateAction.Toggle` path.
 async fn handle_mute(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
-    if let Some(value) = parse_bool_from_data(data) {
+    if let Some(value) = resolve_bool_or_toggle(data, state, |ps| ps.mute).await {
         let s = Arc::clone(state);
         let _ = tokio::task::spawn_blocking(move || s.callbacks().set_mute(value)).await;
     }
     query_player_field(state, |ps| ps.mute.into(), constants::PLAYER_MUTE).await
 }
 
+/// `playershuffle` hybrid. The `"toggle"` sentinel and explicit
+/// booleans flip the shuffle flag through `Player_SetShuffle`. The
+/// current shuffle string (`"Off"`/`"Shuffle"`/`"AutoDj"`) is always
+/// returned. AutoDj-on counts as "shuffling" for toggle purposes — a
+/// toggle from AutoDj turns shuffle off, matching the legacy C# behaviour.
+async fn handle_shuffle(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
+    if let Some(value) = resolve_bool_or_toggle(data, state, |ps| {
+        !ps.shuffle.eq_ignore_ascii_case("off")
+    })
+    .await
+    {
+        let s = Arc::clone(state);
+        let _ = tokio::task::spawn_blocking(move || s.callbacks().set_shuffle(value)).await;
+    }
+    query_player_field(
+        state,
+        |ps| ps.shuffle.clone().into(),
+        constants::PLAYER_SHUFFLE,
+    )
+    .await
+}
+
 /// `playerrepeat` hybrid. Any string value sets the repeat mode; the
-/// current mode is always returned.
+/// current mode is always returned. `"toggle"` cycles None → All →
+/// One → None to match the legacy C# `StateAction.Toggle` semantics.
 async fn handle_repeat(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
     if let Some(mode) = parse_string_from_data(data) {
-        let s = Arc::clone(state);
-        let _ = tokio::task::spawn_blocking(move || s.callbacks().set_repeat(&mode)).await;
+        let resolved = if mode.eq_ignore_ascii_case("toggle") {
+            current_player_state(state).await.map(|ps| {
+                match ps.repeat.as_str() {
+                    "None" => "All",
+                    "All" => "One",
+                    _ => "None",
+                }
+                .to_string()
+            })
+        } else {
+            Some(mode)
+        };
+        if let Some(m) = resolved {
+            let s = Arc::clone(state);
+            let _ = tokio::task::spawn_blocking(move || s.callbacks().set_repeat(&m)).await;
+        }
     }
     query_player_field(
         state,
@@ -690,17 +723,20 @@ async fn handle_repeat(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<S
 
 /// `scrobbler` hybrid. Any data value sets scrobble; current state returned.
 async fn handle_scrobble(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
-    if let Some(value) = parse_bool_from_data(data) {
+    if let Some(value) = resolve_bool_or_toggle(data, state, |ps| ps.scrobble).await {
         let s = Arc::clone(state);
         let _ = tokio::task::spawn_blocking(move || s.callbacks().set_scrobble(value)).await;
     }
     query_player_field(state, |ps| ps.scrobble.into(), constants::PLAYER_SCROBBLE).await
 }
 
-/// `playerautodj` — set-only in the W2 surface. The current C# legacy
-/// handler mirrors the chosen value back; we do the same by echoing.
+/// `playerautodj` — sets autodj on/off and echoes the chosen value.
+/// `"toggle"` derives the next value from `PlayerStateResponse.shuffle`
+/// (the only place autodj-on shows up in W2) and flips it.
 async fn handle_auto_dj(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
-    match parse_bool_from_data(data) {
+    match resolve_bool_or_toggle(data, state, |ps| ps.shuffle.eq_ignore_ascii_case("autodj"))
+        .await
+    {
         Some(value) => {
             let s = Arc::clone(state);
             let _ = tokio::task::spawn_blocking(move || s.callbacks().set_auto_dj(value)).await;
@@ -708,6 +744,135 @@ async fn handle_auto_dj(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<
         }
         None => vec![],
     }
+}
+
+/// `nowplayingrating` hybrid. Any string in `data` is sent through to
+/// `set_rating` (empty string clears the rating, matching legacy
+/// `_trackDataProvider.SetNowPlayingRating`). Always echoes the
+/// current rating, queried fresh after the set so the response
+/// reflects whatever MusicBee actually accepted.
+async fn handle_rating(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
+    if let Some(rating) = data.as_str() {
+        let s = Arc::clone(state);
+        let value = rating.to_owned();
+        let _ = tokio::task::spawn_blocking(move || s.callbacks().set_rating(&value)).await;
+    }
+    let s = Arc::clone(state);
+    match tokio::task::spawn_blocking(move || {
+        s.callbacks()
+            .query_no_params::<String>(QueryType::NowPlayingRating)
+    })
+    .await
+    {
+        Ok(Ok(rating)) => vec![SocketMessage::new(
+            constants::NOW_PLAYING_RATING,
+            serde_json::Value::String(rating),
+        )],
+        Ok(Err(e)) => {
+            warn!("NowPlayingRating query failed: {}", e);
+            vec![]
+        }
+        Err(e) => {
+            warn!("spawn_blocking panicked: {}", e);
+            vec![]
+        }
+    }
+}
+
+/// `nowplayinglfmrating` hybrid. Action sentinels mirror legacy C#
+/// `HandleLastfmLoveRating`: `"toggle"` flips Love/Ban → Normal or
+/// Normal → Love; `"love"` and `"ban"` set directly. Any other value
+/// is ignored. Always echoes the current Last.fm status.
+async fn handle_lfm_rating(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
+    let action = data.as_str().map(str::to_owned);
+    let mut current = current_lfm_status(state).await.unwrap_or_default();
+
+    if let Some(action) = action {
+        let new_status = if action.eq_ignore_ascii_case("toggle") {
+            Some(
+                if current.eq_ignore_ascii_case("Love") || current.eq_ignore_ascii_case("Ban") {
+                    "Normal"
+                } else {
+                    "Love"
+                }
+                .to_string(),
+            )
+        } else if action.eq_ignore_ascii_case("love") {
+            Some("Love".to_string())
+        } else if action.eq_ignore_ascii_case("ban") {
+            Some("Ban".to_string())
+        } else {
+            None
+        };
+
+        if let Some(new_status) = new_status {
+            let s = Arc::clone(state);
+            let value = new_status.clone();
+            let ok = tokio::task::spawn_blocking(move || s.callbacks().set_lfm_rating(&value))
+                .await
+                .ok()
+                .map(|r| r.is_ok())
+                .unwrap_or(false);
+            if ok {
+                current = new_status;
+            }
+        }
+    }
+
+    vec![SocketMessage::new(
+        constants::NOW_PLAYING_LFM_RATING,
+        serde_json::Value::String(current),
+    )]
+}
+
+/// Query the current Last.fm love/ban status string.
+async fn current_lfm_status(state: &Arc<AppState>) -> Option<String> {
+    let s = Arc::clone(state);
+    tokio::task::spawn_blocking(move || {
+        s.callbacks()
+            .query_no_params::<String>(QueryType::NowPlayingLfmRating)
+    })
+    .await
+    .ok()
+    .and_then(|r| r.ok())
+}
+
+/// Resolve a boolean-or-`"toggle"` payload to a concrete bool.
+///
+/// Returns `Some(b)` for explicit bool/0/1/`"true"`/`"false"` inputs,
+/// or for `"toggle"` after reading the current player state and
+/// applying `current` to extract the bool to flip. Returns `None` if
+/// the data is empty/unparseable, or if a toggle was requested but the
+/// state query failed — matching the behaviour of the existing
+/// no-op-on-bad-input path.
+async fn resolve_bool_or_toggle(
+    data: &serde_json::Value,
+    state: &Arc<AppState>,
+    current: fn(&PlayerStateResponse) -> bool,
+) -> Option<bool> {
+    if let Some(b) = parse_bool_from_data(data) {
+        return Some(b);
+    }
+    if data
+        .as_str()
+        .map(|s| s.eq_ignore_ascii_case("toggle"))
+        .unwrap_or(false)
+    {
+        return current_player_state(state).await.map(|ps| !current(&ps));
+    }
+    None
+}
+
+/// Query the current player state, returning `None` on any failure.
+async fn current_player_state(state: &Arc<AppState>) -> Option<PlayerStateResponse> {
+    let s = Arc::clone(state);
+    tokio::task::spawn_blocking(move || {
+        s.callbacks()
+            .query_no_params::<PlayerStateResponse>(QueryType::PlayerState)
+    })
+    .await
+    .ok()
+    .and_then(|r| r.ok())
 }
 
 /// Get/set volume. Empty or default data → return current volume. Otherwise set it.
@@ -895,20 +1060,34 @@ fn parse_pagination(data: &serde_json::Value) -> (i32, i32) {
 
 /// Wrap a collection in the legacy paginated response envelope.
 ///
-/// `total` is reported as the position of the last returned item
-/// (`offset + data.len()`). The real C# server tracks the total
-/// independently of the returned page; the internal DTOs currently
-/// don't carry that number, so this is the best the wire can express
-/// without extending the FFI. Tier A shape-diff is unaffected; a
-/// future Tier B+ might want a richer DTO with explicit `total`.
+/// The C# data providers (`BrowseArtists`, `BrowseAlbums`, etc.) ignore
+/// their offset/limit parameters and return the full library on every
+/// call — historically, pagination has always been done by the handler
+/// layer. Rust slices here and reports the true total so Android
+/// clients see consistent `total` across pages and stop at end-of-data.
+///
+/// Without slicing, every page would carry the full library plus a
+/// monotonically-growing `total = offset + data.len()`, and the
+/// Android client (which trusts `total` to know when to stop) would
+/// page indefinitely. Verified pre-fix: a 1172-artist library produced
+/// 356 sequential `browseartists` requests with offset 0 → 284,000.
+///
+/// Future optimisation: extend the FFI so C# slices server-side and
+/// passes the slice plus true total in a single call. For now Rust
+/// carries the full Vec across the FFI boundary and slices.
 fn paginated_envelope<T: serde::Serialize>(
     data: Vec<T>,
     offset: i32,
     limit: i32,
 ) -> serde_json::Value {
-    let total = offset + data.len() as i32;
+    let total = data.len() as i32;
+    let off = offset.max(0) as usize;
+    let lim = limit.max(0) as usize;
+    let start = off.min(data.len());
+    let end = (off.saturating_add(lim)).min(data.len());
+    let slice: Vec<T> = data.into_iter().skip(start).take(end - start).collect();
     serde_json::json!({
-        "data": data,
+        "data": slice,
         "offset": offset,
         "limit": limit,
         "total": total,

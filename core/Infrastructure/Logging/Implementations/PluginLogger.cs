@@ -1,177 +1,116 @@
 using System;
 using System.Globalization;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
-using NLog;
 
 namespace MusicBeePlugin.Infrastructure.Logging.Implementations
 {
     /// <summary>
-    ///     Plugin logger implementation that wraps NLog functionality.
+    ///     <see cref="IPluginLogger" /> implementation that forwards each
+    ///     log call into the Rust core via <see cref="RustLogBridge" /> —
+    ///     so the plugin produces a single, unified log file. When the
+    ///     Rust core isn't ready yet (early init) or has already torn
+    ///     down (late shutdown), entries fall through to
+    ///     <see cref="BootstrapLogger" />.
     /// </summary>
     public class PluginLogger : IPluginLogger
     {
         private static readonly IFormatProvider FormatProvider = CultureInfo.InvariantCulture;
-        private readonly Logger _logger;
+        private readonly string _target;
 
-        /// <summary>
-        ///     Initializes a new instance of the PluginLogger class.
-        /// </summary>
-        /// <param name="name">The logger name (typically the class name).</param>
-        public PluginLogger(string name)
+        public PluginLogger(string name) => _target = name ?? string.Empty;
+
+        public PluginLogger(Type type) => _target = type?.FullName ?? string.Empty;
+
+        public void Debug(string message) => Send(RustLogBridge.LevelDebug, message, null);
+
+        public void Debug(string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelDebug, Format(messageTemplate, args), null);
+
+        public void Info(string message) => Send(RustLogBridge.LevelInfo, message, null);
+
+        public void Info(string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelInfo, Format(messageTemplate, args), null);
+
+        public void Warn(string message) => Send(RustLogBridge.LevelWarn, message, null);
+
+        public void Warn(string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelWarn, Format(messageTemplate, args), null);
+
+        public void LogError(string message) => Send(RustLogBridge.LevelError, message, null);
+
+        public void LogError(string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelError, Format(messageTemplate, args), null);
+
+        public void LogError(Exception exception, string message = null) =>
+            Send(RustLogBridge.LevelError, message, exception);
+
+        public void LogError(Exception exception, string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelError, Format(messageTemplate, args), exception);
+
+        public void Fatal(string message) => Send(RustLogBridge.LevelError, "FATAL: " + message, null);
+
+        public void Fatal(string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelError, "FATAL: " + Format(messageTemplate, args), null);
+
+        public void Fatal(Exception exception, string message = null) =>
+            Send(RustLogBridge.LevelError, "FATAL: " + (message ?? string.Empty), exception);
+
+        public void Fatal(Exception exception, string messageTemplate, params object[] args) =>
+            Send(RustLogBridge.LevelError, "FATAL: " + Format(messageTemplate, args), exception);
+
+        private void Send(int level, string message, Exception ex)
         {
-            _logger = LogManager.GetLogger(name);
+            // Bake the exception into the message so a single FFI call
+            // carries everything Rust's tracing layer needs to render.
+            var rendered = ex == null
+                ? (message ?? string.Empty)
+                : string.IsNullOrEmpty(message)
+                    ? ex.ToString()
+                    : message + Environment.NewLine + ex;
+
+            if (RustLogBridge.TryLog(level, _target, rendered))
+                return;
+
+            // Rust isn't up — fall back to the bootstrap file so we
+            // never silently drop init/shutdown errors.
+            switch (level)
+            {
+                case RustLogBridge.LevelTrace:
+                    BootstrapLogger.Trace(_target, rendered);
+                    break;
+                case RustLogBridge.LevelDebug:
+                    BootstrapLogger.Debug(_target, rendered);
+                    break;
+                case RustLogBridge.LevelInfo:
+                    BootstrapLogger.Info(_target, rendered);
+                    break;
+                case RustLogBridge.LevelWarn:
+                    BootstrapLogger.Warn(_target, rendered);
+                    break;
+                default:
+                    if (ex == null)
+                        BootstrapLogger.Error(_target, message ?? string.Empty);
+                    else
+                        BootstrapLogger.Error(_target, message ?? string.Empty, ex);
+                    break;
+            }
         }
 
-        /// <summary>
-        ///     Initializes a new instance of the PluginLogger class.
-        /// </summary>
-        /// <param name="type">The type to use for the logger name.</param>
-        public PluginLogger(Type type)
+        private static string Format(string template, object[] args)
         {
-            _logger = LogManager.GetLogger(type.FullName);
-        }
-
-        /// <summary>
-        ///     Logs a debug message.
-        /// </summary>
-        /// <param name="message">The message to log.</param>
-        public void Debug(string message)
-        {
-            _logger.Debug(message);
-        }
-
-        /// <summary>
-        ///     Logs a debug message with structured parameters.
-        /// </summary>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void Debug(string messageTemplate, params object[] args)
-        {
-            _logger.Debug(FormatProvider, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs an informational message.
-        /// </summary>
-        /// <param name="message">The message to log.</param>
-        public void Info(string message)
-        {
-            _logger.Info(message);
-        }
-
-        /// <summary>
-        ///     Logs an informational message with structured parameters.
-        /// </summary>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void Info(string messageTemplate, params object[] args)
-        {
-            _logger.Info(FormatProvider, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs a warning message.
-        /// </summary>
-        /// <param name="message">The message to log.</param>
-        public void Warn(string message)
-        {
-            _logger.Warn(message);
-        }
-
-        /// <summary>
-        ///     Logs a warning message with structured parameters.
-        /// </summary>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void Warn(string messageTemplate, params object[] args)
-        {
-            _logger.Warn(FormatProvider, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs an error message.
-        /// </summary>
-        /// <param name="message">The message to log.</param>
-        public void LogError(string message)
-        {
-            _logger.Error(message);
-        }
-
-        /// <summary>
-        ///     Logs an error message with structured parameters.
-        /// </summary>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void LogError(string messageTemplate, params object[] args)
-        {
-            _logger.Error(FormatProvider, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs an error message with exception details.
-        /// </summary>
-        /// <param name="exception">The exception to log.</param>
-        /// <param name="message">The message to log.</param>
-        public void LogError(Exception exception, string message = null)
-        {
-            if (string.IsNullOrEmpty(message))
-                _logger.Error(exception);
-            else
-                _logger.Error(exception, message);
-        }
-
-        /// <summary>
-        ///     Logs an error message with exception details and structured parameters.
-        /// </summary>
-        /// <param name="exception">The exception to log.</param>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void LogError(Exception exception, string messageTemplate, params object[] args)
-        {
-            _logger.Error(exception, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs a fatal error message.
-        /// </summary>
-        /// <param name="message">The message to log.</param>
-        public void Fatal(string message)
-        {
-            _logger.Fatal(message);
-        }
-
-        /// <summary>
-        ///     Logs a fatal error message with structured parameters.
-        /// </summary>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void Fatal(string messageTemplate, params object[] args)
-        {
-            _logger.Fatal(FormatProvider, messageTemplate, args);
-        }
-
-        /// <summary>
-        ///     Logs a fatal error message with exception details.
-        /// </summary>
-        /// <param name="exception">The exception to log.</param>
-        /// <param name="message">The message to log.</param>
-        public void Fatal(Exception exception, string message = null)
-        {
-            if (string.IsNullOrEmpty(message))
-                _logger.Fatal(exception);
-            else
-                _logger.Fatal(exception, message);
-        }
-
-        /// <summary>
-        ///     Logs a fatal error message with exception details and structured parameters.
-        /// </summary>
-        /// <param name="exception">The exception to log.</param>
-        /// <param name="messageTemplate">The message template with placeholders.</param>
-        /// <param name="args">The values to substitute into the template.</param>
-        public void Fatal(Exception exception, string messageTemplate, params object[] args)
-        {
-            _logger.Fatal(exception, messageTemplate, args);
+            if (string.IsNullOrEmpty(template) || args == null || args.Length == 0)
+                return template ?? string.Empty;
+            try
+            {
+                return string.Format(FormatProvider, template, args);
+            }
+            catch (FormatException)
+            {
+                // Templates with named placeholders ("{Name}") aren't
+                // valid String.Format inputs. Keep the raw template
+                // rather than dropping the line.
+                return template;
+            }
         }
     }
 }

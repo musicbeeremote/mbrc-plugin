@@ -169,6 +169,68 @@ pub extern "C" fn mbrc_handle_notification(notification_type: c_int) -> c_int {
     }
 }
 
+/// Forward a log line from the C# host into the Rust `tracing`
+/// pipeline so the plugin only writes one log file.
+///
+/// `level` follows the same numeric ladder used everywhere else in
+/// this FFI: 0 = TRACE, 1 = DEBUG, 2 = INFO, 3 = WARN, 4 = ERROR.
+/// `target` is the structured `target` field (typically the C# class
+/// name). `message` is the rendered log message — formatting and
+/// exception flattening happen on the C# side.
+///
+/// Returns 0 on success, -1 if the Rust core has not been initialised
+/// yet (the C# side must fall back to its bootstrap file logger when
+/// this happens). Passing a null `target` or `message` is treated as
+/// an empty string. Invalid UTF-8 is replaced lossily.
+#[no_mangle]
+pub extern "C" fn mbrc_log(level: c_int, target: *const c_char, message: *const c_char) -> c_int {
+    if MbrcCore::get().is_err() {
+        return -1;
+    }
+
+    let target = unsafe { cstr_to_string(target) };
+    let message = unsafe { cstr_to_string(message) };
+
+    match level {
+        0 => tracing::trace!(target: "mbrc_plugin", csharp_target = %target, "{}", message),
+        1 => tracing::debug!(target: "mbrc_plugin", csharp_target = %target, "{}", message),
+        2 => tracing::info!(target: "mbrc_plugin", csharp_target = %target, "{}", message),
+        3 => tracing::warn!(target: "mbrc_plugin", csharp_target = %target, "{}", message),
+        _ => tracing::error!(target: "mbrc_plugin", csharp_target = %target, "{}", message),
+    }
+    0
+}
+
+/// Adjust the active log-level filter at runtime. `directive` is
+/// anything `EnvFilter` accepts — typically `"info"` or `"debug"`,
+/// driven by the plugin's debug-logging UI checkbox. Returns 0 on
+/// success, -1 if logging isn't initialised yet, and -2 if the
+/// directive failed to parse.
+#[no_mangle]
+pub extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
+    let directive = unsafe { cstr_to_string(directive) };
+    if directive.is_empty() {
+        return -2;
+    }
+    if logging::try_set_filter(&directive) {
+        0
+    } else {
+        // Either the subscriber wasn't installed, or the directive
+        // didn't parse — both are user-visible failures the C# side
+        // can decide what to do about.
+        -1
+    }
+}
+
+/// Read a possibly-null C string into an owned `String`, replacing
+/// invalid UTF-8 lossily so a malformed message never panics the host.
+unsafe fn cstr_to_string(ptr: *const c_char) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+    CStr::from_ptr(ptr).to_string_lossy().into_owned()
+}
+
 /// Free a string previously returned by the Rust core.
 ///
 /// The pointer must have been allocated by Rust (e.g. via `CString::into_raw`).
@@ -361,24 +423,52 @@ async fn build_broadcast(
         }
 
         NotificationType::NowPlayingLyricsReady => {
-            // Lyrics ready — broadcast empty context; actual lyrics fetched on demand
+            // Mirror legacy C# Broadcaster.BroadcastLyrics: ship the
+            // actual lyrics, falling back to "Lyrics Not Found" when
+            // empty so the client always has a renderable string.
+            let lyrics_state = Arc::clone(state);
+            let lyrics = tokio::task::spawn_blocking(move || {
+                lyrics_state
+                    .callbacks()
+                    .query_no_params::<String>(QueryType::Lyrics)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Lyrics Not Found".to_string());
             Some(BroadcastEvent::single(
                 notification,
                 constants::NOW_PLAYING_LYRICS,
-                serde_json::Value::String(String::new()),
+                serde_json::Value::String(lyrics),
             ))
         }
 
-        NotificationType::NowPlayingArtworkReady => Some(BroadcastEvent::single(
-            notification,
-            constants::NOW_PLAYING_COVER,
-            serde_json::Value::String(String::new()),
-        )),
+        NotificationType::NowPlayingArtworkReady => {
+            // Mirror legacy C# Broadcaster.BroadcastCover: query the
+            // base64 cover and ship it on the broadcast frame so the
+            // client refreshes artwork on track change.
+            let cover_state = Arc::clone(state);
+            let cover = tokio::task::spawn_blocking(move || {
+                cover_state
+                    .callbacks()
+                    .query_no_params::<String>(QueryType::CoverData)
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or_default();
+            Some(BroadcastEvent::single(
+                notification,
+                constants::NOW_PLAYING_COVER,
+                serde_json::Value::String(cover),
+            ))
+        }
 
         NotificationType::NowPlayingListChanged => Some(BroadcastEvent::single(
             notification,
             constants::NOW_PLAYING_LIST_CHANGED,
-            serde_json::Value::String(String::new()),
+            serde_json::Value::Bool(true),
         )),
 
         NotificationType::FileAddedToLibrary => {

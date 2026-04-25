@@ -142,6 +142,7 @@ async fn handle_message(
                         connection_id = client.short_id(),
                         protocol_version = client.protocol_version,
                         platform = ?client.platform,
+                        client_id = client.client_id.as_deref().unwrap_or("<none>"),
                         "Client authenticated"
                     );
                 }
