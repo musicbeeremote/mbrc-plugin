@@ -30,6 +30,8 @@ namespace MusicBeePlugin.Core
 
         public ICoverService CoverService => _container.Resolve<ICoverService>();
 
+        public IEventAggregator EventAggregator => _container.Resolve<IEventAggregator>();
+
         public PluginCore(IMusicBeeApiAdapter adapters, IDataProviders dataProviders, string storagePath, Version version)
         {
             var builder = new ContainerBuilder();

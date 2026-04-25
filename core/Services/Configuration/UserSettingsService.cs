@@ -7,6 +7,7 @@ using System.Threading;
 using System.Xml;
 using MusicBeePlugin.Enumerations;
 using MusicBeePlugin.Events.Contracts;
+using MusicBeePlugin.Events.Messages;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
 using MusicBeePlugin.Models.Configuration;
 using MusicBeePlugin.Protocol.Messages;
@@ -180,9 +181,8 @@ namespace MusicBeePlugin.Services.Configuration
 
                 WriteCoreSettingsJson();
 
-                _logger.Debug("Settings saved successfully, triggering socket restart");
-                var message = MessageSendEvent.Create("SocketRestart", true);
-                _eventAggregator.Publish(message);
+                _logger.Debug("Settings saved successfully, triggering core restart");
+                _eventAggregator.Publish(new CoreRestartRequestedEvent());
             }
             catch (Exception ex)
             {

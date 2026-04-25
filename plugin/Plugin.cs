@@ -4,6 +4,7 @@ using System.Reflection;
 using MusicBeePlugin.Adapters.Implementations;
 using MusicBeePlugin.Core;
 using MusicBeePlugin.DataProviders;
+using MusicBeePlugin.Events.Messages;
 using MusicBeePlugin.Services;
 using MusicBeePlugin.Services.Core;
 
@@ -96,9 +97,11 @@ namespace MusicBeePlugin
                     version
                 );
 
-                // Initialize core services and networking
+                // Initialize core services. The legacy C# socket server is no
+                // longer started — Rust owns networking. Settings, cover
+                // service, notifications etc. still come up via PluginCore so
+                // the Rust callbacks can resolve their data providers.
                 _pluginCore.Initialize();
-                _pluginCore.StartNetworking();
 
                 // Initialize Rust core with data providers for callbacks
                 _nativeBridge = new NativeBridge(
@@ -110,6 +113,17 @@ namespace MusicBeePlugin
                     _pluginCore.CoverService);
                 _nativeBridge.Initialize(_api.Setting_GetPersistentStoragePath());
                 _nativeBridge.StartNetworking();
+
+                // Restart the Rust server when the user changes settings —
+                // re-reads core_settings.json. The old MessageSendEvent-based
+                // SocketRestart trigger fed the C# SocketServer which is now
+                // gone; subscribe directly so no protocol-layer event is
+                // needed for a runtime concern.
+                _pluginCore.EventAggregator.Subscribe<CoreRestartRequestedEvent>(_ =>
+                {
+                    _nativeBridge?.StopNetworking();
+                    _nativeBridge?.StartNetworking();
+                });
 
                 // Add MusicBee menu item for settings
                 _api.MB_AddMenuItem(

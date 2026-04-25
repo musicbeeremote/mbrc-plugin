@@ -1,3 +1,4 @@
+using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Services.Configuration;
 using MusicBeePlugin.Services.Media;
 
@@ -21,6 +22,13 @@ namespace MusicBeePlugin.Services.Core
         ///     the DI container out of the plugin assembly.
         /// </summary>
         ICoverService CoverService { get; }
+
+        /// <summary>
+        ///     Cross-component event bus. Exposed so the Plugin host can
+        ///     subscribe to core-level events (e.g. CoreRestartRequested)
+        ///     without holding a second reference to the DI container.
+        /// </summary>
+        IEventAggregator EventAggregator { get; }
 
         void Initialize();
 
