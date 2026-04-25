@@ -4,6 +4,7 @@
 // csbindgen mirrors into C#. Scope the allow to the crate root.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+mod config;
 mod discovery;
 mod ffi;
 mod logging;
@@ -88,23 +89,28 @@ pub extern "C" fn mbrc_shutdown() -> c_int {
     }
 }
 
-/// Start the HTTP server on the given port.
+/// Start the HTTP server. The listening port is read from
+/// `core_settings.json` in the storage directory passed to
+/// `mbrc_initialize` (falling back to the documented default if the
+/// file is missing or invalid). C# WinForms is the only writer of
+/// that file — Rust never persists settings.
 ///
 /// Requires `mbrc_initialize` to have been called first.
 /// Returns: 0 on success, negative error code on failure.
 #[no_mangle]
-pub extern "C" fn mbrc_start_networking(port: c_int) -> c_int {
-    info!(port, "mbrc_start_networking called");
+pub extern "C" fn mbrc_start_networking() -> c_int {
+    info!("mbrc_start_networking called");
 
-    if port <= 0 || port > 65535 {
-        return MbrcResult::InvalidArgument as c_int;
-    }
+    let core = match MbrcCore::get() {
+        Ok(c) => c,
+        Err(e) => return e as c_int,
+    };
 
-    match MbrcCore::get() {
-        Ok(core) => match core.start_networking(port as u16) {
-            Ok(()) => MbrcResult::Ok as c_int,
-            Err(e) => e as c_int,
-        },
+    let settings = config::CoreSettings::load_from_storage(core.state().storage_path());
+    info!(port = settings.port, "starting hybrid server");
+
+    match core.start_networking(settings.port) {
+        Ok(()) => MbrcResult::Ok as c_int,
         Err(e) => e as c_int,
     }
 }

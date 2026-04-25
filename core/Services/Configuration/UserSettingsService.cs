@@ -10,6 +10,7 @@ using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
 using MusicBeePlugin.Models.Configuration;
 using MusicBeePlugin.Protocol.Messages;
+using Newtonsoft.Json;
 
 namespace MusicBeePlugin.Services.Configuration
 {
@@ -31,6 +32,11 @@ namespace MusicBeePlugin.Services.Configuration
         private const string UpdateFirewallNode = "update_firewall";
         private const string AlternativeSearchNode = "alternative_search";
         private const string LogFilename = "mbrc.log";
+
+        // JSON projection of the Rust-relevant settings subset. The Rust core
+        // reads this on `mbrc_start_networking`; C# is the only writer.
+        // Schema must match `mbrc_core::config::CoreSettings`.
+        private const string CoreSettingsFilename = "core_settings.json";
 
         private static readonly char[] CommaSeparator = { ',' };
 
@@ -138,6 +144,12 @@ namespace MusicBeePlugin.Services.Configuration
                 _logger.LogError(ex, "Failed to load settings, using defaults");
                 _settings = new UserSettingsModel();
             }
+
+            // Keep core_settings.json in sync with whatever XML produced — this
+            // runs on every plugin start, so existing installs get a JSON file
+            // mirroring their current XML on first upgrade without needing the
+            // user to open the settings dialog.
+            WriteCoreSettingsJson();
         }
 
         public void SaveSettings()
@@ -165,6 +177,8 @@ namespace MusicBeePlugin.Services.Configuration
                 SafeLoadXml(document, GetSettingsFile());
                 WriteApplicationSetting(document);
                 document.Save(GetSettingsFile());
+
+                WriteCoreSettingsJson();
 
                 _logger.Debug("Settings saved successfully, triggering socket restart");
                 var message = MessageSendEvent.Create("SocketRestart", true);
@@ -252,6 +266,37 @@ namespace MusicBeePlugin.Services.Configuration
         {
             return Path.Combine(StoragePath, SFilename);
         }
+
+        /// <summary>
+        ///     Write the JSON projection consumed by the Rust core. Lives next to
+        ///     settings.xml in the same storage directory; the Rust core reads it
+        ///     once at server start. Only the runtime-relevant subset is included.
+        /// </summary>
+        private void WriteCoreSettingsJson()
+        {
+            try
+            {
+                if (!Directory.Exists(StoragePath))
+                    Directory.CreateDirectory(StoragePath);
+
+                var dto = new CoreSettingsDto { port = (ushort)_settings.ListeningPort };
+                var json = JsonConvert.SerializeObject(dto, Newtonsoft.Json.Formatting.Indented);
+                File.WriteAllText(Path.Combine(StoragePath, CoreSettingsFilename), json);
+                _logger.Debug($"core_settings.json written (port={dto.port})");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to write core_settings.json");
+            }
+        }
+
+        // Field names match the snake_case serde shape Rust expects.
+        // ReSharper disable InconsistentNaming
+        private sealed class CoreSettingsDto
+        {
+            public ushort port { get; set; }
+        }
+        // ReSharper restore InconsistentNaming
 
         private void CreateEmptySettingsFile(string application)
         {

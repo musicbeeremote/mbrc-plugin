@@ -109,7 +109,7 @@ namespace MusicBeePlugin
                     _pluginCore.UserSettings,
                     _pluginCore.CoverService);
                 _nativeBridge.Initialize(_api.Setting_GetPersistentStoragePath());
-                _nativeBridge.StartNetworking(8080);
+                _nativeBridge.StartNetworking();
 
                 // Add MusicBee menu item for settings
                 _api.MB_AddMenuItem(

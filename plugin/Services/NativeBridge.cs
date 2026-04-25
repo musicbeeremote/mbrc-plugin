@@ -229,9 +229,11 @@ namespace MusicBeePlugin.Services
         }
 
         /// <summary>
-        ///     Start the Rust HTTP server on the given port.
+        ///     Start the Rust HTTP server. The listening port is read from
+        ///     core_settings.json in the storage path passed to Initialize;
+        ///     C# WinForms is the only writer of that file.
         /// </summary>
-        public void StartNetworking(int port)
+        public void StartNetworking()
         {
             if (!_initialized)
             {
@@ -241,9 +243,9 @@ namespace MusicBeePlugin.Services
 
             try
             {
-                var result = NativeMethods.mbrc_start_networking(port);
+                var result = NativeMethods.mbrc_start_networking();
                 if (result == 0)
-                    Logger.Info("Rust HTTP server starting on port {0}", port);
+                    Logger.Info("Rust HTTP server starting (port from core_settings.json)");
                 else
                     Logger.Error("Failed to start Rust HTTP server (error code: {0})", result);
             }

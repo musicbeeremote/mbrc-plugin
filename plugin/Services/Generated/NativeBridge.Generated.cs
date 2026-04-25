@@ -40,13 +40,17 @@ namespace MusicBeePlugin.Services.Generated
         internal static extern int mbrc_shutdown();
 
         /// <summary>
-        ///  Start the HTTP server on the given port.
+        ///  Start the HTTP server. The listening port is read from
+        ///  `core_settings.json` in the storage directory passed to
+        ///  `mbrc_initialize` (falling back to the documented default if the
+        ///  file is missing or invalid). C# WinForms is the only writer of
+        ///  that file — Rust never persists settings.
         ///
         ///  Requires `mbrc_initialize` to have been called first.
         ///  Returns: 0 on success, negative error code on failure.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_start_networking", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern int mbrc_start_networking(int port);
+        internal static extern int mbrc_start_networking();
 
         /// <summary>
         ///  Stop the HTTP server gracefully.
