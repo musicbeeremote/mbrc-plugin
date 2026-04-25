@@ -21,7 +21,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use mbrc_core::replay_support::{handle_connection, nop_callbacks, AppState};
+use mbrc_core::replay_support::{
+    handle_connection, nop_callbacks, synthesize_notification, AppState, NotificationType,
+};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -177,6 +179,7 @@ struct ReplayStats {
     /// context of every s2c frame we timed out waiting for — so we can
     /// see which handlers aren't producing output with no-op callbacks.
     timeout_contexts: Vec<String>,
+    notifications_synthesized: usize,
 }
 
 type ConnectionReport = (
@@ -186,7 +189,66 @@ type ConnectionReport = (
     usize,                             // shape matches
     Vec<(String, Vec<ShapeMismatch>)>, // mismatches
     Vec<String>,                       // timeout contexts
+    usize,                             // notifications synthesized
 );
+
+/// Map an s2c context that's *only ever* a broadcast (never a command
+/// response) to its `NotificationType`. Cross-cutting contexts like
+/// `playerstate` / `playervolume` / `nowplayingcover` are intentionally
+/// excluded — even when the classifier flags them as orphans, the
+/// handshake's multi-message response can be misclassified, so
+/// synthesizing for them desynchronizes the wire and *worsens* the
+/// shape-match score (verified empirically: opt-in for those contexts
+/// drove playerstate timeouts from 6 → 24 and nowplayingposition from
+/// 18 → 133, net negative). Keeping it conservative.
+fn broadcast_notification_for(context: &str) -> Option<NotificationType> {
+    match context {
+        "nowplayinglistchanged" => Some(NotificationType::NowPlayingListChanged),
+        "nowplayingtrack" => Some(NotificationType::TrackChanged),
+        _ => None,
+    }
+}
+
+/// Walk a connection's frames and tag each s2c entry as either a
+/// response to a recent c2s command (false) or an orphan broadcast
+/// (true). The heuristic: a broadcast is an s2c whose context doesn't
+/// match the most-recent unconsumed c2s command on this connection.
+fn classify_broadcasts(frames: &[Frame]) -> Vec<bool> {
+    let mut is_broadcast = vec![false; frames.len()];
+    let mut last_c2s_ctx: Option<String> = None;
+    let mut response_consumed = true;
+
+    for (i, f) in frames.iter().enumerate() {
+        match f.dir {
+            Dir::C2s => {
+                let ctx = f
+                    .frame
+                    .as_ref()
+                    .and_then(|v| v.get("context"))
+                    .and_then(|c| c.as_str())
+                    .map(String::from);
+                last_c2s_ctx = ctx;
+                response_consumed = false;
+            }
+            Dir::S2c => {
+                let s2c_ctx = f
+                    .frame
+                    .as_ref()
+                    .and_then(|v| v.get("context"))
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("");
+                let matches_request = !response_consumed
+                    && last_c2s_ctx.as_deref() == Some(s2c_ctx);
+                if matches_request {
+                    response_consumed = true;
+                } else {
+                    is_broadcast[i] = true;
+                }
+            }
+        }
+    }
+    is_broadcast
+}
 
 async fn replay_connection(frames: &[Frame]) -> Result<ConnectionReport, String> {
     let state = AppState::for_replay(nop_callbacks(), String::from("/tmp/replay"));
@@ -216,8 +278,14 @@ async fn replay_connection(frames: &[Frame]) -> Result<ConnectionReport, String>
     let mut shape_matches = 0;
     let mut mismatches: Vec<(String, Vec<ShapeMismatch>)> = Vec::new();
     let mut timeout_contexts: Vec<String> = Vec::new();
+    let mut notifications_synthesized: usize = 0;
 
-    for f in frames {
+    // Pre-classify each s2c frame as response-to-c2s vs orphan broadcast.
+    // Orphans we synthesize via mbrc notifications so the server emits
+    // them onto the wire just like real MusicBee would have.
+    let is_broadcast = classify_broadcasts(frames);
+
+    for (i, f) in frames.iter().enumerate() {
         match f.dir {
             Dir::C2s => {
                 let bytes: String = if let Some(raw) = &f.raw {
@@ -245,6 +313,18 @@ async fn replay_connection(frames: &[Frame]) -> Result<ConnectionReport, String>
                     .and_then(|c| c.as_str())
                     .unwrap_or("?")
                     .to_string();
+
+                // If this s2c is an orphan broadcast, synthesize the
+                // matching MusicBee notification so the server emits the
+                // expected frame onto the wire. The connection task is
+                // already subscribed to event_tx; the broadcast lands on
+                // the read side a few ms later.
+                if is_broadcast[i] {
+                    if let Some(nt) = broadcast_notification_for(&expected_ctx) {
+                        let _ = synthesize_notification(&state, nt).await;
+                        notifications_synthesized += 1;
+                    }
+                }
 
                 line.clear();
                 match timeout(RESPONSE_READ_TIMEOUT, reader.read_line(&mut line)).await {
@@ -294,6 +374,7 @@ async fn replay_connection(frames: &[Frame]) -> Result<ConnectionReport, String>
         shape_matches,
         mismatches,
         timeout_contexts,
+        notifications_synthesized,
     ))
 }
 
@@ -311,11 +392,12 @@ async fn replay_fixture(path: &PathBuf) -> ReplayStats {
         shape_mismatches: Vec::new(),
         timeouts: 0,
         timeout_contexts: Vec::new(),
+        notifications_synthesized: 0,
     };
 
     for (i, conn) in connections.iter().enumerate() {
         match replay_connection(conn).await {
-            Ok((sent, expected, received, matched, mismatches, timeout_ctxs)) => {
+            Ok((sent, expected, received, matched, mismatches, timeout_ctxs, notes)) => {
                 stats.c2s_sent += sent;
                 stats.s2c_expected += expected;
                 stats.s2c_received += received;
@@ -323,6 +405,7 @@ async fn replay_fixture(path: &PathBuf) -> ReplayStats {
                 stats.timeouts += timeout_ctxs.len();
                 stats.timeout_contexts.extend(timeout_ctxs);
                 stats.shape_mismatches.extend(mismatches);
+                stats.notifications_synthesized += notes;
             }
             Err(e) => {
                 eprintln!(
@@ -359,7 +442,7 @@ async fn replay_all_fixtures() {
         eprintln!("\n=== replaying {} ===", path.display());
         let stats = replay_fixture(path).await;
         eprintln!(
-            "  conns={} c2s={} s2c_expected={} s2c_received={} matched={} mismatched={} timeouts={}",
+            "  conns={} c2s={} s2c_expected={} s2c_received={} matched={} mismatched={} timeouts={} notifications_synthesized={}",
             stats.connections,
             stats.c2s_sent,
             stats.s2c_expected,
@@ -367,6 +450,7 @@ async fn replay_all_fixtures() {
             stats.shape_matches,
             stats.shape_mismatches.len(),
             stats.timeouts,
+            stats.notifications_synthesized,
         );
         // Show top-10 mismatch contexts so mismatches are actionable
         // without drowning in output.

@@ -182,6 +182,17 @@ pub extern "C" fn mbrc_free_string(ptr: *mut c_char) {
     }
 }
 
+/// Replay-harness-visible alias for [`build_broadcast`] — same impl,
+/// just `pub(crate)` so `replay_support` can re-export it. Production
+/// code paths still go through `build_broadcast`.
+#[doc(hidden)]
+pub(crate) async fn build_broadcast_for_replay(
+    notification: NotificationType,
+    state: &Arc<state::AppState>,
+) -> Option<BroadcastEvent> {
+    build_broadcast(notification, state).await
+}
+
 /// Build a broadcast event for a given notification by querying MusicBee via callbacks.
 /// Returns `None` for notifications that don't produce broadcasts (e.g. FileAddedToLibrary).
 async fn build_broadcast(

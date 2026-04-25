@@ -10,9 +10,28 @@ use std::ffi::c_int;
 use std::ptr;
 
 pub use crate::ffi::callbacks::SafeCallbacks;
-pub use crate::ffi::types::{MbrcCallbacks, QueryType};
+pub use crate::ffi::types::{MbrcCallbacks, NotificationType, QueryType};
 pub use crate::server::legacy::connection::handle_connection;
 pub use crate::state::AppState;
+
+use std::sync::Arc;
+
+/// Synthesize a notification broadcast as if MusicBee had fired it,
+/// pushing the resulting messages onto the connection's `event_tx`.
+/// The replay harness uses this to reproduce captured s2c frames that
+/// originated from real MusicBee notifications (vs. command responses).
+///
+/// Returns the number of `SocketMessage`s emitted, or 0 if the
+/// notification type doesn't produce a broadcast (FileAddedToLibrary).
+pub async fn synthesize_notification(state: &Arc<AppState>, notification: NotificationType) -> usize {
+    if let Some(event) = crate::build_broadcast_for_replay(notification, state).await {
+        let count = event.messages.len();
+        let _ = state.event_tx().send(event);
+        count
+    } else {
+        0
+    }
+}
 pub use crate::server::{
     AlbumCoverResponse, AlbumDto, AlbumListResponse, ArtistDto, ArtistListResponse,
     CoverCacheBuildStatusResponse, GenreDto, GenreListResponse, NowPlayingDetailsResponse,
