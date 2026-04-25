@@ -146,9 +146,7 @@ fn sanitize_ios_data_bareword(s: &str) -> String {
     if !first.is_ascii_alphabetic() {
         return s.to_owned();
     }
-    let token_end = rest
-        .find(|c: char| c == ',' || c == '}')
-        .unwrap_or(rest.len());
+    let token_end = rest.find([',', '}']).unwrap_or(rest.len());
     let token = &rest[..token_end];
     // Whitelist alphanumeric+underscore only — protects against weirder
     // payloads we haven't seen in the wild.
@@ -166,6 +164,30 @@ fn sanitize_ios_data_bareword(s: &str) -> String {
     out.push('"');
     out.push_str(&rest[token_end..]);
     out
+}
+
+/// Writes CRLF-delimited JSON messages to a TCP stream.
+pub struct MessageWriter {
+    writer: BufWriter<OwnedWriteHalf>,
+}
+
+impl MessageWriter {
+    pub fn new(write_half: OwnedWriteHalf) -> Self {
+        Self {
+            writer: BufWriter::new(write_half),
+        }
+    }
+
+    /// Send a message as JSON + CRLF.
+    pub async fn write_message(&mut self, msg: &SocketMessage) -> Result<(), std::io::Error> {
+        let json = serde_json::to_string(msg)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        trace!(json = json.as_str(), "Sending message");
+        self.writer.write_all(json.as_bytes()).await?;
+        self.writer.write_all(b"\r\n").await?;
+        self.writer.flush().await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -233,29 +255,5 @@ mod tests {
     fn leaves_null_data_untouched() {
         let s = r#"{"context":"q","data":null}"#;
         assert_eq!(sanitize_ios_data_bareword(s), s);
-    }
-}
-
-/// Writes CRLF-delimited JSON messages to a TCP stream.
-pub struct MessageWriter {
-    writer: BufWriter<OwnedWriteHalf>,
-}
-
-impl MessageWriter {
-    pub fn new(write_half: OwnedWriteHalf) -> Self {
-        Self {
-            writer: BufWriter::new(write_half),
-        }
-    }
-
-    /// Send a message as JSON + CRLF.
-    pub async fn write_message(&mut self, msg: &SocketMessage) -> Result<(), std::io::Error> {
-        let json = serde_json::to_string(msg)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        trace!(json = json.as_str(), "Sending message");
-        self.writer.write_all(json.as_bytes()).await?;
-        self.writer.write_all(b"\r\n").await?;
-        self.writer.flush().await?;
-        Ok(())
     }
 }

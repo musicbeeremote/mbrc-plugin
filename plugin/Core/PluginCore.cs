@@ -9,7 +9,6 @@ using MusicBeePlugin.Services.Configuration;
 using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Services.UI;
-using MusicBeePlugin.Utilities.Network;
 using NLog;
 
 namespace MusicBeePlugin.Core

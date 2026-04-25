@@ -16,7 +16,6 @@ using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Services.UI;
 using MusicBeePlugin.Tools;
-using MusicBeePlugin.Utilities.Network;
 
 namespace MusicBeePlugin.UI.Windows
 {

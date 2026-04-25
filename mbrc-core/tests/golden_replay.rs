@@ -741,13 +741,12 @@ async fn replay_connection_tier_b(
                     line.clear();
                     match timeout(RESPONSE_READ_TIMEOUT, reader.read_line(&mut line)).await {
                         Ok(Ok(0)) => break,
-                        Ok(Ok(_)) => match serde_json::from_str::<Value>(line.trim()) {
-                            Ok(v) => {
+                        Ok(Ok(_)) => {
+                            if let Ok(v) = serde_json::from_str::<Value>(line.trim()) {
                                 received.push(v);
                                 s2c_received += 1;
                             }
-                            Err(_) => {}
-                        },
+                        }
                         Ok(Err(e)) => return Err(format!("read error: {}", e)),
                         Err(_) => {
                             timeouts += 1;
