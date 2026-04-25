@@ -15,6 +15,7 @@
 //! added, existing endpoints MUST NOT be reshaped without a `/api/v2`.
 
 mod error;
+mod library;
 mod player;
 mod track;
 
@@ -54,6 +55,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/version", get(version_handler))
         .nest("/player", player::routes())
         .nest("/track", track::routes())
+        .nest("/library", library::routes())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
