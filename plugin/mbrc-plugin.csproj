@@ -139,6 +139,17 @@
     <ItemGroup>
       <ILRepackSearchDirs Include="$(OutputPath)" />
     </ItemGroup>
+    <!-- The FFI DTOs (NativeBridgeDtos.cs) live in Core under the bare
+         `MusicBeePlugin.Services` namespace and are reflected over by
+         MessagePack's dynamic formatter, which can only see public
+         types. Without this exclusion the dynamic IL emit fails at
+         runtime ("Building dynamic formatter only allows public type").
+         The pattern matches types directly under .Services with no
+         further dotted segment, leaving the .Configuration / .Core /
+         .Media sub-namespaces internalized as before. -->
+    <ItemGroup>
+      <ILRepackInternalizeExclude Include="MusicBeePlugin\.Services\.[^.]+" />
+    </ItemGroup>
     <ILRepack
       InputAssemblies="@(ILRepackAssemblies)"
       OutputFile="$(ILRepackOutputAssembly)"
@@ -146,6 +157,7 @@
       Parallel="true"
       DebugInfo="true"
       Internalize="true"
+      InternalizeExclude="@(ILRepackInternalizeExclude)"
       LibraryPath="@(ILRepackSearchDirs)"
     />
     <!-- Replace original with merged -->
