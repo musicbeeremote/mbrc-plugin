@@ -35,22 +35,19 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            mbrc-core/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('mbrc-core/Cargo.lock') }}
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: rust fmt check
-        working-directory: mbrc-core
         run: cargo fmt --all -- --check
 
       - name: rust clippy
-        working-directory: mbrc-core
-        run: cargo clippy --target i686-pc-windows-msvc --all-targets -- -D warnings
+        run: cargo clippy --target i686-pc-windows-msvc -p mbrc_core --all-targets -- -D warnings
 
       - name: rust tests
-        working-directory: mbrc-core
-        run: cargo test --target i686-pc-windows-msvc
+        run: cargo test --target i686-pc-windows-msvc -p mbrc_core
 
       - name: rust release build
         run: powershell -NoProfile -ExecutionPolicy Bypass -File ./build-rust.ps1 -Configuration release

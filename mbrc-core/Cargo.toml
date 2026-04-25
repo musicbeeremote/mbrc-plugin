@@ -32,9 +32,4 @@ base64 = "0.22"
 [build-dependencies]
 csbindgen = "1.9"
 
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+# Profile is defined at the workspace root.

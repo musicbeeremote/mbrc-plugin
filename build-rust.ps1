@@ -15,27 +15,35 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 Write-Host "Ensuring i686-pc-windows-msvc target is installed..." -ForegroundColor Yellow
 rustup target add i686-pc-windows-msvc
 
-$crateDir = Join-Path $PSScriptRoot "mbrc-core"
+$workspaceRoot = $PSScriptRoot
 $target = "i686-pc-windows-msvc"
 
 # Build
 Write-Host "`nBuilding mbrc_core ($Configuration)..." -ForegroundColor Yellow
 
-$cargoArgs = @("build", "--manifest-path", "$crateDir\Cargo.toml", "--target", $target)
+# Cargo workspace lives at the script root; build only the cdylib package
+# (the dev tools under tools/ build for the host arch and aren't needed
+# in the plugin output).
+$cargoArgs = @("build", "-p", "mbrc_core", "--target", $target)
 if ($Configuration -eq "release") {
     $cargoArgs += "--release"
 }
 
-& cargo @cargoArgs
+Push-Location $workspaceRoot
+try {
+    & cargo @cargoArgs
+} finally {
+    Pop-Location
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Cargo build failed"
     exit $LASTEXITCODE
 }
 
-# Determine source path
+# Workspace target dir is at the root, not the member crate.
 $profile = if ($Configuration -eq "release") { "release" } else { "debug" }
-$sourceDll = Join-Path $crateDir "target\$target\$profile\mbrc_core.dll"
+$sourceDll = Join-Path $workspaceRoot "target\$target\$profile\mbrc_core.dll"
 
 if (-not (Test-Path $sourceDll)) {
     Write-Error "Built DLL not found at: $sourceDll"

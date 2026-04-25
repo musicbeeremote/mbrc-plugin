@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "mbrc-core",
+    "tools/mbrc-fixture-trim",
+    "tools/mbrc-tee-proxy",
+]
+
+# Profile knobs apply to every workspace member's release build —
+# the production cdylib (`mbrc-core`) and the dev tools (which only
+# run locally) all benefit from the same size-optimised release.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
