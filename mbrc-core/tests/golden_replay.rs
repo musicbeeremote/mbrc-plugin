@@ -1,21 +1,31 @@
-//! Golden-trace replay — Tier A (shape-only).
+//! Golden-trace replay — Tier A (shape) + Tier B (value, burst-aware).
 //!
-//! Reads each `legacy-*.jsonl` fixture, groups frames into connections
-//! using the `player` handshake as boundary, and for every connection:
+//! **Tier A** reads each `legacy-*.jsonl` fixture, groups frames into
+//! connections using the `player` handshake as boundary, replays the
+//! c2s frames in order, and for every captured s2c frame reads one
+//! response line from the server and shape-diffs it against the
+//! captured response. Shape-diff means same keys at every level, same
+//! value *types*. Values themselves are not compared.
 //!
-//! 1. Boots a fresh Rust server instance listening on a loopback port.
-//! 2. Connects a client socket.
-//! 3. Replays the c2s frames in order.
-//! 4. For every captured s2c frame, reads one response line from the
-//!    server and shape-diffs it against the captured response.
+//! **Tier B** partitions each connection into spans
+//! (`C2sBeat { c2s, expected_response }` and `Burst { expected: Vec<Frame> }`)
+//! and replays span-by-span:
 //!
-//! Shape-diff means: same keys at every object level, same value *types*
-//! (null/bool/num/str/arr/obj). Values themselves are not compared —
-//! that's Tier B.
+//!  * `C2sBeat`s send the c2s and read at most one response, then
+//!    shape-diff against the captured payload.
+//!  * `Burst`s figure out which notifications produce the burst's
+//!    context set, fire each once via `mbrc_handle_notification`, then
+//!    read up to N frames with bounded timeout and match each *out of
+//!    order* against any unmatched expected frame in the burst by
+//!    context. Per-frame match is shape-diff. This sidesteps the
+//!    wire-ordering variance (initial-state push vs runtime-playernext
+//!    bursts have different orderings) that blocked Tier A from
+//!    measuring the multi-frame TrackChanged improvement.
 //!
-//! The mock callbacks are all no-op, so handler responses will often
-//! contain default/empty values. Tier A just proves command dispatch
-//! and envelope shape are wired correctly.
+//! Value-strict comparison would require either real MusicBee data or
+//! a hand-crafted exclusion list large enough that the signal-to-noise
+//! collapses; deferred to a future Tier C with a richer seeded callback
+//! table or a recorded-and-replayed callback log.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -487,5 +497,397 @@ async fn replay_all_fixtures() {
     assert!(
         total_matches > 0,
         "nothing shape-matched — harness plumbing broken"
+    );
+}
+
+// ── Tier B: span partition + burst-aware out-of-order shape match ──
+
+/// One unit of replay work. The harness walks these in order.
+#[derive(Debug)]
+enum Span {
+    /// A c2s frame, with an optional response we expect on the wire.
+    /// Fire-and-forget commands (volume up, queue add, etc.) have None.
+    C2sBeat {
+        c2s: Frame,
+        expected_response: Option<Frame>,
+    },
+    /// A run of orphan s2c frames between c2s beats — i.e. a broadcast
+    /// burst from MusicBee. Order within the burst is matched out-of-
+    /// order because the wire ordering varies between burst types.
+    Burst { expected: Vec<Frame> },
+}
+
+fn partition_into_spans(frames: &[Frame]) -> Vec<Span> {
+    let mut spans = Vec::new();
+    let mut i = 0;
+    while i < frames.len() {
+        let f = &frames[i];
+        match f.dir {
+            Dir::C2s => {
+                let c2s_ctx = f
+                    .frame
+                    .as_ref()
+                    .and_then(|v| v.get("context"))
+                    .and_then(|c| c.as_str());
+                // Look ahead: if the very next frame is an s2c with
+                // matching context, that's the response to this c2s.
+                let response = match (c2s_ctx, frames.get(i + 1)) {
+                    (Some(ctx), Some(next)) if next.dir == Dir::S2c => {
+                        let next_ctx = next
+                            .frame
+                            .as_ref()
+                            .and_then(|v| v.get("context"))
+                            .and_then(|c| c.as_str());
+                        if next_ctx == Some(ctx) {
+                            Some(next.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                let consumed = if response.is_some() { 2 } else { 1 };
+                spans.push(Span::C2sBeat {
+                    c2s: f.clone(),
+                    expected_response: response,
+                });
+                i += consumed;
+            }
+            Dir::S2c => {
+                // Collect contiguous s2c frames.
+                let mut j = i;
+                while j < frames.len() && frames[j].dir == Dir::S2c {
+                    j += 1;
+                }
+                spans.push(Span::Burst {
+                    expected: frames[i..j].to_vec(),
+                });
+                i = j;
+            }
+        }
+    }
+    spans
+}
+
+/// Look at the set of contexts in a captured burst and decide which
+/// notification(s) would produce that set. Returns each notification at
+/// most once — firing TrackChanged emits all five frames in one call,
+/// so we don't want to fire it per frame.
+fn notifications_for_burst(contexts: &std::collections::HashSet<String>) -> Vec<NotificationType> {
+    let mut out = Vec::new();
+    // TrackChanged emits rating, lfm-rating, lyrics, position, track.
+    // If any of those appear in the burst, fire it once.
+    let track_changed_contexts = ["nowplayingrating", "nowplayinglfmrating", "nowplayingtrack"];
+    if track_changed_contexts.iter().any(|c| contexts.contains(*c)) {
+        out.push(NotificationType::TrackChanged);
+    }
+    if contexts.contains("nowplayinglistchanged") {
+        out.push(NotificationType::NowPlayingListChanged);
+    }
+    // Cover/lyrics standalone broadcasts only — if the burst is a
+    // TrackChanged we already fired that, which emits an empty cover
+    // placeholder. NowPlayingArtworkReady fires on real cover-load.
+    if contexts.contains("nowplayingcover")
+        && !track_changed_contexts.iter().any(|c| contexts.contains(*c))
+    {
+        out.push(NotificationType::NowPlayingArtworkReady);
+    }
+    out
+}
+
+#[derive(Debug, Default)]
+#[allow(dead_code)]
+struct TierBStats {
+    fixture: String,
+    connections: usize,
+    c2s_sent: usize,
+    s2c_expected: usize,
+    s2c_received: usize,
+    shape_matches: usize,
+    shape_mismatches: Vec<(String, Vec<ShapeMismatch>)>,
+    burst_unmatched: usize,
+    timeouts: usize,
+    notifications_synthesized: usize,
+}
+
+async fn replay_connection_tier_b(
+    frames: &[Frame],
+) -> Result<
+    (
+        usize, // c2s sent
+        usize, // s2c expected
+        usize, // s2c received
+        usize, // shape matches
+        Vec<(String, Vec<ShapeMismatch>)>,
+        usize, // burst unmatched
+        usize, // timeouts
+        usize, // notifications synthesized
+    ),
+    String,
+> {
+    let state = AppState::for_replay(nop_callbacks(), String::from("/tmp/replay"));
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("bind: {}", e))?;
+    let addr = listener.local_addr().map_err(|e| format!("addr: {}", e))?;
+
+    let server_state = Arc::clone(&state);
+    let server_task = tokio::spawn(async move {
+        if let Ok((stream, peer)) = listener.accept().await {
+            handle_connection(stream, peer, server_state).await;
+        }
+    });
+
+    let client = TcpStream::connect(addr)
+        .await
+        .map_err(|e| format!("connect: {}", e))?;
+    let (read_half, mut write_half) = client.into_split();
+    let mut reader = BufReader::new(read_half);
+    let mut line = String::new();
+
+    let mut c2s_sent = 0;
+    let mut s2c_expected = 0;
+    let mut s2c_received = 0;
+    let mut shape_matches = 0;
+    let mut shape_mismatches: Vec<(String, Vec<ShapeMismatch>)> = Vec::new();
+    let mut burst_unmatched = 0;
+    let mut timeouts = 0;
+    let mut notifications_synthesized = 0;
+
+    let spans = partition_into_spans(frames);
+
+    for span in spans {
+        match span {
+            Span::C2sBeat {
+                c2s,
+                expected_response,
+            } => {
+                let bytes: String = if let Some(raw) = &c2s.raw {
+                    raw.clone()
+                } else if let Some(fr) = &c2s.frame {
+                    serde_json::to_string(fr).unwrap_or_default()
+                } else {
+                    continue;
+                };
+                write_half
+                    .write_all(bytes.as_bytes())
+                    .await
+                    .map_err(|e| format!("write: {}", e))?;
+                write_half.write_all(b"\r\n").await.ok();
+                c2s_sent += 1;
+
+                if let Some(resp) = expected_response {
+                    let expected = match &resp.frame {
+                        Some(fr) => fr.clone(),
+                        None => continue,
+                    };
+                    let expected_ctx = expected
+                        .get("context")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("?")
+                        .to_string();
+                    s2c_expected += 1;
+
+                    line.clear();
+                    match timeout(RESPONSE_READ_TIMEOUT, reader.read_line(&mut line)).await {
+                        Ok(Ok(0)) => {
+                            return Err(format!("server closed mid-stream at seq {}", resp.seq));
+                        }
+                        Ok(Ok(_)) => {
+                            s2c_received += 1;
+                            match serde_json::from_str::<Value>(line.trim()) {
+                                Ok(actual) => {
+                                    let diffs = shape_diff(&expected, &actual, "");
+                                    if diffs.is_empty() {
+                                        shape_matches += 1;
+                                    } else {
+                                        shape_mismatches.push((expected_ctx, diffs));
+                                    }
+                                }
+                                Err(_) => burst_unmatched += 1,
+                            }
+                        }
+                        Ok(Err(e)) => return Err(format!("read error: {}", e)),
+                        Err(_) => timeouts += 1,
+                    }
+                }
+            }
+            Span::Burst { expected } => {
+                let burst_size = expected.len();
+                s2c_expected += burst_size;
+
+                // Compute the unique notifications this burst represents
+                // and fire each once.
+                let contexts: std::collections::HashSet<String> = expected
+                    .iter()
+                    .filter_map(|f| {
+                        f.frame
+                            .as_ref()
+                            .and_then(|v| v.get("context"))
+                            .and_then(|c| c.as_str())
+                            .map(String::from)
+                    })
+                    .collect();
+                for nt in notifications_for_burst(&contexts) {
+                    let _ = synthesize_notification(&state, nt).await;
+                    notifications_synthesized += 1;
+                }
+
+                // Read up to burst_size frames with bounded timeout per
+                // frame. Collect into a Vec and match out-of-order.
+                let mut received: Vec<Value> = Vec::new();
+                for _ in 0..burst_size {
+                    line.clear();
+                    match timeout(RESPONSE_READ_TIMEOUT, reader.read_line(&mut line)).await {
+                        Ok(Ok(0)) => break,
+                        Ok(Ok(_)) => match serde_json::from_str::<Value>(line.trim()) {
+                            Ok(v) => {
+                                received.push(v);
+                                s2c_received += 1;
+                            }
+                            Err(_) => {}
+                        },
+                        Ok(Err(e)) => return Err(format!("read error: {}", e)),
+                        Err(_) => {
+                            timeouts += 1;
+                            break;
+                        }
+                    }
+                }
+
+                // Match each expected against the first received with
+                // matching context. Use a `consumed` bitmap so each
+                // received frame matches at most one expected.
+                let mut consumed = vec![false; received.len()];
+                for exp in &expected {
+                    let exp_v = match &exp.frame {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    let exp_ctx = exp_v
+                        .get("context")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("?")
+                        .to_string();
+                    let mut matched = false;
+                    for (i, rcv) in received.iter().enumerate() {
+                        if consumed[i] {
+                            continue;
+                        }
+                        let rcv_ctx = rcv.get("context").and_then(|c| c.as_str()).unwrap_or("");
+                        if rcv_ctx == exp_ctx {
+                            consumed[i] = true;
+                            matched = true;
+                            let diffs = shape_diff(exp_v, rcv, "");
+                            if diffs.is_empty() {
+                                shape_matches += 1;
+                            } else {
+                                shape_mismatches.push((exp_ctx.clone(), diffs));
+                            }
+                            break;
+                        }
+                    }
+                    if !matched {
+                        burst_unmatched += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    drop(write_half);
+    drop(reader);
+    let _ = timeout(Duration::from_millis(200), server_task).await;
+
+    Ok((
+        c2s_sent,
+        s2c_expected,
+        s2c_received,
+        shape_matches,
+        shape_mismatches,
+        burst_unmatched,
+        timeouts,
+        notifications_synthesized,
+    ))
+}
+
+async fn replay_fixture_tier_b(path: &PathBuf) -> TierBStats {
+    let frames = load_fixture(path);
+    let connections = segment(&frames);
+    let mut stats = TierBStats {
+        fixture: path.file_name().unwrap().to_string_lossy().into(),
+        connections: connections.len(),
+        ..Default::default()
+    };
+
+    for conn in connections.iter() {
+        match replay_connection_tier_b(conn).await {
+            Ok((sent, expected, received, matched, mismatches, unmatched, timeouts, notes)) => {
+                stats.c2s_sent += sent;
+                stats.s2c_expected += expected;
+                stats.s2c_received += received;
+                stats.shape_matches += matched;
+                stats.shape_mismatches.extend(mismatches);
+                stats.burst_unmatched += unmatched;
+                stats.timeouts += timeouts;
+                stats.notifications_synthesized += notes;
+            }
+            Err(e) => {
+                eprintln!("  conn ({} frames) failed: {}", conn.len(), e);
+            }
+        }
+    }
+    stats
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn replay_all_fixtures_tier_b() {
+    let fixtures = std::fs::read_dir(FIXTURE_DIR)
+        .expect("fixture dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().and_then(|s| s.to_str()) == Some("jsonl")
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with("legacy-"))
+                    .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    assert!(!fixtures.is_empty(), "no fixtures found in {}", FIXTURE_DIR);
+
+    let mut all = Vec::new();
+    for path in &fixtures {
+        eprintln!("\n=== Tier B replaying {} ===", path.display());
+        let stats = replay_fixture_tier_b(path).await;
+        eprintln!(
+            "  conns={} c2s={} s2c_expected={} s2c_received={} matched={} mismatched={} burst_unmatched={} timeouts={} notifications_synthesized={}",
+            stats.connections,
+            stats.c2s_sent,
+            stats.s2c_expected,
+            stats.s2c_received,
+            stats.shape_matches,
+            stats.shape_mismatches.len(),
+            stats.burst_unmatched,
+            stats.timeouts,
+            stats.notifications_synthesized,
+        );
+        for (ctx, diffs) in stats.shape_mismatches.iter().take(10) {
+            eprintln!("    diff {}: {:?}", ctx, diffs);
+        }
+        all.push(stats);
+    }
+
+    let total_matches: usize = all.iter().map(|s| s.shape_matches).sum();
+    let total_expected: usize = all.iter().map(|s| s.s2c_expected).sum();
+    eprintln!(
+        "\n=== Tier B overall: {}/{} expected s2c frames shape-matched (burst-aware)",
+        total_matches, total_expected
+    );
+    assert!(
+        total_matches > 0,
+        "Tier B: nothing matched — harness or DTOs broken"
     );
 }
