@@ -30,6 +30,14 @@ namespace MusicBeePlugin.Services.Core
         /// </summary>
         IEventAggregator EventAggregator { get; }
 
+        /// <summary>
+        ///     Register the FFI bridge with the container. Called by the
+        ///     Plugin host once <see cref="INativeBridge"/> has been
+        ///     constructed — the container is built before the bridge
+        ///     exists, so DI can't auto-resolve it.
+        /// </summary>
+        void RegisterNativeBridge(INativeBridge bridge);
+
         void Initialize();
 
         /// <summary>
@@ -37,22 +45,6 @@ namespace MusicBeePlugin.Services.Core
         /// </summary>
         /// <param name="enabled">True to enable logging, false to disable.</param>
         void SetLogging(bool enabled);
-
-        /// <summary>
-        ///     Starts the networking services.
-        /// </summary>
-        void StartNetworking();
-
-        /// <summary>
-        ///     Stops the networking services.
-        /// </summary>
-        void StopNetworking();
-
-        /// <summary>
-        ///     Gets the notification handler for processing MusicBee notifications.
-        /// </summary>
-        /// <returns>The notification handler instance</returns>
-        INotificationHandler GetNotificationHandler();
 
         /// <summary>
         ///     Uninstalls the plugin by cleaning up resources and deleting related data folders.

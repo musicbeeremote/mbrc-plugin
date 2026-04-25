@@ -112,6 +112,7 @@ namespace MusicBeePlugin
                     _pluginCore.UserSettings,
                     _pluginCore.CoverService);
                 _nativeBridge.Initialize(_api.Setting_GetPersistentStoragePath());
+                _pluginCore.RegisterNativeBridge(_nativeBridge);
                 _nativeBridge.StartNetworking();
 
                 // Restart the Rust server when the user changes settings —
@@ -179,7 +180,6 @@ namespace MusicBeePlugin
             _nativeBridge?.Dispose();
             _nativeBridge = null;
 
-            _pluginCore?.StopNetworking();
             _pluginCore?.Dispose();
             _pluginCore = null;
         }
@@ -211,40 +211,23 @@ namespace MusicBeePlugin
         /// <param name="type"></param>
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
-            // Perform an action depending on the notification type
-            var notificationHandler = _pluginCore?.GetNotificationHandler();
-            if (notificationHandler == null)
-                return;
-
-            // Forward notification to Rust core
+            // Forward to Rust — it handles broadcast fan-out for all
+            // protocol-visible notifications.
             ForwardNotificationToRust(type);
 
-            switch (type)
+            // The only C#-side responsibility left is priming the cover
+            // cache when a new file is added to the library; the cache
+            // itself stays C#-owned for this release (per rollout plan).
+            if (type == NotificationType.FileAddedToLibrary && _pluginCore != null)
             {
-                case NotificationType.TrackChanged:
-                    notificationHandler.HandleTrackChanged(sourceFileUrl);
-                    break;
-                case NotificationType.VolumeLevelChanged:
-                    notificationHandler.HandleVolumeLevelChanged();
-                    break;
-                case NotificationType.VolumeMuteChanged:
-                    notificationHandler.HandleVolumeMuteChanged();
-                    break;
-                case NotificationType.PlayStateChanged:
-                    notificationHandler.HandlePlayStateChanged();
-                    break;
-                case NotificationType.NowPlayingLyricsReady:
-                    notificationHandler.HandleNowPlayingLyricsReady();
-                    break;
-                case NotificationType.NowPlayingArtworkReady:
-                    notificationHandler.HandleNowPlayingArtworkReady();
-                    break;
-                case NotificationType.PlayingTracksChanged:
-                    notificationHandler.HandleNowPlayingListChanged();
-                    break;
-                case NotificationType.FileAddedToLibrary:
-                    notificationHandler.HandleFileAddedToLibrary(sourceFileUrl);
-                    break;
+                try
+                {
+                    _pluginCore.CoverService.CacheTrackCover(sourceFileUrl);
+                }
+                catch
+                {
+                    // Cover cache failures must never crash MusicBee.
+                }
             }
         }
 

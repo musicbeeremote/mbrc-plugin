@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using FluentAssertions;
 using Moq;
 using MusicBeePlugin.Adapters.Contracts;
-using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Models.Responses;
 using MusicBeePlugin.Services.Media;
 using MusicBeeRemote.Core.Tests.Mocks;
@@ -16,7 +15,6 @@ namespace MusicBeeRemote.Core.Tests.Services
         private readonly Mock<ILibraryDataProvider> _libraryDataProvider;
         private readonly Mock<ITrackDataProvider> _trackDataProvider;
         private readonly Mock<ISystemOperations> _systemOperations;
-        private readonly Mock<IEventAggregator> _eventAggregator;
         private readonly MockLogger _logger;
         private readonly string _storagePath;
         private readonly CoverService _sut;
@@ -27,7 +25,6 @@ namespace MusicBeeRemote.Core.Tests.Services
             _libraryDataProvider = new Mock<ILibraryDataProvider>();
             _trackDataProvider = new Mock<ITrackDataProvider>();
             _systemOperations = new Mock<ISystemOperations>();
-            _eventAggregator = new Mock<IEventAggregator>();
             _logger = new MockLogger();
             _storagePath = System.IO.Path.GetTempPath();
 
@@ -36,7 +33,6 @@ namespace MusicBeeRemote.Core.Tests.Services
                 _libraryDataProvider.Object,
                 _trackDataProvider.Object,
                 _systemOperations.Object,
-                _eventAggregator.Object,
                 _logger,
                 _storagePath);
         }
@@ -227,75 +223,6 @@ namespace MusicBeeRemote.Core.Tests.Services
 
         #endregion
 
-        #region 5.4 GetCoverPage
-
-        [Fact]
-        public void GetCoverPage_EmptyCache_ReturnsEmptyPage()
-        {
-            // Arrange
-            _coverCache.Setup(x => x.Keys()).Returns(new List<string>());
-
-            // Act
-            var result = _sut.GetCoverPage(0, 10);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.Data.Should().BeEmpty();
-            result.Total.Should().Be(0);
-            result.Offset.Should().Be(0);
-            result.Limit.Should().Be(10);
-        }
-
-        [Fact]
-        public void GetCoverPage_WithItems_ReturnsCorrectPage()
-        {
-            // Arrange
-            var keys = new List<string> { "key1", "key2", "key3" };
-            _coverCache.Setup(x => x.Keys()).Returns(keys);
-            _coverCache.Setup(x => x.GetCoverInfo(It.IsAny<string>()))
-                .Returns(("hash", "/path/to/track.mp3"));
-            _libraryDataProvider.Setup(x => x.GetBatchTrackMetadata(It.IsAny<IEnumerable<string>>()))
-                .Returns(new Dictionary<string, (string Artist, string Album)>
-                {
-                    { "/path/to/track.mp3", ("Artist", "Album") }
-                });
-
-            // Act
-            var result = _sut.GetCoverPage(0, 10);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.Data.Should().HaveCount(3);
-            result.Total.Should().Be(3);
-        }
-
-        [Fact]
-        public void GetCoverPage_WithOffset_SkipsItems()
-        {
-            // Arrange
-            var keys = new List<string> { "key1", "key2", "key3", "key4", "key5" };
-            _coverCache.Setup(x => x.Keys()).Returns(keys);
-            _coverCache.Setup(x => x.GetCoverInfo(It.IsAny<string>()))
-                .Returns(("hash", "/path/to/track.mp3"));
-            _libraryDataProvider.Setup(x => x.GetBatchTrackMetadata(It.IsAny<IEnumerable<string>>()))
-                .Returns(new Dictionary<string, (string Artist, string Album)>
-                {
-                    { "/path/to/track.mp3", ("Artist", "Album") }
-                });
-
-            // Act
-            var result = _sut.GetCoverPage(2, 2);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.Data.Should().HaveCount(2);
-            result.Offset.Should().Be(2);
-            result.Limit.Should().Be(2);
-            result.Total.Should().Be(5);
-        }
-
-        #endregion
-
         #region 5.5 GetNowPlayingCover
 
         [Fact]
@@ -339,30 +266,6 @@ namespace MusicBeeRemote.Core.Tests.Services
 
             // Assert
             result.Should().BeEmpty();
-        }
-
-        #endregion
-
-        #region 5.6 BroadcastCacheStatus
-
-        [Fact]
-        public void BroadcastCacheStatus_PublishesEvent()
-        {
-            // Act
-            _sut.BroadcastCacheStatus();
-
-            // Assert
-            _eventAggregator.Verify(x => x.Publish(It.IsAny<object>()), Times.Once);
-        }
-
-        [Fact]
-        public void BroadcastCacheStatus_WithClientId_PublishesEvent()
-        {
-            // Act
-            _sut.BroadcastCacheStatus("client-123");
-
-            // Assert
-            _eventAggregator.Verify(x => x.Publish(It.IsAny<object>()), Times.Once);
         }
 
         #endregion

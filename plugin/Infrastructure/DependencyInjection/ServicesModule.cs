@@ -1,14 +1,9 @@
 ﻿using System;
 using Autofac;
 using MusicBeePlugin.Adapters.Contracts;
-using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
-using MusicBeePlugin.Models.Configuration;
-using MusicBeePlugin.Protocol.Messages;
 using MusicBeePlugin.Services.Configuration;
-using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Media;
-using MusicBeePlugin.Services.UI;
 using NLog;
 
 namespace MusicBeePlugin.Infrastructure.DependencyInjection
@@ -43,7 +38,6 @@ namespace MusicBeePlugin.Infrastructure.DependencyInjection
                     c.Resolve<ILibraryDataProvider>(),
                     c.Resolve<ITrackDataProvider>(),
                     c.Resolve<ISystemOperations>(),
-                    c.Resolve<IEventAggregator>(),
                     c.Resolve<IPluginLogger>(),
                     c.Resolve<IUserSettingsService>().StoragePath))
                 .As<ICoverService>()
@@ -76,37 +70,6 @@ namespace MusicBeePlugin.Infrastructure.DependencyInjection
 #endif
                 });
 
-            // Register Notification Handler
-            builder.RegisterType<NotificationHandler>()
-                .As<INotificationHandler>()
-                .SingleInstance();
-
-            // Register LyricCoverModel as singleton
-            builder.RegisterType<LyricCoverModel>()
-                .AsSelf()
-                .SingleInstance();
-
-            // Register StateMonitor
-            builder.RegisterType<StateMonitor>()
-                .As<IStateMonitor>()
-                .SingleInstance();
-
-            // Setup event subscriptions after container is built
-            builder.RegisterBuildCallback(container =>
-            {
-                // Subscribe to socket status changes
-                // Note: WindowManager will be available after UIModule registers it
-                var eventAggregator = container.Resolve<IEventAggregator>();
-                eventAggregator.Subscribe<SocketStatusChangeEvent>(socketStatusEvent =>
-                {
-                    // Resolve WindowManager when the event occurs (lazy resolution)
-                    if (container.IsRegistered<IWindowManager>())
-                    {
-                        var windowManager = container.Resolve<IWindowManager>();
-                        windowManager.UpdateWindowStatus(socketStatusEvent.IsRunning);
-                    }
-                });
-            });
         }
 
         /// <summary>

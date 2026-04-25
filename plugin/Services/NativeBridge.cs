@@ -8,6 +8,7 @@ using MessagePack.Resolvers;
 using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Enumerations;
 using MusicBeePlugin.Services.Configuration;
+using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Generated;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Utilities.Data;
@@ -22,7 +23,7 @@ namespace MusicBeePlugin.Services
     ///     handles lifecycle, MessagePack DTOs, and callback implementations that
     ///     bridge Rust queries to C# data providers.
     /// </summary>
-    public sealed class NativeBridge : IDisposable
+    public sealed class NativeBridge : INativeBridge, IDisposable
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -145,6 +146,36 @@ namespace MusicBeePlugin.Services
         private IntPtr _libraryHandle;
         private bool _initialized;
         private bool _disposed;
+        private bool _networkingRunning;
+
+        /// <summary>
+        ///     True between successful StartNetworking and StopNetworking calls.
+        ///     Used by InfoWindow to render the status badge in the settings UI.
+        /// </summary>
+        public bool IsNetworkingRunning => _networkingRunning;
+
+        /// <summary>
+        ///     Probe the Rust server by attempting a TCP connect to the
+        ///     configured port on the loopback interface. Returns true when
+        ///     a TCP connection is accepted within ~500 ms. Cheap enough to
+        ///     run from the InfoWindow's "verify" button.
+        /// </summary>
+        public bool VerifyConnection()
+        {
+            if (!_networkingRunning) return false;
+            try
+            {
+                using (var client = new System.Net.Sockets.TcpClient())
+                {
+                    var task = client.ConnectAsync("127.0.0.1", (int)_userSettings.ListeningPort);
+                    return task.Wait(TimeSpan.FromMilliseconds(500)) && client.Connected;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         /// <summary>
         ///     Creates a new NativeBridge instance with data providers for callback handling.
@@ -245,9 +276,14 @@ namespace MusicBeePlugin.Services
             {
                 var result = NativeMethods.mbrc_start_networking();
                 if (result == 0)
+                {
+                    _networkingRunning = true;
                     Logger.Info("Rust HTTP server starting (port from core_settings.json)");
+                }
                 else
+                {
                     Logger.Error("Failed to start Rust HTTP server (error code: {0})", result);
+                }
             }
             catch (Exception ex)
             {
@@ -265,6 +301,7 @@ namespace MusicBeePlugin.Services
             try
             {
                 var result = NativeMethods.mbrc_stop_networking();
+                _networkingRunning = false;
                 if (result == 0)
                     Logger.Info("Rust HTTP server stopped");
                 else

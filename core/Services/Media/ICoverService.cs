@@ -26,12 +26,6 @@ namespace MusicBeePlugin.Services.Media
         void InvalidateCache();
 
         /// <summary>
-        ///     Broadcasts the current cache building status to clients.
-        /// </summary>
-        /// <param name="clientId">Optional specific client ID, or all for all clients</param>
-        void BroadcastCacheStatus(string clientId = "all");
-
-        /// <summary>
         ///     Gets an album cover for the specified artist and album.
         /// </summary>
         /// <param name="artist">The artist name</param>
@@ -55,7 +49,6 @@ namespace MusicBeePlugin.Services.Media
         /// <param name="offset">The starting offset for pagination</param>
         /// <param name="limit">The maximum number of covers to return</param>
         /// <returns>Paginated response containing album cover data</returns>
-        Page<AlbumCoverPayload> GetCoverPage(int offset, int limit);
 
         /// <summary>
         ///     Gets the cover for the currently playing track.

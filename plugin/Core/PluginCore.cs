@@ -20,11 +20,9 @@ namespace MusicBeePlugin.Core
     public class PluginCore : IPluginCore, IDisposable
     {
         private readonly IContainer _container;
-        private readonly INetworkingManager _networkingManager;
-        private readonly INotificationHandler _notificationHandler;
+        private readonly NativeBridgeHolder _nativeBridgeHolder;
         private readonly IUserSettingsService _userSettingsService;
         private readonly IWindowManager _windowManager;
-        private readonly IStateMonitor _stateMonitor;
 
         public IUserSettings UserSettings => _userSettingsService;
 
@@ -53,11 +51,18 @@ namespace MusicBeePlugin.Core
             // Register this PluginCore instance for modules that need it
             builder.RegisterInstance(this).As<IPluginCore>().SingleInstance();
 
-            // Register modules in order of dependencies
+            // Late-binding slot for the FFI bridge. The actual NativeBridge
+            // is constructed by the Plugin host after the container is built,
+            // because it pulls data providers out of this container.
+            var nativeBridgeHolder = new NativeBridgeHolder();
+            builder.RegisterInstance(nativeBridgeHolder).As<NativeBridgeHolder>().As<INativeBridge>()
+                .SingleInstance();
+
+            // Register modules in order of dependencies. The legacy
+            // CommandModule/NetworkingModule have been removed: Rust owns
+            // the socket server, command dispatch and protocol handling.
             builder.RegisterModule<LoggingModule>();
             builder.RegisterModule(new ServicesModule(storagePath, version));
-            builder.RegisterModule<CommandModule>();
-            builder.RegisterModule<NetworkingModule>();
             builder.RegisterModule(new UIModule(this));
 
             // Build the container
@@ -65,20 +70,17 @@ namespace MusicBeePlugin.Core
 
             // Get required services (these are now initialized by modules)
             _userSettingsService = _container.Resolve<IUserSettingsService>();
-            _networkingManager = _container.Resolve<INetworkingManager>();
-            _notificationHandler = _container.Resolve<INotificationHandler>();
             _windowManager = _container.Resolve<IWindowManager>();
-            _stateMonitor = _container.Resolve<IStateMonitor>();
+            _nativeBridgeHolder = nativeBridgeHolder;
         }
+
+        public void RegisterNativeBridge(INativeBridge bridge) => _nativeBridgeHolder.Set(bridge);
 
         /// <summary>
         ///     Disposes the PluginCore and cleans up resources.
         /// </summary>
         public void Dispose()
         {
-            // Stop monitoring first before disposing container
-            _stateMonitor?.StopMonitoring();
-
             // Dispose container which will dispose all registered IDisposable services
             _container?.Dispose();
 
@@ -87,9 +89,6 @@ namespace MusicBeePlugin.Core
 
         public void Initialize()
         {
-
-            _stateMonitor.StartMonitoring();
-
             // Check if this is the first run and show settings window if needed
             if (_userSettingsService.IsFirstRun())
                 _windowManager.OpenInfoWindow();
@@ -99,10 +98,6 @@ namespace MusicBeePlugin.Core
             var coverService = _container.Resolve<ICoverService>();
             var systemOperations = _container.Resolve<ISystemOperations>();
             systemOperations.CreateBackgroundTask(() => coverService.InitializeCacheAsync());
-
-            // Broadcast initial now playing state (cover and lyrics)
-            // This replaces the old InitializeModelState functionality
-            _notificationHandler.BroadcastInitialNowPlayingState();
         }
 
         /// <summary>
@@ -114,31 +109,6 @@ namespace MusicBeePlugin.Core
             LoggingService.InitializeLoggingConfiguration(
                 _userSettingsService.FullLogPath,
                 enabled ? LogLevel.Debug : LogLevel.Error);
-        }
-
-        /// <summary>
-        ///     Starts the networking services.
-        /// </summary>
-        public void StartNetworking()
-        {
-            _networkingManager.StartListening();
-        }
-
-        /// <summary>
-        ///     Stops the networking services.
-        /// </summary>
-        public void StopNetworking()
-        {
-            _networkingManager.StopListening();
-        }
-
-        /// <summary>
-        ///     Gets the notification handler for processing MusicBee notifications.
-        /// </summary>
-        /// <returns>The notification handler instance</returns>
-        public INotificationHandler GetNotificationHandler()
-        {
-            return _notificationHandler;
         }
 
         public void Uninstall()

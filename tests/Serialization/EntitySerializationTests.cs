@@ -1,6 +1,5 @@
 using FluentAssertions;
 using MusicBeePlugin.Enumerations;
-using MusicBeePlugin.Models.Commands;
 using MusicBeePlugin.Models.Entities;
 using Newtonsoft.Json;
 using Xunit;
@@ -381,87 +380,6 @@ namespace MusicBeeRemote.Core.Tests.Serialization
             json.Should().Contain("\"scrobbler\":false");
             json.Should().Contain("\"playerstate\":\"Stopped\"");
             json.Should().Contain("\"playervolume\":\"22\"");
-        }
-
-        #endregion
-
-        #region CoverPayload
-
-        [Fact]
-        public void CoverPayload_NotFound_SerializesWithoutCoverField()
-        {
-            // Arrange - cover not found scenario
-            var coverNotFound = new CoverPayload(null, false);
-
-            // Act
-            var json = Serialize(coverNotFound);
-
-            // Assert - v1.4.1 nowplayingcover context: no cover field when not found
-            // Verified from actual v1.4.1 JSON: {"context":"nowplayingcover","data":{"status":404}}
-            json.Should().Contain("\"status\":404");
-            json.Should().NotContain("\"cover\"");
-        }
-
-        [Fact]
-        public void CoverPayload_WithCoverReady_SerializesWithoutCoverField()
-        {
-            // Arrange - cover ready but not included scenario
-            var coverReady = new CoverPayload("base64data", false);
-
-            // Act
-            var json = Serialize(coverReady);
-
-            // Assert - status 1 means cover is ready, but cover field should not be included
-            // Verified from actual v1.4.1 JSON: {"context":"nowplayingcover","data":{"status":1}}
-            json.Should().Contain("\"status\":1");
-            json.Should().NotContain("\"cover\"");
-        }
-
-        [Fact]
-        public void CoverPayload_WithCoverIncluded_SerializesWithCoverField()
-        {
-            // Arrange - cover available and included
-            var coverIncluded = new CoverPayload("base64data", true);
-
-            // Act
-            var json = Serialize(coverIncluded);
-
-            // Assert - status 200 means cover is available and included
-            json.Should().Contain("\"status\":200");
-            json.Should().Contain("\"cover\":\"base64data\"");
-        }
-
-        #endregion
-
-        #region LyricsPayload
-
-        [Fact]
-        public void LyricsPayload_SerializesWithLowercaseFieldNames()
-        {
-            // Arrange - no lyrics scenario
-            var noLyrics = new LyricsPayload("");
-
-            // Act
-            var json = Serialize(noLyrics);
-
-            // Assert - v1.4.1 nowplayinglyrics context used lowercase field names
-            // Verified from actual v1.4.1 JSON: {"context":"nowplayinglyrics","data":{"status":404,"lyrics":""}}
-            json.Should().Contain("\"status\":404");
-            json.Should().Contain("\"lyrics\":\"\"");
-        }
-
-        [Fact]
-        public void LyricsPayload_WithLyrics_SerializesCorrectly()
-        {
-            // Arrange - lyrics found scenario
-            var withLyrics = new LyricsPayload("Some lyrics text");
-
-            // Act
-            var json = Serialize(withLyrics);
-
-            // Assert - status 200 means lyrics found
-            json.Should().Contain("\"status\":200");
-            json.Should().Contain("\"lyrics\":\"Some lyrics text\"");
         }
 
         #endregion

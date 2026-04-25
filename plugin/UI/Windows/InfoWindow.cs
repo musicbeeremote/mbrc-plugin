@@ -12,6 +12,7 @@ using MusicBeePlugin.Enumerations;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
 using MusicBeePlugin.Properties;
 using MusicBeePlugin.Services.Configuration;
+using MusicBeePlugin.Services.Core;
 using MusicBeePlugin.Services.Media;
 using MusicBeePlugin.Services.UI;
 using MusicBeePlugin.Tools;
@@ -22,12 +23,11 @@ namespace MusicBeePlugin.UI.Windows
     /// <summary>
     ///     Represents the Settings and monitoring dialog of the plugin.
     /// </summary>
-    public partial class InfoWindow : Form, IInfoWindow, IConnectionListener
+    public partial class InfoWindow : Form, IInfoWindow
     {
         private readonly ICoverCache _coverCache;
         private readonly IPluginLogger _logger;
-        private readonly INetworkingManager _networkingManager;
-        private readonly ISocketTester _socketTester;
+        private readonly INativeBridge _nativeBridge;
         private static readonly char[] DotSeparator = { '.' };
         private readonly IUserSettingsService _userSettingsService;
         private BindingList<string> _ipAddressBinding;
@@ -40,30 +40,23 @@ namespace MusicBeePlugin.UI.Windows
         ///     the plugin's network connection, debugging, and cache functionalities.
         /// </summary>
         /// <remarks>
-        ///     This class implements the `ISocketTester.IConnectionListener` interface
-        ///     to respond to network connection status updates.
+        ///     Networking is owned by the Rust core; <see cref="NativeBridge"/>
+        ///     supplies status and a verify-connection probe.
         /// </remarks>
         public InfoWindow(
             IUserSettingsService userSettingsService,
-            INetworkingManager networkingManager,
-            ISocketTester socketTester,
+            INativeBridge nativeBridge,
             ICoverService coverService,
             ICoverCache coverCache,
             IPluginLogger logger)
         {
             _userSettingsService = userSettingsService;
-            _networkingManager = networkingManager;
-            _socketTester = socketTester;
+            _nativeBridge = nativeBridge;
             _coverCache = coverCache;
             _logger = logger;
 
             InitializeComponent();
             _ipAddressBinding = new BindingList<string>();
-        }
-
-        public void OnConnectionResult(bool isConnected)
-        {
-            UpdateSocketStatus(isConnected);
         }
 
         /// <summary>
@@ -114,7 +107,7 @@ namespace MusicBeePlugin.UI.Windows
             portNumericUpDown.Value = settings.ListeningPort;
             UpdateFilteringSelection(settings.FilterSelection);
 
-            UpdateSocketStatus(_networkingManager.IsRunning);
+            UpdateSocketStatus(_nativeBridge?.IsNetworkingRunning ?? false);
             allowedAddressesComboBox.DataSource = _ipAddressBinding;
 
             if (settings.Source == SearchSource.None)
@@ -129,8 +122,7 @@ namespace MusicBeePlugin.UI.Windows
 
             _logger.Debug($"Selected source is -> {settings.Source}");
 
-            _socketTester.ConnectionListener = this;
-            _socketTester.VerifyConnection();
+            UpdateSocketStatus(_nativeBridge?.VerifyConnection() ?? false);
 
             // Initialize cover cache state display
             InitializeCacheStateDisplay();
@@ -229,7 +221,7 @@ namespace MusicBeePlugin.UI.Windows
             if (firewallCheckbox.Checked)
                 UpdateFirewallRules(currentSettings.ListeningPort);
 
-            _socketTester.VerifyConnection();
+            UpdateSocketStatus(_nativeBridge?.VerifyConnection() ?? false);
         }
 
         private void AddAddressButtonClick(object sender, EventArgs e)

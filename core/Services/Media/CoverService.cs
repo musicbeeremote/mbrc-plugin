@@ -3,10 +3,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using MusicBeePlugin.Adapters.Contracts;
-using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
 using MusicBeePlugin.Models.Responses;
-using MusicBeePlugin.Protocol.Messages;
 
 namespace MusicBeePlugin.Services.Media
 {
@@ -17,7 +15,6 @@ namespace MusicBeePlugin.Services.Media
     public class CoverService : ICoverService
     {
         private readonly ICoverCache _coverCache;
-        private readonly IEventAggregator _eventAggregator;
         private readonly ILibraryDataProvider _libraryDataProvider;
         private readonly IPluginLogger _logger;
         private readonly string _storagePath;
@@ -29,7 +26,6 @@ namespace MusicBeePlugin.Services.Media
             ILibraryDataProvider libraryDataProvider,
             ITrackDataProvider trackDataProvider,
             ISystemOperations systemOperations,
-            IEventAggregator eventAggregator,
             IPluginLogger logger,
             string storagePath)
         {
@@ -37,7 +33,6 @@ namespace MusicBeePlugin.Services.Media
             _libraryDataProvider = libraryDataProvider;
             _trackDataProvider = trackDataProvider;
             _systemOperations = systemOperations;
-            _eventAggregator = eventAggregator;
             _logger = logger;
             _storagePath = storagePath;
         }
@@ -56,13 +51,11 @@ namespace MusicBeePlugin.Services.Media
             {
                 IsBuildingCache = true;
                 _systemOperations.SetBackgroundTaskMessage("MusicBee Remote: Caching album covers.");
-                BroadcastCacheStatus();
 
                 PrepareCache();
                 BuildCache();
 
                 IsBuildingCache = false;
-                BroadcastCacheStatus();
                 _systemOperations.SetBackgroundTaskMessage(
                     $"MusicBee Remote: Done. {_coverCache.State} album covers are now cached.");
             });
@@ -76,17 +69,6 @@ namespace MusicBeePlugin.Services.Media
             _coverCache.Invalidate();
             // Don't use .Wait() as it can cause deadlocks - let the task run asynchronously
             _systemOperations.CreateBackgroundTask(() => InitializeCacheAsync());
-        }
-
-        /// <summary>
-        ///     Broadcasts the current cache building status to clients.
-        /// </summary>
-        /// <param name="clientId">Optional specific client ID, or null for all clients</param>
-        public void BroadcastCacheStatus(string clientId = "all")
-        {
-            var message = MessageSendEvent.Create(ProtocolConstants.LibraryCoverCacheBuildStatus, IsBuildingCache,
-                clientId);
-            _eventAggregator.Publish(message);
         }
 
         /// <summary>
@@ -168,57 +150,6 @@ namespace MusicBeePlugin.Services.Media
             return GetAlbumCoverStatusPayload(404);
         }
 
-        /// <summary>
-        ///     Gets a paginated list of album covers.
-        /// </summary>
-        public Page<AlbumCoverPayload> GetCoverPage(int offset, int limit)
-        {
-            var stopwatch = Stopwatch.StartNew();
-            var keys = _coverCache.Keys().ToList();
-            var pageKeys = keys.Skip(offset).Take(limit).ToList();
-
-            // Batch lookup: get hash and path for all keys in one pass
-            var coverInfos = pageKeys
-                .Select(key => (Key: key, Info: _coverCache.GetCoverInfo(key)))
-                .ToList();
-
-            // Batch metadata lookup: get artist/album for all paths at once
-            var paths = coverInfos
-                .Where(x => !string.IsNullOrEmpty(x.Info.Path))
-                .Select(x => x.Info.Path)
-                .Distinct();
-            var metadata = _libraryDataProvider.GetBatchTrackMetadata(paths);
-
-            // Build the response using pre-fetched data
-            var data = coverInfos.Select(item =>
-            {
-                var (hash, path) = item.Info;
-                var cover = Utilities.Common.Utilities.GetCoverFromCache(_storagePath, hash);
-
-                metadata.TryGetValue(path, out var trackMeta);
-                var (artist, album) = trackMeta;
-
-                return new AlbumCoverPayload
-                {
-                    Artist = artist ?? string.Empty,
-                    Album = album ?? string.Empty,
-                    Cover = cover,
-                    Hash = hash,
-                    Status = string.IsNullOrEmpty(cover) ? 404 : 200
-                };
-            }).ToList();
-
-            stopwatch.Stop();
-            _logger.Debug($"cover page from: {offset} with {limit} limit, request took {stopwatch.Elapsed} ms");
-
-            return new Page<AlbumCoverPayload>
-            {
-                Data = data,
-                Offset = offset,
-                Limit = limit,
-                Total = keys.Count
-            };
-        }
 
         /// <summary>
         ///     Gets the cover for the currently playing track.
