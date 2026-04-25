@@ -22,7 +22,6 @@ namespace MusicBeeRemote.Core.Tests.Mocks
         public string CurrentRating { get; set; } = "4";
         public LastfmStatus CurrentLastfmStatus { get; set; } = LastfmStatus.Normal;
 
-        public List<NowPlayingListTrack> LegacyNowPlayingList { get; set; } = new List<NowPlayingListTrack>();
         public List<NowPlaying> NowPlayingList { get; set; } = new List<NowPlaying>();
 
         // Call counters
@@ -85,11 +84,9 @@ namespace MusicBeeRemote.Core.Tests.Mocks
             return null;
         }
 
-        public IEnumerable<NowPlayingListTrack> GetNowPlayingListLegacy() => LegacyNowPlayingList;
+        public IEnumerable<NowPlaying> GetNowPlayingListPage(int offset, int limit) => NowPlayingList;
 
         public IEnumerable<NowPlaying> GetNowPlayingListOrdered(int offset, int limit) => NowPlayingList;
-
-        public IEnumerable<NowPlaying> GetNowPlayingListPage(int offset, int limit) => NowPlayingList;
 
         #endregion
 

@@ -16,11 +16,6 @@ namespace MusicBeePlugin.DataProviders
     /// </summary>
     public class TrackDataProvider : ITrackDataProvider
     {
-        /// <summary>
-        ///     Maximum number of tracks to return in legacy playlist queries.
-        /// </summary>
-        private const int MaxLegacyPlaylistSize = 5000;
-
         private static readonly string[] SearchFields = { "ArtistPeople", "Title" };
         private readonly Plugin.MusicBeeApiInterface _api;
 
@@ -188,40 +183,6 @@ namespace MusicBeePlugin.DataProviders
             return null;
         }
 
-        public IEnumerable<NowPlayingListTrack> GetNowPlayingListLegacy()
-        {
-            if (!_api.NowPlayingList_QueryFiles(null))
-                yield break;
-
-            var position = 1;
-            while (position <= MaxLegacyPlaylistSize)
-            {
-                var trackPath = _api.NowPlayingList_QueryGetNextFile();
-                if (string.IsNullOrEmpty(trackPath))
-                    break;
-
-                // Use bulk API for efficiency
-                var fields = new[] { Plugin.MetaDataType.Artist, Plugin.MetaDataType.TrackTitle };
-                var results = new string[2];
-                var success = _api.Library_GetFileTags(trackPath, fields, out results);
-
-                var artist = SafeGetResult(success, results, 0);
-                var title = SafeGetResult(success, results, 1);
-
-                if (string.IsNullOrEmpty(title))
-                    title = Path.GetFileName(trackPath);
-
-                yield return new NowPlayingListTrack
-                {
-                    Artist = string.IsNullOrEmpty(artist) ? "Unknown Artist" : artist,
-                    Title = title,
-                    Position = position,
-                    Path = trackPath
-                };
-                position++;
-            }
-        }
-
         public IEnumerable<NowPlaying> GetNowPlayingListOrdered(int offset, int limit)
         {
             if (!_api.NowPlayingList_QueryFiles(null))
@@ -236,7 +197,6 @@ namespace MusicBeePlugin.DataProviders
                 if (string.IsNullOrEmpty(trackPath))
                     break;
 
-                // Use bulk API for efficiency
                 var fields = new[]
                 {
                     Plugin.MetaDataType.Artist,

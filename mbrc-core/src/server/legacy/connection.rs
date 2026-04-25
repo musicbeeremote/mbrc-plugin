@@ -205,7 +205,8 @@ async fn handle_message(
         _ => {
             // Dispatch to command handlers
             let responses =
-                commands::dispatch_command(msg.context.as_str(), &msg.data, state).await;
+                commands::dispatch_command(msg.context.as_str(), &msg.data, state, client.platform)
+                    .await;
             for response in &responses {
                 if let Err(e) = writer.write_message(response).await {
                     warn!(

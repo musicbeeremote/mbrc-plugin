@@ -86,30 +86,6 @@ namespace MusicBeeRemote.Core.Tests.Serialization
 
         #endregion
 
-        #region NowPlayingListTrack
-
-        [Fact]
-        public void NowPlayingListTrack_SerializesWithLowercaseFieldNames()
-        {
-            // Arrange
-            var track = new NowPlayingListTrack("Test Artist", "Test Title", 1)
-            {
-                Path = @"C:\Music\test.mp3"
-            };
-
-            // Act
-            var json = Serialize(track);
-
-            // Assert - v1.4.1 nowplayinglist context used lowercase field names
-            // Verified from actual v1.4.1 JSON: {"context":"nowplayinglist","data":{...,"data":[{"artist":"...","title":"...","path":"...","position":1}]}}
-            json.Should().Contain("\"artist\":\"Test Artist\"");
-            json.Should().Contain("\"title\":\"Test Title\"");
-            json.Should().Contain("\"position\":1");
-            json.Should().Contain("\"path\":");
-        }
-
-        #endregion
-
         #region NowPlayingTrack
 
         [Fact]

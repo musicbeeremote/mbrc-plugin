@@ -97,6 +97,7 @@ namespace MusicBeePlugin.Services
         private const int QueryAlbumCoverBatch = 24;
         private const int QueryNowPlayingRating = 25;
         private const int QueryNowPlayingLfmRating = 26;
+        private const int QueryNowPlayingListOrdered = 27;
 
         // Must match CommandType in mbrc-core/src/ffi/types.rs.
         private const int CmdSetMute = 1;
@@ -503,6 +504,9 @@ namespace MusicBeePlugin.Services
                     case QueryNowPlayingLfmRating:
                         resultBytes = SerializeNowPlayingLfmRating();
                         break;
+                    case QueryNowPlayingListOrdered:
+                        resultBytes = SerializeNowPlayingListOrdered(paramsBuf, paramsLen);
+                        break;
                     default:
                         Logger.Warn("Unknown query type: {0}", queryType);
                         return -1;
@@ -778,8 +782,24 @@ namespace MusicBeePlugin.Services
         {
             var p = MessagePackSerializer.Deserialize<PaginationParams>(
                 CopyParams(paramsBuf, paramsLen), MsgPackOptions);
-            var page = _track.GetNowPlayingListPage(p.offset, p.limit)
-                ?? System.Linq.Enumerable.Empty<Models.Entities.NowPlaying>();
+            return SerializeNowPlayingListEntries(_track.GetNowPlayingListPage(p.offset, p.limit));
+        }
+
+        // iOS-v4 variant — queue-absolute position + populated album fields.
+        // Routed by the Rust legacy dispatcher when the connection's
+        // ClientPlatform == Ios. Captured iOS-v4 fixture frames show
+        // {"position": <queue_index>, "album": "...", "album_artist": "..."}
+        // which only this enumeration produces.
+        private byte[] SerializeNowPlayingListOrdered(IntPtr paramsBuf, uint paramsLen)
+        {
+            var p = MessagePackSerializer.Deserialize<PaginationParams>(
+                CopyParams(paramsBuf, paramsLen), MsgPackOptions);
+            return SerializeNowPlayingListEntries(_track.GetNowPlayingListOrdered(p.offset, p.limit));
+        }
+
+        private byte[] SerializeNowPlayingListEntries(System.Collections.Generic.IEnumerable<Models.Entities.NowPlaying> page)
+        {
+            page = page ?? System.Linq.Enumerable.Empty<Models.Entities.NowPlaying>();
             var list = new System.Collections.Generic.List<NowPlayingTrackDto>();
             foreach (var t in page)
                 list.Add(new NowPlayingTrackDto

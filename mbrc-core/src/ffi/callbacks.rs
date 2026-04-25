@@ -339,6 +339,20 @@ impl SafeCallbacks {
         )
     }
 
+    /// iOS-v4 variant — list starts from the currently-playing track and
+    /// `position` is the MusicBee-internal queue index (queue-absolute,
+    /// not page-relative). Album / album_artist fields are populated.
+    pub fn query_now_playing_list_ordered(
+        &self,
+        offset: i32,
+        limit: i32,
+    ) -> Result<NowPlayingListResponse, String> {
+        self.query(
+            QueryType::NowPlayingListOrdered,
+            &PaginationParams { offset, limit },
+        )
+    }
+
     pub fn query_radio_stations(
         &self,
         offset: i32,

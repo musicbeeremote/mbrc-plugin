@@ -112,22 +112,6 @@ namespace MusicBeeRemote.Core.Tests.DataProviders
             Assert.Null(result);
         }
 
-        [Fact]
-        public void GetNowPlayingListLegacy_ReturnsList()
-        {
-            _provider.LegacyNowPlayingList.Add(new NowPlayingListTrack
-            {
-                Artist = "Artist 1",
-                Title = "Track 1",
-                Position = 1
-            });
-
-            var list = _provider.GetNowPlayingListLegacy().ToList();
-
-            Assert.Single(list);
-            Assert.Equal("Track 1", list[0].Title);
-        }
-
         #endregion
 
         #region Rating Tests

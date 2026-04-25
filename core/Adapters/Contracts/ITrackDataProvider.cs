@@ -62,26 +62,22 @@ namespace MusicBeePlugin.Adapters.Contracts
         string SearchNowPlayingList(string query, SearchSource searchSource);
 
         /// <summary>
-        ///     Gets the now playing list in legacy format (limited to 5000 tracks).
-        ///     Uses yield return for streaming results and proper query cleanup.
+        ///     Gets a page of the now playing list — Android-v4 wire shape.
+        ///     <c>Position</c> is page-relative (1-based), album/album_artist
+        ///     left empty so the Rust DTO's skip_serializing_if drops them
+        ///     from the wire (matches captured Android-v4 frames).
         /// </summary>
-        IEnumerable<NowPlayingListTrack> GetNowPlayingListLegacy();
-
-        /// <summary>
-        ///     Gets the now playing list starting from current track position.
-        ///     Uses yield return for streaming results and proper query cleanup.
-        /// </summary>
-        /// <param name="offset">Not used in ordered retrieval (starts from current)</param>
-        /// <param name="limit">Maximum number of tracks to return</param>
-        IEnumerable<NowPlaying> GetNowPlayingListOrdered(int offset, int limit);
-
-        /// <summary>
-        ///     Gets a page of the now playing list.
-        ///     Uses yield return for streaming results and proper query cleanup.
-        /// </summary>
-        /// <param name="offset">Number of tracks to skip</param>
-        /// <param name="limit">Maximum number of tracks to return</param>
         IEnumerable<NowPlaying> GetNowPlayingListPage(int offset, int limit);
+
+        /// <summary>
+        ///     Gets the now playing list starting from the currently-playing
+        ///     track — iOS-v4 wire shape. <c>Position</c> is the
+        ///     MusicBee-internal queue index (so iOS clients can show "you're
+        ///     on track 47 of 200"), and album/album_artist are populated.
+        ///     Captured iOS-v4 traces send {"offset":0} and expect this
+        ///     queue-absolute indexing.
+        /// </summary>
+        IEnumerable<NowPlaying> GetNowPlayingListOrdered(int offset, int limit);
 
         // Rating Operations
 

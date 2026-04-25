@@ -6,6 +6,7 @@ use crate::ffi::callbacks::LibraryQueueTarget;
 use crate::ffi::types::QueryType;
 use crate::protocol::constants;
 use crate::protocol::messages::SocketMessage;
+use crate::server::legacy::handshake::ClientPlatform;
 use crate::server::{PlayerStateResponse, TrackInfoResponse};
 use crate::state::AppState;
 
@@ -19,6 +20,7 @@ pub async fn dispatch_command(
     context: &str,
     data: &serde_json::Value,
     state: &Arc<AppState>,
+    platform: ClientPlatform,
 ) -> Vec<SocketMessage> {
     match context {
         // ── Player actions (fire-and-forget thin callbacks) ──────────
@@ -322,9 +324,24 @@ pub async fn dispatch_command(
         }
 
         constants::NOW_PLAYING_LIST => {
+            // Platform-aware split: iOS-v4 captures show queue-absolute
+            // position indices and populated album/album_artist; Android-v4
+            // captures show page-relative positions with those fields
+            // omitted. The DTO's `skip_serializing_if` handles the field-
+            // set difference automatically — only the indexing semantics
+            // need different FFI calls.
             let (offset, limit) = parse_pagination(data);
             let s = Arc::clone(state);
-            match tokio::task::spawn_blocking(move || s.callbacks().query_now_playing_list(offset, limit)).await {
+            let result = if platform == ClientPlatform::Ios {
+                tokio::task::spawn_blocking(move || {
+                    s.callbacks().query_now_playing_list_ordered(offset, limit)
+                })
+                .await
+            } else {
+                tokio::task::spawn_blocking(move || s.callbacks().query_now_playing_list(offset, limit))
+                    .await
+            };
+            match result {
                 Ok(Ok(r)) => vec![SocketMessage::new(
                     constants::NOW_PLAYING_LIST,
                     paginated_envelope(r.tracks, offset, limit),
