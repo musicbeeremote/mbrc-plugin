@@ -16,7 +16,11 @@
 
 mod error;
 mod library;
+mod now_playing;
+mod outputs;
 mod player;
+mod playlists;
+mod radio;
 mod track;
 
 use std::sync::Arc;
@@ -56,6 +60,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .nest("/player", player::routes())
         .nest("/track", track::routes())
         .nest("/library", library::routes())
+        .nest("/now_playing", now_playing::routes())
+        .nest("/playlists", playlists::routes())
+        .nest("/outputs", outputs::routes())
+        .nest("/radio", radio::routes())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
