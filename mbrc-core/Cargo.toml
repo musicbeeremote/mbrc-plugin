@@ -27,6 +27,7 @@ parking_lot = "0.12"
 uuid = { version = "1", features = ["v4"] }
 if-addrs = "0.13"
 socket2 = "0.5"
+base64 = "0.22"
 
 [build-dependencies]
 csbindgen = "1.9"

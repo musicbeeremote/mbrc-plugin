@@ -16,6 +16,7 @@
 
 mod error;
 mod player;
+mod track;
 
 use std::sync::Arc;
 
@@ -52,6 +53,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/version", get(version_handler))
         .nest("/player", player::routes())
+        .nest("/track", track::routes())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
