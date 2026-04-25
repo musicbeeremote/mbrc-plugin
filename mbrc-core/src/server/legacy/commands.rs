@@ -538,50 +538,80 @@ pub async fn dispatch_command(
             }
         }
 
-        // ── Single-album cover lookup (Android-v4 shape) ────────────
+        // ── Album-cover lookup (two wire variants) ──────────────────
         //
-        // Android request: `{"artist":"…","album":"…"}` → response
-        // `{"cover":"<b64>","hash":"…","status":200}`. Empty album
-        // shortcuts to `{"status":400}` without a callback (matches
-        // fixture byte-for-byte).
+        // Android v4: `{"artist":"…","album":"…"}` → single-cover
+        // response `{cover,hash,status}`. Empty album shortcuts to
+        // `{"status":400}` without a callback.
         //
-        // TODO(w3d-ios): iOS v4 uses a paginated batch variant of the
-        // same command (`{"offset":N,"limit":M}` →
-        // `{"data":[{album,artist,cover,hash,status},…],offset,limit,
-        // total}`). Wants a new `QueryType::AlbumCoverBatch` + C# path
-        // that enumerates the cover cache. Tracked as its own follow-up.
+        // iOS v4: `{"offset":N,"limit":M}` → paginated batch response
+        // `{data:[{album,artist,cover,hash,status},…],offset,limit,
+        // total}`. Routes through QueryType::AlbumCoverBatch which
+        // walks the C# cover cache by index.
+        //
+        // The two shapes are mutually exclusive — `album` and `offset`
+        // never coexist in real captures — so we sniff on the
+        // `offset`/`limit` keys to dispatch.
         constants::LIBRARY_ALBUM_COVER => {
-            let artist = data.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_owned();
-            let album = data.get("album").and_then(|v| v.as_str()).unwrap_or("").to_owned();
-            let client_hash = data.get("hash").and_then(|v| v.as_str()).unwrap_or("").to_owned();
-            if album.is_empty() {
-                vec![SocketMessage::new(
-                    constants::LIBRARY_ALBUM_COVER,
-                    serde_json::json!({ "status": 400 }),
-                )]
-            } else {
+            let is_batch = data.get("offset").is_some() || data.get("limit").is_some();
+            if is_batch {
+                let (offset, limit) = parse_pagination(data);
                 let s = Arc::clone(state);
                 match tokio::task::spawn_blocking(move || {
-                    s.callbacks().query_album_cover(&artist, &album, &client_hash)
+                    s.callbacks().query_album_cover_batch(offset, limit)
                 })
                 .await
                 {
                     Ok(Ok(r)) => vec![SocketMessage::new(
                         constants::LIBRARY_ALBUM_COVER,
-                        serde_json::json!({
-                            "cover": r.cover,
-                            "hash": r.hash,
-                            "status": r.status,
-                        }),
+                        serde_json::to_value(&r).unwrap_or(serde_json::json!({
+                            "data": [], "offset": offset, "limit": limit, "total": 0,
+                        })),
                     )],
                     Ok(Err(e)) => {
-                        warn!("AlbumCover query failed: {}", e);
+                        warn!("AlbumCoverBatch query failed: {}", e);
                         vec![SocketMessage::new(
                             constants::LIBRARY_ALBUM_COVER,
-                            serde_json::json!({ "status": 404 }),
+                            serde_json::json!({
+                                "data": [], "offset": offset, "limit": limit, "total": 0,
+                            }),
                         )]
                     }
                     Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+                }
+            } else {
+                let artist = data.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+                let album = data.get("album").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+                let client_hash = data.get("hash").and_then(|v| v.as_str()).unwrap_or("").to_owned();
+                if album.is_empty() {
+                    vec![SocketMessage::new(
+                        constants::LIBRARY_ALBUM_COVER,
+                        serde_json::json!({ "status": 400 }),
+                    )]
+                } else {
+                    let s = Arc::clone(state);
+                    match tokio::task::spawn_blocking(move || {
+                        s.callbacks().query_album_cover(&artist, &album, &client_hash)
+                    })
+                    .await
+                    {
+                        Ok(Ok(r)) => vec![SocketMessage::new(
+                            constants::LIBRARY_ALBUM_COVER,
+                            serde_json::json!({
+                                "cover": r.cover,
+                                "hash": r.hash,
+                                "status": r.status,
+                            }),
+                        )],
+                        Ok(Err(e)) => {
+                            warn!("AlbumCover query failed: {}", e);
+                            vec![SocketMessage::new(
+                                constants::LIBRARY_ALBUM_COVER,
+                                serde_json::json!({ "status": 404 }),
+                            )]
+                        }
+                        Err(e) => { warn!("spawn_blocking panicked: {}", e); vec![] }
+                    }
                 }
             }
         }

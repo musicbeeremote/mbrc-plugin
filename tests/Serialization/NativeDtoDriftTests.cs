@@ -171,6 +171,12 @@ namespace MusicBeeRemote.Core.Tests.Serialization
         }
 
         [Fact]
+        public void AlbumCoverBatchResponse_roundtrips_canonical_schema()
+        {
+            AssertRoundTrip<AlbumCoverBatchResponse>("album_cover_batch_response.json");
+        }
+
+        [Fact]
         public void CoverCacheBuildStatusResponse_roundtrips_canonical_schema()
         {
             AssertRoundTrip<CoverCacheBuildStatusResponse>(

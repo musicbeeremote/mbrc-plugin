@@ -276,6 +276,40 @@ pub struct AlbumCoverResponse {
     pub hash: String,
 }
 
+/// One entry in an `AlbumCoverBatch` page. Same shape as
+/// `AlbumCoverResponse` minus a hash field that's always populated;
+/// kept distinct so the batch endpoint can return a `Vec<…>` of
+/// these without leaking the single-cover semantics.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlbumCoverBatchEntry {
+    #[serde(default)]
+    pub album: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub cover: String,
+    #[serde(default)]
+    pub hash: String,
+    #[serde(default)]
+    pub status: i32,
+}
+
+/// Response payload for `QueryType::AlbumCoverBatch` — paginated
+/// enumeration of the cover cache. Matches the iOS-v4 wire shape
+/// `{data, offset, limit, total}` produced by the legacy
+/// `LIBRARY_ALBUM_COVER` `{offset,limit}` request variant.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlbumCoverBatchResponse {
+    #[serde(default, rename = "data")]
+    pub items: Vec<AlbumCoverBatchEntry>,
+    #[serde(default)]
+    pub offset: i32,
+    #[serde(default)]
+    pub limit: i32,
+    #[serde(default)]
+    pub total: i32,
+}
+
 /// Response payload for `QueryType::CoverCacheBuildStatus`. `building`
 /// is true while the C# `CoverService` is indexing album artwork.
 #[derive(Debug, Serialize, Deserialize)]

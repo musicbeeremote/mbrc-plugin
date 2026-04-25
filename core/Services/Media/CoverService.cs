@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -148,6 +149,52 @@ namespace MusicBeePlugin.Services.Media
                 };
 
             return GetAlbumCoverStatusPayload(404);
+        }
+
+        public AlbumCoverBatchPage GetAlbumCoverBatch(int offset, int limit)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var keys = _coverCache.Keys().ToList();
+            var pageKeys = keys.Skip(offset).Take(limit).ToList();
+
+            var coverInfos = pageKeys
+                .Select(key => (Key: key, Info: _coverCache.GetCoverInfo(key)))
+                .ToList();
+
+            var paths = coverInfos
+                .Where(x => !string.IsNullOrEmpty(x.Info.Path))
+                .Select(x => x.Info.Path)
+                .Distinct();
+            var metadata = _libraryDataProvider.GetBatchTrackMetadata(paths);
+
+            var data = coverInfos.Select(item =>
+            {
+                var (hash, path) = item.Info;
+                var cover = Utilities.Common.Utilities.GetCoverFromCache(_storagePath, hash);
+
+                metadata.TryGetValue(path, out var trackMeta);
+                var (artist, album) = trackMeta;
+
+                return new MusicBeePlugin.Models.Responses.AlbumCoverBatchEntry
+                {
+                    Artist = artist ?? string.Empty,
+                    Album = album ?? string.Empty,
+                    Cover = cover ?? string.Empty,
+                    Hash = hash ?? string.Empty,
+                    Status = string.IsNullOrEmpty(cover) ? 404 : 200
+                };
+            }).ToList();
+
+            stopwatch.Stop();
+            _logger.Debug($"cover batch from: {offset} with {limit} limit, request took {stopwatch.Elapsed} ms");
+
+            return new AlbumCoverBatchPage
+            {
+                Data = data,
+                Offset = offset,
+                Limit = limit,
+                Total = keys.Count
+            };
         }
 
 

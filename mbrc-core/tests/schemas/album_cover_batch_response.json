@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "album": "Kind of Blue",
+      "artist": "Miles Davis",
+      "cover": "iVBORw0KGgo=",
+      "hash": "cafef00d",
+      "status": 200
+    },
+    {
+      "album": "",
+      "artist": "Unknown Artist",
+      "cover": "",
+      "hash": "",
+      "status": 404
+    }
+  ],
+  "offset": 0,
+  "limit": 100,
+  "total": 1498
+}

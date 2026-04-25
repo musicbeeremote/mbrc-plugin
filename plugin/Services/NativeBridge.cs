@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using MessagePack;
 using MessagePack.Resolvers;
+using System.Linq;
 using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Enumerations;
 using MusicBeePlugin.Services.Configuration;
@@ -93,6 +94,7 @@ namespace MusicBeePlugin.Services
         private const int QueryAlbumCover = 21;
         private const int QueryCoverCacheBuildStatus = 22;
         private const int QueryPlaybackPosition = 23;
+        private const int QueryAlbumCoverBatch = 24;
 
         // Must match CommandType in mbrc-core/src/ffi/types.rs.
         private const int CmdSetMute = 1;
@@ -489,6 +491,9 @@ namespace MusicBeePlugin.Services
                         break;
                     case QueryPlaybackPosition:
                         resultBytes = SerializePlaybackPosition();
+                        break;
+                    case QueryAlbumCoverBatch:
+                        resultBytes = SerializeAlbumCoverBatch(paramsBuf, paramsLen);
                         break;
                     default:
                         Logger.Warn("Unknown query type: {0}", queryType);
@@ -986,6 +991,30 @@ namespace MusicBeePlugin.Services
         private byte[] SerializeCoverCacheBuildStatus()
         {
             var dto = new CoverCacheBuildStatusResponse { building = _coverService.IsBuildingCache };
+            return MessagePackSerializer.Serialize(dto, MsgPackOptions);
+        }
+
+        private byte[] SerializeAlbumCoverBatch(IntPtr paramsBuf, uint paramsLen)
+        {
+            var p = MessagePackSerializer.Deserialize<PaginationParams>(
+                CopyParams(paramsBuf, paramsLen), MsgPackOptions);
+            var page = _coverService.GetAlbumCoverBatch(p.offset, p.limit);
+            var dto = new AlbumCoverBatchResponse
+            {
+                data = (page?.Data ?? new System.Collections.Generic.List<MusicBeePlugin.Models.Responses.AlbumCoverBatchEntry>())
+                    .Select(e => new AlbumCoverBatchEntry
+                    {
+                        album = e.Album ?? string.Empty,
+                        artist = e.Artist ?? string.Empty,
+                        cover = e.Cover ?? string.Empty,
+                        hash = e.Hash ?? string.Empty,
+                        status = e.Status,
+                    })
+                    .ToList(),
+                offset = page?.Offset ?? p.offset,
+                limit = page?.Limit ?? p.limit,
+                total = page?.Total ?? 0,
+            };
             return MessagePackSerializer.Serialize(dto, MsgPackOptions);
         }
 

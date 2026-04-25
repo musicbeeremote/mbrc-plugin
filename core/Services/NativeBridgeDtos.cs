@@ -269,6 +269,23 @@ namespace MusicBeePlugin.Services
         public string hash { get; set; }
     }
 
+    public class AlbumCoverBatchEntry
+    {
+        public string album { get; set; }
+        public string artist { get; set; }
+        public string cover { get; set; }
+        public string hash { get; set; }
+        public int status { get; set; }
+    }
+
+    public class AlbumCoverBatchResponse
+    {
+        public System.Collections.Generic.List<AlbumCoverBatchEntry> data { get; set; }
+        public int offset { get; set; }
+        public int limit { get; set; }
+        public int total { get; set; }
+    }
+
     public class CoverCacheBuildStatusResponse
     {
         public bool building { get; set; }

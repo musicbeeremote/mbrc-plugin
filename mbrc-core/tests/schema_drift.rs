@@ -7,12 +7,12 @@
 //! round-trip on the C# DTOs. One side drifting → CI red.
 
 use mbrc_core::{
-    AlbumCoverParams, AlbumCoverResponse, AlbumListResponse, ArtistListResponse, BrowseParams,
-    CoverCacheBuildStatusResponse, GenreListResponse, IndexParams, LibraryQueueParams, MoveParams,
-    NowPlayingDetailsResponse, NowPlayingListResponse, OutputDevicesResponse, PaginationParams,
-    PlaybackPositionResponse, PlayerStateResponse, PlaylistListResponse, QueryParams,
-    RadioStationsResponse, SetBoolParams, SetLfmRatingParams, SetRepeatParams, StringValueParams,
-    TrackInfoResponse, TrackListResponse,
+    AlbumCoverBatchResponse, AlbumCoverParams, AlbumCoverResponse, AlbumListResponse,
+    ArtistListResponse, BrowseParams, CoverCacheBuildStatusResponse, GenreListResponse,
+    IndexParams, LibraryQueueParams, MoveParams, NowPlayingDetailsResponse,
+    NowPlayingListResponse, OutputDevicesResponse, PaginationParams, PlaybackPositionResponse,
+    PlayerStateResponse, PlaylistListResponse, QueryParams, RadioStationsResponse, SetBoolParams,
+    SetLfmRatingParams, SetRepeatParams, StringValueParams, TrackInfoResponse, TrackListResponse,
 };
 use serde_json::Value;
 
@@ -152,6 +152,13 @@ fn now_playing_details_response_roundtrips() {
 #[test]
 fn album_cover_response_roundtrips() {
     assert_roundtrip::<AlbumCoverResponse>("tests/schemas/album_cover_response.json");
+}
+
+#[test]
+fn album_cover_batch_response_roundtrips() {
+    assert_roundtrip::<AlbumCoverBatchResponse>(
+        "tests/schemas/album_cover_batch_response.json",
+    );
 }
 
 #[test]

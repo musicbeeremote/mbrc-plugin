@@ -44,17 +44,21 @@ namespace MusicBeePlugin.Services.Media
         AlbumCoverPayload GetCoverBySize(string artist, string album, string size);
 
         /// <summary>
-        ///     Gets a paginated list of album covers.
-        /// </summary>
-        /// <param name="offset">The starting offset for pagination</param>
-        /// <param name="limit">The maximum number of covers to return</param>
-        /// <returns>Paginated response containing album cover data</returns>
-
-        /// <summary>
         ///     Gets the cover for the currently playing track.
         /// </summary>
         /// <returns>Cover path or empty string if not available</returns>
         string GetNowPlayingCover();
+
+        /// <summary>
+        ///     Enumerate the album-cover cache as a paginated batch.
+        ///     Drives the iOS-v4 <c>libraryalbumcover</c> request variant
+        ///     <c>{offset,limit}</c>; returns one entry per cached cover
+        ///     with <c>{album, artist, cover, hash, status}</c>.
+        /// </summary>
+        /// <param name="offset">The starting offset for pagination</param>
+        /// <param name="limit">Maximum number of covers to return</param>
+        /// <returns>List of cover entries plus pagination metadata</returns>
+        AlbumCoverBatchPage GetAlbumCoverBatch(int offset, int limit);
 
         /// <summary>
         ///     Caches the cover for a newly added track.

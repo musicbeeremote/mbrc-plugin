@@ -10,7 +10,8 @@ use crate::ffi::dtos::{
 };
 use crate::ffi::types::{CommandType, MbrcCallbacks, QueryType};
 use crate::server::{
-    AlbumCoverResponse, AlbumListResponse, ArtistListResponse, CoverCacheBuildStatusResponse,
+    AlbumCoverBatchResponse, AlbumCoverResponse, AlbumListResponse, ArtistListResponse,
+    CoverCacheBuildStatusResponse,
     GenreListResponse, NowPlayingDetailsResponse, NowPlayingListResponse, OutputDevicesResponse,
     PlaybackPositionResponse, PlaylistListResponse, RadioStationsResponse, TrackListResponse,
 };
@@ -499,6 +500,17 @@ impl SafeCallbacks {
 
     pub fn query_cover_cache_build_status(&self) -> Result<CoverCacheBuildStatusResponse, String> {
         self.query_no_params(QueryType::CoverCacheBuildStatus)
+    }
+
+    pub fn query_album_cover_batch(
+        &self,
+        offset: i32,
+        limit: i32,
+    ) -> Result<AlbumCoverBatchResponse, String> {
+        self.query(
+            QueryType::AlbumCoverBatch,
+            &PaginationParams { offset, limit },
+        )
     }
 
     pub fn query_playback_position(&self) -> Result<PlaybackPositionResponse, String> {
