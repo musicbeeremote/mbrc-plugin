@@ -10,7 +10,6 @@ using MusicBeePlugin.Events.Contracts;
 using MusicBeePlugin.Events.Messages;
 using MusicBeePlugin.Infrastructure.Logging.Contracts;
 using MusicBeePlugin.Models.Configuration;
-using MusicBeePlugin.Protocol.Messages;
 using Newtonsoft.Json;
 
 namespace MusicBeePlugin.Services.Configuration

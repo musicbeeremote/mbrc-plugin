@@ -140,15 +140,6 @@ namespace MusicBeePlugin.Adapters.Contracts
         /// <returns>True if successful</returns>
         bool SetPosition(int position);
 
-        // Composite Status
-
-        /// <summary>
-        ///     Gets a complete player status object.
-        /// </summary>
-        /// <param name="legacyShuffleFormat">If true, returns shuffle as boolean; otherwise returns ShuffleState</param>
-        /// <returns>Player status containing all state information</returns>
-        PlayerStatus GetPlayerStatus(bool legacyShuffleFormat);
-
         // Output Devices
 
         /// <summary>

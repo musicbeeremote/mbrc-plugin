@@ -329,37 +329,6 @@ namespace MusicBeeRemote.Core.Tests.Serialization
 
         #endregion
 
-        #region PlayerStatus
-
-        [Fact]
-        public void PlayerStatus_SerializesWithLowercaseFieldNames()
-        {
-            // Arrange
-            var status = new PlayerStatus
-            {
-                Repeat = "None",
-                Mute = false,
-                Shuffle = "off",
-                Scrobble = false,
-                State = "Stopped",
-                Volume = "22"
-            };
-
-            // Act
-            var json = Serialize(status);
-
-            // Assert - v1.4.1 playerstatus context used lowercase field names
-            // Verified from actual v1.4.1 JSON: {"context":"playerstatus","data":{"playerrepeat":"None","playermute":false,"playershuffle":"off","scrobbler":false,"playerstate":"Stopped","playervolume":"22"}}
-            json.Should().Contain("\"playerrepeat\":\"None\"");
-            json.Should().Contain("\"playermute\":false");
-            json.Should().Contain("\"playershuffle\":\"off\"");
-            json.Should().Contain("\"scrobbler\":false");
-            json.Should().Contain("\"playerstate\":\"Stopped\"");
-            json.Should().Contain("\"playervolume\":\"22\"");
-        }
-
-        #endregion
-
         #region PlaybackPosition
 
         [Fact]

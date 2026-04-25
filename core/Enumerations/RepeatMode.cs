@@ -4,8 +4,6 @@ namespace MusicBeePlugin.Enumerations
 {
     /// <summary>
     ///     Repeat mode enumeration with PascalCase string values for backward compatibility.
-    ///     StringEnumConverter is applied globally via SocketMessage.SerializerSettings.
-    ///     TODO: Consider normalizing to lowercase in a future protocol version update.
     /// </summary>
     public enum RepeatMode
     {

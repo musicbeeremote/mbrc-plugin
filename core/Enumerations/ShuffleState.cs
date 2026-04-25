@@ -3,7 +3,7 @@ using System.Runtime.Serialization;
 namespace MusicBeePlugin.Enumerations
 {
     /// <summary>
-    ///     Shuffle state enumeration. StringEnumConverter is applied globally via SocketMessage.SerializerSettings.
+    ///     Shuffle state enumeration.
     /// </summary>
     public enum ShuffleState
     {

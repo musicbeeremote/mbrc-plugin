@@ -229,52 +229,6 @@ namespace MusicBeeRemote.Core.Tests.DataProviders
 
         #endregion
 
-        #region Composite Status Tests
-
-        [Fact]
-        public void GetPlayerStatus_ReturnsCorrectStatus()
-        {
-            _provider.CurrentPlayState = PlayState.Playing;
-            _provider.CurrentVolume = 75;
-            _provider.IsMuted = false;
-            _provider.CurrentRepeatMode = RepeatMode.All;
-            _provider.ShuffleEnabled = true;
-            _provider.ScrobblingEnabled = true;
-
-            var status = _provider.GetPlayerStatus(false);
-
-            Assert.Equal("Playing", status.State);
-            Assert.Equal("75", status.Volume);
-            Assert.False(status.Mute);
-            Assert.Equal("All", status.Repeat);
-            Assert.True(status.Scrobble);
-        }
-
-        [Fact]
-        public void GetPlayerStatus_LegacyFormat_ReturnsBoolShuffle()
-        {
-            _provider.ShuffleEnabled = true;
-            _provider.AutoDjEnabled = false;
-
-            var status = _provider.GetPlayerStatus(legacyShuffleFormat: true);
-
-            Assert.IsType<bool>(status.Shuffle);
-            Assert.True((bool)status.Shuffle);
-        }
-
-        [Fact]
-        public void GetPlayerStatus_ModernFormat_ReturnsShuffleState()
-        {
-            _provider.ShuffleEnabled = true;
-            _provider.AutoDjEnabled = false;
-
-            var status = _provider.GetPlayerStatus(legacyShuffleFormat: false);
-
-            Assert.Equal("Shuffle", status.Shuffle.ToString());
-        }
-
-        #endregion
-
         #region Output Device Tests
 
         [Fact]

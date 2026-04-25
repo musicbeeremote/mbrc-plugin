@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 using MusicBeePlugin.Adapters.Contracts;
 using MusicBeePlugin.Enumerations;
 using MusicBeePlugin.Models.Entities;
@@ -207,25 +206,6 @@ namespace MusicBeePlugin.DataProviders
         public bool SetPosition(int position)
         {
             return _api.Player_SetPosition(position);
-        }
-
-        #endregion
-
-        #region Composite Status
-
-        public PlayerStatus GetPlayerStatus(bool legacyShuffleFormat)
-        {
-            return new PlayerStatus
-            {
-                Repeat = GetRepeatMode().ToString(),
-                Mute = GetMute(),
-                Shuffle = legacyShuffleFormat
-                    ? (object)GetShuffle()
-                    : GetShuffleState().ToString(),
-                Scrobble = GetScrobbleEnabled(),
-                State = GetPlayState().ToString(),
-                Volume = GetVolume().ToString(CultureInfo.InvariantCulture)
-            };
         }
 
         #endregion

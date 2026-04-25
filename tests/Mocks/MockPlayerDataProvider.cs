@@ -157,25 +157,6 @@ namespace MusicBeeRemote.Core.Tests.Mocks
 
         #endregion
 
-        #region Composite Status
-
-        public PlayerStatus GetPlayerStatus(bool legacyShuffleFormat)
-        {
-            return new PlayerStatus
-            {
-                State = CurrentPlayState.ToString(),
-                Mute = IsMuted,
-                Volume = CurrentVolume.ToString(),
-                Repeat = CurrentRepeatMode.ToString(),
-                Shuffle = legacyShuffleFormat
-                    ? (object)ShuffleEnabled
-                    : GetShuffleState().ToString(),
-                Scrobble = ScrobblingEnabled
-            };
-        }
-
-        #endregion
-
         #region Output Devices
 
         public OutputDevice GetOutputDevices()
