@@ -89,6 +89,17 @@ pub struct BrowseParams {
     pub album_artists: bool,
 }
 
+/// Payload for `NowPlayingQueue`. `queue_type` is the legacy protocol
+/// string (`"now" | "next" | "last" | "add-all"`); `files` is the list
+/// of file URLs the client wants enqueued; `play` is the file to start
+/// playback from when `queue_type == "add-all"` (empty otherwise).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NowPlayingQueueParams {
+    pub queue_type: String,
+    pub files: Vec<String>,
+    pub play: String,
+}
+
 /// Payload for the `AlbumCover` query. `client_hash` is the hash the
 /// client already has cached (empty = no cached copy); the C# side
 /// returns a 304-shaped response when it matches.

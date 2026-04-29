@@ -18,8 +18,9 @@ pub mod replay_support;
 // Re-export DTOs so drift-guard integration tests can construct and
 // round-trip them without touching internal module paths.
 pub use ffi::dtos::{
-    AlbumCoverParams, BrowseParams, IndexParams, LibraryQueueParams, MoveParams, PaginationParams,
-    QueryParams, SetBoolParams, SetLfmRatingParams, SetRepeatParams, StringValueParams,
+    AlbumCoverParams, BrowseParams, IndexParams, LibraryQueueParams, MoveParams,
+    NowPlayingQueueParams, PaginationParams, QueryParams, SetBoolParams, SetLfmRatingParams,
+    SetRepeatParams, StringValueParams,
 };
 pub use server::{
     AlbumCoverBatchEntry, AlbumCoverBatchResponse, AlbumCoverResponse, AlbumDto, AlbumListResponse,

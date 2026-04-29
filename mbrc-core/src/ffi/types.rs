@@ -93,6 +93,7 @@ pub enum CommandType {
     LibraryQueueArtist = 16,
     LibraryQueueAlbum = 17,
     LibraryQueueTrack = 18,
+    NowPlayingQueue = 19,
 }
 
 /// Callback delegate types matching the C# side exactly.

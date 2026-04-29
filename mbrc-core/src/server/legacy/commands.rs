@@ -265,6 +265,61 @@ pub async fn dispatch_command(
             vec![]
         }
 
+        // ── Queue files into now-playing list ────────────────────────
+        //
+        // Wire shape: `{queue: "now"|"next"|"last"|"add-all", data: [paths], play?: string}`.
+        // Response shape (always emitted, mirrors legacy C# `QueueResponse`):
+        //   `{"context":"nowplayingqueue","data":{"code":200|400|500}}`
+        // 400 when `data` is missing or empty; 500 when the FFI call fails.
+        constants::NOW_PLAYING_QUEUE => {
+            let queue_type = data
+                .get("queue")
+                .and_then(|v| v.as_str())
+                .unwrap_or("now")
+                .to_owned();
+            let files: Vec<String> = data
+                .get("data")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_owned()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let play = data
+                .get("play")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_owned();
+
+            let code = if files.is_empty() {
+                400
+            } else {
+                let s = Arc::clone(state);
+                let qt = queue_type.clone();
+                let p = play.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    s.callbacks().now_playing_queue(&qt, files, &p)
+                })
+                .await;
+                match result {
+                    Ok(Ok(())) => 200,
+                    Ok(Err(e)) => {
+                        warn!("NowPlayingQueue command failed: {}", e);
+                        500
+                    }
+                    Err(e) => {
+                        warn!("spawn_blocking panicked: {}", e);
+                        500
+                    }
+                }
+            };
+            vec![SocketMessage::new(
+                constants::NOW_PLAYING_QUEUE,
+                serde_json::json!({ "code": code }),
+            )]
+        }
+
         // ── Tag change (fire-and-forget, C# server sends no echo) ────
         //
         // TODO(w2): there is no `CommandType::NowPlayingTagChange` in the
@@ -648,9 +703,6 @@ pub async fn dispatch_command(
         }
 
         // ── Unhandled commands ──────────────────────────────────────
-        //
-        // TODO(golden-trace): `nowplayingqueue` still needs an FFI
-        // command (queue file URLs into now playing) plus a handler.
         _ => {
             info!("Unhandled command: {}", context);
             vec![]
@@ -669,20 +721,34 @@ async fn handle_mute(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<Soc
     query_player_field(state, |ps| ps.mute.into(), constants::PLAYER_MUTE).await
 }
 
-/// `playershuffle` hybrid. The `"toggle"` sentinel and explicit
-/// booleans flip the shuffle flag through `Player_SetShuffle`. The
-/// current shuffle string (`"Off"`/`"Shuffle"`/`"AutoDj"`) is always
-/// returned. AutoDj-on counts as "shuffling" for toggle purposes — a
-/// toggle from AutoDj turns shuffle off, matching the legacy C# behaviour.
+/// `playershuffle` — V4 tri-state toggle, matching the legacy C#
+/// `RequestAutoDjShuffleState`. A `"toggle"` request cycles
+/// `Off → Shuffle → AutoDj → Off` by routing through `Player_SetShuffle`
+/// and `Player_StartAutoDj` / `Player_EndAutoDj`. Non-toggle data is a
+/// no-op (the legacy handler also returned without emitting). The
+/// post-cycle shuffle string is read back from MusicBee.
 async fn handle_shuffle(data: &serde_json::Value, state: &Arc<AppState>) -> Vec<SocketMessage> {
-    if let Some(value) = resolve_bool_or_toggle(data, state, |ps| {
-        !ps.shuffle.eq_ignore_ascii_case("off")
-    })
-    .await
-    {
-        let s = Arc::clone(state);
-        let _ = tokio::task::spawn_blocking(move || s.callbacks().set_shuffle(value)).await;
+    let is_toggle = data
+        .as_str()
+        .map(|s| s.eq_ignore_ascii_case("toggle"))
+        .unwrap_or(false);
+    if !is_toggle {
+        return vec![];
     }
+    let Some(ps) = current_player_state(state).await else {
+        return vec![];
+    };
+    let current = ps.shuffle.to_ascii_lowercase();
+    let s = Arc::clone(state);
+    let _ = tokio::task::spawn_blocking(move || {
+        let cb = s.callbacks();
+        match current.as_str() {
+            "shuffle" => cb.set_auto_dj(true),
+            "autodj" => cb.set_auto_dj(false),
+            _ => cb.set_shuffle(true),
+        }
+    })
+    .await;
     query_player_field(
         state,
         |ps| ps.shuffle.clone().into(),

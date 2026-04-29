@@ -5,8 +5,9 @@ use serde::Serialize;
 use tracing::warn;
 
 use crate::ffi::dtos::{
-    AlbumCoverParams, BrowseParams, IndexParams, LibraryQueueParams, MoveParams, PaginationParams,
-    QueryParams, SetBoolParams, SetLfmRatingParams, SetRepeatParams, StringValueParams,
+    AlbumCoverParams, BrowseParams, IndexParams, LibraryQueueParams, MoveParams,
+    NowPlayingQueueParams, PaginationParams, QueryParams, SetBoolParams, SetLfmRatingParams,
+    SetRepeatParams, StringValueParams,
 };
 use crate::ffi::types::{CommandType, MbrcCallbacks, QueryType};
 use crate::server::{
@@ -326,6 +327,22 @@ impl SafeCallbacks {
             CommandType::NowPlayingListSearch,
             &StringValueParams {
                 value: query.to_owned(),
+            },
+        )
+    }
+
+    pub fn now_playing_queue(
+        &self,
+        queue_type: &str,
+        files: Vec<String>,
+        play: &str,
+    ) -> Result<(), String> {
+        self.execute_command(
+            CommandType::NowPlayingQueue,
+            &NowPlayingQueueParams {
+                queue_type: queue_type.to_owned(),
+                files,
+                play: play.to_owned(),
             },
         )
     }

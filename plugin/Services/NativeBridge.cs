@@ -123,6 +123,7 @@ namespace MusicBeePlugin.Services
         private const int CmdLibraryQueueArtist = 16;
         private const int CmdLibraryQueueAlbum = 17;
         private const int CmdLibraryQueueTrack = 18;
+        private const int CmdNowPlayingQueue = 19;
 
         #endregion
 
@@ -576,6 +577,8 @@ namespace MusicBeePlugin.Services
                         return ApplyLibraryQueue(paramsBuf, paramsLen, MetaTag.Album);
                     case CmdLibraryQueueTrack:
                         return ApplyLibraryQueue(paramsBuf, paramsLen, MetaTag.Title);
+                    case CmdNowPlayingQueue:
+                        return ApplyNowPlayingQueue(paramsBuf, paramsLen);
                     default:
                         Logger.Warn("Unknown command type: {0}", commandType);
                         return -1;
@@ -693,6 +696,18 @@ namespace MusicBeePlugin.Services
             return _playlist.QueueFiles(queueType, fileUrls ?? new string[0], playFirst) ? 0 : 1;
         }
 
+        private int ApplyNowPlayingQueue(IntPtr paramsBuf, uint paramsLen)
+        {
+            var dto = MessagePackSerializer.Deserialize<NowPlayingQueueParams>(
+                CopyParams(paramsBuf, paramsLen), MsgPackOptions);
+            var files = dto.files ?? new string[0];
+            if (files.Length == 0)
+                return 1;
+            var queueType = MapQueueType(dto.queue_type ?? string.Empty);
+            var play = string.IsNullOrEmpty(dto.play) ? null : dto.play;
+            return _playlist.QueueFiles(queueType, files, play) ? 0 : 1;
+        }
+
         private static QueueType MapQueueType(string token)
         {
             // Mirrors core/Utilities/Mapping/QueueTypeMapper (which is
@@ -748,7 +763,10 @@ namespace MusicBeePlugin.Services
 
         private byte[] SerializeCoverData()
         {
-            var artwork = _track.GetNowPlayingArtwork() ?? string.Empty;
+            // Match legacy `Broadcaster.BroadcastCover` fallback chain:
+            // embedded artwork first, then MusicBee's downloaded artwork.
+            // Going through CoverService keeps that policy in one place.
+            var artwork = _coverService.GetNowPlayingCover() ?? string.Empty;
             return MessagePackSerializer.Serialize(artwork, MsgPackOptions);
         }
 

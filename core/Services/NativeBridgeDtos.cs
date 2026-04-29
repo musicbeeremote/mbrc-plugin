@@ -94,6 +94,20 @@ namespace MusicBeePlugin.Services
     }
 
     /// <summary>
+    ///     Payload for NowPlayingQueue. <c>queue_type</c> is the legacy
+    ///     protocol string (<c>"now" | "next" | "last" | "add-all"</c>);
+    ///     <c>files</c> is the list of file URLs to enqueue;
+    ///     <c>play</c> is the file to start playback from when
+    ///     <c>queue_type == "add-all"</c> (empty otherwise).
+    /// </summary>
+    public class NowPlayingQueueParams
+    {
+        public string queue_type { get; set; }
+        public string[] files { get; set; }
+        public string play { get; set; }
+    }
+
+    /// <summary>
     ///     Pagination payload (NowPlayingList, RadioStations queries).
     /// </summary>
     public class PaginationParams

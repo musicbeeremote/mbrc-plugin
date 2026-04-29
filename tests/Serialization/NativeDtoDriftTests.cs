@@ -87,6 +87,12 @@ namespace MusicBeeRemote.Core.Tests.Serialization
         }
 
         [Fact]
+        public void NowPlayingQueueParams_roundtrips_canonical_schema()
+        {
+            AssertRoundTrip<NowPlayingQueueParams>("now_playing_queue_params.json");
+        }
+
+        [Fact]
         public void PaginationParams_roundtrips_canonical_schema()
         {
             AssertRoundTrip<PaginationParams>("pagination_params.json");
