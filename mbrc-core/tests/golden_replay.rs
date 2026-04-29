@@ -584,9 +584,11 @@ fn notifications_for_burst(contexts: &std::collections::HashSet<String>) -> Vec<
     if contexts.contains("nowplayinglistchanged") {
         out.push(NotificationType::NowPlayingListChanged);
     }
-    // Cover/lyrics standalone broadcasts only — if the burst is a
-    // TrackChanged we already fired that, which emits an empty cover
-    // placeholder. NowPlayingArtworkReady fires on real cover-load.
+    // Standalone cover bursts only. When a TrackChanged is already in
+    // play we emit the cover as part of that burst (deduped via
+    // `cover_if_changed`); a separate NowPlayingArtworkReady would
+    // double-broadcast. NowPlayingArtworkReady is reserved for real
+    // async cover-loads that arrive after the initial track-change.
     if contexts.contains("nowplayingcover")
         && !track_changed_contexts.iter().any(|c| contexts.contains(*c))
     {

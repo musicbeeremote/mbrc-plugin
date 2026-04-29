@@ -30,6 +30,10 @@ pub struct AppState {
     networking_running: parking_lot::Mutex<bool>,
     /// Broadcast channel for pushing events to all connected legacy TCP clients.
     event_tx: broadcast::Sender<BroadcastEvent>,
+    /// Last broadcast cover (base64). Used to dedupe `nowplayingcover` frames
+    /// when both `TrackChanged` and `NowPlayingArtworkReady` return the same
+    /// artwork — mirrors the SHA1 dedupe in legacy `LyricCoverModel.SetCover`.
+    last_cover: parking_lot::Mutex<Option<String>>,
 }
 
 #[allow(dead_code)]
@@ -62,6 +66,19 @@ impl AppState {
         &self.event_tx
     }
 
+    /// Swap in `cover` as the most-recently-broadcast artwork. Returns
+    /// `Some(cover)` if it differs from the previous value (i.e. should
+    /// be broadcast), or `None` if it's a duplicate of what we last sent.
+    pub fn cover_if_changed(&self, cover: String) -> Option<String> {
+        let mut last = self.last_cover.lock();
+        if last.as_deref() == Some(cover.as_str()) {
+            None
+        } else {
+            *last = Some(cover.clone());
+            Some(cover)
+        }
+    }
+
     /// Build a fresh `Arc<AppState>` without touching the `MbrcCore` singleton.
     /// Used by the golden-trace replay harness so each fixture run starts clean.
     pub fn for_replay(callbacks: SafeCallbacks, storage_path: String) -> Arc<Self> {
@@ -72,6 +89,7 @@ impl AppState {
             shutdown_tx: parking_lot::Mutex::new(None),
             networking_running: parking_lot::Mutex::new(false),
             event_tx,
+            last_cover: parking_lot::Mutex::new(None),
         })
     }
 }
@@ -93,6 +111,7 @@ impl MbrcCore {
             shutdown_tx: parking_lot::Mutex::new(None),
             networking_running: parking_lot::Mutex::new(false),
             event_tx,
+            last_cover: parking_lot::Mutex::new(None),
         });
 
         let core = MbrcCore { runtime, state };

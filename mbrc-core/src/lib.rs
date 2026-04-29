@@ -255,6 +255,23 @@ pub(crate) async fn build_broadcast_for_replay(
     build_broadcast(notification, state).await
 }
 
+/// Query the current cover (base64) and return it only if it differs from
+/// the last value we broadcast. `None` means either the query failed or the
+/// cover is unchanged — both cases skip the frame, matching the legacy
+/// `LyricCoverModel.SetCover` SHA1-dedupe behaviour.
+async fn query_cover_if_changed(state: &Arc<state::AppState>) -> Option<String> {
+    let cover_state = Arc::clone(state);
+    let cover = tokio::task::spawn_blocking(move || {
+        cover_state
+            .callbacks()
+            .query_no_params::<String>(QueryType::CoverData)
+    })
+    .await
+    .ok()?
+    .ok()?;
+    state.cover_if_changed(cover)
+}
+
 /// Build a broadcast event for a given notification by querying MusicBee via callbacks.
 /// Returns `None` for notifications that don't produce broadcasts (e.g. FileAddedToLibrary).
 async fn build_broadcast(
@@ -321,11 +338,14 @@ async fn build_broadcast(
             .and_then(|r| r.ok())
             .unwrap_or_default();
 
-            // Wire order from captured Android-v4 traces:
-            // rating -> lfm-rating -> lyrics -> position -> track.
-            // Cover does NOT appear in TrackChanged bursts — it arrives
-            // separately via NowPlayingArtworkReady once artwork loads.
-            let messages = vec![
+            // Mirrors legacy C# `NotificationHandler.HandleTrackChanged`:
+            // cover is pushed eagerly here (embedded artwork is available
+            // synchronously). `NowPlayingArtworkReady` re-pushes only when
+            // async-loaded artwork actually differs — `cover_if_changed`
+            // dedupes both paths.
+            let cover = query_cover_if_changed(state).await;
+
+            let mut messages = vec![
                 SocketMessage::new(
                     constants::NOW_PLAYING_RATING,
                     serde_json::Value::String(rating),
@@ -347,6 +367,12 @@ async fn build_broadcast(
                     serde_json::to_value(&track).unwrap_or_default(),
                 ),
             ];
+            if let Some(cover) = cover {
+                messages.push(SocketMessage::new(
+                    constants::NOW_PLAYING_COVER,
+                    serde_json::Value::String(cover),
+                ));
+            }
             Some(BroadcastEvent::multi(notification, messages))
         }
 
@@ -445,24 +471,17 @@ async fn build_broadcast(
         }
 
         NotificationType::NowPlayingArtworkReady => {
-            // Mirror legacy C# Broadcaster.BroadcastCover: query the
-            // base64 cover and ship it on the broadcast frame so the
-            // client refreshes artwork on track change.
-            let cover_state = Arc::clone(state);
-            let cover = tokio::task::spawn_blocking(move || {
-                cover_state
-                    .callbacks()
-                    .query_no_params::<String>(QueryType::CoverData)
+            // Async path: MusicBee fires this after downloading online
+            // artwork. Skip the frame if it matches what TrackChanged
+            // already broadcast — legacy `LyricCoverModel.SetCover`
+            // dedupes the same way.
+            query_cover_if_changed(state).await.map(|cover| {
+                BroadcastEvent::single(
+                    notification,
+                    constants::NOW_PLAYING_COVER,
+                    serde_json::Value::String(cover),
+                )
             })
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .unwrap_or_default();
-            Some(BroadcastEvent::single(
-                notification,
-                constants::NOW_PLAYING_COVER,
-                serde_json::Value::String(cover),
-            ))
         }
 
         NotificationType::NowPlayingListChanged => Some(BroadcastEvent::single(
