@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group all Avalonia UI packages (must move in lockstep)",
+      "matchPackageNames": ["/^Avalonia/"],
+      "groupName": "Avalonia"
+    },
+    {
+      "description": "Group test/dev dependencies",
+      "matchPackageNames": [
+        "xunit",
+        "xunit.runner.visualstudio",
+        "Microsoft.NET.Test.Sdk",
+        "Moq",
+        "FluentAssertions",
+        "coverlet.collector"
+      ],
+      "groupName": "test dependencies",
+      "addLabels": ["test"]
+    },
+    {
+      "description": "Group analyzers (build-time only)",
+      "matchPackageNames": [
+        "AsyncFixer",
+        "StyleCop.Analyzers",
+        "/^Microsoft\\.CodeAnalysis\\./"
+      ],
+      "groupName": "analyzers",
+      "addLabels": ["analyzers"]
+    },
+    {
+      "description": "Assembly-merge toolchain is load-bearing for the single-DLL output — require manual dashboard approval before opening a PR",
+      "matchPackageNames": ["Fody", "Costura.Fody", "ILRepack.Lib.MSBuild.Task"],
+      "groupName": "assembly-merge toolchain",
+      "addLabels": ["build-critical"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "System.* runtime packages can break .NET Framework 4.8 compat on major bumps — flag majors for manual approval",
+      "matchPackageNames": ["/^System\\./"],
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["net48-compat"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "addLabels": ["ci"]
+    }
+  ]
+}
