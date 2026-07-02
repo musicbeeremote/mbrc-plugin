@@ -4,7 +4,7 @@
 <br/>
 <p align="center">
     <a href="https://github.com/musicbeeremote/plugin">
-    <img src="logo.png" alt="Logo" width="80"   height="80" />
+    <img src="docs/assets/logo.png" alt="Logo" width="80"   height="80" />
     </a>
 
 <h3 align="center">MusicBee Remote (plugin)</h3>
@@ -44,7 +44,7 @@
 
 <p align="center">
     <a href="https://mbrc.kelsos.net">
-    <img src="screenshot.png" alt="Project Screenshot">
+    <img src="docs/assets/screenshot.png" alt="Project Screenshot">
     <a/>
 </p>
 
@@ -151,10 +151,10 @@ Open `MBRC.sln` and build the solution.
 dotnet build -c Release
 ```
 
-**Build Script (Windows):**
-```bash
-build.bat          # Release build (default)
-build.bat Debug    # Debug build
+**Build Script (Windows / PowerShell):**
+```powershell
+.\build-msbuild.ps1                       # Release build (default)
+.\build-msbuild.ps1 -Configuration Debug  # Debug build
 ```
 
 The build process:
