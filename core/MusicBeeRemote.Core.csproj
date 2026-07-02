@@ -43,9 +43,9 @@
 
   <!-- NuGet Package References (all targets) -->
   <ItemGroup>
-    <PackageReference Include="Autofac" Version="6.5.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="NLog" Version="5.3.4" />
+    <PackageReference Include="Autofac" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="NLog" />
   </ItemGroup>
 
   <!-- Framework references (net48) -->

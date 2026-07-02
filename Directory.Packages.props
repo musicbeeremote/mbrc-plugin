@@ -1,0 +1,46 @@
+<Project>
+
+  <!-- Central Package Management: every package version lives here, one source -->
+  <!-- of truth. Projects reference packages without a Version attribute. -->
+  <!-- https://learn.microsoft.com/nuget/consume-packages/central-package-management -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Runtime / shared -->
+    <PackageVersion Include="Autofac" Version="6.5.0" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="NLog" Version="5.3.4" />
+
+    <!-- Plugin packaging (assembly merge) -->
+    <PackageVersion Include="Costura.Fody" Version="4.1.0" />
+    <PackageVersion Include="Fody" Version="6.8.0" />
+    <PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34" />
+
+    <!-- api-debugger (Avalonia UI) -->
+    <PackageVersion Include="Avalonia" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageVersion Include="SkiaSharp" Version="2.88.9" />
+
+    <!-- Analyzers (build-time only) -->
+    <PackageVersion Include="AsyncFixer" Version="1.6.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" />
+    <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
+
+    <!-- Test -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageVersion Include="xunit" Version="2.6.6" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.6" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.0" />
+    <PackageVersion Include="Moq" Version="4.20.70" />
+    <PackageVersion Include="FluentAssertions" Version="6.12.0" />
+  </ItemGroup>
+
+</Project>

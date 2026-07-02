@@ -78,13 +78,13 @@
     <!-- </PackageReference> -->
     
     <!-- Security analyzers (FREE) -->
-    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4">
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
     
     <!-- Async/await best practices (FREE) -->
-    <PackageReference Include="AsyncFixer" Version="1.6.0">
+    <PackageReference Include="AsyncFixer">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
@@ -93,7 +93,7 @@
   <!-- Optional: StyleCop for consistent style (uncomment if desired) -->
   <!--
   <ItemGroup>
-    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
+    <PackageReference Include="StyleCop.Analyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>

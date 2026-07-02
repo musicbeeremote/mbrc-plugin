@@ -43,19 +43,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.3" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
     <!-- Referenced unconditionally so packages.lock.json is identical across Debug/Release -->
     <!-- (a config-conditional reference makes the lockfile config-specific and breaks -->
     <!-- locked-mode restore in the other config). ApiDebugger is an internal debug tool -->
     <!-- and is not shipped, so bundling Diagnostics in Release output is harmless. -->
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.3" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <PackageReference Include="Avalonia.Diagnostics" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
 </Project>

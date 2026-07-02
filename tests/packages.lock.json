@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "dependencies": {
     ".NETFramework,Version=v4.8": {
       "AsyncFixer": {
@@ -68,15 +68,6 @@
           "Microsoft.TestPlatform.ObjectModel": "17.8.0"
         }
       },
-      "Autofac": {
-        "type": "Transitive",
-        "resolved": "6.5.0",
-        "contentHash": "sm6HWWBDEoTPGXeyOchMygJ/7L89VxmVH72BFxakG88J34AVjA8RMi5jbv3PdpUtXI/d9ZLKOaxCmOSIo2K4aA==",
-        "dependencies": {
-          "Microsoft.Bcl.AsyncInterfaces": "1.1.0",
-          "System.Diagnostics.DiagnosticSource": "4.7.1"
-        }
-      },
       "Castle.Core": {
         "type": "Transitive",
         "resolved": "5.1.1",
@@ -103,16 +94,6 @@
           "NuGet.Frameworks": "6.5.0",
           "System.Reflection.Metadata": "1.6.0"
         }
-      },
-      "Newtonsoft.Json": {
-        "type": "Transitive",
-        "resolved": "13.0.3",
-        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
-      },
-      "NLog": {
-        "type": "Transitive",
-        "resolved": "5.3.4",
-        "contentHash": "gLy7+O1hEYJXIlcTr1/VWjGXrZTQFZzYNO18IWasD64pNwz0BreV+nHLxWKXWZzERRzoKnsk2XYtwLkTVk7J1A=="
       },
       "NuGet.Frameworks": {
         "type": "Transitive",
@@ -220,6 +201,28 @@
           "NLog": "[5.3.4, )",
           "Newtonsoft.Json": "[13.0.3, )"
         }
+      },
+      "Autofac": {
+        "type": "CentralTransitive",
+        "requested": "[6.5.0, )",
+        "resolved": "6.5.0",
+        "contentHash": "sm6HWWBDEoTPGXeyOchMygJ/7L89VxmVH72BFxakG88J34AVjA8RMi5jbv3PdpUtXI/d9ZLKOaxCmOSIo2K4aA==",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "1.1.0",
+          "System.Diagnostics.DiagnosticSource": "4.7.1"
+        }
+      },
+      "Newtonsoft.Json": {
+        "type": "CentralTransitive",
+        "requested": "[13.0.3, )",
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+      },
+      "NLog": {
+        "type": "CentralTransitive",
+        "requested": "[5.3.4, )",
+        "resolved": "5.3.4",
+        "contentHash": "gLy7+O1hEYJXIlcTr1/VWjGXrZTQFZzYNO18IWasD64pNwz0BreV+nHLxWKXWZzERRzoKnsk2XYtwLkTVk7J1A=="
       }
     }
   }
