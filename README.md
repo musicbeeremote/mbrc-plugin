@@ -109,7 +109,7 @@ As a developer there are a few steps you need to follow to get started:
 
 ### Prerequisites
 
-* [Visual Studio 2022 Community](https://visualstudio.microsoft.com/vs/community/) (or later)
+* [Visual Studio 2026 Community](https://visualstudio.microsoft.com/vs/community/) (2022 also supported)
 * [.NET Framework 4.8](https://dotnet.microsoft.com/download/dotnet-framework/net48) SDK
 * [MusicBee](http://getmusicbee.com/) installed (for testing)
 

@@ -3,26 +3,32 @@ param(
     [string]$Configuration = "Release"
 )
 
-# Find MSBuild path
-$msbuildPaths = @(
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\bin\MSBuild.exe",
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\bin\MSBuild.exe",
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\MSBuild.exe",
-    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community\MSBuild\Current\bin\MSBuild.exe",
-    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\bin\MSBuild.exe",
-    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\MSBuild.exe"
-)
-
+# Find MSBuild. Prefer vswhere (version-independent: resolves VS 2026, 2022, any
+# edition, incl. prerelease/Insiders); fall back to probing well-known locations.
 $msbuild = $null
-foreach ($path in $msbuildPaths) {
-    if (Test-Path $path) {
-        $msbuild = $path
-        break
+
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vswhere) {
+    $msbuild = & $vswhere -latest -prerelease -products * `
+        -requires Microsoft.Component.MSBuild `
+        -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+}
+
+if (-not $msbuild -or -not (Test-Path $msbuild)) {
+    # Fallback: VS 2026 installs under "18", VS 2022 under "2022".
+    $editions = "Community", "Professional", "Enterprise", "BuildTools"
+    $candidates = foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+        foreach ($ver in "18", "2022") {
+            foreach ($edition in $editions) {
+                "$base\Microsoft Visual Studio\$ver\$edition\MSBuild\Current\Bin\MSBuild.exe"
+            }
+        }
     }
+    $msbuild = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
 if (-not $msbuild) {
-    Write-Error "MSBuild not found. Please install Visual Studio 2022."
+    Write-Error "MSBuild not found. Please install Visual Studio 2026 (or 2022) with the MSBuild component."
     exit 1
 }
 

@@ -48,8 +48,11 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
-    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.2.3" />
+    <!-- Referenced unconditionally so packages.lock.json is identical across Debug/Release -->
+    <!-- (a config-conditional reference makes the lockfile config-specific and breaks -->
+    <!-- locked-mode restore in the other config). ApiDebugger is an internal debug tool -->
+    <!-- and is not shipped, so bundling Diagnostics in Release output is harmless. -->
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.3" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
