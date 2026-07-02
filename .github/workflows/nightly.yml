@@ -5,16 +5,30 @@ on:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC
   workflow_dispatch:     # Allow manual trigger
 
+# Least-privilege default; jobs opt into more only where needed.
+permissions:
+  contents: read
+
+# Never run two nightlies at once; don't cancel one already in flight.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
 jobs:
   check:
+    name: check if build needed
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read        # gh run list reads workflow run history
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check if nightly needed
         id: check
@@ -64,24 +78,29 @@ jobs:
           echo "version=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
 
   build:
+    name: build nightly
     needs: check
     if: needs.check.outputs.should_build == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       - name: setup NuGet
-        uses: nuget/setup-nuget@v2
+        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
       - name: restore packages
         run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive -LockedMode
 
       - name: build
+        env:
+          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
         run: |
-          $version = "${{ needs.check.outputs.version }}"
+          $version = $env:NIGHTLY_VERSION
           msbuild MBRC.sln /p:Configuration="Release" /p:VersionSuffix="-nightly.$version" /m /v:M /nr:false
 
       - name: prepare artifacts
@@ -103,19 +122,25 @@ jobs:
           echo "PREFIX=$prefix" >> $env:GITHUB_OUTPUT
 
       - name: build installer
+        env:
+          VERSION_PREFIX: ${{ steps.version_prefix.outputs.PREFIX }}
+          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
         run: |
-          $version = "${{ steps.version_prefix.outputs.PREFIX }}-nightly.${{ needs.check.outputs.version }}"
+          $version = "${env:VERSION_PREFIX}-nightly.${env:NIGHTLY_VERSION}"
           $env:PLUGIN_VERSION = $version
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer\MusicBeeRemote.nsi
           mv "installer\musicbee_remote_$version.exe" "build\dist\"
 
       - name: create zip
+        env:
+          VERSION_PREFIX: ${{ steps.version_prefix.outputs.PREFIX }}
+          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
         run: |
-          $version = "${{ steps.version_prefix.outputs.PREFIX }}-nightly.${{ needs.check.outputs.version }}"
+          $version = "${env:VERSION_PREFIX}-nightly.${env:NIGHTLY_VERSION}"
           Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-${{ needs.check.outputs.version }}
           path: |

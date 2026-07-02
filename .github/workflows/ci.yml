@@ -7,39 +7,54 @@ on:
   pull_request:
     branches: [ main ]
 
+# Least-privilege default; jobs opt into more only where needed (see release).
+permissions:
+  contents: read
+
+# Cancel superseded runs on a branch/PR; let tag (release) runs finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
+    name: build & test
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       - name: setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: '9.0.x'
 
       - name: setup NuGet
-        uses: nuget/setup-nuget@v2
+        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
       - name: restore packages
         run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive -LockedMode
 
       - name: determine version
         id: version
+        env:
+          GH_REF: ${{ github.ref }}
+          GH_REF_NAME: ${{ github.ref_name }}
+          GH_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
-            $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ($env:GH_REF.StartsWith("refs/tags/v")) {
+            $version = $env:GH_REF_NAME -replace '^v', ''
             echo "VERSION=$version" >> $env:GITHUB_OUTPUT
             echo "VERSION_ARGS=/p:Version=$version" >> $env:GITHUB_OUTPUT
             echo "Building release version: $version"
           } else {
             # For non-tag builds, use VersionPrefix from Directory.Build.props with nightly suffix
-            $suffix = "nightly.${{ github.run_number }}"
+            $suffix = "nightly.$env:GH_RUN_NUMBER"
             echo "VERSION_ARGS=/p:VersionSuffix=$suffix" >> $env:GITHUB_OUTPUT
             echo "Building development version with suffix: $suffix"
           }
@@ -57,9 +72,11 @@ jobs:
           echo "✅ Code formatting is clean!"
 
       - name: build with strict analysis
+        env:
+          VERSION_ARGS: ${{ steps.version.outputs.VERSION_ARGS }}
         run: |
           echo "🔍 Building with strict static analysis (warnings as errors)..."
-          msbuild MBRC.sln /p:Configuration="Release" /p:MSBuildCI="true" ${{ steps.version.outputs.VERSION_ARGS }} /m /v:M /fl /nr:false
+          msbuild MBRC.sln /p:Configuration="Release" /p:MSBuildCI="true" $env:VERSION_ARGS /m /v:M /fl /nr:false
 
       - name: static analysis passed
         run: |
@@ -72,7 +89,7 @@ jobs:
           dotnet test tests/MusicBeeRemote.Core.Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
       - name: upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./TestResults
@@ -86,34 +103,38 @@ jobs:
           cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
           cp LICENSE build/dist
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mbrc-plugin-dev
           path: build/dist
 
   release:
+    name: release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: write      # create the GitHub release and upload its assets
+      id-token: write      # OIDC token used to sign the build provenance attestation
+      attestations: write  # publish the provenance attestation
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: download build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: mbrc-plugin-dev
           path: build/dist
 
       - name: set version from tag
         id: version
+        env:
+          GH_REF_NAME: ${{ github.ref_name }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace '^v', ''
+          $version = $env:GH_REF_NAME -replace '^v', ''
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
           echo "Version: $version"
 
@@ -121,40 +142,50 @@ jobs:
         run: choco install nsis -y
 
       - name: build installer
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          $env:PLUGIN_VERSION = "${{ steps.version.outputs.VERSION }}"
+          $env:PLUGIN_VERSION = $env:VERSION
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer\MusicBeeRemote.nsi
 
       - name: move installer to dist
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          $version = "${{ steps.version.outputs.VERSION }}"
+          $version = $env:VERSION
           mv "installer\musicbee_remote_$version.exe" "build\dist\"
 
       - name: create zip archive
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          $version = "${{ steps.version.outputs.VERSION }}"
+          $version = $env:VERSION
           cp installer\README.txt build\dist\
           Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: generate checksums
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          $version = "${{ steps.version.outputs.VERSION }}"
+          $version = $env:VERSION
           cd build\dist
           (Get-FileHash -Algorithm SHA512 "musicbee_remote_$version.exe").Hash.ToLower() + "  musicbee_remote_$version.exe" | Out-File -Encoding ascii "musicbee_remote_$version.exe.sha512"
           (Get-FileHash -Algorithm SHA512 "musicbee_remote_$version.zip").Hash.ToLower() + "  musicbee_remote_$version.zip" | Out-File -Encoding ascii "musicbee_remote_$version.zip.sha512"
 
       - name: attest build provenance (exe)
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: build/dist/musicbee_remote_${{ steps.version.outputs.VERSION }}.exe
 
       - name: attest build provenance (zip)
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: build/dist/musicbee_remote_${{ steps.version.outputs.VERSION }}.zip
 
       - name: create GitHub release
-        uses: softprops/action-gh-release@v2
+        # zizmor: ignore[superfluous-actions] — kept intentionally: the action bundles
+        # release-notes generation + multi-asset upload that a raw `gh release` step would reimplement.
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: |
             build/dist/musicbee_remote_${{ steps.version.outputs.VERSION }}.exe
