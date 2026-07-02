@@ -28,7 +28,12 @@
     <LangVersion>7.3</LangVersion>
     <Nullable>disable</Nullable>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    
+
+    <!-- Reproducible restores: generate + honour packages.lock.json per project. -->
+    <!-- Locally the lockfile regenerates when dependencies change; CI restores with -->
+    <!-- -LockedMode (see .github/workflows/ci.yml) to fail on any drift. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
     <!-- Critical analyzer rules that should fail the build (in CI only by default) -->
     <!-- Set MSBuildCI=true in CI environment or locally to enforce -->
     <WarningsAsErrors Condition="'$(MSBuildCI)' == 'true'">

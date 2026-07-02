@@ -77,7 +77,7 @@ jobs:
         uses: nuget/setup-nuget@v2
 
       - name: restore packages
-        run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive
+        run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive -LockedMode
 
       - name: build
         run: |
