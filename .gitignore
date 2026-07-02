@@ -155,12 +155,19 @@ MB_REMOTE.XML
 *.iml
 *.dll
 
+# Local MusicBee install used for debug deployment
 app/MusicBee
-tools
 
 # Windows reserved device names (can appear as phantom files)
 nul
 NUL
+
+# Local scratch capture output (raw tee-proxy sessions; trimmed golden
+# fixtures are committed under their own path, not here)
+tests/captures/
+
+# Codex CLI local config
+.codex/
 
 # Test results
 TestResults/
