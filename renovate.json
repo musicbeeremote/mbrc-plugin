@@ -8,6 +8,7 @@
   ],
   "dependencyDashboard": true,
   "automerge": false,
+  "rangeStrategy": "pin",
   "minimumReleaseAge": "7 days",
   "internalChecksFilter": "strict",
   "prConcurrentLimit": 5,
