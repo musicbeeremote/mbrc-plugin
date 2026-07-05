@@ -1,0 +1,10 @@
+[package]
+name = "mbrc-wire"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+description = "MusicBee Remote legacy wire protocol: CRLF-JSON framing, {context,data} messages, client handshake."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

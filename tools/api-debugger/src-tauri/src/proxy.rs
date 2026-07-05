@@ -34,11 +34,9 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use mbrc_capture::{meta_capture_start, meta_close, meta_handshake, meta_open, Frame};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -48,9 +46,6 @@ use tokio::task::JoinHandle;
 /// Event channel names shared with the frontend.
 pub const EVENT_PROXY: &str = "mbrc://proxy";
 pub const EVENT_PROXY_STATE: &str = "mbrc://proxy-state";
-
-/// Capture format version, written into the file header.
-const CAPTURE_FORMAT: &str = "mbrc-capture/2";
 
 /// Sentinel for "no c2s seen yet on this connection" in `Session::last_c2s`.
 const NO_SEQ: u64 = u64::MAX;
@@ -76,59 +71,13 @@ fn default_upstream() -> String {
     "127.0.0.1:3000".to_string()
 }
 
-/// A captured wire frame - the golden-trace record written to disk.
-#[derive(Debug, Clone, Serialize)]
-pub struct FrameRecord {
-    #[serde(rename = "type")]
-    kind: &'static str,
-    conn_id: u32,
-    seq: u64,
-    ts: String,
-    /// "c2s" (client → server) or "s2c" (server → client).
-    dir: String,
-    elapsed_ms: u128,
-    /// For `s2c` frames: seq of the most recent `c2s` on this connection, if
-    /// any - a correlation hint distinguishing responses from broadcasts.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reply_to: Option<u64>,
-    /// Exact frame content as it crossed the wire (line terminator stripped).
-    /// The source of truth for byte-faithful replay.
-    raw: String,
-    /// Parsed JSON, present when `raw` was well-formed. Derived convenience.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    frame: Option<serde_json::Value>,
-}
-
-impl FrameRecord {
-    fn new(conn_id: u32, seq: u64, dir: &str, elapsed_ms: u128, frame_bytes: &[u8]) -> Self {
-        let raw = String::from_utf8_lossy(frame_bytes).into_owned();
-        let frame = serde_json::from_str(&raw).ok();
-        FrameRecord {
-            kind: "frame",
-            conn_id,
-            seq,
-            ts: now_rfc3339(),
-            dir: dir.to_string(),
-            elapsed_ms,
-            reply_to: None,
-            raw,
-            frame,
-        }
-    }
-
-    /// Display `context` for the UI, pulled from the parsed frame.
-    fn context(&self) -> Option<&str> {
-        self.frame.as_ref()?.get("context")?.as_str()
-    }
-}
-
 /// What the UI receives: a frame plus the client `peer` (not written to disk -
 /// the on-disk record stays a pristine golden frame).
 #[derive(Debug, Clone, Serialize)]
 pub struct ProxyEvent {
     peer: String,
     #[serde(flatten)]
-    record: FrameRecord,
+    record: Frame,
 }
 
 /// A client connection opening or closing, so the UI can track the live set.
@@ -224,12 +173,6 @@ struct Session {
     closed_by: Mutex<Option<&'static str>>,
 }
 
-fn now_rfc3339() -> String {
-    OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_owned())
-}
-
 /// Serialize one record and append it as a line to the capture file, if one is
 /// configured. A write failure is surfaced to the UI but never stalls the wire.
 async fn append_line<S: Serialize>(shared: &Shared, value: &S) {
@@ -272,14 +215,7 @@ pub async fn start_proxy(
                 .await
                 .map_err(|e| format!("open {} failed: {e}", path.display()))?;
             // Format header, so a consumer can version-detect the capture.
-            let header = json!({
-                "type": "meta",
-                "event": "capture-start",
-                "format": CAPTURE_FORMAT,
-                "listen": options.listen,
-                "upstream": options.upstream,
-                "ts": now_rfc3339(),
-            });
+            let header = meta_capture_start(&options.listen, &options.upstream);
             let mut line = serde_json::to_vec(&header).map_err(|e| e.to_string())?;
             line.push(b'\n');
             file.write_all(&line)
@@ -397,11 +333,7 @@ async fn handle_session(
     });
 
     // Connection-open lifecycle record.
-    append_line(
-        &session.shared,
-        &json!({ "type": "meta", "conn_id": conn_id, "event": "open", "peer": peer, "ts": now_rfc3339() }),
-    )
-    .await;
+    append_line(&session.shared, &meta_open(conn_id, &peer)).await;
 
     let (cr, cw) = client.into_split();
     let (ur, uw) = upstream.into_split();
@@ -428,11 +360,7 @@ async fn handle_session(
         Ok(_) => "eof".to_string(),
         Err(e) => format!("error:{e}"),
     };
-    append_line(
-        &session.shared,
-        &json!({ "type": "meta", "conn_id": conn_id, "event": "close", "ts": now_rfc3339(), "reason": reason, "by": by }),
-    )
-    .await;
+    append_line(&session.shared, &meta_close(conn_id, &reason, by)).await;
 
     let detail = match &result {
         Ok(_) => format!("client disconnected: {peer} (conn {conn_id}, by {by})"),
@@ -517,7 +445,7 @@ async fn record_frame(session: &Arc<Session>, dir: &str, frame_bytes: &[u8]) {
     let seq = session.shared.seq.fetch_add(1, Ordering::Relaxed);
     let elapsed_ms = session.shared.started.elapsed().as_millis();
 
-    let mut record = FrameRecord::new(session.conn_id, seq, dir, elapsed_ms, frame_bytes);
+    let mut record = Frame::new(session.conn_id, seq, dir, elapsed_ms, frame_bytes);
 
     if dir == "s2c" {
         let last = session.last_c2s.load(Ordering::Relaxed);
@@ -546,7 +474,7 @@ async fn record_frame(session: &Arc<Session>, dir: &str, frame_bytes: &[u8]) {
 /// Sniff the two handshake frames (`player` → client type, `protocol` →
 /// negotiated version) and, on the `protocol` frame, emit a `handshake` meta
 /// record capturing what was negotiated on this connection.
-async fn maybe_handshake(session: &Arc<Session>, record: &FrameRecord) {
+async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
     match record.context() {
         Some("player") => {
             if let Some(ct) = record
@@ -568,14 +496,7 @@ async fn maybe_handshake(session: &Arc<Session>, record: &FrameRecord) {
             let client_type = session.client_type.lock().unwrap().clone();
             append_line(
                 &session.shared,
-                &json!({
-                    "type": "meta",
-                    "conn_id": session.conn_id,
-                    "event": "handshake",
-                    "client_type": client_type,
-                    "protocol_version": protocol_version,
-                    "ts": now_rfc3339(),
-                }),
+                &meta_handshake(session.conn_id, client_type.as_deref(), protocol_version),
             )
             .await;
         }
@@ -605,22 +526,5 @@ mod tests {
     #[test]
     fn empty_stays_empty() {
         assert_eq!(trim_line_terminator(b"\r\n"), b"");
-    }
-
-    #[test]
-    fn frame_record_keeps_raw_and_parses_valid_json() {
-        let r = FrameRecord::new(0, 3, "c2s", 12, br#"{"context":"player","data":"Android"}"#);
-        assert_eq!(r.raw, r#"{"context":"player","data":"Android"}"#);
-        assert_eq!(r.context(), Some("player"));
-        assert_eq!(r.conn_id, 0);
-        assert_eq!(r.seq, 3);
-    }
-
-    #[test]
-    fn frame_record_leaves_malformed_as_raw_only() {
-        let r = FrameRecord::new(1, 0, "s2c", 0, b"{not json");
-        assert!(r.frame.is_none());
-        assert_eq!(r.raw, "{not json");
-        assert_eq!(r.context(), None);
     }
 }

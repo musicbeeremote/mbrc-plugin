@@ -1,0 +1,66 @@
+name: rust-workspace
+
+# CI for the root Rust workspace: the shared crates (packages/mbrc-*) and the
+# headless CLI (tools/mbrc-cli). The Tauri api-debugger has its own workflow
+# (api-debugger.yml) and is excluded from this workspace, so it isn't built here.
+# The Windows/x86 plugin core (packages/mbrc-core) will get its own job when it
+# lands in Milestone B.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'packages/mbrc-wire/**'
+      - 'packages/mbrc-capture/**'
+      - 'packages/mbrc-discovery/**'
+      - 'tools/mbrc-cli/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'packages/mbrc-wire/**'
+      - 'packages/mbrc-capture/**'
+      - 'packages/mbrc-discovery/**'
+      - 'tools/mbrc-cli/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-workspace-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: fmt + clippy + test
+    # Windows is the plugin's ship target; ubuntu is the fast common case. Run
+    # both so the shared crates + CLI stay portable and pass where they ship.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: setup Rust components
+        run: rustup component add rustfmt clippy
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+
+      - name: check formatting
+        run: cargo fmt --all --check
+
+      - name: clippy (warnings as errors)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: test
+        run: cargo test --locked

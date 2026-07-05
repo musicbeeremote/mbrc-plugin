@@ -11,6 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use mbrc_capture::count_frames;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
@@ -44,12 +45,6 @@ fn modified_ms(meta: &fs::Metadata) -> u64 {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
-}
-
-/// Count frame records cheaply, without a full JSON parse: non-empty lines
-/// carrying a `"dir"` field (meta/lifecycle lines have none).
-fn count_frames(contents: &str) -> usize {
-    contents.lines().filter(|l| l.contains("\"dir\"")).count()
 }
 
 fn info_for(path: &Path) -> Option<SessionInfo> {
@@ -150,16 +145,5 @@ mod tests {
         assert_eq!(sanitize("  keep-dots.v2  "), "keep-dots.v2");
         assert_eq!(sanitize("///"), "session");
         assert_eq!(sanitize(""), "session");
-    }
-
-    #[test]
-    fn count_frames_ignores_meta_lines() {
-        let jsonl = concat!(
-            "{\"type\":\"meta\",\"event\":\"capture-start\"}\n",
-            "{\"type\":\"frame\",\"dir\":\"c2s\",\"seq\":0}\n",
-            "{\"type\":\"frame\",\"dir\":\"s2c\",\"seq\":1}\n",
-            "\n",
-        );
-        assert_eq!(count_frames(jsonl), 2);
     }
 }

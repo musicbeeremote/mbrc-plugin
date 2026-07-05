@@ -30,3 +30,14 @@ tokio = { version = "=1.52.3", features = ["net", "io-util", "sync", "rt", "rt-m
 time = { version = "=0.3.53", features = ["formatting"] }
 if-addrs = "=0.15.0"
 
+# Shared crates from the root workspace. This app stays its own workspace (the
+# [workspace] table below) and reaches them by path, so the root workspace's
+# cargo test / CI never has to build the webview toolchain.
+mbrc-discovery = { path = "../../../packages/mbrc-discovery" }
+mbrc-wire = { path = "../../../packages/mbrc-wire" }
+mbrc-capture = { path = "../../../packages/mbrc-capture" }
+
+# Marks this crate as its own workspace root, independent of the repo-root
+# Cargo.toml. Keeps the Tauri/webview dependency graph out of the root workspace.
+[workspace]
+

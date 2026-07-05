@@ -1,0 +1,15 @@
+[package]
+name = "mbrc-capture"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+description = "mbrc-capture/2 golden-trace format: frame + meta records, reader/writer helpers."
+
+[dependencies]
+mbrc-wire = { workspace = true }
+serde = { workspace = true }
+# preserve_order keeps JSON object keys in wire order through parse -> rewrite ->
+# re-serialize, so trimmed golden fixtures stay faithful to the original frame
+# key order (V4 responses are order-sensitive).
+serde_json = { workspace = true, features = ["preserve_order"] }
+time = { workspace = true }

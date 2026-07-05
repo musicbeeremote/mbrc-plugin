@@ -1,0 +1,18 @@
+[package]
+name = "mbrc-cli"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+description = "Headless CLI for the MusicBee Remote wire protocol and mbrc-capture traces."
+
+[[bin]]
+name = "mbrc"
+path = "src/main.rs"
+
+[dependencies]
+mbrc-wire = { workspace = true }
+mbrc-capture = { workspace = true }
+mbrc-discovery = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

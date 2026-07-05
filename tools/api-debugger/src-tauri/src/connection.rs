@@ -1,26 +1,24 @@
 //! Direct connection(s) to a MusicBee Remote plugin instance.
 //!
-//! The wire protocol is newline (`\r\n`) delimited JSON of the shape
-//! `{"context": "...", "data": ...}`. Connecting performs the plugin handshake
-//! automatically: send `player`, then on the plugin's `player` reply send
-//! `protocol`, and reply to any `ping` with `pong`.
-//!
-//! Connections are keyed by a `slot` string ("primary" / "secondary") so the UI
-//! can hold two independent sockets - the secondary mirrors the Android client's
-//! separate `no_broadcast` data-fetch connection. Events are emitted on
-//! slot-scoped channels: `mbrc://message/<slot>` and `mbrc://state/<slot>`.
+//! The wire protocol (CRLF-JSON framing, `{context,data}` messages, and the
+//! `player` -> `protocol` / `ping` -> `pong` handshake automation) lives in the
+//! shared `mbrc-wire` crate. This module is the Tauri glue: it owns the sockets,
+//! surfaces every frame to the UI, and keys connections by a `slot` string
+//! ("primary" / "secondary") so the UI can hold two independent sockets - the
+//! secondary mirrors the Android client's separate `no_broadcast` data-fetch
+//! connection. Events are emitted on slot-scoped channels:
+//! `mbrc://message/<slot>` and `mbrc://state/<slot>`.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use mbrc_wire::{frame_line, parse_context, ClientHandshake, FrameAccumulator};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-
-const TERMINATOR: &str = "\r\n";
 
 /// Base event channel names; the actual channel is suffixed with `/<slot>`.
 pub const EVENT_MESSAGE: &str = "mbrc://message";
@@ -31,6 +29,11 @@ fn message_channel(slot: &str) -> String {
 }
 fn state_channel(slot: &str) -> String {
     format!("{EVENT_STATE}/{slot}")
+}
+
+/// `context` of a wire line, with the UI's "unknown" fallback for junk frames.
+fn context_of(line: &str) -> String {
+    parse_context(line).unwrap_or_else(|| "unknown".to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,14 +104,6 @@ impl ConnectionState {
     }
 }
 
-/// Pull the `context` field out of a JSON line without a full typed parse.
-fn context_of(line: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(line)
-        .ok()
-        .and_then(|v| v.get("context").and_then(|c| c.as_str()).map(str::to_owned))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
 /// Send a line and mirror it into the slot's UI log as a "sent" message.
 fn emit_send(app: &AppHandle, slot: &str, tx: &mpsc::UnboundedSender<String>, line: String) {
     let context = context_of(&line);
@@ -140,8 +135,11 @@ pub async fn connect(
     // Writer task: frame each outbound line with the terminator.
     let writer = tokio::spawn(async move {
         while let Some(line) = rx.recv().await {
-            let framed = format!("{line}{TERMINATOR}");
-            if write_half.write_all(framed.as_bytes()).await.is_err() {
+            if write_half
+                .write_all(frame_line(&line).as_bytes())
+                .await
+                .is_err()
+            {
                 break;
             }
             let _ = write_half.flush().await;
@@ -152,44 +150,32 @@ pub async fn connect(
     let app_reader = app.clone();
     let tx_reader = tx.clone();
     let slot_reader = slot.clone();
-    let protocol_version = options.protocol_version;
-    let no_broadcast = options.no_broadcast;
+    let mut handshake = ClientHandshake::new(
+        options.client_type.clone(),
+        options.protocol_version,
+        options.no_broadcast,
+    );
+    // Capture the initial frame before `handshake` moves into the reader task.
+    let initial = handshake.initial();
     let reader = tokio::spawn(async move {
         let mut buf = vec![0u8; 8192];
-        let mut acc = String::new();
-        let mut player_acknowledged = false;
+        let mut acc = FrameAccumulator::default();
 
         loop {
             match read_half.read(&mut buf).await {
                 Ok(0) => break, // peer closed
                 Ok(n) => {
-                    acc.push_str(&String::from_utf8_lossy(&buf[..n]));
-                    while let Some(idx) = acc.find(TERMINATOR) {
-                        let line = acc[..idx].to_string();
-                        acc = acc[idx + TERMINATOR.len()..].to_string();
+                    acc.push_bytes(&buf[..n]);
+                    while let Some(line) = acc.next_frame() {
                         if line.trim().is_empty() {
                             continue;
                         }
                         let context = context_of(&line);
 
-                        // Handshake + keepalive automation.
-                        match context.as_str() {
-                            "ping" => {
-                                emit_send(
-                                    &app_reader,
-                                    &slot_reader,
-                                    &tx_reader,
-                                    r#"{"context":"pong","data":""}"#.to_string(),
-                                );
-                            }
-                            "player" if !player_acknowledged => {
-                                player_acknowledged = true;
-                                let msg = format!(
-                                    r#"{{"context":"protocol","data":{{"protocol_version":{protocol_version},"no_broadcast":{no_broadcast}}}}}"#
-                                );
-                                emit_send(&app_reader, &slot_reader, &tx_reader, msg);
-                            }
-                            _ => {}
+                        // Handshake + keepalive automation (player -> protocol,
+                        // ping -> pong), driven by the shared wire crate.
+                        if let Some(reply) = handshake.on_incoming(&context) {
+                            emit_send(&app_reader, &slot_reader, &tx_reader, reply);
                         }
 
                         let _ = app_reader.emit(
@@ -216,12 +202,7 @@ pub async fn connect(
     });
 
     // Kick off the handshake with the initial player message.
-    emit_send(
-        &app,
-        &slot,
-        &tx,
-        format!(r#"{{"context":"player","data":"{}"}}"#, options.client_type),
-    );
+    emit_send(&app, &slot, &tx, initial);
 
     state.replace(
         &slot,

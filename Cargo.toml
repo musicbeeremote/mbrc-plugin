@@ -1,0 +1,41 @@
+# Root Rust workspace for MusicBee Remote.
+#
+# Holds the shared library crates (packages/mbrc-*), the headless CLI
+# (tools/mbrc-cli), and later the Rust plugin core (packages/mbrc-core).
+#
+# The Tauri api-debugger (tools/api-debugger/src-tauri) is deliberately its OWN
+# workspace and is excluded here: it path-depends into the shared crates but
+# keeps the heavy webview toolchain out of this workspace's cargo test / CI.
+[workspace]
+resolver = "2"
+members = [
+    "packages/mbrc-discovery",
+    "packages/mbrc-wire",
+    "packages/mbrc-capture",
+    "tools/mbrc-cli",
+]
+exclude = ["tools/api-debugger/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+authors = ["Konstantinos Paparas"]
+
+# Exact-version pins match the api-debugger's supply-chain hardening so both
+# workspaces resolve the shared crates against identical dependency versions.
+[workspace.dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+tokio = { version = "=1.52.3", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "time", "fs", "signal"] }
+time = { version = "=0.3.53", features = ["formatting"] }
+if-addrs = "=0.15.0"
+mbrc-wire = { path = "packages/mbrc-wire" }
+mbrc-capture = { path = "packages/mbrc-capture" }
+mbrc-discovery = { path = "packages/mbrc-discovery" }
+
+# Size-optimised release build; only affects `--release` (cargo test uses dev).
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

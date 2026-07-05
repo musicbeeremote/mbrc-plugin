@@ -9,11 +9,19 @@ on:
     branches: [ main ]
     paths:
       - 'tools/api-debugger/**'
+      # src-tauri path-depends on these shared crates, so changes there can
+      # break the debugger build/tests - retrigger this workflow when they move.
+      - 'packages/mbrc-wire/**'
+      - 'packages/mbrc-capture/**'
+      - 'packages/mbrc-discovery/**'
       - '.github/workflows/api-debugger.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'tools/api-debugger/**'
+      - 'packages/mbrc-wire/**'
+      - 'packages/mbrc-capture/**'
+      - 'packages/mbrc-discovery/**'
       - '.github/workflows/api-debugger.yml'
 
 permissions:

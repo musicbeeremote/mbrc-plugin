@@ -52,6 +52,9 @@ name = "api-debugger"
 version = "0.1.0"
 dependencies = [
  "if-addrs",
+ "mbrc-capture",
+ "mbrc-discovery",
+ "mbrc-wire",
  "serde",
  "serde_json",
  "tauri",
@@ -1960,6 +1963,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbrc-capture"
+version = "0.1.0"
+dependencies = [
+ "mbrc-wire",
+ "serde",
+ "serde_json",
+ "time",
+]
+
+[[package]]
+name = "mbrc-discovery"
+version = "0.1.0"
+dependencies = [
+ "if-addrs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mbrc-wire"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2941,6 +2971,7 @@ version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
+ "indexmap 2.14.0",
  "itoa",
  "memchr",
  "serde",
