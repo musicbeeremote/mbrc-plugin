@@ -68,8 +68,9 @@ mbrc-plugin/
 ├── core/             # Core library - business logic, services, protocol handling
 ├── plugin/           # MusicBee plugin - API integration, adapters
 ├── tests/            # Unit tests (xUnit, FluentAssertions, Moq)
-├── api-debugger/     # Protocol testing GUI utility
-└── firewall-utility/ # Windows firewall configuration tool
+├── firewall-utility/ # Windows firewall configuration tool
+└── tools/
+    └── api-debugger/ # Protocol testing tool (Tauri + Vue, standalone)
 ```
 
 The `core` library is merged into `plugin` during build using ILRepack, producing a single `mb_remote.dll`.
@@ -204,7 +205,7 @@ The version is centralized in `Directory.Build.props`:
 <VersionPrefix>1.5.0</VersionPrefix>
 ```
 
-All projects (plugin, core, firewall-utility, api-debugger) inherit this version automatically.
+All projects (plugin, core, firewall-utility) inherit this version automatically.
 
 ### Creating a Release
 

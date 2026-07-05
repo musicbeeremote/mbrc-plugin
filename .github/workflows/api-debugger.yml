@@ -1,0 +1,95 @@
+name: api-debugger
+
+# Standalone dev tool (tools/api-debugger) - a Tauri 2 + Vue 3 app used only for
+# manual protocol debugging. It's decoupled from the plugin build, so this
+# workflow runs *only* when the tool itself changes (path filter below) rather
+# than on every push/PR to the repo.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/api-debugger/**'
+      - '.github/workflows/api-debugger.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tools/api-debugger/**'
+      - '.github/workflows/api-debugger.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-debugger-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: tools/api-debugger
+
+jobs:
+  build:
+    name: build & test
+    # Windows is the tool's only target (WebView2 + the plugin it debugs), so we
+    # verify on the same platform developers actually run it.
+    runs-on: windows-latest
+    # Normal runs finish in ~7 min (cold Rust cache); this caps a hung test or
+    # stalled cache well short of GitHub's 6h default so a hang doesn't squat on
+    # a runner and hold the concurrency slot.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: setup pnpm
+        # No version pin here - pnpm/action-setup reads the exact version from
+        # the `packageManager` field in tools/api-debugger/package.json, keeping
+        # a single source of truth.
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        with:
+          package_json_file: tools/api-debugger/package.json
+
+      - name: setup Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version-file: tools/api-debugger/.nvmrc
+          cache: pnpm
+          cache-dependency-path: tools/api-debugger/pnpm-lock.yaml
+
+      - name: install frontend deps
+        # --frozen-lockfile fails if pnpm-lock.yaml is out of sync with
+        # package.json, so a forgotten lockfile update breaks CI here.
+        run: pnpm install --frozen-lockfile
+
+      - name: typecheck + build frontend
+        # `pnpm build` runs vue-tsc (typecheck) then vite build, producing
+        # ../dist which the Rust build script (frontendDist) needs below.
+        run: pnpm build
+
+      - name: run frontend tests
+        run: pnpm test
+
+      - name: setup Rust components
+        # rustup + the stable toolchain are preinstalled on windows-latest; we
+        # only need the fmt/clippy components on top.
+        working-directory: tools/api-debugger/src-tauri
+        run: rustup component add rustfmt clippy
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+        with:
+          workspaces: tools/api-debugger/src-tauri
+
+      - name: check Rust formatting
+        working-directory: tools/api-debugger/src-tauri
+        run: cargo fmt --all --check
+
+      - name: clippy (warnings as errors)
+        working-directory: tools/api-debugger/src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: run Rust tests
+        working-directory: tools/api-debugger/src-tauri
+        run: cargo test --locked

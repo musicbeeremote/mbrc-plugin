@@ -1,9 +1,13 @@
-﻿# Tools
+# Tools
 
-## NuGet 
-> **Note**!
-> This step is only required if you intend to run build via Command line using the provided build script.
-> You can skip it otherwise.
+Developer tooling that lives alongside the MBRC plugin but is not part of `MBRC.sln`.
 
-You can find instructions on how to download NuGet CLI tools in the following [link](https://learn.microsoft.com/en-us/nuget/install-nuget-client-tools).
-After downloading NuGet CLI tools put `nuget.exe` in this directory so that the build script can find it.
+## api-debugger
+
+A cross-platform desktop app (Tauri 2 + Vue 3 + TypeScript + Tailwind) for
+exercising and debugging the MusicBee Remote wire protocol: connect directly to
+a running plugin, tee/capture live traffic through a proxy, save and compare
+sessions, and discover plugin instances on the network. Replaces the former C#
+Avalonia debugger.
+
+See [`api-debugger/README.md`](api-debugger/README.md) for setup and usage.

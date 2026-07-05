@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* JSON syntax highlighting tokens (see lib/jsonHighlight.ts). */
+.tok-key {
+  color: #7dd3fc; /* sky-300 */
+}
+.tok-str {
+  color: #86efac; /* green-300 */
+}
+.tok-num {
+  color: #fca5a5; /* red-300 */
+}
+.tok-bool {
+  color: #c4b5fd; /* violet-300 */
+}
+.tok-null {
+  color: #a1a1aa; /* zinc-400 */
+}

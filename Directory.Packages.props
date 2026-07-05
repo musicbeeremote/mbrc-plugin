@@ -18,16 +18,6 @@
     <PackageVersion Include="Fody" Version="6.8.0" />
     <PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34" />
 
-    <!-- api-debugger (Avalonia UI) -->
-    <PackageVersion Include="Avalonia" Version="11.2.3" />
-    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
-    <PackageVersion Include="Avalonia.Desktop" Version="11.2.3" />
-    <PackageVersion Include="Avalonia.Diagnostics" Version="11.2.3" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.2.3" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.2.3" />
-    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-    <PackageVersion Include="SkiaSharp" Version="2.88.9" />
-
     <!-- Analyzers (build-time only) -->
     <PackageVersion Include="AsyncFixer" Version="1.6.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />

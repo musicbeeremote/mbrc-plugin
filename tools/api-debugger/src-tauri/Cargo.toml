@@ -1,0 +1,32 @@
+[package]
+name = "api-debugger"
+version = "0.1.0"
+description = "MusicBee Remote API Debugger"
+authors = ["Konstantinos Paparas"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "api_debugger_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Dependencies are pinned to exact versions (supply-chain hardening). Version
+# bumps are handled by Renovate, which waits 7 days after a release
+# (minimumReleaseAge) before opening an update PR.
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-opener = "=2.5.4"
+tauri-plugin-dialog = "=2.7.1"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+tokio = { version = "=1.52.3", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "fs"] }
+time = { version = "=0.3.53", features = ["formatting"] }
+if-addrs = "=0.15.0"
+

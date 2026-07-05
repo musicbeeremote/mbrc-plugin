@@ -1,0 +1,33 @@
+{
+  "name": "api-debugger",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.1",
+    "@tauri-apps/plugin-opener": "2.5.4",
+    "@vueuse/core": "14.3.0",
+    "pinia": "3.0.4",
+    "vue": "3.5.39"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.1",
+    "@tauri-apps/cli": "2.11.3",
+    "@vitejs/plugin-vue": "5.2.4",
+    "tailwindcss": "4.3.1",
+    "typescript": "5.6.3",
+    "vite": "6.4.3",
+    "vitest": "4.1.9",
+    "vue-tsc": "2.2.12"
+  }
+}
