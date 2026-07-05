@@ -94,9 +94,8 @@ publish/
 *.Publish.xml
 *.pubxml
 
-# NuGet Packages Directory
-## TODO: If you have NuGet Package Restore enabled, uncomment the next line
-packages/
+# NuGet restore output lives in .nuget/ (ignored below).
+# The top-level packages/ directory is tracked SOURCE (Rust + C# modules), not NuGet output.
 
 # Windows Azure Build Output
 csx

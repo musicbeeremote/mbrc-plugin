@@ -7,8 +7,8 @@
     <IsTestProject>true</IsTestProject>
 
     <!-- Output paths -->
-    <OutputPath>..\build\bin\tests\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>..\build\obj\tests\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>..\..\build\bin\tests\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\..\build\obj\tests\$(Configuration)\</IntermediateOutputPath>
 
     <!-- Suppress warnings that are not relevant for test projects -->
     <!-- CA1707: Test method names use underscores for readability (e.g., Method_Condition_Expected) -->
@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\MusicBeeRemote.Core.csproj" />
+    <ProjectReference Include="..\..\packages\core\MusicBeeRemote.Core.csproj" />
   </ItemGroup>
 
 </Project>

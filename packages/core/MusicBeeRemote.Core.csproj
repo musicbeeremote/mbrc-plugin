@@ -8,8 +8,8 @@
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
 
     <!-- Output paths -->
-    <OutputPath>..\build\bin\core\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>..\build\obj\core\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>..\..\build\bin\core\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\..\build\obj\core\$(Configuration)\</IntermediateOutputPath>
 
     <!-- Enable automatic file inclusion -->
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>

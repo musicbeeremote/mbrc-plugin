@@ -18,7 +18,7 @@
     <RunCodeAnalysis>false</RunCodeAnalysis>
 
     <!-- Output paths -->
-    <OutputPath>..\build\bin\firewall-utility\$(Configuration)\</OutputPath>
+    <OutputPath>..\..\build\bin\firewall-utility\$(Configuration)\</OutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">

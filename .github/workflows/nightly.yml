@@ -94,7 +94,7 @@ jobs:
         uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
       - name: restore packages
-        run: nuget restore MBRC.sln -OutputDirectory packages -NonInteractive -LockedMode
+        run: nuget restore MBRC.sln -OutputDirectory .nuget -NonInteractive -LockedMode
 
       - name: build
         env:

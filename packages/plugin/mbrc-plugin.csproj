@@ -17,8 +17,8 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 
     <!-- Output paths -->
-    <OutputPath>..\build\bin\plugin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>..\build\obj\plugin\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>..\..\build\bin\plugin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\..\build\obj\plugin\$(Configuration)\</IntermediateOutputPath>
 
     <!-- Enable automatic file inclusion -->
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
@@ -113,7 +113,7 @@
   <!-- ILRepack: Merge Core assembly into Plugin (configuration in ILRepack.targets) -->
   <Target Name="MergeCore" AfterTargets="Build">
     <PropertyGroup>
-      <CoreOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\bin\core\$(Configuration)\net48\'))</CoreOutputPath>
+      <CoreOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\build\bin\core\$(Configuration)\net48\'))</CoreOutputPath>
       <ILRepackInputAssembly>$(OutputPath)mb_remote.dll</ILRepackInputAssembly>
       <ILRepackCoreAssembly>$(CoreOutputPath)MusicBeeRemote.Core.dll</ILRepackCoreAssembly>
       <ILRepackOutputAssembly>$(OutputPath)mb_remote_merged.dll</ILRepackOutputAssembly>
