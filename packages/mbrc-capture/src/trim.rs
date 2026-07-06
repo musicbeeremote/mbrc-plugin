@@ -12,7 +12,15 @@
 //! 3. Drop pre-V4 buckets (the server rejects them at handshake).
 //! 4. Per bucket: skip structurally-identical reconnects, renumber `conn_id`,
 //!    collapse immediate repeats, rewrite long cover/lyric payloads to tiny
-//!    placeholders, and cap arrays - re-deriving `raw` when a frame changes.
+//!    placeholders, cap arrays, scrub PII (file paths, library metadata), and
+//!    cap frames per context - re-deriving `raw` when a frame changes.
+//!
+//! Scrubbing (step 4) makes the fixture safe to commit to a public repo: real
+//! file paths (which leak usernames, host names, and library layout) are rewritten
+//! to synthetic ones, and library metadata (artist/album/title/genre/name) is
+//! replaced with deterministic pseudonyms. The mapping is stable within a bucket,
+//! so a name or path referenced across frames (browse -> cover -> queue) stays
+//! consistent and the fixture still replays.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -25,8 +33,12 @@ use crate::{parse_line, Record};
 pub const PLACEHOLDER_PNG_B64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAeIVWUMAAAAASUVORK5CYII=";
 
-/// Placeholder for long lyric strings.
-pub const PLACEHOLDER_LYRICS: &str = "<placeholder lyrics>";
+/// Placeholder for long lyric strings - lorem ipsum, so no real (copyrighted)
+/// lyrics land in a committed fixture while the shape (a long multi-line string)
+/// is preserved.
+pub const PLACEHOLDER_LYRICS: &str = "Lorem ipsum dolor sit amet, consectetur \
+adipiscing elit.\nSed do eiusmod tempor incididunt ut labore et dolore magna \
+aliqua.\nUt enim ad minim veniam, quis nostrud exercitation ullamco laboris.";
 
 /// Cover base64 payloads in real traces are 5-50 KB. This threshold sits well
 /// above any status/error string ("200", "404") and below any real cover.
@@ -36,6 +48,12 @@ const LYRIC_REWRITE_THRESHOLD: usize = 80;
 /// Max items kept in any captured array. Real browse/list responses have
 /// hundreds; a fixture only needs a handful to pin the per-item shape.
 const MAX_ARRAY_LEN: usize = 3;
+
+/// Max frames kept per `(dir, context)` within a bucket. Real sessions repeat a
+/// command hundreds of times (the browse screen fires one `libraryalbumcover`
+/// per album); a fixture only needs a handful to pin the exchange. This is what
+/// keeps a cover-fetch storm from dominating the fixture.
+const MAX_PER_CONTEXT: usize = 8;
 
 /// The result of trimming: one bucket (e.g. `legacy-v4-android`) per
 /// `(platform, protocol)`, each a list of trimmed frame records.
@@ -76,6 +94,48 @@ impl FrameRec {
 struct Handshake {
     client_type: Option<String>,
     protocol_version: Option<i64>,
+}
+
+/// Deterministic pseudonymizer, stable within one bucket: the same original
+/// value always maps to the same synthetic label, so cross-frame references
+/// (an album named in `browsealbums`, requested in `libraryalbumcover`, echoed
+/// in `nowplayinglist`) stay linked. Empty strings pass through unchanged so
+/// the "empty album" shape is preserved.
+#[derive(Default)]
+struct Scrubber {
+    counters: BTreeMap<&'static str, usize>,
+    seen: BTreeMap<(&'static str, String), String>,
+}
+
+impl Scrubber {
+    /// Map `original` to a stable `"{display} {n}"` label within `category`.
+    fn label(&mut self, category: &'static str, display: &str, original: &str) -> String {
+        if original.is_empty() {
+            return String::new();
+        }
+        let key = (category, original.to_string());
+        if let Some(v) = self.seen.get(&key) {
+            return v.clone();
+        }
+        let n = self.counters.entry(category).or_insert(0);
+        *n += 1;
+        let val = format!("{display} {n}");
+        self.seen.insert(key, val.clone());
+        val
+    }
+
+    /// Map a path with no useful sibling metadata to a stable synthetic path.
+    fn path_token(&mut self, original: &str, ext: &str) -> String {
+        let key = ("path", original.to_string());
+        if let Some(v) = self.seen.get(&key) {
+            return v.clone();
+        }
+        let n = self.counters.entry("path").or_insert(0);
+        *n += 1;
+        let val = format!("\\\\host\\media\\item-{n}.{ext}");
+        self.seen.insert(key, val.clone());
+        val
+    }
 }
 
 /// Trim the concatenated contents of one or more `mbrc-capture/2` files.
@@ -137,6 +197,9 @@ pub fn trim_capture(contents: &str) -> TrimOutput {
         let mut seen_patterns: HashSet<String> = HashSet::new();
         let mut lines: Vec<Value> = Vec::new();
         let mut conn_counter: u32 = 0;
+        // One scrubber per bucket: pseudonyms stay consistent across the whole
+        // fixture file, but do not leak between platforms.
+        let mut scrubber = Scrubber::default();
 
         for idxs in &conns {
             let pattern = connection_pattern(idxs, &frames);
@@ -148,7 +211,7 @@ pub fn trim_capture(contents: &str) -> TrimOutput {
 
             let mut seen_in_conn: HashSet<String> = HashSet::new();
             for &i in idxs {
-                let mut rewritten = rewrite_placeholders(&frames[i].v);
+                let mut rewritten = rewrite_placeholders(&frames[i].v, &mut scrubber);
                 if let Some(obj) = rewritten.as_object_mut() {
                     obj.insert("conn_id".into(), Value::from(new_conn_id));
                 }
@@ -159,9 +222,33 @@ pub fn trim_capture(contents: &str) -> TrimOutput {
                 lines.push(rewritten);
             }
         }
+        cap_per_context(&mut lines);
         out.buckets.insert(bucket, lines);
     }
     out
+}
+
+/// Keep at most `MAX_PER_CONTEXT` frames for each `(dir, context)`, in order.
+/// This is what tames repetitive command storms (e.g. one `libraryalbumcover`
+/// per album) so a single exchange cannot dominate the fixture.
+fn cap_per_context(lines: &mut Vec<Value>) {
+    let mut counts: BTreeMap<(String, String), usize> = BTreeMap::new();
+    lines.retain(|rec| {
+        let dir = rec
+            .get("dir")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let ctx = rec
+            .get("frame")
+            .and_then(|f| f.get("context"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let c = counts.entry((dir, ctx)).or_insert(0);
+        *c += 1;
+        *c <= MAX_PER_CONTEXT
+    });
 }
 
 /// Classify a connection: prefer its `handshake` meta, else sniff the
@@ -221,7 +308,7 @@ fn bucket_name(platform: Option<&str>, protocol: Option<i64>) -> String {
 
 // -- Placeholder substitution --------------------------------------------
 
-fn rewrite_placeholders(rec: &Value) -> Value {
+fn rewrite_placeholders(rec: &Value, scrub: &mut Scrubber) -> Value {
     let mut out = rec.clone();
     let ctx = out
         .get("frame")
@@ -243,6 +330,7 @@ fn rewrite_placeholders(rec: &Value) -> Value {
             _ => {}
         }
         truncate_arrays(data);
+        scrub_value(data, scrub);
         *data != before
     };
 
@@ -276,6 +364,122 @@ fn truncate_arrays(v: &mut Value) {
             }
         }
         _ => {}
+    }
+}
+
+// -- PII scrubbing ---------------------------------------------------------
+
+/// Recursively pseudonymize library metadata by key name and rewrite any file
+/// paths, in place. Values are mapped through `scrub` so they stay consistent
+/// across the whole fixture.
+///
+/// Two path strategies: `src`/`path`/`url` object fields are rebuilt from their
+/// sibling metadata (readable, consistent); any *other* path-shaped string -
+/// including bare paths inside arrays (`nowplayingqueue` sends folder paths as a
+/// list) or under odd keys (`play`) - is caught by shape and tokenized. Nothing
+/// path-shaped escapes.
+fn scrub_value(v: &mut Value, scrub: &mut Scrubber) {
+    match v {
+        Value::Array(a) => {
+            for item in a.iter_mut() {
+                scrub_value(item, scrub);
+            }
+        }
+        Value::Object(o) => {
+            for (k, val) in o.iter_mut() {
+                let category = match k.as_str() {
+                    "artist" | "album_artist" | "albumartist" | "albumArtist" => {
+                        Some(("artist", "Artist"))
+                    }
+                    "album" => Some(("album", "Album")),
+                    "title" => Some(("title", "Track")),
+                    "genre" => Some(("genre", "Genre")),
+                    "name" => Some(("name", "Name")),
+                    _ => None,
+                };
+                match category {
+                    // Pseudonymize a metadata string field.
+                    Some((cat, display)) if val.is_string() => {
+                        let original = val.as_str().unwrap_or_default().to_string();
+                        *val = Value::from(scrub.label(cat, display, &original));
+                    }
+                    // Leave src/path/url for rebuild_paths (it uses siblings);
+                    // recurse everything else so nested/array paths get caught.
+                    _ if matches!(k.as_str(), "src" | "path" | "url") => {}
+                    _ => scrub_value(val, scrub),
+                }
+            }
+            // Rebuild path fields last, so they can use the sibling pseudonyms
+            // that were just assigned above.
+            rebuild_paths(o, scrub);
+        }
+        // A path-shaped leaf string (bare array item, or an unrecognized key).
+        Value::String(s) if looks_like_path(s) => {
+            let ext = extension_of(s);
+            *v = Value::from(scrub.path_token(s, &ext));
+        }
+        _ => {}
+    }
+}
+
+/// Heuristic: does this string look like a filesystem path or URL? Real library
+/// metadata (already pseudonymized before this runs) does not contain backslashes
+/// or `scheme://`, and a `year` like "09/04/2006" has neither, so this only fires
+/// on genuine paths.
+fn looks_like_path(s: &str) -> bool {
+    if s.contains('\\') || s.contains("://") {
+        return true;
+    }
+    // Windows drive path with a forward slash, e.g. "C:/Music/...".
+    let b = s.as_bytes();
+    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'/' || b[2] == b'\\')
+}
+
+/// Rewrite `src`/`path`/`url` string fields on this object to synthetic paths.
+/// Prefers rebuilding from the (already pseudonymized) sibling metadata so the
+/// path stays human-readable and internally consistent; falls back to an opaque
+/// token when there is nothing to build from.
+fn rebuild_paths(o: &mut Map<String, Value>, scrub: &mut Scrubber) {
+    let artist = o
+        .get("album_artist")
+        .and_then(Value::as_str)
+        .or_else(|| o.get("artist").and_then(Value::as_str))
+        .map(str::to_string);
+    let album = o.get("album").and_then(Value::as_str).map(str::to_string);
+    let title = o.get("title").and_then(Value::as_str).map(str::to_string);
+    let name = o.get("name").and_then(Value::as_str).map(str::to_string);
+    let trackno = o.get("trackno").and_then(Value::as_i64).unwrap_or(0);
+
+    let mut updates: Vec<(&'static str, String)> = Vec::new();
+    for key in ["src", "path", "url"] {
+        if let Some(Value::String(p)) = o.get(key) {
+            if p.is_empty() {
+                continue;
+            }
+            let ext = extension_of(p);
+            let synth = match (&artist, &album, &title) {
+                (Some(a), Some(al), Some(t)) if !a.is_empty() && !t.is_empty() => {
+                    format!("\\\\host\\music\\{a}\\{al}\\{trackno:02} - {t}.{ext}")
+                }
+                _ => match &name {
+                    Some(n) if !n.is_empty() => format!("\\\\host\\media\\{n}.{ext}"),
+                    _ => scrub.path_token(p, &ext),
+                },
+            };
+            updates.push((key, synth));
+        }
+    }
+    for (key, synth) in updates {
+        o.insert(key.to_string(), Value::from(synth));
+    }
+}
+
+/// Best-effort file extension (defaults to `dat`), used only to keep the
+/// synthetic path's shape close to the original.
+fn extension_of(p: &str) -> String {
+    match p.rsplit('.').next() {
+        Some(e) if !e.is_empty() && e.len() <= 4 && !e.contains(['\\', '/']) => e.to_string(),
+        _ => "dat".to_string(),
     }
 }
 
@@ -463,6 +667,157 @@ mod tests {
             lib["frame"]["data"].as_array().unwrap().len(),
             MAX_ARRAY_LEN
         );
+    }
+
+    #[test]
+    fn scrubs_paths_and_pseudonymizes_names() {
+        // Synthetic inputs only - never paste real captured library data into a
+        // committed test, or the test file leaks the PII the scrubber removes.
+        let lines = [
+            handshake_line(0, "Android", 4),
+            frame_line(0, 0, "c2s", "player", Value::from("Android")),
+            frame_line(
+                0,
+                1,
+                "s2c",
+                "nowplayingtrack",
+                serde_json::json!({
+                    "artist": "SENTINEL_ARTIST",
+                    "title": "SENTINEL_TITLE",
+                    "album": "SENTINEL_ALBUM",
+                    "trackno": 10,
+                    "path": "\\\\SENTINEL_HOST\\share\\SENTINEL_ARTIST\\SENTINEL_ALBUM\\10 - SENTINEL_TITLE.mp3"
+                }),
+            ),
+        ]
+        .join("\n");
+        let out = trim_capture(&lines);
+        let bucket = &out.buckets["legacy-v4-android"];
+        let track = bucket
+            .iter()
+            .find(|r| r["frame"]["context"] == "nowplayingtrack")
+            .unwrap();
+        let data = &track["frame"]["data"];
+
+        // Names pseudonymized.
+        assert_eq!(data["artist"], Value::from("Artist 1"));
+        assert_eq!(data["album"], Value::from("Album 1"));
+        assert_eq!(data["title"], Value::from("Track 1"));
+
+        // Path rebuilt from pseudonyms - no original host/layout, keeps extension.
+        let path = data["path"].as_str().unwrap();
+        assert!(path.contains("Artist 1") && path.contains("Track 1"));
+        assert!(path.ends_with(".mp3"));
+
+        // No original sentinel value survives anywhere in the re-derived frame.
+        let raw = track["raw"].as_str().unwrap();
+        for sentinel in [
+            "SENTINEL_HOST",
+            "SENTINEL_ARTIST",
+            "SENTINEL_ALBUM",
+            "SENTINEL_TITLE",
+        ] {
+            assert!(!raw.contains(sentinel), "{sentinel} leaked: {raw}");
+        }
+    }
+
+    #[test]
+    fn pseudonyms_are_stable_across_frames() {
+        let lines = [
+            handshake_line(0, "Android", 4),
+            frame_line(0, 0, "c2s", "player", Value::from("Android")),
+            frame_line(
+                0,
+                1,
+                "s2c",
+                "a",
+                serde_json::json!({"artist": "SENTINEL_ARTIST"}),
+            ),
+            frame_line(
+                0,
+                2,
+                "s2c",
+                "b",
+                serde_json::json!({"artist": "SENTINEL_ARTIST"}),
+            ),
+        ]
+        .join("\n");
+        let out = trim_capture(&lines);
+        let bucket = &out.buckets["legacy-v4-android"];
+        let a = bucket
+            .iter()
+            .find(|r| r["frame"]["context"] == "a")
+            .unwrap();
+        let b = bucket
+            .iter()
+            .find(|r| r["frame"]["context"] == "b")
+            .unwrap();
+        assert_eq!(a["frame"]["data"]["artist"], b["frame"]["data"]["artist"]);
+        assert_eq!(a["frame"]["data"]["artist"], Value::from("Artist 1"));
+    }
+
+    #[test]
+    fn scrubs_bare_paths_in_arrays_and_odd_keys() {
+        // `nowplayingqueue` sends folder paths as a bare-string array plus a
+        // `play` field - neither is a src/path/url key.
+        let lines = [
+            handshake_line(0, "Android", 4),
+            frame_line(0, 0, "c2s", "player", Value::from("Android")),
+            frame_line(
+                0,
+                1,
+                "c2s",
+                "nowplayingqueue",
+                serde_json::json!({
+                    "queue": "now",
+                    "data": [
+                        "\\\\SENTINEL_HOST\\share\\folder\\x",
+                        "\\\\SENTINEL_HOST\\share\\folder\\x"
+                    ],
+                    "play": "\\\\SENTINEL_HOST\\share\\other\\y.mp3"
+                }),
+            ),
+        ]
+        .join("\n");
+        let out = trim_capture(&lines);
+        let q = out.buckets["legacy-v4-android"]
+            .iter()
+            .find(|r| r["frame"]["context"] == "nowplayingqueue")
+            .unwrap();
+        let raw = q["raw"].as_str().unwrap();
+        assert!(!raw.contains("SENTINEL_HOST"), "path leaked in raw: {raw}");
+        // Same original path -> same token (referential consistency).
+        let arr = q["frame"]["data"]["data"].as_array().unwrap();
+        assert_eq!(arr[0], arr[1]);
+        assert!(arr[0]
+            .as_str()
+            .unwrap()
+            .starts_with("\\\\host\\media\\item-"));
+    }
+
+    #[test]
+    fn caps_frames_per_context() {
+        let mut lines = vec![
+            handshake_line(0, "Android", 4),
+            frame_line(0, 0, "c2s", "player", Value::from("Android")),
+        ];
+        // 20 distinct cover requests - a cover-fetch storm.
+        for i in 0..20u64 {
+            lines.push(frame_line(
+                0,
+                100 + i,
+                "c2s",
+                "libraryalbumcover",
+                Value::from(format!("album-{i}")),
+            ));
+        }
+        let out = trim_capture(&lines.join("\n"));
+        let bucket = &out.buckets["legacy-v4-android"];
+        let covers = bucket
+            .iter()
+            .filter(|r| r["frame"]["context"] == "libraryalbumcover")
+            .count();
+        assert_eq!(covers, MAX_PER_CONTEXT);
     }
 
     #[test]

@@ -3,8 +3,9 @@
 // Contexts mirror core/Protocol/Messages/ProtocolConstants.cs. Each entry has a
 // starting `template` and a v4 `data` payload `hint` (from docs/protocol.md).
 // Usage flags help a tester know what's relevant:
-//   android  - sent by the Android 1.6.1 client (Protocol.kt + golden c2s)
-//   ios      - used by the third-party iOS app (from the golden captures)
+//   android  - sent by an Android client across the V4 line (Protocol.kt union
+//              v1.1.0-v1.6.1, verified against upstream tags + golden c2s)
+//   ios      - sent by the iOS app (iOS protocol sheet + golden captures)
 
 export interface CommandDef {
   context: string;
@@ -66,7 +67,7 @@ export const COMMAND_CATALOG: CommandGroup[] = [
       cmd("nowplayingtrack", "Current track", { hint: "null", android: true }),
       cmd("nowplayingdetails", "Track details (V4)", { hint: "null", android: true, ios: true }),
       cmd("nowplayingcover", "Cover art", { hint: "null", android: true, ios: true }),
-      cmd("nowplayinglyrics", "Lyrics", { hint: "null", android: true }),
+      cmd("nowplayinglyrics", "Lyrics", { hint: "null", android: true, ios: true }),
       cmd("nowplayingposition", "Position", { hint: "null to query · number ms to seek", android: true, ios: true }),
       cmd("nowplayingrating", "Rating", { hint: 'null · "0"–"5" to set · "" clears', android: true, ios: true }),
       cmd("nowplayinglfmrating", "Last.fm love/ban", { hint: 'null · "toggle" · "love" · "ban"', android: true, ios: true }),
@@ -76,10 +77,10 @@ export const COMMAND_CATALOG: CommandGroup[] = [
         android: true,
         ios: true,
       }),
-      cmd("nowplayinglistplay", "Play list item", { data: 0, hint: "number - track index", android: true }),
-      cmd("nowplayinglistremove", "Remove list item", { data: { index: 0 }, hint: "number index · or { index } (V3+)", android: true }),
+      cmd("nowplayinglistplay", "Play list item", { data: 0, hint: "number - track index", android: true, ios: true }),
+      cmd("nowplayinglistremove", "Remove list item", { data: { index: 0 }, hint: "number index · or { index } (V3+)", android: true, ios: true }),
       cmd("nowplayinglistmove", "Move list item", { data: { from: 0, to: 0 }, hint: "{ from, to }", android: true, ios: true }),
-      cmd("nowplayinglistsearch", "Search list", { data: "query", hint: "string (not used by current clients)" }),
+      cmd("nowplayinglistsearch", "Search list", { data: "query", hint: "string · Android ≤1.5.1 (removed in 1.6.0)", android: true }),
       cmd("nowplayingqueue", "Queue files", {
         data: { queue: "next", play: null, data: ["file:///path/to/song.mp3"] },
         hint: '{ queue: "next"|"last"|"now", play, data: [paths] }',
@@ -89,7 +90,6 @@ export const COMMAND_CATALOG: CommandGroup[] = [
       cmd("nowplayingtagchange", "Change tag (V4)", {
         data: { tag: "artist", value: "New Value" },
         hint: "{ tag, value }",
-        android: true,
         ios: true,
       }),
     ],
@@ -138,7 +138,7 @@ export const COMMAND_CATALOG: CommandGroup[] = [
   {
     name: "Connection",
     commands: [
-      cmd("verifyconnection", "Verify connection (V4)", { hint: "null", android: true }),
+      cmd("verifyconnection", "Verify connection (V4)", { hint: "null", android: true, ios: true }),
       cmd("pluginversion", "Plugin version", { hint: "null", android: true, ios: true }),
       cmd("init", "Initial state sync", { hint: "null - triggers multiple responses", android: true, ios: true }),
       // Real traffic sends ping/pong data as "" (empty string), not null (see docs note).

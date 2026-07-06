@@ -138,8 +138,6 @@ const currentCmd = computed(() => findCommand(command.value));
             :disabled="primaryConnected"
             class="rounded bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none disabled:opacity-50"
           >
-            <option :value="2">2</option>
-            <option :value="3">3</option>
             <option :value="4">4</option>
           </select>
         </label>

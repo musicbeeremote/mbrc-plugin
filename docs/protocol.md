@@ -2,12 +2,17 @@
 
 This document describes the communication protocol between MusicBee Remote clients and the plugin.
 
+It documents the **maintained protocol-4 surface** only: the commands that shipping
+Android and iOS clients actually use and that we intend to keep supporting. Pre-V4
+versions (2 / 2.1 / 3) are legacy and out of scope here (see [Protocol Versions](#protocol-versions)).
+
 ## Table of Contents
 
 - [Overview](#overview)
 - [Connection Architecture](#connection-architecture)
 - [Message Format](#message-format)
 - [Protocol Handshake](#protocol-handshake)
+- [Client Usage Legend](#client-usage-legend)
 - [Quick Reference](#quick-reference)
 - [Protocol Versions](#protocol-versions)
 - [Commands by Category](#commands-by-category)
@@ -19,7 +24,7 @@ This document describes the communication protocol between MusicBee Remote clien
 
 ## Overview
 
-MusicBee Remote uses a TCP socket-based protocol with JSON messages. The protocol supports multiple versions, with newer versions adding features while maintaining backward compatibility.
+MusicBee Remote uses a TCP socket-based protocol with newline-terminated JSON messages.
 
 | Property | Value |
 |----------|-------|
@@ -28,8 +33,8 @@ MusicBee Remote uses a TCP socket-based protocol with JSON messages. The protoco
 | Message Format | JSON |
 | Encoding | UTF-8 (no BOM) |
 | Message Terminator | CRLF (`\r\n`) |
-| Current Version | 4 |
-| Supported Versions | 2, 2.1, 3, 4 |
+| Maintained Version | 4 |
+| Also | V5 = V4 + `nowplayingcurrentposition` (iOS); V6 = reserved future redesign |
 
 **Important:** All messages must be encoded as UTF-8 without a Byte Order Mark (BOM). The plugin expects and sends UTF-8 encoded text.
 
@@ -86,6 +91,11 @@ When fetching heavy data like album covers or paginated library requests:
 - `context`: Command identifier (string)
 - `data`: Command payload (varies by command - can be object, string, number, or null)
 
+Examples below use `data: null` for query/action requests, but the plugin **ignores the
+request `data` for getters and actions** - real clients send `null`, `""`, or `true`
+interchangeably (e.g. the Android client often sends `true`, the iOS client `""`). Only
+commands that set a value read the request `data`.
+
 ### Response Format
 
 ```json
@@ -99,7 +109,7 @@ When fetching heavy data like album covers or paginated library requests:
 {"context": "playernext", "data": null}
 ```
 
-**Command with string data:**
+**Command with numeric data:**
 ```json
 {"context": "playervolume", "data": 75}
 ```
@@ -119,22 +129,13 @@ When fetching heavy data like album covers or paginated library requests:
 
 ## Protocol Handshake
 
-Every client should perform a protocol handshake after connecting. This declares the client's protocol version and capabilities.
+Every client performs a protocol handshake after connecting. This declares the client's protocol version and capabilities.
 
 ### Context
 `protocol`
 
-### Request Formats
+### Request
 
-**Legacy format (V2/V2.1):**
-```json
-{
-  "context": "protocol",
-  "data": 2
-}
-```
-
-**Extended format (V3+):**
 ```json
 {
   "context": "protocol",
@@ -150,7 +151,7 @@ Every client should perform a protocol handshake after connecting. This declares
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `protocol_version` | int | Client's protocol version (2, 3, or 4) |
+| `protocol_version` | int | Client's protocol version (`4`, or `5` for the iOS current-position extension) |
 | `no_broadcast` | bool | If `true`, this connection will not receive broadcasts |
 | `client_id` | string | Optional client identifier for logging |
 
@@ -189,175 +190,159 @@ The server responds with its protocol version. The effective protocol is the min
 }
 ```
 
+Before the `protocol` frame, a client first identifies its platform with a `player` frame
+(`"Android"` / `"iOS"`); the plugin uses this to apply per-platform wire quirks.
+
+---
+
+## Client Usage Legend
+
+Every command below is tagged with the clients that use it, verified against the Android
+client source (`Protocol.kt`, v1.1.0-v1.6.1), the iOS protocol sheet, and captured golden
+traces:
+
+| Tag | Meaning |
+|-----|---------|
+| **Both** | Sent by both the Android and iOS clients |
+| **Android** | Sent by the Android client only |
+| **iOS** | Sent by the iOS client only |
+
 ---
 
 ## Quick Reference
 
-All available contexts with short descriptions, organized by category.
+All maintained V4 contexts, organized by category.
 
 ### System
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `protocol` | Protocol version handshake (extended format with `no_broadcast` in V3+) | V2 |
-| `player` | Player identification and client platform registration | V2 |
-| `ping` | Keepalive ping request | V2.1 |
-| `pong` | Keepalive pong response | V2.1 |
-| `pluginversion` | Query the plugin version string | V2 |
-| `init` | Request initial state sync (triggers multiple responses) | V2.1 |
-| `verifyconnection` | Verify the connection is active | V4 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `protocol` | Protocol version handshake (extended object format) | Both | V4 |
+| `player` | Client platform identification (`"Android"` / `"iOS"`) | Both | V4 |
+| `ping` | Keepalive ping (server → client) | Both | V4 |
+| `pong` | Keepalive pong (client → server) | Both | V4 |
+| `pluginversion` | Query the plugin version string | Both | V4 |
+| `init` | Request initial state sync (triggers a bundle of responses) | Both | V4 |
+| `verifyconnection` | Verify the connection is active (answered pre-auth) | Both | V4 |
 
 ### Player Control
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `playerplay` | Start playback | V2.1 |
-| `playerpause` | Pause playback | V2.1 |
-| `playerplaypause` | Toggle play/pause state | V2 |
-| `playerstop` | Stop playback | V2 |
-| `playernext` | Skip to next track | V2 |
-| `playerprevious` | Skip to previous track | V2 |
-| `playervolume` | Get or set volume level (0-100) | V2 |
-| `playermute` | Get, set, or toggle mute state | V2 |
-| `playershuffle` | Get, set, or toggle shuffle mode | V2 |
-| `playerrepeat` | Get, set, or toggle repeat mode (None/All/One) | V2 |
-| `playerautodj` | Get, set, or toggle AutoDJ mode | V2 |
-| `scrobbler` | Get, set, or toggle Last.fm scrobbling | V2 |
-| `playerstatus` | Get full player status (state, volume, modes) | V2 |
-| `playeroutput` | Get or set audio output device | V4 |
-| `playeroutputswitch` | Switch to a specific output device | V4 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `playerplaypause` | Toggle play/pause state | Both | V4 |
+| `playerplay` | Start playback (media-session / lockscreen) | Android | V4 |
+| `playerpause` | Pause playback (media-session / lockscreen) | Android | V4 |
+| `playerstop` | Stop playback | Android | V4 |
+| `playernext` | Skip to next track | Both | V4 |
+| `playerprevious` | Skip to previous track | Both | V4 |
+| `playervolume` | Get or set volume level (0-100) | Both | V4 |
+| `playermute` | Get, set, or toggle mute state | Android | V4 |
+| `playershuffle` | Get, set, or toggle shuffle mode | Both | V4 |
+| `playerrepeat` | Get, set, or toggle repeat mode (None/All/One) | Both | V4 |
+| `scrobbler` | Get, set, or toggle Last.fm scrobbling | Android | V4 |
+| `playerstatus` | Full player status (state, volume, modes) | Both | V4 |
+| `playeroutput` | Get or set audio output device | Android | V4 |
+| `playeroutputswitch` | Switch to a specific output device | Android | V4 |
 
 ### Now Playing Track
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `nowplayingtrack` | Get current track info (artist, title, album, year) | V2 |
-| `nowplayingdetails` | Get extended track metadata (genre, bitrate, etc.) | V4 |
-| `nowplayingposition` | Get or set playback position in milliseconds | V2 |
-| `nowplayingcover` | Get album artwork for current track | V2 |
-| `nowplayinglyrics` | Get lyrics for current track | V2 |
-| `nowplayingrating` | Get or set track rating | V2 |
-| `nowplayinglfmrating` | Get or set Last.fm love/ban status | V2 |
-| `nowplayingtagchange` | Modify track metadata tags | V4 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `nowplayingtrack` | Current track info (artist, title, album, year, path) | Both | V4 |
+| `nowplayingdetails` | Extended track metadata (genre, bitrate, etc.) | Both | V4 |
+| `nowplayingposition` | Get or set playback position in milliseconds | Both | V4 |
+| `nowplayingcurrentposition` | Lightweight current-position poll (replies on `nowplayingposition`) | iOS | **V5** |
+| `nowplayingcover` | Album artwork for current track | Both | V4 |
+| `nowplayinglyrics` | Lyrics for current track | Both | V4 |
+| `nowplayingrating` | Get or set track rating | Both | V4 |
+| `nowplayinglfmrating` | Get or set Last.fm love/ban status | Both | V4 |
+| `nowplayingtagchange` | Modify track metadata tags | iOS | V4 |
 
 ### Now Playing List
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `nowplayinglist` | Get the now playing queue (supports pagination) | V2 |
-| `nowplayinglistplay` | Play a specific track from the queue by index | V2 |
-| `nowplayinglistremove` | Remove a track from the queue by index | V2 |
-| `nowplayinglistmove` | Move a track within the queue | V2 |
-| `nowplayinglistsearch` | Search and play a track in the queue | V2 |
-| `nowplayingqueue` | Queue files to the now playing list | V3 |
-| `nowplayinglistchanged` | Broadcast: now playing list was modified | V2 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `nowplayinglist` | Get the now playing queue (paginated) | Both | V4 |
+| `nowplayinglistplay` | Play a specific track from the queue by index | Both | V4 |
+| `nowplayinglistremove` | Remove a track from the queue by index | Both | V4 |
+| `nowplayinglistmove` | Move a track within the queue | Both | V4 |
+| `nowplayinglistsearch` | Search and play a track in the queue | Android | V4 (removed in Android 1.6.0) |
+| `nowplayingqueue` | Queue files to the now playing list | Both | V4 |
 
-### Library Search
+### Library Browse (flat, paginated)
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `librarysearchtitle` | Search library by track title | V2 |
-| `librarysearchartist` | Search library by artist name | V2 |
-| `librarysearchalbum` | Search library by album name | V2 |
-| `librarysearchgenre` | Search library by genre | V2 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `browsegenres` | Browse all genres (paginated) | Both | V4 |
+| `browseartists` | Browse all artists (paginated, supports album artists) | Both | V4 |
+| `browsealbums` | Browse all albums (paginated) | Both | V4 |
+| `browsetracks` | Browse all tracks (paginated) | Both | V4 |
 
-### Library Browse
+### Library Navigation (hierarchical, by name)
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `browsegenres` | Browse all genres (paginated) | V3 |
-| `browseartists` | Browse all artists (paginated, supports album artists) | V3 |
-| `browsealbums` | Browse all albums (paginated) | V3 |
-| `browsetracks` | Browse all tracks (paginated) | V3 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `librarygenreartists` | Get all artists in a specific genre | iOS | V4 |
+| `libraryartistalbums` | Get all albums by a specific artist | iOS | V4 |
+| `libraryalbumtracks` | Get all tracks on a specific album | iOS | V4 |
 
-### Library Navigation
+### Library Covers & Misc
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `libraryartistalbums` | Get all albums by a specific artist | V2 |
-| `libraryalbumtracks` | Get all tracks on a specific album | V2 |
-| `librarygenreartists` | Get all artists in a specific genre | V2 |
-
-### Library Queue
-
-| Context | Description | Since |
-|---------|-------------|-------|
-| `libraryqueuetrack` | Queue tracks matching a title | V2 |
-| `libraryqueueartist` | Queue all tracks by an artist | V2 |
-| `libraryqueuealbum` | Queue all tracks from an album | V2 |
-| `libraryqueuegenre` | Queue all tracks in a genre | V2 |
-| `libraryplayall` | Play entire library (optional shuffle) | V4 |
-
-### Library Covers
-
-| Context | Description | Since |
-|---------|-------------|-------|
-| `libraryalbumcover` | Get album cover by artist/album (supports pagination) | V4 |
-| `librarycovercachebuildstatus` | Query cover cache build progress | V4 |
-
-### Radio
-
-| Context | Description | Since |
-|---------|-------------|-------|
-| `radiostations` | Get available radio stations (paginated) | V4 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `libraryalbumcover` | Get album cover by artist/album (paginated) | Both | V4 |
+| `librarycovercachebuildstatus` | Query cover cache build progress | iOS | V4 |
+| `libraryplayall` | Play entire library (optional shuffle) | Both | V4 |
+| `radiostations` | Get available radio stations (paginated) | Android | V4 |
 
 ### Playlists
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `playlistlist` | Get all playlists (supports pagination) | V2 |
-| `playlistplay` | Play a specific playlist by URL | V3 |
+| Context | Description | Clients | Since |
+|---------|-------------|---------|-------|
+| `playlistlist` | Get all playlists (paginated) | Both | V4 |
+| `playlistplay` | Play a specific playlist by URL | Both | V4 |
 
 ### Error Responses
 
-| Context | Description | Since |
-|---------|-------------|-------|
-| `error` | Error occurred processing a request | V2 |
-| `notallowed` | Operation not permitted (authentication required) | V2 |
+| Context | Description |
+|---------|-------------|
+| `error` | Error occurred processing a request |
+| `notallowed` | Operation not permitted (authentication required) |
 
 ---
 
 ## Protocol Versions
 
-### Version 2 (Base)
+### Version 4 (maintained baseline)
 
-Initial protocol version with core functionality:
-- Player controls (play, pause, stop, next, previous)
-- Volume and mute control
-- Shuffle and repeat modes
-- Now playing track info
-- Cover art and lyrics
-- Ratings (track and Last.fm)
-- Library search
-- Queue operations
-- Playlist listing
+The maintained protocol. Every command in this document is V4 unless explicitly noted. V4
+uses object payloads, pagination, string-typed player fields, and the full player / now
+playing / library / playlist surface. It is the minimum version new clients should target.
 
-### Version 2.1
+### Version 5 (legacy extension)
 
-Additions:
-- Ping/Pong keepalive mechanism
-- Separate play and pause commands
-- Init request for initial state sync
+V5 is V4 plus a **single** addition: `nowplayingcurrentposition`, a lightweight
+current-position poll. The iOS client sends it only when the server advertises
+`protocol_version >= 5`; the handler replies on the existing `nowplayingposition` context.
+There are no other differences from V4. (Origin: the plugin's `old-develop` branch.)
 
-### Version 3
+### Version 6 (reserved, future)
 
-Additions:
-- Pagination support for large lists
-- Browse operations (genres, artists, albums, tracks)
-- `no_broadcast` flag in handshake
-- Enhanced now playing queue management
-- Playlist play by URL
+Reserved for a future strict/standardized redesign: consistent typing, snake_case keys, a
+uniform error envelope, and a traceability envelope for request/response correlation. Not
+yet defined and not implemented. All new schema work targets V6, not V4/V5.
 
-### Version 4
+### Legacy (V2 / V2.1 / V3)
 
-Additions:
-- Output device switching
-- Tag editing
-- Album cover pagination and caching
-- Radio stations
-- Connection verification
-- Extended track details
-- Play all library with shuffle option
+Superseded and out of scope for this document and the Rust core. The C# plugin still
+negotiates them for old installs, but no maintained client uses them and their payload
+shapes are not documented here.
+
+> **Not documented / not in the Rust core:** `librarysearch{title,artist,album,genre}`,
+> `libraryqueue{track,artist,album,genre}`, and `playerautodj` are pre-V4 legacy commands
+> that no shipping Android or iOS client sends. They remain registered in the C# plugin as
+> a compatibility safety net but are intentionally excluded from this reference and from the
+> Rust core.
 
 ---
 
@@ -369,7 +354,7 @@ Additions:
 | Property | Value |
 |----------|-------|
 | Context | `protocol` |
-| Since | V2 (extended format V3+) |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -398,8 +383,10 @@ Additions:
 | Property | Value |
 |----------|-------|
 | Context | `player` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | No |
+
+Sent right after connecting, before the `protocol` handshake, to declare the client platform.
 
 **Request:**
 ```json
@@ -409,39 +396,24 @@ Additions:
 }
 ```
 
-**Response:**
-```json
-{
-  "context": "player",
-  "data": "MusicBee"
-}
-```
-
-The data field identifies the client platform ("Android", "iOS", or other).
+`data` is the platform string (`"Android"` / `"iOS"`). The plugin uses it to apply
+per-platform wire quirks (e.g. lenient parsing for the iOS client).
 
 ---
 
-#### Ping/Pong Keepalive
+#### Ping / Pong (Keepalive)
 | Property | Value |
 |----------|-------|
-| Context | `ping` / `pong` |
-| Since | V2.1 |
+| Context | `ping` (server → client), `pong` (client → server) |
+| Clients | Both |
 | Broadcast | No |
 
-**Ping:**
-```json
-{
-  "context": "ping",
-  "data": null
-}
-```
+The server periodically sends `ping`; the client replies `pong`. Both carry an empty-string
+`data` on the wire.
 
-**Pong response:**
 ```json
-{
-  "context": "pong",
-  "data": null
-}
+{"context": "ping", "data": ""}
+{"context": "pong", "data": ""}
 ```
 
 ---
@@ -450,7 +422,7 @@ The data field identifies the client platform ("Android", "iOS", or other).
 | Property | Value |
 |----------|-------|
 | Context | `pluginversion` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -465,51 +437,23 @@ The data field identifies the client platform ("Android", "iOS", or other).
 ```json
 {
   "context": "pluginversion",
-  "data": "1.5.0"
+  "data": "1.4.0"
 }
 ```
 
 ---
 
-#### Connection Verification
-| Property | Value |
-|----------|-------|
-| Context | `verifyconnection` |
-| Since | V4 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "verifyconnection",
-  "data": null
-}
-```
-
-**Response:**
-```json
-{
-  "context": "verifyconnection",
-  "data": true
-}
-```
-
----
-
-#### Initialize (Full State Sync)
+#### Initial State Sync
 | Property | Value |
 |----------|-------|
 | Context | `init` |
-| Since | V2.1 |
-| Broadcast | No (triggers multiple responses) |
+| Clients | Both |
+| Broadcast | No |
 
-Requests initial state. Server responds with multiple messages:
-- `nowplayingtrack` - Current track info
-- `nowplayingrating` - Track rating
-- `nowplayinglfmrating` - Last.fm status
-- `playerstatus` - Full player state
-- `nowplayingcover` - Album art (broadcast to all)
-- `nowplayinglyrics` - Lyrics (broadcast to all)
+The V4 handshake state mechanism. On `init` the plugin pushes a bundle of state to the
+requesting client (`nowplayingtrack`, `nowplayingrating`, `nowplayinglfmrating`,
+`playerstatus`) and broadcasts `nowplayingcover` / `nowplayinglyrics`. This subsumes the
+individual state requests, so a V4 client does not request them separately.
 
 **Request:**
 ```json
@@ -521,64 +465,46 @@ Requests initial state. Server responds with multiple messages:
 
 ---
 
+#### Verify Connection
+| Property | Value |
+|----------|-------|
+| Context | `verifyconnection` |
+| Clients | Both |
+| Broadcast | No |
+
+Connection health check. Handled **before** the authentication gate: the plugin echoes it
+back with empty data. Timer/reconnect driven, not user-triggered.
+
+**Request:**
+```json
+{
+  "context": "verifyconnection",
+  "data": null
+}
+```
+
+**Response:**
+```json
+{
+  "context": "verifyconnection",
+  "data": ""
+}
+```
+
+---
+
 ### Player Control Commands
 
-#### Play
+#### Play / Pause / Stop / Play-Pause Toggle
 | Property | Value |
 |----------|-------|
-| Context | `playerplay` |
-| Since | V2.1 |
+| Context | `playerplay`, `playerpause`, `playerstop`, `playerplaypause` |
+| Clients | `playerplaypause` **Both**; `playerplay` / `playerpause` / `playerstop` **Android** |
 | Broadcast | Yes (`playerstate`) |
 
-**Request:**
-```json
-{
-  "context": "playerplay",
-  "data": null
-}
-```
-
-**Response:**
-```json
-{
-  "context": "playerplay",
-  "data": true
-}
-```
-
----
-
-#### Pause
-| Property | Value |
-|----------|-------|
-| Context | `playerpause` |
-| Since | V2.1 |
-| Broadcast | Yes (`playerstate`) |
-
-**Request:**
-```json
-{
-  "context": "playerpause",
-  "data": null
-}
-```
-
-**Response:**
-```json
-{
-  "context": "playerpause",
-  "data": true
-}
-```
-
----
-
-#### Play/Pause Toggle
-| Property | Value |
-|----------|-------|
-| Context | `playerplaypause` |
-| Since | V2 |
-| Broadcast | Yes (`playerstate`) |
+In-app and notification buttons collapse to `playerplaypause`. The separate `playerplay` /
+`playerpause` split only fires from the Android media session (Bluetooth / Android Auto /
+lockscreen). iOS uses `playerplaypause` only.
 
 **Request:**
 ```json
@@ -598,36 +524,11 @@ Requests initial state. Server responds with multiple messages:
 
 ---
 
-#### Stop
+#### Next / Previous
 | Property | Value |
 |----------|-------|
-| Context | `playerstop` |
-| Since | V2 |
-| Broadcast | Yes (`playerstate`) |
-
-**Request:**
-```json
-{
-  "context": "playerstop",
-  "data": null
-}
-```
-
-**Response:**
-```json
-{
-  "context": "playerstop",
-  "data": true
-}
-```
-
----
-
-#### Next Track
-| Property | Value |
-|----------|-------|
-| Context | `playernext` |
-| Since | V2 |
+| Context | `playernext`, `playerprevious` |
+| Clients | Both |
 | Broadcast | Yes (`nowplayingtrack`, etc.) |
 
 **Request:**
@@ -642,31 +543,6 @@ Requests initial state. Server responds with multiple messages:
 ```json
 {
   "context": "playernext",
-  "data": true
-}
-```
-
----
-
-#### Previous Track
-| Property | Value |
-|----------|-------|
-| Context | `playerprevious` |
-| Since | V2 |
-| Broadcast | Yes (`nowplayingtrack`, etc.) |
-
-**Request:**
-```json
-{
-  "context": "playerprevious",
-  "data": null
-}
-```
-
-**Response:**
-```json
-{
-  "context": "playerprevious",
   "data": true
 }
 ```
@@ -677,7 +553,7 @@ Requests initial state. Server responds with multiple messages:
 | Property | Value |
 |----------|-------|
 | Context | `playervolume` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes |
 
 **Set volume:**
@@ -696,7 +572,7 @@ Requests initial state. Server responds with multiple messages:
 }
 ```
 
-**Response:**
+**Response** (integer; note: volume is stringified only inside `playerstatus`, not here):
 ```json
 {
   "context": "playervolume",
@@ -710,38 +586,21 @@ Requests initial state. Server responds with multiple messages:
 | Property | Value |
 |----------|-------|
 | Context | `playermute` |
-| Since | V2 |
+| Clients | Android |
 | Broadcast | Yes |
 
-**Set mute:**
+**Set / toggle / query:**
 ```json
-{
-  "context": "playermute",
-  "data": true
-}
-```
-
-**Toggle mute:**
-```json
-{
-  "context": "playermute",
-  "data": "toggle"
-}
-```
-
-**Query mute:**
-```json
-{
-  "context": "playermute",
-  "data": null
-}
+{"context": "playermute", "data": true}
+{"context": "playermute", "data": "toggle"}
+{"context": "playermute", "data": null}
 ```
 
 **Response:**
 ```json
 {
   "context": "playermute",
-  "data": true
+  "data": false
 }
 ```
 
@@ -751,34 +610,16 @@ Requests initial state. Server responds with multiple messages:
 | Property | Value |
 |----------|-------|
 | Context | `playershuffle` |
-| Since | V2 (enhanced in V4) |
+| Clients | Both |
 | Broadcast | Yes |
 
-**Toggle shuffle:**
+**Toggle / set:**
 ```json
-{
-  "context": "playershuffle",
-  "data": "toggle"
-}
+{"context": "playershuffle", "data": "toggle"}
+{"context": "playershuffle", "data": "shuffle"}
 ```
 
-**Set shuffle state (V4+):**
-```json
-{
-  "context": "playershuffle",
-  "data": "shuffle"
-}
-```
-
-**Response (V2):**
-```json
-{
-  "context": "playershuffle",
-  "data": true
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "playershuffle",
@@ -794,23 +635,13 @@ Shuffle states: `"off"`, `"shuffle"`, `"autodj"`
 | Property | Value |
 |----------|-------|
 | Context | `playerrepeat` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes |
 
-**Toggle repeat (cycles None → All → One → None):**
+**Toggle (cycles None → All → One → None) / set:**
 ```json
-{
-  "context": "playerrepeat",
-  "data": "toggle"
-}
-```
-
-**Set repeat mode:**
-```json
-{
-  "context": "playerrepeat",
-  "data": "All"
-}
+{"context": "playerrepeat", "data": "toggle"}
+{"context": "playerrepeat", "data": "All"}
 ```
 
 **Response:**
@@ -825,44 +656,17 @@ Repeat modes: `"None"`, `"All"`, `"One"`
 
 ---
 
-#### AutoDJ
-| Property | Value |
-|----------|-------|
-| Context | `playerautodj` |
-| Since | V2 |
-| Broadcast | Yes |
-
-**Toggle AutoDJ:**
-```json
-{
-  "context": "playerautodj",
-  "data": "toggle"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "playerautodj",
-  "data": true
-}
-```
-
----
-
 #### Scrobbling
 | Property | Value |
 |----------|-------|
 | Context | `scrobbler` |
-| Since | V2 |
+| Clients | Android |
 | Broadcast | Yes |
 
-**Toggle scrobbling:**
+**Toggle / query:**
 ```json
-{
-  "context": "scrobbler",
-  "data": "toggle"
-}
+{"context": "scrobbler", "data": "toggle"}
+{"context": "scrobbler", "data": null}
 ```
 
 **Response:**
@@ -879,8 +683,10 @@ Repeat modes: `"None"`, `"All"`, `"One"`
 | Property | Value |
 |----------|-------|
 | Context | `playerstatus` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes |
+
+Sent to each client as part of the `init` bundle, and broadcast on state change.
 
 **Request:**
 ```json
@@ -907,11 +713,11 @@ Repeat modes: `"None"`, `"All"`, `"One"`
 
 ---
 
-#### Output Device (V4+)
+#### Output Device
 | Property | Value |
 |----------|-------|
 | Context | `playeroutput` |
-| Since | V4 |
+| Clients | Android |
 | Broadcast | Yes |
 
 **Query devices:**
@@ -943,14 +749,14 @@ Repeat modes: `"None"`, `"All"`, `"One"`
 
 ---
 
-#### Output Device Switch (V4+)
+#### Output Device Switch
 | Property | Value |
 |----------|-------|
 | Context | `playeroutputswitch` |
-| Since | V4 |
+| Clients | Android |
 | Broadcast | Yes |
 
-Switches to a specific output device by name.
+Switches to a specific output device by name. Responds on the `playeroutput` context.
 
 **Request:**
 ```json
@@ -979,7 +785,7 @@ Switches to a specific output device by name.
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingtrack` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (on track change) |
 
 **Request:**
@@ -990,20 +796,7 @@ Switches to a specific output device by name.
 }
 ```
 
-**Response (V2):**
-```json
-{
-  "context": "nowplayingtrack",
-  "data": {
-    "artist": "Artist Name",
-    "title": "Song Title",
-    "album": "Album Name",
-    "year": "2024"
-  }
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "nowplayingtrack",
@@ -1019,11 +812,11 @@ Switches to a specific output device by name.
 
 ---
 
-#### Track Details (V4+)
+#### Track Details
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingdetails` |
-| Since | V4 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -1034,7 +827,7 @@ Switches to a specific output device by name.
 }
 ```
 
-**Response:**
+**Response** (all values are strings):
 ```json
 {
   "context": "nowplayingdetails",
@@ -1045,10 +838,11 @@ Switches to a specific output device by name.
     "trackCount": "12",
     "discNo": "1",
     "discCount": "1",
-    "composer": "Composer Name",
     "publisher": "Record Label",
+    "composer": "Composer Name",
     "comment": "",
     "grouping": "",
+    "ratingAlbum": "",
     "encoder": "LAME",
     "kind": "mp3",
     "format": "MPEG-1 Layer 3",
@@ -1072,7 +866,7 @@ Switches to a specific output device by name.
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingposition` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (on seek) |
 
 **Query position:**
@@ -1104,11 +898,45 @@ Switches to a specific output device by name.
 
 ---
 
+#### Current Position (V5)
+| Property | Value |
+|----------|-------|
+| Context | `nowplayingcurrentposition` |
+| Clients | iOS |
+| Since | **V5** |
+| Broadcast | No |
+
+A lightweight poll for the elapsed position only. The iOS client sends it **only when the
+server advertised `protocol_version >= 5`**; against a V4 server it is never sent. The
+handler replies on the `nowplayingposition` context (same payload shape), so there is no
+distinct response context.
+
+**Request:**
+```json
+{
+  "context": "nowplayingcurrentposition",
+  "data": null
+}
+```
+
+**Response:**
+```json
+{
+  "context": "nowplayingposition",
+  "data": {
+    "current": 120000,
+    "total": 245000
+  }
+}
+```
+
+---
+
 #### Album Cover
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingcover` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (on track change) |
 
 **Request:**
@@ -1119,15 +947,7 @@ Switches to a specific output device by name.
 }
 ```
 
-**Response (V2):**
-```json
-{
-  "context": "nowplayingcover",
-  "data": "base64_encoded_image_data"
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "nowplayingcover",
@@ -1141,7 +961,7 @@ Switches to a specific output device by name.
 **Status codes:**
 - `200` - Cover available and included
 - `404` - Cover not found
-- `1` - Cover ready (not included in this response)
+- `1` - Cover ready (not included in this response; request again)
 
 ---
 
@@ -1149,7 +969,7 @@ Switches to a specific output device by name.
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglyrics` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (on track change) |
 
 **Request:**
@@ -1160,15 +980,7 @@ Switches to a specific output device by name.
 }
 ```
 
-**Response (V2):**
-```json
-{
-  "context": "nowplayinglyrics",
-  "data": "Lyrics text here..."
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "nowplayinglyrics",
@@ -1179,37 +991,22 @@ Switches to a specific output device by name.
 }
 ```
 
+Status `404` with empty `lyrics` when none are available.
+
 ---
 
 #### Track Rating
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingrating` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes |
 
-**Set rating:**
+**Set / clear / query:**
 ```json
-{
-  "context": "nowplayingrating",
-  "data": "4"
-}
-```
-
-**Clear rating:**
-```json
-{
-  "context": "nowplayingrating",
-  "data": ""
-}
-```
-
-**Query rating:**
-```json
-{
-  "context": "nowplayingrating",
-  "data": null
-}
+{"context": "nowplayingrating", "data": "4"}
+{"context": "nowplayingrating", "data": ""}
+{"context": "nowplayingrating", "data": null}
 ```
 
 **Response:**
@@ -1220,37 +1017,22 @@ Switches to a specific output device by name.
 }
 ```
 
+Rating is a string `"0"`-`"5"`.
+
 ---
 
 #### Last.fm Love/Ban
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglfmrating` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes |
 
-**Toggle love:**
+**Toggle / set:**
 ```json
-{
-  "context": "nowplayinglfmrating",
-  "data": "toggle"
-}
-```
-
-**Set love:**
-```json
-{
-  "context": "nowplayinglfmrating",
-  "data": "love"
-}
-```
-
-**Set ban:**
-```json
-{
-  "context": "nowplayinglfmrating",
-  "data": "ban"
-}
+{"context": "nowplayinglfmrating", "data": "toggle"}
+{"context": "nowplayinglfmrating", "data": "love"}
+{"context": "nowplayinglfmrating", "data": "ban"}
 ```
 
 **Response:**
@@ -1265,12 +1047,15 @@ Values: `"Normal"`, `"Love"`, `"Ban"`
 
 ---
 
-#### Tag Change (V4+)
+#### Tag Change
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingtagchange` |
-| Since | V4 |
+| Clients | iOS |
 | Broadcast | No |
+
+Modifies a metadata tag on the current track. Returns updated track details on the
+`nowplayingdetails` context (see [Track Details](#track-details) for the payload shape).
 
 **Request:**
 ```json
@@ -1283,40 +1068,6 @@ Values: `"Normal"`, `"Love"`, `"Ban"`
 }
 ```
 
-**Response:**
-```json
-{
-  "context": "nowplayingdetails",
-  "data": {
-    "albumArtist": "Album Artist",
-    "genre": "Rock",
-    "trackNo": "5",
-    "trackCount": "12",
-    "discNo": "1",
-    "discCount": "1",
-    "composer": "Composer Name",
-    "publisher": "Record Label",
-    "comment": "",
-    "grouping": "",
-    "encoder": "LAME",
-    "kind": "mp3",
-    "format": "MPEG-1 Layer 3",
-    "size": "8542631",
-    "channels": "2",
-    "sampleRate": "44100",
-    "bitrate": "320",
-    "dateModified": "2024-01-15",
-    "dateAdded": "2024-01-01",
-    "lastPlayed": "2024-01-20",
-    "playCount": "15",
-    "skipCount": "2",
-    "duration": "245000"
-  }
-}
-```
-
-Note: Returns updated track details after the tag change.
-
 ---
 
 ### Now Playing List Commands
@@ -1325,18 +1076,10 @@ Note: Returns updated track details after the tag change.
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglist` |
-| Since | V2 (pagination in V3+) |
+| Clients | Both |
 | Broadcast | No |
 
-**Request (V2):**
-```json
-{
-  "context": "nowplayinglist",
-  "data": null
-}
-```
-
-**Request (V3+ with pagination):**
+**Request:**
 ```json
 {
   "context": "nowplayinglist",
@@ -1347,18 +1090,7 @@ Note: Returns updated track details after the tag change.
 }
 ```
 
-**Response (V2):**
-```json
-{
-  "context": "nowplayinglist",
-  "data": [
-    {"artist": "Artist", "title": "Song 1", "path": "C:\\Music\\song1.mp3", "position": 0},
-    {"artist": "Artist", "title": "Song 2", "path": "C:\\Music\\song2.mp3", "position": 1}
-  ]
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "nowplayinglist",
@@ -1373,16 +1105,19 @@ Note: Returns updated track details after the tag change.
 }
 ```
 
+The iOS client receives two extra per-item fields, `album` and `album_artist` (see
+[NowPlayingListTrack](#nowplayinglisttrack)).
+
 ---
 
 #### Play Track from List
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglistplay` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (`nowplayingtrack`, etc.) |
 
-**Request:**
+**Request** (track index):
 ```json
 {
   "context": "nowplayinglistplay",
@@ -1390,7 +1125,7 @@ Note: Returns updated track details after the tag change.
 }
 ```
 
-Note: Android clients use 1-based indexing (adjusted internally).
+Clients typically re-request `nowplayinglist` after this to refresh.
 
 **Response:**
 ```json
@@ -1406,10 +1141,10 @@ Note: Android clients use 1-based indexing (adjusted internally).
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglistremove` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (`nowplayinglistchanged`) |
 
-**Request:**
+**Request** (track index):
 ```json
 {
   "context": "nowplayinglistremove",
@@ -1434,7 +1169,7 @@ Note: Android clients use 1-based indexing (adjusted internally).
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglistmove` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (`nowplayinglistchanged`) |
 
 **Request:**
@@ -1466,8 +1201,11 @@ Note: Android clients use 1-based indexing (adjusted internally).
 | Property | Value |
 |----------|-------|
 | Context | `nowplayinglistsearch` |
-| Since | V2 |
-| Broadcast | Yes (if match found and played) |
+| Clients | Android |
+| Broadcast | Yes (if a match is found and played) |
+
+Sent by Android clients up to v1.5.1; removed in Android 1.6.0 (moved client-side). Still a
+valid V4 command the plugin answers.
 
 **Request:**
 ```json
@@ -1487,11 +1225,11 @@ Note: Android clients use 1-based indexing (adjusted internally).
 
 ---
 
-#### Queue Files (V3+)
+#### Queue Files
 | Property | Value |
 |----------|-------|
 | Context | `nowplayingqueue` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | Yes (`nowplayinglistchanged`) |
 
 **Request:**
@@ -1507,10 +1245,10 @@ Note: Android clients use 1-based indexing (adjusted internally).
 ```
 
 Queue types:
-- `"playnow"` / `"now"` - Play immediately
+- `"now"` / `"playnow"` - Play immediately
 - `"next"` - Queue as next track
 - `"last"` - Queue at end
-- `"addandplay"` / `"add-all"` - Add all and start playing
+- `"add-all"` / `"addandplay"` - Add all and start playing
 
 **Response:**
 ```json
@@ -1528,155 +1266,11 @@ Response codes: `200` (success), `400` (invalid request), `500` (error)
 
 ### Library Commands
 
-#### Search by Title
-| Property | Value |
-|----------|-------|
-| Context | `librarysearchtitle` |
-| Since | V2 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "librarysearchtitle",
-  "data": "search query"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "librarysearchtitle",
-  "data": [
-    {
-      "src": "C:\\Music\\song.mp3",
-      "artist": "Artist",
-      "title": "Song",
-      "trackno": 1,
-      "disc": 1,
-      "album": "Album",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
-    }
-  ]
-}
-```
-
----
-
-#### Search by Artist
-| Property | Value |
-|----------|-------|
-| Context | `librarysearchartist` |
-| Since | V2 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "librarysearchartist",
-  "data": "artist name"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "librarysearchartist",
-  "data": [
-    {
-      "src": "C:\\Music\\song.mp3",
-      "artist": "Artist Name",
-      "title": "Song Title",
-      "trackno": 1,
-      "disc": 1,
-      "album": "Album Name",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
-    }
-  ]
-}
-```
-
----
-
-#### Search by Album
-| Property | Value |
-|----------|-------|
-| Context | `librarysearchalbum` |
-| Since | V2 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "librarysearchalbum",
-  "data": "album name"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "librarysearchalbum",
-  "data": [
-    {
-      "src": "C:\\Music\\song.mp3",
-      "artist": "Artist Name",
-      "title": "Song Title",
-      "trackno": 1,
-      "disc": 1,
-      "album": "Album Name",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
-    }
-  ]
-}
-```
-
----
-
-#### Search by Genre
-| Property | Value |
-|----------|-------|
-| Context | `librarysearchgenre` |
-| Since | V2 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "librarysearchgenre",
-  "data": "genre name"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "librarysearchgenre",
-  "data": [
-    {
-      "src": "C:\\Music\\song.mp3",
-      "artist": "Artist Name",
-      "title": "Song Title",
-      "trackno": 1,
-      "disc": 1,
-      "album": "Album Name",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
-    }
-  ]
-}
-```
-
----
-
-#### Browse Genres (V3+)
+#### Browse Genres
 | Property | Value |
 |----------|-------|
 | Context | `browsegenres` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -1708,11 +1302,11 @@ Response codes: `200` (success), `400` (invalid request), `500` (error)
 
 ---
 
-#### Browse Artists (V3+)
+#### Browse Artists
 | Property | Value |
 |----------|-------|
 | Context | `browseartists` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -1746,11 +1340,11 @@ Set `album_artists: true` to browse album artists instead of track artists.
 
 ---
 
-#### Browse Albums (V3+)
+#### Browse Albums
 | Property | Value |
 |----------|-------|
 | Context | `browsealbums` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -1781,11 +1375,11 @@ Set `album_artists: true` to browse album artists instead of track artists.
 
 ---
 
-#### Browse Tracks (V3+)
+#### Browse Tracks
 | Property | Value |
 |----------|-------|
 | Context | `browsetracks` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | No |
 
 **Request:**
@@ -1825,11 +1419,42 @@ Set `album_artists: true` to browse album artists instead of track artists.
 
 ---
 
+#### Get Genre Artists
+| Property | Value |
+|----------|-------|
+| Context | `librarygenreartists` |
+| Clients | iOS |
+| Broadcast | No |
+
+Hierarchical (name-keyed, non-paginated) navigation used by the iOS client to drill
+genre → artists → albums → tracks.
+
+**Request:**
+```json
+{
+  "context": "librarygenreartists",
+  "data": "Genre Name"
+}
+```
+
+**Response:**
+```json
+{
+  "context": "librarygenreartists",
+  "data": [
+    {"artist": "Artist 1", "count": 25},
+    {"artist": "Artist 2", "count": 18}
+  ]
+}
+```
+
+---
+
 #### Get Artist Albums
 | Property | Value |
 |----------|-------|
 | Context | `libraryartistalbums` |
-| Since | V2 |
+| Clients | iOS |
 | Broadcast | No |
 
 **Request:**
@@ -1857,7 +1482,7 @@ Set `album_artists: true` to browse album artists instead of track artists.
 | Property | Value |
 |----------|-------|
 | Context | `libraryalbumtracks` |
-| Since | V2 |
+| Clients | iOS |
 | Broadcast | No |
 
 **Request:**
@@ -1868,7 +1493,7 @@ Set `album_artists: true` to browse album artists instead of track artists.
 }
 ```
 
-**Response:**
+**Response** (album-track items omit `album`/`genre`):
 ```json
 {
   "context": "libraryalbumtracks",
@@ -1879,19 +1504,7 @@ Set `album_artists: true` to browse album artists instead of track artists.
       "title": "Track 1",
       "trackno": 1,
       "disc": 1,
-      "album": "Album Name",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
-    },
-    {
-      "src": "C:\\Music\\track2.mp3",
-      "artist": "Artist Name",
-      "title": "Track 2",
-      "trackno": 2,
-      "disc": 1,
-      "album": "Album Name",
-      "album_artist": "Album Artist",
-      "genre": "Rock"
+      "album_artist": "Album Artist"
     }
   ]
 }
@@ -1899,166 +1512,18 @@ Set `album_artists: true` to browse album artists instead of track artists.
 
 ---
 
-#### Get Genre Artists
-| Property | Value |
-|----------|-------|
-| Context | `librarygenreartists` |
-| Since | V2 |
-| Broadcast | No |
-
-**Request:**
-```json
-{
-  "context": "librarygenreartists",
-  "data": "Genre Name"
-}
-```
-
-**Response:**
-```json
-{
-  "context": "librarygenreartists",
-  "data": [
-    {"artist": "Artist 1", "count": 25},
-    {"artist": "Artist 2", "count": 18}
-  ]
-}
-```
-
----
-
-#### Queue Track
-| Property | Value |
-|----------|-------|
-| Context | `libraryqueuetrack` |
-| Since | V2 |
-| Broadcast | Yes |
-
-**Request:**
-```json
-{
-  "context": "libraryqueuetrack",
-  "data": {
-    "type": "next",
-    "query": "Song Title"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "context": "libraryqueuetrack",
-  "data": true
-}
-```
-
----
-
-#### Queue Artist
-| Property | Value |
-|----------|-------|
-| Context | `libraryqueueartist` |
-| Since | V2 |
-| Broadcast | Yes |
-
-**Request:**
-```json
-{
-  "context": "libraryqueueartist",
-  "data": {
-    "type": "next",
-    "query": "Artist Name"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "context": "libraryqueueartist",
-  "data": true
-}
-```
-
----
-
-#### Queue Album
-| Property | Value |
-|----------|-------|
-| Context | `libraryqueuealbum` |
-| Since | V2 |
-| Broadcast | Yes |
-
-**Request:**
-```json
-{
-  "context": "libraryqueuealbum",
-  "data": {
-    "type": "next",
-    "query": "Album Name"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "context": "libraryqueuealbum",
-  "data": true
-}
-```
-
----
-
-#### Queue Genre
-| Property | Value |
-|----------|-------|
-| Context | `libraryqueuegenre` |
-| Since | V2 |
-| Broadcast | Yes |
-
-**Request:**
-```json
-{
-  "context": "libraryqueuegenre",
-  "data": {
-    "type": "next",
-    "query": "Genre Name"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "context": "libraryqueuegenre",
-  "data": true
-}
-```
-
----
-
-#### Play All Library (V4+)
+#### Play All Library
 | Property | Value |
 |----------|-------|
 | Context | `libraryplayall` |
-| Since | V4 |
+| Clients | Both |
 | Broadcast | Yes |
 
-**Request (shuffle):**
+**Request** (`true` = shuffle, `false` = in order):
 ```json
 {
   "context": "libraryplayall",
   "data": true
-}
-```
-
-**Request (in order):**
-```json
-{
-  "context": "libraryplayall",
-  "data": false
 }
 ```
 
@@ -2072,11 +1537,11 @@ Set `album_artists: true` to browse album artists instead of track artists.
 
 ---
 
-#### Album Cover (V4+)
+#### Album Cover
 | Property | Value |
 |----------|-------|
 | Context | `libraryalbumcover` |
-| Since | V4 |
+| Clients | Both |
 | Broadcast | No |
 
 Use this on the **data socket** (no-broadcast) for heavy cover fetching.
@@ -2105,7 +1570,7 @@ Use this on the **data socket** (no-broadcast) for heavy cover fetching.
 }
 ```
 
-**Response:**
+**Single-cover response:**
 ```json
 {
   "context": "libraryalbumcover",
@@ -2119,6 +1584,30 @@ Use this on the **data socket** (no-broadcast) for heavy cover fetching.
 }
 ```
 
+When only a status applies (cover not found, not modified, or cache still building), the
+response carries the status alone:
+```json
+{
+  "context": "libraryalbumcover",
+  "data": {"status": 404}
+}
+```
+
+**Paginated response** (for the paginated request form) - a `Page` of cover items:
+```json
+{
+  "context": "libraryalbumcover",
+  "data": {
+    "offset": 0,
+    "limit": 20,
+    "total": 120,
+    "data": [
+      {"album": "Album Name", "artist": "Artist Name", "cover": "base64_data", "status": 200, "hash": "sha1_hash"}
+    ]
+  }
+}
+```
+
 Status codes:
 - `200` - Cover available
 - `304` - Not modified (hash matches)
@@ -2127,12 +1616,14 @@ Status codes:
 
 ---
 
-#### Cover Cache Status (V4+)
+#### Cover Cache Status
 | Property | Value |
 |----------|-------|
 | Context | `librarycovercachebuildstatus` |
-| Since | V4 |
+| Clients | iOS |
 | Broadcast | Yes |
+
+Returned before an album-cover page while the cache is still building; clients retry after.
 
 **Request:**
 ```json
@@ -2142,7 +1633,7 @@ Status codes:
 }
 ```
 
-**Response:**
+**Response** (`true` if the cache is currently being built):
 ```json
 {
   "context": "librarycovercachebuildstatus",
@@ -2150,15 +1641,13 @@ Status codes:
 }
 ```
 
-Returns `true` if cache is currently being built.
-
 ---
 
-#### Radio Stations (V4+)
+#### Radio Stations
 | Property | Value |
 |----------|-------|
 | Context | `radiostations` |
-| Since | V4 |
+| Clients | Android |
 | Broadcast | No |
 
 **Request:**
@@ -2195,18 +1684,10 @@ Returns `true` if cache is currently being built.
 | Property | Value |
 |----------|-------|
 | Context | `playlistlist` |
-| Since | V2 |
+| Clients | Both |
 | Broadcast | Yes (on change) |
 
-**Request (V2):**
-```json
-{
-  "context": "playlistlist",
-  "data": null
-}
-```
-
-**Request (V3+):**
+**Request:**
 ```json
 {
   "context": "playlistlist",
@@ -2217,18 +1698,7 @@ Returns `true` if cache is currently being built.
 }
 ```
 
-**Response (V2):**
-```json
-{
-  "context": "playlistlist",
-  "data": [
-    {"name": "Favorites", "url": "playlist://favorites"},
-    {"name": "Rock Mix", "url": "playlist://rock-mix"}
-  ]
-}
-```
-
-**Response (V3+):**
+**Response:**
 ```json
 {
   "context": "playlistlist",
@@ -2246,11 +1716,11 @@ Returns `true` if cache is currently being built.
 
 ---
 
-#### Play Playlist (V3+)
+#### Play Playlist
 | Property | Value |
 |----------|-------|
 | Context | `playlistplay` |
-| Since | V3 |
+| Clients | Both |
 | Broadcast | Yes |
 
 **Request:**
@@ -2273,7 +1743,8 @@ Returns `true` if cache is currently being built.
 
 ## Broadcast Events
 
-Broadcasts are automatically sent to all connected clients (unless `no_broadcast: true` was set during handshake).
+Broadcasts are automatically sent to all connected clients (unless `no_broadcast: true` was
+set during handshake). Both Android and iOS clients consume them.
 
 ### Player State Broadcasts
 
@@ -2282,20 +1753,19 @@ Broadcasts are automatically sent to all connected clients (unless `no_broadcast
 | `playerstate` | Play/pause/stop | `"Playing"`, `"Paused"`, `"Stopped"` |
 | `playervolume` | Volume change | Integer (0-100) |
 | `playermute` | Mute toggle | Boolean |
-| `playershuffle` | Shuffle change | Boolean (V2) or ShuffleState (V3+) |
+| `playershuffle` | Shuffle change | ShuffleState (`"off"`/`"shuffle"`/`"autodj"`) |
 | `playerrepeat` | Repeat change | `"None"`, `"All"`, `"One"` |
 | `scrobbler` | Scrobbler toggle | Boolean |
-| `playerautodj` | AutoDJ toggle | Boolean |
 | `playeroutput` | Output device change | OutputDevice object |
 
 ### Track Broadcasts
 
 | Context | Trigger | Data |
 |---------|---------|------|
-| `nowplayingtrack` | Track change | NowPlayingTrack/V2 object |
+| `nowplayingtrack` | Track change | NowPlayingTrack object |
 | `nowplayingposition` | Seek | Position object |
-| `nowplayingcover` | Cover available | CoverPayload (V3+) or string (V2) |
-| `nowplayinglyrics` | Lyrics available | LyricsPayload (V3+) or string (V2) |
+| `nowplayingcover` | Cover available | CoverPayload |
+| `nowplayinglyrics` | Lyrics available | LyricsPayload |
 | `nowplayingrating` | Rating change | String |
 | `nowplayinglfmrating` | Last.fm status change | LastfmStatus |
 
@@ -2368,7 +1838,7 @@ When a track changes, clients receive:
 "Undefined" | "None" | "All" | "One"
 ```
 
-#### ShuffleState (V3+)
+#### ShuffleState
 ```
 "off" | "shuffle" | "autodj"
 ```
@@ -2392,17 +1862,7 @@ When a track changes, clients receive:
 }
 ```
 
-#### NowPlayingTrack (V2)
-```json
-{
-  "artist": "string",
-  "title": "string",
-  "album": "string",
-  "year": "string"
-}
-```
-
-#### NowPlayingTrackV2 (V3+)
+#### NowPlayingTrack
 ```json
 {
   "artist": "string",
@@ -2473,6 +1933,19 @@ Note: `cover` field is omitted when null (status 1 or 404).
 }
 ```
 
+The iOS client receives two additional fields, `album` and `album_artist` (empty strings
+when unset):
+```json
+{
+  "artist": "string",
+  "album": "string",
+  "album_artist": "string",
+  "title": "string",
+  "path": "string",
+  "position": 0
+}
+```
+
 #### GenreData
 ```json
 {
@@ -2534,7 +2007,7 @@ Data Socket (no_broadcast: true):
 
 ### 2. Handle Pagination
 
-For large libraries, always use pagination:
+For large libraries, always use pagination and fetch pages incrementally:
 ```json
 {
   "context": "browsetracks",
@@ -2545,8 +2018,6 @@ For large libraries, always use pagination:
 }
 ```
 
-Fetch pages incrementally rather than requesting everything at once.
-
 ### 3. Cache Aggressively
 
 - Use the `hash` field in cover requests to avoid re-downloading unchanged covers
@@ -2554,24 +2025,18 @@ Fetch pages incrementally rather than requesting everything at once.
 
 ### 4. Implement Keepalive
 
-Send periodic ping messages to detect connection drops:
-```json
-{
-  "context": "ping",
-  "data": null
-}
-```
+The server sends periodic `ping` frames; reply promptly with `pong` (empty-string data) to
+keep the connection alive and detect drops.
 
-### 5. Handle Version Differences
+### 5. Use `init` for Startup State
 
-Check the protocol version returned during handshake and adjust your requests accordingly:
-- V2: Simple data types, no pagination
-- V3: Object payloads, pagination support
-- V4: Extended features (output devices, tag editing, etc.)
+After the handshake, send `init` to receive the bundled current state rather than requesting
+each field individually. The plugin pushes track / rating / lfm-rating / status and
+broadcasts cover / lyrics in response.
 
 ### 6. Process Broadcasts Efficiently
 
-Broadcasts arrive frequently during playback. Implement debouncing for UI updates to avoid performance issues.
+Broadcasts arrive frequently during playback. Debounce UI updates to avoid performance issues.
 
 ---
 
@@ -2604,4 +2069,5 @@ MusicBee Remote supports UDP multicast for service discovery on the local networ
 - Multicast Address: `239.1.5.10`
 - Port: `45345`
 
-Clients can listen for discovery broadcasts to find available MusicBee instances without manual configuration.
+Clients can listen for discovery broadcasts to find available MusicBee instances without
+manual configuration. Discovery is a separate UDP path, independent of the TCP command socket.
