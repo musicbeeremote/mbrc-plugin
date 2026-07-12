@@ -38,14 +38,56 @@ pub fn parse_context(line: &str) -> Option<String> {
 /// Parse a wire line, tolerating the known iOS-client malformations.
 ///
 /// Tries strict JSON first; on failure, retries after rewriting the iOS `\'`
-/// escape (see [`sanitize_ios_quotes`]). Truly unrecoverable frames - e.g. the
-/// iOS `{"data":status}` bare-identifier bug - return `None`, and the caller is
-/// expected to warn-and-drop while keeping the connection alive.
+/// escape (see [`sanitize_ios_quotes`]) and then after quoting a bare-identifier
+/// `data` value (see [`sanitize_ios_bare_data`]) - the iOS v4 bug where it emits
+/// e.g. `{"context":"nowplayingposition","data":status}` instead of
+/// `"data":"status"`. Both are known v4 iOS quirks and must be parsed, not
+/// dropped, or the frame (a control command or a position poll) silently
+/// vanishes. Genuinely unrecoverable frames still return `None`.
 pub fn parse_lenient(line: &str) -> Option<serde_json::Value> {
     if let Ok(v) = serde_json::from_str(line) {
         return Some(v);
     }
-    serde_json::from_str(&sanitize_ios_quotes(line)).ok()
+    let quoted = sanitize_ios_quotes(line);
+    if let Ok(v) = serde_json::from_str(&quoted) {
+        return Some(v);
+    }
+    serde_json::from_str(&sanitize_ios_bare_data(&quoted)?).ok()
+}
+
+/// Quote a bare-identifier `data` value - the iOS v4 bug where it emits
+/// `{"data":status}` instead of `{"data":"status"}`. Rewrites the value only when
+/// it is an unquoted identifier that is NOT a JSON literal (`true`/`false`/`null`),
+/// number, string, object, or array, so already-valid frames are never touched.
+/// Returns `None` when there is no such bare value to fix.
+fn sanitize_ios_bare_data(s: &str) -> Option<String> {
+    const KEY: &str = "\"data\":";
+    let key_at = s.find(KEY)?;
+    let val_at = key_at + KEY.len();
+    let after = &s[val_at..];
+    let lead_ws = after.len() - after.trim_start().len();
+    let token_at = val_at + lead_ws;
+    let first = s[token_at..].chars().next()?;
+    // A valid JSON value start (string/object/array/number) is not the bug.
+    if matches!(first, '"' | '{' | '[' | '-') || first.is_ascii_digit() {
+        return None;
+    }
+    // The bare token is the run of identifier chars.
+    let token: String = s[token_at..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    // Empty, or a real JSON literal -> nothing to fix.
+    if token.is_empty() || matches!(token.as_str(), "true" | "false" | "null") {
+        return None;
+    }
+    let token_end = token_at + token.len();
+    Some(format!(
+        "{}\"{}\"{}",
+        &s[..token_at],
+        token,
+        &s[token_end..]
+    ))
 }
 
 /// Rewrite the iOS `\'` escape (invalid JSON) to a bare `'`. Escaped
@@ -218,8 +260,31 @@ mod tests {
         // A real escaped backslash before a quote is preserved, not mangled.
         assert_eq!(sanitize_ios_quotes(r#"a\\b"#), r#"a\\b"#);
         assert_eq!(sanitize_ios_quotes(r#"it\'s"#), "it's");
-        // The bare-identifier bug is unrecoverable.
-        assert!(parse_lenient(r#"{"data":status}"#).is_none());
+    }
+
+    #[test]
+    fn lenient_recovers_ios_bare_data_quirk() {
+        // The iOS v4 bare-identifier bug: `data` is an unquoted word. We quote it
+        // instead of dropping the frame, so the context is still dispatched.
+        let v = parse_lenient(r#"{"context":"nowplayingposition","data":status}"#).unwrap();
+        assert_eq!(v["context"], "nowplayingposition");
+        assert_eq!(v["data"], "status");
+        // Minimal form.
+        assert_eq!(
+            parse_lenient(r#"{"data":status}"#).unwrap()["data"],
+            "status"
+        );
+
+        // Valid literals / numbers / strings / objects are untouched (strict JSON
+        // wins first, and the sanitizer would leave them alone anyway).
+        assert_eq!(parse_lenient(r#"{"data":true}"#).unwrap()["data"], true);
+        assert_eq!(parse_lenient(r#"{"data":false}"#).unwrap()["data"], false);
+        assert!(parse_lenient(r#"{"data":null}"#).unwrap()["data"].is_null());
+        assert_eq!(parse_lenient(r#"{"data":42}"#).unwrap()["data"], 42);
+        assert_eq!(parse_lenient(r#"{"data":"s"}"#).unwrap()["data"], "s");
+        // Genuinely broken frames still fail.
+        assert!(parse_lenient("not json at all").is_none());
+        assert!(parse_lenient(r#"{"context":"x","data":"#).is_none());
     }
 
     #[test]

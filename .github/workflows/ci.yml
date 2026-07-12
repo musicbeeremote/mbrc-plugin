@@ -37,6 +37,15 @@ jobs:
       - name: setup NuGet
         uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
+      # The plugin build invokes build.ps1 -Rust (MSBuild BuildRustCore target),
+      # which compiles mbrc_core.dll for i686. The runner ships Rust; we just add
+      # the 32-bit target the plugin links against.
+      - name: setup Rust (i686 target)
+        run: rustup target add i686-pc-windows-msvc
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
       - name: restore packages
         run: nuget restore MBRC.sln -OutputDirectory .nuget -NonInteractive -LockedMode
 
@@ -93,6 +102,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./TestResults
+          flags: csharp
           fail_ci_if_error: false
           verbose: true
 
@@ -100,6 +110,9 @@ jobs:
         run: |
           mkdir -p build/dist
           cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
+          # Native core (Release -> the `plugin` cargo profile); must ship next to
+          # mb_remote.dll. Not embedded by Costura (managed-only).
+          cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
           cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
           cp LICENSE build/dist
 
@@ -161,7 +174,7 @@ jobs:
         run: |
           $version = $env:VERSION
           cp installer\README.txt build\dist\
-          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
+          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\mbrc_core.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: generate checksums
         env:

@@ -85,6 +85,9 @@ Section "MainSection" SEC01
 	SetOverwrite on
 	SetOutPath "$INSTDIR\Plugins"
 	File ..\build\dist\mb_remote.dll
+	; The native Rust core the plugin loads at runtime. Costura embeds only the
+	; managed deps into mb_remote.dll; mbrc_core.dll must ship side-by-side.
+	File ..\build\dist\mbrc_core.dll
 	File ..\build\dist\firewall-utility.exe
 	SetOverwrite off
 SectionEnd
@@ -111,9 +114,11 @@ Function un.onInit
 FunctionEnd
 
 Section Uninstall
-	Delete "$INSTDIR\mb_remote.dll"
-	Delete "$INSTDIR\firewall-utility.exe"
-	Delete "$INSTDIR\mbremoteuninstall.exe"
+	; Plugin files live under $INSTDIR\Plugins (see SetOutPath above).
+	Delete "$INSTDIR\Plugins\mb_remote.dll"
+	Delete "$INSTDIR\Plugins\mbrc_core.dll"
+	Delete "$INSTDIR\Plugins\firewall-utility.exe"
+	Delete "$INSTDIR\Plugins\mbremoteuninstall.exe"
 	RmDir /r "$APPDATA\MusicBee\mb_remote"
 
 	; Remove Start Menu items

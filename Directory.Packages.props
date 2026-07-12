@@ -8,29 +8,32 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Runtime / shared -->
-    <PackageVersion Include="Autofac" Version="6.5.0" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageVersion Include="NLog" Version="5.3.4" />
+    <!-- Runtime / shared. MessagePack held at 2.5.x: it is the load-bearing FFI
+         serializer (dynamic formatter emit on net48 + Costura) and was live-
+         validated here. v3.x is net48-compatible (net472/netstandard2.0) but the
+         major bump needs a live FFI round-trip smoke test before adoption. -->
+    <PackageVersion Include="MessagePack" Version="2.5.302" />
 
-    <!-- Plugin packaging (assembly merge) -->
-    <PackageVersion Include="Costura.Fody" Version="4.1.0" />
-    <PackageVersion Include="Fody" Version="6.8.0" />
-    <PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34" />
+    <!-- Plugin packaging (Costura embeds managed deps into mb_remote.dll) -->
+    <PackageVersion Include="Costura.Fody" Version="6.2.0" />
+    <PackageVersion Include="Fody" Version="6.9.3" />
 
     <!-- Analyzers (build-time only) -->
-    <PackageVersion Include="AsyncFixer" Version="1.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" />
+    <PackageVersion Include="AsyncFixer" Version="2.1.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.301" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
 
-    <!-- Test -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageVersion Include="xunit" Version="2.6.6" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.6" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.0" />
-    <PackageVersion Include="Moq" Version="4.20.70" />
-    <PackageVersion Include="FluentAssertions" Version="6.12.0" />
+    <!-- Test. AwesomeAssertions replaces FluentAssertions (v7+ is the Xceed
+         commercial license); it is a drop-in fork under the same namespace,
+         Apache-2.0. NSubstitute replaces Moq (BSD, avoids the SponsorLink
+         history). Both ship net47/netstandard2.0 -> net48-compatible. -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="NSubstitute" Version="6.0.0" />
+    <PackageVersion Include="AwesomeAssertions" Version="9.4.0" />
   </ItemGroup>
 
 </Project>

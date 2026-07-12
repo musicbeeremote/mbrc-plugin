@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
 using System.Xml.Linq;
-using FluentAssertions;
-using MusicBeePlugin.Enumerations;
-using MusicBeePlugin.Utilities.Data;
+using AwesomeAssertions;
+using MusicBeePlugin.Models;
+using MusicBeePlugin.Utilities;
 using Xunit;
 
 namespace MusicBeeRemote.Core.Tests.Utilities

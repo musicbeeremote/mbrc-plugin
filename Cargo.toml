@@ -9,6 +9,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "packages/mbrc-core",
     "packages/mbrc-discovery",
     "packages/mbrc-wire",
     "packages/mbrc-capture",
@@ -24,7 +25,11 @@ authors = ["Konstantinos Paparas"]
 # workspaces resolve the shared crates against identical dependency versions.
 [workspace.dependencies]
 serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.150"
+# preserve_order keeps JSON object keys in the order structs/`json!` literals
+# declare them, instead of BTreeMap's alphabetical sort. The V4 clients (iOS
+# especially) read the wire in the field order the shipped C# plugin emitted,
+# so the core must match that order, not alphabetize.
+serde_json = { version = "=1.0.150", features = ["preserve_order"] }
 tokio = { version = "=1.52.3", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "time", "fs", "signal"] }
 time = { version = "=0.3.53", features = ["formatting"] }
 if-addrs = "=0.15.0"
@@ -39,3 +44,11 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# The plugin cdylib profile. Same size optimisation as release, but
+# panic = "unwind" so the FFI boundary's catch_unwind actually catches a Rust
+# panic and returns an error code instead of aborting the MusicBee host
+# process. Build the core with `--profile plugin`.
+[profile.plugin]
+inherits = "release"
+panic = "unwind"

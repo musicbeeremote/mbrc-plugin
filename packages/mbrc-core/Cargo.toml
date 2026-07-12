@@ -1,0 +1,62 @@
+[package]
+name = "mbrc-core"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+publish = false
+
+# cdylib -> mbrc_core.dll (the native library the C# plugin loads at cutover).
+# rlib   -> lets integration tests / the replay harness link the core in-process.
+[lib]
+name = "mbrc_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+rmp-serde = "=1.3.1"
+# Cover decode/encode (moving cover handling into the core; C# hands over raw
+# artwork). Pure-Rust decoders, so it cross-compiles to i686 with no C toolchain.
+# `gif` is included because some MusicBee libraries carry GIF album art (GDI+
+# decoded it; without this feature the core skips those covers).
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+# SIMD (SSE4.1/AVX2) image resizing - the actual downscale is the from-scratch
+# build's bottleneck, and this is several times faster than image's scalar
+# `imageops::resize`. Pure Rust with runtime CPU detection, so i686 stays clean.
+fast_image_resize = "=6.0.0"
+base64 = "=0.22.1"
+# Embedded key-value store backing the durable caches (album-cover index +
+# library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
+# toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
+# - a good fit for the 32-bit i686 target (no mmap address-space ceiling).
+redb = "=4.1.0"
+# SHA1 for cover cache identities (album key + content hash). Not cryptographic;
+# must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
+sha1 = "=0.11.0"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
+# gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so
+# i686-msvc cross-compiles with no C/zlib toolchain.
+flate2 = { version = "=1.0.35", default-features = false, features = ["rust_backend"] }
+# Cross-platform process RSS for the O(page) memory proof (validation plan): a
+# periodic + per-reconcile log line so a paging sweep on a huge library shows
+# resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),
+# i686-msvc clean; only sampled when the log level admits it.
+memory-stats = "=1.2.0"
+tokio = { workspace = true }
+mbrc-wire = { workspace = true }
+if-addrs = { workspace = true }
+socket2 = "=0.6.4"
+
+[build-dependencies]
+csbindgen = "=1.9.8"
+syn = { version = "=2.0.118", features = ["full"] }
+
+[dev-dependencies]
+mbrc-capture = { workspace = true }
+serde_json = { workspace = true }
+# Property-based fuzzing of the untrusted decode paths (cover artwork + settings
+# msgpack) on stable. rmp-serde is re-declared here so the integration test can
+# call the decoder directly (crate deps aren't visible to integration tests).
+proptest = "=1.11.0"
+rmp-serde = "=1.3.1"

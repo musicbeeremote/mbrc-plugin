@@ -55,12 +55,12 @@ jobs:
         # No version pin here - pnpm/action-setup reads the exact version from
         # the `packageManager` field in tools/api-debugger/package.json, keeping
         # a single source of truth.
-        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: tools/api-debugger/package.json
 
       - name: setup Node
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: tools/api-debugger/.nvmrc
           cache: pnpm
@@ -86,7 +86,7 @@ jobs:
         run: rustup component add rustfmt clippy
 
       - name: cache Rust build
-        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: tools/api-debugger/src-tauri
 

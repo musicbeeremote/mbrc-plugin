@@ -11,6 +11,7 @@ mod capture;
 mod compare;
 mod fuzz;
 mod inspect;
+mod monitor;
 mod replay;
 mod rng;
 mod send;
@@ -26,6 +27,7 @@ fn main() -> ExitCode {
         Some("discover") => cmd_discover(rest),
         Some("inspect") => inspect::run(rest),
         Some("send") => send::run(rest),
+        Some("monitor") => monitor::run(rest),
         Some("capture") => capture::run(rest),
         Some("serve") => serve::run(rest),
         Some("trim") => trim::run(rest),
@@ -95,6 +97,10 @@ fn print_usage() {
          \x20 replay   --golden <file|dir> [--host H]   drive a golden against a live server,\n\
          \x20          [--port P] [--values]              record responses, diff vs the golden\n\
          \x20 fuzz     [--host H] [--port P] [--seed N]  seeded protocol fuzzer (read-only\n\
-         \x20          [--iterations K] [--corpus G]      default; --diff-host for differential)\n"
+         \x20          [--iterations K] [--corpus G]      default; --diff-host for differential)\n\
+         \x20 monitor  [--host H] [--port P]             read-only paging/keepalive validator\n\
+         \x20          [--client-type Android|iOS]        (invariants + JSONL + persistence sig)\n\
+         \x20          [--concurrency N] [--duration D]   D = inf|<n>[s|m|h]\n\
+         \x20          [--page-size N] [--out FILE]\n"
     );
 }

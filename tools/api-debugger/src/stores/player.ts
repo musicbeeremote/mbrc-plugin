@@ -4,6 +4,18 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onMessage, onState, sendCommand } from "../lib/api";
 import { emptyNowPlaying, foldResponse, type NowPlaying } from "../lib/player";
 
+/**
+ * True when a `nowplayingcover` frame is the bare `{status:1}` readiness marker
+ * (art available but not inlined) rather than an actual image payload. The
+ * status may arrive as a number or a string.
+ */
+function isCoverReadyMarker(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  const hasImage = typeof d.cover === "string" && d.cover.length > 0;
+  return !hasImage && String(d.status ?? "") === "1";
+}
+
 /** Local seek-bar tick (ms). Advances position client-side between syncs. */
 const TICK_MS = 1000;
 /** Re-sync position with the plugin every Nth tick (so 15s), to correct drift. */
@@ -100,6 +112,16 @@ export const usePlayerStore = defineStore("player", () => {
     }
     const patch = foldResponse(context, data);
     if (Object.keys(patch).length > 0) Object.assign(np.value, patch);
+
+    // Cover-ready marker: the plugin broadcasts `nowplayingcover` with
+    // `{status:1}` to say new artwork is available but not inlined (e.g. after
+    // MusicBee finishes downloading art on a track change). Mirror the real
+    // clients and pull the image on a fresh request so it updates without a
+    // manual fetch. An explicit `nowplayingcover` request returns the image with
+    // status 200/404, never 1, so this cannot loop.
+    if (context === "nowplayingcover" && isCoverReadyMarker(data)) {
+      void send("nowplayingcover", "");
+    }
   }
 
   function reset() {

@@ -1,10 +1,10 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
-using MusicBeePlugin.Adapters.Implementations;
-using MusicBeePlugin.Core;
-using MusicBeePlugin.DataProviders;
-using MusicBeePlugin.Services.Core;
+using System.Windows.Forms;
+using MusicBeePlugin.Host;
+using MusicBeePlugin.Settings;
+using FfiGen = MusicBeePlugin.Ffi.Generated;
 
 namespace MusicBeePlugin
 {
@@ -23,9 +23,15 @@ namespace MusicBeePlugin
         private MusicBeeApiInterface _api;
 
         /// <summary>
-        ///     The plugin core for dependency injection.
+        ///     The hand-wired composition root (providers + services + FFI bridge).
         /// </summary>
-        private Core.PluginCore _pluginCore;
+        private PluginHost _host;
+
+        /// <summary>The preferences panel, built lazily in <see cref="Configure" />.</summary>
+        private ConfigurationPanel _configPanel;
+
+        /// <summary>Plugin version string, shown in the preferences panel.</summary>
+        private string _version;
 
         /// <summary>
         ///     This function initialized the Plugin.
@@ -38,6 +44,7 @@ namespace MusicBeePlugin
             _api.Initialise(apiInterfacePtr);
 
             var version = Assembly.GetExecutingAssembly().GetName().Version;
+            _version = version.ToString();
 
             _about.PluginInfoVersion = PluginInfoVersion;
             _about.Name = "MusicBee Remote: Plugin";
@@ -51,59 +58,56 @@ namespace MusicBeePlugin
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
+            // Non-zero height tells MusicBee this plugin has a preferences panel;
+            // MusicBee then calls Configure(panelHandle) to populate it. The panel
+            // now holds only a Configure button, so it needs little room.
+            _about.ConfigurationPanelHeight = 120;
 
             if (_api.ApiRevision < MinApiRevision)
                 return _about;
 
-            InitializePluginCore(version);
+            InitializeHost(version);
+
+            // A Tools menu entry opens the same settings dialog as the Configure
+            // button, matching the classic plugin's layout.
+            _api.MB_AddMenuItem(
+                "mnuTools/MusicBee Remote",
+                "MusicBee Remote: open settings",
+                (sender, args) => OpenSettingsDialog());
 
             return _about;
         }
 
         /// <summary>
-        ///     Initializes the plugin core with dependency injection, networking, and menu items.
-        ///     Wraps initialization in try-catch for robust error handling.
+        ///     Open the settings dialog (shared by the Configure button and the
+        ///     Tools menu entry). No-op if the host failed to start.
+        /// </summary>
+        private void OpenSettingsDialog()
+        {
+            if (_host == null)
+                return;
+
+            using (var dialog = new SettingsDialog(_host, _version))
+                dialog.ShowDialog();
+        }
+
+        /// <summary>
+        ///     Builds the composition root and boots the Rust core. Wrapped in a
+        ///     catch-all so a startup failure leaves the plugin degraded (remote
+        ///     off) rather than crashing MusicBee.
         /// </summary>
         /// <param name="version">The plugin version from assembly.</param>
-        private void InitializePluginCore(Version version)
+        private void InitializeHost(Version version)
         {
             try
             {
-                // Create adapter composition for dependency injection (system operations only)
-                var adapters = new MusicBeeApiAdapter(
-                    new SystemOperations(_api)
-                );
-
-                // Create data providers composition for dependency injection
-                var dataProviders = new DataProviders.DataProviders(
-                    new PlayerDataProvider(_api),
-                    new TrackDataProvider(_api),
-                    new PlaylistDataProvider(_api),
-                    new LibraryDataProvider(_api)
-                );
-
-                // Initialize plugin core with dependency injection
-                _pluginCore = new PluginCore(
-                    adapters,
-                    dataProviders,
-                    _api.Setting_GetPersistentStoragePath(),
-                    version
-                );
-
-                // Initialize core services and networking
-                _pluginCore.Initialize();
-                _pluginCore.StartNetworking();
-
-                // Add MusicBee menu item for settings
-                _api.MB_AddMenuItem(
-                    "mnuTools/MusicBee Remote",
-                    "Information Panel of the MusicBee Remote",
-                    (sender, args) => _pluginCore?.OpenSettingsWindow()
-                );
+                _host = new PluginHost(_api, _api.Setting_GetPersistentStoragePath(), version);
+                _host.Start();
             }
             catch (Exception ex)
             {
-                // Log the error to fallback location and ensure plugin doesn't crash MusicBee
+                // Log the error to a fallback location and ensure the plugin
+                // never crashes MusicBee.
                 try
                 {
                     var fallbackPath = Path.Combine(
@@ -112,15 +116,15 @@ namespace MusicBeePlugin
                         "initialization_error.log");
                     Directory.CreateDirectory(Path.GetDirectoryName(fallbackPath));
                     File.AppendAllText(fallbackPath,
-                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] FATAL: Plugin initialization failed: {ex}\n");
+                        $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.ffffffZ}] FATAL: Plugin initialization failed: {ex}\n");
                 }
                 catch
                 {
                     // If logging fails, continue silently to prevent MusicBee crash
                 }
 
-                // Ensure _pluginCore is null so other methods can handle gracefully
-                _pluginCore = null;
+                // Ensure _host is null so other methods handle it gracefully.
+                _host = null;
             }
         }
 
@@ -135,7 +139,16 @@ namespace MusicBeePlugin
         /// </returns>
         public bool Configure(IntPtr panelHandle)
         {
-            _pluginCore?.OpenSettingsWindow();
+            // The core owns settings; the panel reads/writes them over the FFI.
+            if (_host == null || panelHandle == IntPtr.Zero)
+                return false;
+
+            var panel = Control.FromHandle(panelHandle);
+            if (panel == null)
+                return false;
+
+            _configPanel = new ConfigurationPanel(_host, _version);
+            _configPanel.AttachTo(panel);
             return true;
         }
 
@@ -145,9 +158,8 @@ namespace MusicBeePlugin
         /// <param name="reason">The reason for closing.</param>
         public void Close(PluginCloseReason reason)
         {
-            _pluginCore?.StopNetworking();
-            _pluginCore?.Dispose();
-            _pluginCore = null;
+            _host?.Dispose();
+            _host = null;
         }
 
         /// <summary>
@@ -155,18 +167,28 @@ namespace MusicBeePlugin
         /// </summary>
         public void Uninstall()
         {
-            _pluginCore?.Uninstall();
+            try
+            {
+                var settingsFolder = Path.Combine(
+                    _api.Setting_GetPersistentStoragePath(),
+                    "mb_remote");
+                if (Directory.Exists(settingsFolder))
+                    Directory.Delete(settingsFolder, true);
+            }
+            catch
+            {
+                // Best-effort cleanup; never throw out of Uninstall.
+            }
         }
 
         /// <summary>
-        ///     Called by MusicBee when the user clicks Apply or Save in the MusicBee Preferences screen.
-        ///     Settings are now saved through the InfoWindow's UserSettingsService when changes are applied.
-        ///     This method is kept for MusicBee API compatibility.
+        ///     Called by MusicBee when the user clicks Save/Apply in the Preferences
+        ///     screen. The embedded panel holds only a Configure button now; settings
+        ///     are edited and persisted in the settings dialog, so there is nothing to
+        ///     apply here.
         /// </summary>
-        public static void SaveSettings()
+        public void SaveSettings()
         {
-            // Settings are saved via UserSettingsService when the user applies changes in InfoWindow.
-            // This empty implementation maintains compatibility with MusicBee's plugin interface.
         }
 
         /// <summary>
@@ -177,38 +199,47 @@ namespace MusicBeePlugin
         /// <param name="type"></param>
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
-            // Perform an action depending on the notification type
-            var notificationHandler = _pluginCore?.GetNotificationHandler();
-            if (notificationHandler == null)
+            if (_host == null)
                 return;
 
+            // Map MusicBee's notification to the core's NotificationType (the
+            // generated FFI enum). Only the events the core re-queries are
+            // forwarded; anything else is ignored.
+            FfiGen.NotificationType coreType;
             switch (type)
             {
                 case NotificationType.TrackChanged:
-                    notificationHandler.HandleTrackChanged(sourceFileUrl);
-                    break;
-                case NotificationType.VolumeLevelChanged:
-                    notificationHandler.HandleVolumeLevelChanged();
-                    break;
-                case NotificationType.VolumeMuteChanged:
-                    notificationHandler.HandleVolumeMuteChanged();
+                    coreType = FfiGen.NotificationType.TrackChanged;
                     break;
                 case NotificationType.PlayStateChanged:
-                    notificationHandler.HandlePlayStateChanged();
+                    coreType = FfiGen.NotificationType.PlayStateChanged;
+                    break;
+                case NotificationType.VolumeLevelChanged:
+                    coreType = FfiGen.NotificationType.VolumeLevelChanged;
+                    break;
+                case NotificationType.VolumeMuteChanged:
+                    coreType = FfiGen.NotificationType.VolumeMuteChanged;
                     break;
                 case NotificationType.NowPlayingLyricsReady:
-                    notificationHandler.HandleNowPlayingLyricsReady();
+                    coreType = FfiGen.NotificationType.NowPlayingLyricsReady;
                     break;
                 case NotificationType.NowPlayingArtworkReady:
-                    notificationHandler.HandleNowPlayingArtworkReady();
+                    coreType = FfiGen.NotificationType.NowPlayingArtworkReady;
                     break;
                 case NotificationType.PlayingTracksChanged:
-                    notificationHandler.HandleNowPlayingListChanged();
+                    coreType = FfiGen.NotificationType.NowPlayingListChanged;
                     break;
                 case NotificationType.FileAddedToLibrary:
-                    notificationHandler.HandleFileAddedToLibrary(sourceFileUrl);
+                    coreType = FfiGen.NotificationType.FileAddedToLibrary;
                     break;
+                case NotificationType.LibrarySwitched:
+                    coreType = FfiGen.NotificationType.LibrarySwitched;
+                    break;
+                default:
+                    return;
             }
+
+            _host.HandleNotification((int)coreType);
         }
     }
 }

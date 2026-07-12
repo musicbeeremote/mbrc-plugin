@@ -34,12 +34,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Moq" />
-    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="AwesomeAssertions" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\packages\core\MusicBeeRemote.Core.csproj" />
+    <ProjectReference Include="..\..\packages\plugin\mbrc-plugin.csproj" />
   </ItemGroup>
 
 </Project>

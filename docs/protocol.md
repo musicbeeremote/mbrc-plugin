@@ -24,7 +24,7 @@ versions (2 / 2.1 / 3) are legacy and out of scope here (see [Protocol Versions]
 
 ## Overview
 
-MusicBee Remote uses a TCP socket-based protocol with newline-terminated JSON messages.
+MusicBee Remote uses a TCP socket-based protocol with CRLF-terminated JSON messages.
 
 | Property | Value |
 |----------|-------|
@@ -34,7 +34,6 @@ MusicBee Remote uses a TCP socket-based protocol with newline-terminated JSON me
 | Encoding | UTF-8 (no BOM) |
 | Message Terminator | CRLF (`\r\n`) |
 | Maintained Version | 4 |
-| Also | V5 = V4 + `nowplayingcurrentposition` (iOS); V6 = reserved future redesign |
 
 **Important:** All messages must be encoded as UTF-8 without a Byte Order Mark (BOM). The plugin expects and sends UTF-8 encoded text.
 
@@ -197,15 +196,18 @@ Before the `protocol` frame, a client first identifies its platform with a `play
 
 ## Client Usage Legend
 
-Every command below is tagged with the clients that use it, verified against the Android
-client source (`Protocol.kt`, v1.1.0-v1.6.1), the iOS protocol sheet, and captured golden
-traces:
+Every command below is marked for the three currently-supported clients, verified against the
+Android client source (`Protocol.kt`, v1.1.0-v1.6.1), the iOS protocol sheet, and captured
+golden traces:
 
-| Tag | Meaning |
-|-----|---------|
-| **Both** | Sent by both the Android and iOS clients |
-| **Android** | Sent by the Android client only |
-| **iOS** | Sent by the iOS client only |
+| Column | Client |
+|--------|--------|
+| **A 1.5.1** | Android app v1.5.1 (last of the pre-1.6 line) |
+| **A 1.6.1** | Android app v1.6.1 (current) |
+| **iOS** | iOS app (current) |
+
+`✓` = the client sends/uses the command; `-` = it does not. Footnotes call out the commands
+that changed between the two Android versions.
 
 ---
 
@@ -215,92 +217,99 @@ All maintained V4 contexts, organized by category.
 
 ### System
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `protocol` | Protocol version handshake (extended object format) | Both | V4 |
-| `player` | Client platform identification (`"Android"` / `"iOS"`) | Both | V4 |
-| `ping` | Keepalive ping (server → client) | Both | V4 |
-| `pong` | Keepalive pong (client → server) | Both | V4 |
-| `pluginversion` | Query the plugin version string | Both | V4 |
-| `init` | Request initial state sync (triggers a bundle of responses) | Both | V4 |
-| `verifyconnection` | Verify the connection is active (answered pre-auth) | Both | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `protocol` | Protocol version handshake (extended object format) | ✓ | ✓ | ✓ |
+| `player` | Client platform identification (`"Android"` / `"iOS"`) | ✓ | ✓ | ✓ |
+| `ping` | Keepalive ping (server → client) | ✓ | ✓ | ✓ |
+| `pong` | Keepalive pong (client → server) | ✓ | ✓ | ✓ |
+| `pluginversion` | Query the plugin version string | ✓ | ✓ | ✓ |
+| `init` | Request initial state sync (triggers a bundle of responses) | ✓ | ✓ | ✓ |
+| `verifyconnection` | Verify the connection is active (answered pre-auth) | ✓ | ✓ | ✓ |
 
 ### Player Control
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `playerplaypause` | Toggle play/pause state | Both | V4 |
-| `playerplay` | Start playback (media-session / lockscreen) | Android | V4 |
-| `playerpause` | Pause playback (media-session / lockscreen) | Android | V4 |
-| `playerstop` | Stop playback | Android | V4 |
-| `playernext` | Skip to next track | Both | V4 |
-| `playerprevious` | Skip to previous track | Both | V4 |
-| `playervolume` | Get or set volume level (0-100) | Both | V4 |
-| `playermute` | Get, set, or toggle mute state | Android | V4 |
-| `playershuffle` | Get, set, or toggle shuffle mode | Both | V4 |
-| `playerrepeat` | Get, set, or toggle repeat mode (None/All/One) | Both | V4 |
-| `scrobbler` | Get, set, or toggle Last.fm scrobbling | Android | V4 |
-| `playerstatus` | Full player status (state, volume, modes) | Both | V4 |
-| `playeroutput` | Get or set audio output device | Android | V4 |
-| `playeroutputswitch` | Switch to a specific output device | Android | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `playerplaypause` | Toggle play/pause state | ✓ | ✓ | ✓ |
+| `playerplay` | Start playback (media-session / lockscreen) | ✓ | ✓ | - |
+| `playerpause` | Pause playback (media-session / lockscreen) | ✓ | ✓ | - |
+| `playerstop` | Stop playback | ✓ | -¹ | - |
+| `playernext` | Skip to next track | ✓ | ✓ | ✓ |
+| `playerprevious` | Skip to previous track | ✓ | ✓ | ✓ |
+| `playervolume` | Get or set volume level (0-100) | ✓ | ✓ | ✓ |
+| `playermute` | Get, set, or toggle mute state | ✓ | ✓ | - |
+| `playershuffle` | Get, set, or toggle shuffle mode | ✓ | ✓ | ✓ |
+| `playerrepeat` | Get, set, or toggle repeat mode (None/All/One) | ✓ | ✓ | ✓ |
+| `scrobbler` | Get, set, or toggle Last.fm scrobbling | ✓ | ✓ | - |
+| `playerstatus` | Full player status (state, volume, modes) | ✓ | ✓ | ✓ |
+| `playeroutput` | Get or set audio output device | ✓ | ✓ | - |
+| `playeroutputswitch` | Switch to a specific output device | ✓ | ✓ | - |
+
+¹ `playerstop` ships in 1.5.1 but is missing / non-functional in 1.6.1.
 
 ### Now Playing Track
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `nowplayingtrack` | Current track info (artist, title, album, year, path) | Both | V4 |
-| `nowplayingdetails` | Extended track metadata (genre, bitrate, etc.) | Both | V4 |
-| `nowplayingposition` | Get or set playback position in milliseconds | Both | V4 |
-| `nowplayingcurrentposition` | Lightweight current-position poll (replies on `nowplayingposition`) | iOS | **V5** |
-| `nowplayingcover` | Album artwork for current track | Both | V4 |
-| `nowplayinglyrics` | Lyrics for current track | Both | V4 |
-| `nowplayingrating` | Get or set track rating | Both | V4 |
-| `nowplayinglfmrating` | Get or set Last.fm love/ban status | Both | V4 |
-| `nowplayingtagchange` | Modify track metadata tags | iOS | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `nowplayingtrack` | Current track info (artist, title, album, year, path) | ✓ | ✓ | ✓ |
+| `nowplayingdetails` | Extended track metadata (genre, bitrate, etc.) | -² | ✓ | ✓ |
+| `nowplayingposition` | Get or set playback position in milliseconds | ✓ | ✓ | ✓ |
+| `nowplayingcover` | Album artwork for current track | ✓ | ✓ | ✓ |
+| `nowplayinglyrics` | Lyrics for current track | ✓ | ✓ | ✓ |
+| `nowplayingrating` | Get or set track rating | ✓ | ✓ | ✓ |
+| `nowplayinglfmrating` | Get or set Last.fm love/ban status | ✓ | ✓ | ✓ |
+| `nowplayingtagchange` | Modify track metadata tags | - | - | ✓ |
+
+² `nowplayingdetails` was added in Android 1.6.0.
 
 ### Now Playing List
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `nowplayinglist` | Get the now playing queue (paginated) | Both | V4 |
-| `nowplayinglistplay` | Play a specific track from the queue by index | Both | V4 |
-| `nowplayinglistremove` | Remove a track from the queue by index | Both | V4 |
-| `nowplayinglistmove` | Move a track within the queue | Both | V4 |
-| `nowplayinglistsearch` | Search and play a track in the queue | Android | V4 (removed in Android 1.6.0) |
-| `nowplayingqueue` | Queue files to the now playing list | Both | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `nowplayinglist` | Get the now playing queue (paginated) | ✓ | ✓ | ✓ |
+| `nowplayinglistplay` | Play a specific track from the queue by index | ✓ | ✓ | ✓ |
+| `nowplayinglistremove` | Remove a track from the queue by index | ✓ | ✓ | ✓ |
+| `nowplayinglistmove` | Move a track within the queue | ✓ | ✓ | ✓ |
+| `nowplayinglistsearch` | Search and play a track in the queue | ✓ | -³ | - |
+| `nowplayingqueue` | Queue files to the now playing list | ✓ | ✓ | ✓ |
+
+³ `nowplayinglistsearch` was removed in Android 1.6.0 (moved client-side).
 
 ### Library Browse (flat, paginated)
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `browsegenres` | Browse all genres (paginated) | Both | V4 |
-| `browseartists` | Browse all artists (paginated, supports album artists) | Both | V4 |
-| `browsealbums` | Browse all albums (paginated) | Both | V4 |
-| `browsetracks` | Browse all tracks (paginated) | Both | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `browsegenres` | Browse all genres (paginated) | ✓ | ✓ | ✓ |
+| `browseartists` | Browse all artists (paginated, supports album artists) | ✓ | ✓ | ✓ |
+| `browsealbums` | Browse all albums (paginated) | ✓ | ✓ | ✓ |
+| `browsetracks` | Browse all tracks (paginated) | ✓ | ✓ | ✓ |
 
 ### Library Navigation (hierarchical, by name)
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `librarygenreartists` | Get all artists in a specific genre | iOS | V4 |
-| `libraryartistalbums` | Get all albums by a specific artist | iOS | V4 |
-| `libraryalbumtracks` | Get all tracks on a specific album | iOS | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `librarygenreartists` | Get all artists in a specific genre | - | - | ✓ |
+| `libraryartistalbums` | Get all albums by a specific artist | - | - | ✓ |
+| `libraryalbumtracks` | Get all tracks on a specific album | - | - | ✓ |
 
 ### Library Covers & Misc
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `libraryalbumcover` | Get album cover by artist/album (paginated) | Both | V4 |
-| `librarycovercachebuildstatus` | Query cover cache build progress | iOS | V4 |
-| `libraryplayall` | Play entire library (optional shuffle) | Both | V4 |
-| `radiostations` | Get available radio stations (paginated) | Android | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `libraryalbumcover` | Get album cover by artist/album (paginated) | ✓ | ✓ | ✓ |
+| `librarycovercachebuildstatus` | Query cover cache build progress | - | - | ✓ |
+| `libraryplayall` | Play entire library (optional shuffle) | -⁴ | ✓ | ✓ |
+| `radiostations` | Get available radio stations (paginated) | ✓ | ✓ | - |
+
+⁴ `libraryplayall` was added in Android 1.6.0.
 
 ### Playlists
 
-| Context | Description | Clients | Since |
-|---------|-------------|---------|-------|
-| `playlistlist` | Get all playlists (paginated) | Both | V4 |
-| `playlistplay` | Play a specific playlist by URL | Both | V4 |
+| Context | Description | A 1.5.1 | A 1.6.1 | iOS |
+|---------|-------------|:-------:|:-------:|:---:|
+| `playlistlist` | Get all playlists (paginated) | ✓ | ✓ | ✓ |
+| `playlistplay` | Play a specific playlist by URL | ✓ | ✓ | ✓ |
 
 ### Error Responses
 
@@ -315,22 +324,9 @@ All maintained V4 contexts, organized by category.
 
 ### Version 4 (maintained baseline)
 
-The maintained protocol. Every command in this document is V4 unless explicitly noted. V4
-uses object payloads, pagination, string-typed player fields, and the full player / now
-playing / library / playlist surface. It is the minimum version new clients should target.
-
-### Version 5 (legacy extension)
-
-V5 is V4 plus a **single** addition: `nowplayingcurrentposition`, a lightweight
-current-position poll. The iOS client sends it only when the server advertises
-`protocol_version >= 5`; the handler replies on the existing `nowplayingposition` context.
-There are no other differences from V4. (Origin: the plugin's `old-develop` branch.)
-
-### Version 6 (reserved, future)
-
-Reserved for a future strict/standardized redesign: consistent typing, snake_case keys, a
-uniform error envelope, and a traceability envelope for request/response correlation. Not
-yet defined and not implemented. All new schema work targets V6, not V4/V5.
+The maintained protocol and the sole surface documented here. V4 uses object payloads,
+pagination, string-typed player fields, and the full player / now playing / library /
+playlist surface. Every command in this document is V4.
 
 ### Legacy (V2 / V2.1 / V3)
 
@@ -882,40 +878,6 @@ Switches to a specific output device by name. Responds on the `playeroutput` con
 {
   "context": "nowplayingposition",
   "data": 120000
-}
-```
-
-**Response:**
-```json
-{
-  "context": "nowplayingposition",
-  "data": {
-    "current": 120000,
-    "total": 245000
-  }
-}
-```
-
----
-
-#### Current Position (V5)
-| Property | Value |
-|----------|-------|
-| Context | `nowplayingcurrentposition` |
-| Clients | iOS |
-| Since | **V5** |
-| Broadcast | No |
-
-A lightweight poll for the elapsed position only. The iOS client sends it **only when the
-server advertised `protocol_version >= 5`**; against a V4 server it is never sent. The
-handler replies on the `nowplayingposition` context (same payload shape), so there is no
-distinct response context.
-
-**Request:**
-```json
-{
-  "context": "nowplayingcurrentposition",
-  "data": null
 }
 ```
 

@@ -63,14 +63,8 @@
     <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
 
-  <!-- Project References -->
-  <ItemGroup>
-    <ProjectReference Include="..\core\MusicBeeRemote.Core.csproj" />
-  </ItemGroup>
-
   <!-- NuGet Package References -->
   <ItemGroup>
-    <PackageReference Include="Autofac" />
     <PackageReference Include="Costura.Fody">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
@@ -78,71 +72,48 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Include="NLog" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
-  <!-- Framework References -->
+  <!-- Framework References. System.Drawing + System.Windows.Forms: the settings
+       panel. System.Xml.Linq: XmlFilterHelper's library-query filters. -->
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System" />
-    <Reference Include="System.Configuration" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.ServiceModel" />
-    <Reference Include="System.Transactions" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xaml" />
-    <Reference Include="System.Xml" />
-    <Reference Include="System.Data.Linq" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
 
-  <!-- ILRepack: Merge Core assembly into Plugin (configuration in ILRepack.targets) -->
-  <Target Name="MergeCore" AfterTargets="Build">
-    <PropertyGroup>
-      <CoreOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\build\bin\core\$(Configuration)\net48\'))</CoreOutputPath>
-      <ILRepackInputAssembly>$(OutputPath)mb_remote.dll</ILRepackInputAssembly>
-      <ILRepackCoreAssembly>$(CoreOutputPath)MusicBeeRemote.Core.dll</ILRepackCoreAssembly>
-      <ILRepackOutputAssembly>$(OutputPath)mb_remote_merged.dll</ILRepackOutputAssembly>
-    </PropertyGroup>
-    <Message Text="ILRepack: Merging $(ILRepackCoreAssembly) into $(ILRepackInputAssembly)" Importance="high" />
-    <ItemGroup>
-      <ILRepackAssemblies Include="$(ILRepackInputAssembly)" />
-      <ILRepackAssemblies Include="$(ILRepackCoreAssembly)" />
-    </ItemGroup>
-    <ILRepack
-      InputAssemblies="@(ILRepackAssemblies)"
-      OutputFile="$(ILRepackOutputAssembly)"
-      TargetKind="SameAsPrimaryAssembly"
-      Parallel="true"
-      DebugInfo="true"
-      Internalize="true"
-    />
-    <!-- Replace original with merged -->
-    <Delete Files="$(ILRepackInputAssembly)" />
-    <Move SourceFiles="$(ILRepackOutputAssembly)" DestinationFiles="$(ILRepackInputAssembly)" />
-    <!-- Clean up Core assembly from plugin output -->
-    <Delete Files="$(OutputPath)MusicBeeRemote.Core.dll" Condition="Exists('$(OutputPath)MusicBeeRemote.Core.dll')" />
-    <Delete Files="$(OutputPath)MusicBeeRemote.Core.pdb" Condition="Exists('$(OutputPath)MusicBeeRemote.Core.pdb')" />
-    <Message Text="ILRepack: Merge complete. Output: $(ILRepackInputAssembly)" Importance="high" />
+  <!-- Repo root (packages/plugin/../../), used by the Rust build + deploy targets
+       below. Independent of $(SolutionDir), which Rider does NOT set when it
+       builds this project via the LaunchSettings run configuration. -->
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</RepoRoot>
+  </PropertyGroup>
+
+  <!-- Build the Rust core (mbrc_core.dll) as part of the plugin build, so a
+       single "Build"/Run in the IDE produces both halves. build.ps1 -Rust also
+       stages mbrc_core.dll next to the plugin in app\MusicBee\Plugins. -->
+  <Target Name="BuildRustCore" BeforeTargets="BeforeBuild">
+    <Message Text="Building Rust core (mbrc_core.dll, $(Configuration))..." Importance="high" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RepoRoot)build.ps1&quot; -Rust -Configuration $(Configuration)"
+          WorkingDirectory="$(RepoRoot)" />
   </Target>
 
-  <!-- Post-build event -->
-  <Target AfterTargets="MergeCore" Condition="'$(Configuration)'=='Debug' and '$(SolutionDir)' != '' and '$(SolutionDir)' != '*Undefined*'" Name="PostBuild">
-    <Exec Command="XCOPY /Q /E /I /Y /C /R &quot;$(TargetDir)mb_remote.dll&quot; &quot;$(SolutionDir)\app\MusicBee\Plugins&quot;" />
+  <!-- Post-build: stage the plugin next to MusicBee for Debug runs, so a Run from
+       the IDE (Build before-launch) or a CLI build always deploys the C# DLL too.
+       Keyed on $(RepoRoot), not $(SolutionDir), so it works even when the project
+       is built without a solution context (Rider LaunchSettings run config). Core
+       is folded into this project (no ILRepack); Costura embeds the managed NuGet
+       deps into mb_remote.dll. -->
+  <Target AfterTargets="Build" Condition="'$(Configuration)'=='Debug'" Name="PostBuild">
+    <Exec Command="XCOPY /Q /E /I /Y /C /R &quot;$(TargetDir)mb_remote.dll&quot; &quot;$(RepoRoot)app\MusicBee\Plugins&quot;" />
   </Target>
 
   <!-- Include additional files -->

@@ -93,6 +93,13 @@ jobs:
       - name: setup NuGet
         uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
+      # The plugin build compiles mbrc_core.dll for i686 via build.ps1 -Rust.
+      - name: setup Rust (i686 target)
+        run: rustup target add i686-pc-windows-msvc
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
       - name: restore packages
         run: nuget restore MBRC.sln -OutputDirectory .nuget -NonInteractive -LockedMode
 
@@ -107,6 +114,7 @@ jobs:
         run: |
           mkdir -p build/dist
           cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
+          cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
           cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
           cp LICENSE build/dist
           cp installer/README.txt build/dist
@@ -137,7 +145,7 @@ jobs:
           NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
         run: |
           $version = "${env:VERSION_PREFIX}-nightly.${env:NIGHTLY_VERSION}"
-          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
+          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\mbrc_core.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
 
       - name: upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

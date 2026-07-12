@@ -1,14 +1,16 @@
 name: rust-workspace
 
-# CI for the root Rust workspace: the shared crates (packages/mbrc-*) and the
-# headless CLI (tools/mbrc-cli). The Tauri api-debugger has its own workflow
-# (api-debugger.yml) and is excluded from this workspace, so it isn't built here.
-# The Windows/x86 plugin core (packages/mbrc-core) will get its own job when it
-# lands in Milestone B.
+# CI for the root Rust workspace: the plugin core (packages/mbrc-core), the
+# shared crates (packages/mbrc-*), and the headless CLI (tools/mbrc-cli). The
+# Tauri api-debugger has its own workflow (api-debugger.yml) and is excluded
+# from this workspace, so it isn't built here. mbrc-core additionally gets an
+# i686 cross-build (its ship target as the plugin's native cdylib) and the
+# workspace is measured for coverage.
 on:
   push:
     branches: [ main ]
     paths:
+      - 'packages/mbrc-core/**'
       - 'packages/mbrc-wire/**'
       - 'packages/mbrc-capture/**'
       - 'packages/mbrc-discovery/**'
@@ -19,6 +21,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
+      - 'packages/mbrc-core/**'
       - 'packages/mbrc-wire/**'
       - 'packages/mbrc-capture/**'
       - 'packages/mbrc-discovery/**'
@@ -54,7 +57,7 @@ jobs:
         run: rustup component add rustfmt clippy
 
       - name: cache Rust build
-        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
       - name: check formatting
         run: cargo fmt --all --check
@@ -64,3 +67,46 @@ jobs:
 
       - name: test
         run: cargo test --locked
+
+      # mbrc-core ships as the plugin's native cdylib built for 32-bit Windows.
+      # Cross-build it on the Windows runner so i686-only breakage (linking,
+      # target-cfg, pointer width) is caught here, not only in the C# CI.
+      - name: build mbrc-core (i686 plugin profile)
+        if: matrix.os == 'windows-latest'
+        run: |
+          rustup target add i686-pc-windows-msvc
+          cargo build -p mbrc-core --target i686-pc-windows-msvc --profile plugin --locked
+
+  coverage:
+    name: coverage
+    # Windows: mbrc-core is the Windows plugin cdylib, and this matches where the
+    # test matrix is green, so coverage compiles the whole workspace reliably.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: setup Rust (llvm-tools)
+        run: rustup component add llvm-tools-preview
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: install cargo-llvm-cov
+        # Installed from crates.io (version-pinned) rather than a third-party
+        # action; rust-cache keeps the compiled binary warm across runs.
+        run: cargo install cargo-llvm-cov --version 0.8.7 --locked
+
+      - name: collect coverage (lcov)
+        run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
+
+      - name: upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          flags: rust
+          fail_ci_if_error: false
+          verbose: true

@@ -1,0 +1,13 @@
+# Pin the Rust toolchain so local builds and CI use the exact same rustc,
+# rustfmt, and clippy. rustfmt output and clippy lints are only stable within a
+# version, so an unpinned toolchain drifts: CI (fmt --check / clippy -D warnings)
+# then fails on code that was clean locally. rustup reads this file for every
+# cargo/rustc invocation in the repo (including the plugin's build.ps1 -Rust and
+# the tools/api-debugger workspace), so there is a single source of truth.
+#
+# Bumping: change `channel`, then run `cargo fmt --all` and fix any new clippy
+# lints in the SAME commit so the tree stays CI-green.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+targets = ["i686-pc-windows-msvc"]

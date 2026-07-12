@@ -1,5 +1,5 @@
-using FluentAssertions;
-using MusicBeePlugin.Utilities.Common;
+using AwesomeAssertions;
+using MusicBeePlugin.Utilities;
 using Xunit;
 
 namespace MusicBeeRemote.Core.Tests.Utilities
