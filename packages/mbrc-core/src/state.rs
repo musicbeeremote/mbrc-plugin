@@ -406,6 +406,20 @@ mod tests {
         .unwrap();
         assert!(write_settings_bytes(&bad).is_err());
 
+        // Blocked-connection host dispatch (folded in here to avoid a second
+        // concurrent STATE test): an empty log queries to an empty array - Some,
+        // not None - and the clear command succeeds. Populating the log needs the
+        // accept loop, so the non-empty path is covered by the `blocked` unit
+        // tests; this pins the dispatch arms + the empty-not-None contract.
+        let blocked = host_query(HostQueryType::RecentBlocked, &[]).expect("recent-blocked query");
+        let entries: Vec<crate::ffi::dtos::BlockedConnection> =
+            rmp_serde::from_slice(&blocked).unwrap();
+        assert!(entries.is_empty());
+        assert_eq!(
+            host_command(HostCommandType::ClearBlockedLog, &[]),
+            MbrcResult::Ok
+        );
+
         let _ = shutdown();
     }
 }

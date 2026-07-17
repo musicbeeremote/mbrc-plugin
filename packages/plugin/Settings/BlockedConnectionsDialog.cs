@@ -36,16 +36,35 @@ namespace MusicBeePlugin.Settings
             MinimizeBox = false;
             MaximizeBox = true;
             ShowInTaskbar = false;
+            ShowIcon = false; // no generic form icon in the title bar
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(540, 360);
             MinimumSize = new Size(420, 260);
 
             BuildLayout();
-            LoadEntries();
 
             _timer = new Timer { Interval = RefreshMs };
             _timer.Tick += (s, e) => LoadEntries();
             _timer.Start();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // Populate here, not in the constructor: the window handle only exists
+            // once shown, and LoadEntries no-ops without it - doing it in the ctor
+            // left the list empty until the first timer tick.
+            LoadEntries();
+            SizeReasonColumn();
+        }
+
+        /// <summary>Stretch the last ("Reason") column to fill the list width.</summary>
+        private void SizeReasonColumn()
+        {
+            if (_list.Columns.Count < 4) return;
+            var used = _list.Columns[0].Width + _list.Columns[1].Width + _list.Columns[2].Width;
+            var fill = _list.ClientSize.Width - used - 4;
+            if (fill > 140) _list.Columns[3].Width = fill;
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -67,9 +86,12 @@ namespace MusicBeePlugin.Settings
                 MultiSelect = false,
             };
             _list.Columns.Add("Time", 150);
-            _list.Columns.Add("IP address", 130);
-            _list.Columns.Add("Port", 60);
-            _list.Columns.Add("Reason", 180);
+            _list.Columns.Add("IP address", 120);
+            _list.Columns.Add("Port", 55);
+            // "Reason" fills the remaining width (its text is the widest column),
+            // and re-fills when the window is resized.
+            _list.Columns.Add("Reason", 200);
+            _list.Resize += (s, e) => SizeReasonColumn();
 
             // Shown in place of the list when there is nothing to display.
             _empty = new Label
@@ -85,20 +107,22 @@ namespace MusicBeePlugin.Settings
             listHost.Controls.Add(_list);
             listHost.Controls.Add(_empty);
 
+            // Equal explicit size + margin so the two buttons line up (AutoSize
+            // gave them different widths/heights and an uneven gap).
+            var buttonSize = new Size(84, 27);
             _clear = new Button
             {
                 Text = "Clear",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
+                Size = buttonSize,
+                Margin = new Padding(8, 0, 0, 0),
             };
             _clear.Click += (s, e) => ClearLog();
 
             var close = new Button
             {
                 Text = "Close",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Size = buttonSize,
+                Margin = new Padding(8, 0, 0, 0),
                 DialogResult = DialogResult.OK,
             };
             close.Click += (s, e) => Close();
