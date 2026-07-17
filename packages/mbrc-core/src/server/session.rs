@@ -18,8 +18,11 @@ use crate::nowplaying::NowPlayingCache;
 use crate::protocol::version::ProtocolVersion;
 use crate::providers::Providers;
 
-/// Protocol version this server speaks.
-pub const SERVER_PROTOCOL: u8 = 4;
+/// Highest protocol version this server speaks. The handshake reply echoes the
+/// client's negotiated version capped at this, so a V4 client is still told 4
+/// (unchanged) while a V5 iOS client is told 5 - which is what gates it into
+/// sending `nowplayingcurrentposition`.
+pub const MAX_PROTOCOL: u8 = 5;
 /// Minimum client protocol accepted; older clients are rejected at handshake.
 pub const MIN_PROTOCOL: u8 = 4;
 /// The identity the plugin reports for the `player` context.
@@ -197,9 +200,14 @@ impl Session {
             );
             return Outcome::close();
         };
-        // The handshake only accepts versions with a formatter; default to V4
-        // defensively so a command is never dropped over a version lookup.
-        let version = ProtocolVersion::from_negotiated(negotiated).unwrap_or(ProtocolVersion::V4);
+        // Effective version = negotiated capped at what we support (mirrors the
+        // handshake reply, which reports `min(version, MAX_PROTOCOL)`). A client
+        // that negotiates >MAX is told MAX and must be dispatched as MAX too, or
+        // it would send MAX-gated commands (e.g. `nowplayingcurrentposition`)
+        // that we'd silently drop. Default to V4 defensively if the lookup ever
+        // misses, so a command is never dropped over a version lookup.
+        let version = ProtocolVersion::from_negotiated(negotiated.min(MAX_PROTOCOL))
+            .unwrap_or(ProtocolVersion::V4);
         let platform = commands::Platform::from_name(self.platform.as_deref());
         let mut ctx = commands::Ctx::new(providers, version).with_platform(platform);
         if let Some(cache) = now_playing {
@@ -270,7 +278,8 @@ impl Session {
             self.protocol_version = Some(handshake.version);
             self.no_broadcast = handshake.no_broadcast;
             self.client_id = handshake.client_id;
-            Outcome::reply(frame("protocol", json!(SERVER_PROTOCOL)))
+            let reported = handshake.version.min(MAX_PROTOCOL);
+            Outcome::reply(frame("protocol", json!(reported)))
         }
     }
 }
@@ -375,6 +384,85 @@ mod tests {
         let (c, d) = ctx(&out.replies[0]);
         assert_eq!(c, "protocol");
         assert_eq!(d, json!(4));
+    }
+
+    #[test]
+    fn protocol_v5_is_reported_back_and_unlocks_current_position() {
+        let mut s = Session::default();
+        // iOS handshakes protocol_version 5 (bare int form).
+        let out = s.handle_frame(
+            r#"{"context":"protocol","data":5}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(s.protocol_version, Some(5));
+        let (c, d) = ctx(&out.replies[0]);
+        assert_eq!(c, "protocol");
+        assert_eq!(d, json!(5)); // echoed 5 gates iOS into sending currentposition
+
+        // The V5-only alias now dispatches and replies on `nowplayingposition`.
+        let reply = s.handle_frame(
+            r#"{"context":"nowplayingcurrentposition","data":"status"}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        let (rc, _) = ctx(&reply.replies[0]);
+        assert_eq!(rc, "nowplayingposition");
+    }
+
+    #[test]
+    fn future_version_is_capped_to_max_and_dispatched_as_max() {
+        // A client negotiating > MAX_PROTOCOL is told MAX in the reply, so it
+        // must also be dispatched as MAX - otherwise it sends MAX-gated commands
+        // (currentposition) that we'd drop, breaking effective = min(client, max).
+        let mut s = Session::default();
+        let out = s.handle_frame(
+            r#"{"context":"protocol","data":6}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(s.protocol_version, Some(6)); // raw negotiated is preserved
+        let (_, d) = ctx(&out.replies[0]);
+        assert_eq!(d, json!(MAX_PROTOCOL)); // but we report our cap (5)
+
+        // ...and the MAX-gated alias is honored, not dropped.
+        let reply = s.handle_frame(
+            r#"{"context":"nowplayingcurrentposition","data":"status"}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        let (rc, _) = ctx(&reply.replies[0]);
+        assert_eq!(rc, "nowplayingposition");
+    }
+
+    #[test]
+    fn current_position_is_dropped_in_a_v4_session() {
+        let mut s = Session::default();
+        s.handle_frame(
+            r#"{"context":"protocol","data":4}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        // A v4 session doesn't know the alias: no reply frame is produced.
+        let reply = s.handle_frame(
+            r#"{"context":"nowplayingcurrentposition","data":"status"}"#,
+            &NullProviders,
+            None,
+            None,
+            None,
+        );
+        assert!(reply.replies.is_empty());
+        assert!(!reply.close);
     }
 
     #[test]

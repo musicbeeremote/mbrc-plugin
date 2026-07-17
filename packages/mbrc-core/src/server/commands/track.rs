@@ -40,6 +40,14 @@ pub fn position(data: &Value, p: &dyn Providers) -> HandlerResult {
     frame_dto("nowplayingposition", &p.playback_position()?)
 }
 
+/// V5 iOS `nowplayingcurrentposition` alias: report the current `{current,total}`
+/// on the `nowplayingposition` context. Query-only - unlike `position` it never
+/// seeks, matching the C# `RequestCurrentPosition`, which ignores the payload and
+/// always reports.
+pub fn current_position(p: &dyn Providers) -> HandlerResult {
+    frame_dto("nowplayingposition", &p.playback_position()?)
+}
+
 /// Now-playing cover on request. The C# host hands over the raw MusicBee
 /// artwork; the core owns sizing and resizes it to the 600px now-playing
 /// default (matching the shipped plugin). On any resize failure we log and send
@@ -170,6 +178,17 @@ mod tests {
         assert_eq!(out[0].0, "nowplayingposition");
         assert!(m.recorded().contains(&"set_position(120000)".to_string()));
         assert!(m.recorded().contains(&"playback_position".to_string()));
+    }
+
+    #[test]
+    fn current_position_replies_on_position_context_without_seeking() {
+        // The V5 alias is query-only: it reports on `nowplayingposition` and
+        // never calls set_position, unlike the seek-or-query `position`.
+        let m = MockProviders::default();
+        let out = current_position(&m).unwrap();
+        assert_eq!(out[0].0, "nowplayingposition");
+        assert!(m.recorded().contains(&"playback_position".to_string()));
+        assert!(!m.recorded().iter().any(|c| c.starts_with("set_position")));
     }
 
     #[test]

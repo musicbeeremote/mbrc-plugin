@@ -324,9 +324,23 @@ All maintained V4 contexts, organized by category.
 
 ### Version 4 (maintained baseline)
 
-The maintained protocol and the sole surface documented here. V4 uses object payloads,
+The maintained protocol and the primary surface documented here. V4 uses object payloads,
 pagination, string-typed player fields, and the full player / now playing / library /
-playlist surface. Every command in this document is V4.
+playlist surface. Every command in this document is V4 unless explicitly marked V5.
+
+### Version 5 (iOS compatibility)
+
+V5 is byte-identical to V4 on the wire plus **one** extra client-to-server command:
+`nowplayingcurrentposition` (see [Current Position (V5, iOS)](#current-position-v5-ios)).
+It exists purely for compatibility with the iOS client, which handshakes
+`protocol_version: 5` and, when the server also reports `>= 5`, polls current position on
+this context instead of `nowplayingposition`. The reply is identical to
+`nowplayingposition` - it is a thin alias, not a new payload.
+
+The server reports `min(client_version, 5)` in its handshake reply (the effective protocol
+is the minimum of client and server). So a V4 client is still told `4` and never sees V5
+behavior; only a client that negotiates `>= 5` unlocks the alias. The alias is rejected
+(dropped) in a V4 session.
 
 ### Legacy (V2 / V2.1 / V3)
 
@@ -882,6 +896,39 @@ Switches to a specific output device by name. Responds on the `playeroutput` con
 ```
 
 **Response:**
+```json
+{
+  "context": "nowplayingposition",
+  "data": {
+    "current": 120000,
+    "total": 245000
+  }
+}
+```
+
+---
+
+#### Current Position (V5, iOS)
+| Property | Value |
+|----------|-------|
+| Context | `nowplayingcurrentposition` |
+| Clients | iOS (V5 only) |
+| Broadcast | No |
+
+**iOS-compatibility alias, V5 only.** The iOS client polls the current position on this
+context once the server reports protocol `>= 5`. It is a query-only alias: the payload is
+ignored (it never seeks) and the reply is emitted on the `nowplayingposition` context with
+the same `{current,total}` shape. A V4 session does not accept it (the frame is dropped).
+
+**Request:**
+```json
+{
+  "context": "nowplayingcurrentposition",
+  "data": null
+}
+```
+
+**Response** (note the `nowplayingposition` context):
 ```json
 {
   "context": "nowplayingposition",

@@ -278,6 +278,12 @@ pub fn dispatch(ctx: &Ctx, context: &str, data: &Value) -> Option<HandlerResult>
         "nowplayingrating" => track::rating(data, ctx),
         "nowplayinglfmrating" => track::lfm_rating(data, ctx),
         "nowplayingtagchange" => track::tag_change(data, p),
+        // V5-only iOS alias. Deliberately NOT in DISPATCHED_CONTEXTS (the V4
+        // surface): it never fires in a V4 session, replies on the existing
+        // `nowplayingposition` context.
+        "nowplayingcurrentposition" if ctx.version.accepts_current_position() => {
+            track::current_position(p)
+        }
         "nowplayinglist" => nowplaying_list::list(data, ctx),
         "nowplayinglistplay" => nowplaying_list::play(data, ctx),
         "nowplayinglistremove" => nowplaying_list::remove(data, p),
@@ -321,6 +327,21 @@ mod audit {
                 "no dispatch arm for declared context {context}"
             );
         }
+    }
+
+    #[test]
+    fn current_position_alias_is_v5_only() {
+        let providers = crate::providers::NullProviders;
+        // V4 session: the alias is unknown (no arm), so dispatch returns None -
+        // it stays out of the V4 surface.
+        let v4 = Ctx::new(&providers, ProtocolVersion::V4);
+        assert!(dispatch(&v4, "nowplayingcurrentposition", &Value::Null).is_none());
+        // V5 session: the alias dispatches and replies on `nowplayingposition`.
+        let v5 = Ctx::new(&providers, ProtocolVersion::V5);
+        let out = dispatch(&v5, "nowplayingcurrentposition", &Value::Null)
+            .expect("v5 dispatches the alias")
+            .expect("handler succeeds");
+        assert_eq!(out[0].0, "nowplayingposition");
     }
 
     // ── Lenient coercion (C# `ToObject<T>()` parity) ──
