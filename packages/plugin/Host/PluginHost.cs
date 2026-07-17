@@ -98,6 +98,15 @@ namespace MusicBeePlugin.Host
         public bool RebuildCovers() => _bridge.RebuildCovers();
 
         /// <summary>
+        ///     Recent rejected connection attempts (newest first) for the settings
+        ///     panel's blocked-connections view. Never null.
+        /// </summary>
+        public List<BlockedConnection> ReadBlockedConnections() => _bridge.ReadBlockedConnections();
+
+        /// <summary>Clear the core's in-memory blocked-connection log.</summary>
+        public bool ClearBlockedConnections() => _bridge.ClearBlockedConnections();
+
+        /// <summary>
         ///     Core -> host push events (raised on a background thread). The
         ///     settings panel subscribes to refresh its cache line when a rebuild
         ///     starts/finishes. Forwarded from the native bridge.

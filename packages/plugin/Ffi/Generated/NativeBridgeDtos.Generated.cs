@@ -275,4 +275,12 @@ namespace MusicBeePlugin.Ffi
         public long updated_since { get; set; }
     }
 
+    public class BlockedConnection
+    {
+        public long unix_ms { get; set; }
+        public string ip { get; set; }
+        public ushort port { get; set; }
+        public string reason { get; set; }
+    }
+
 }

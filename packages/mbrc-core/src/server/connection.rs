@@ -169,6 +169,11 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                             client_id = session.client_id.as_deref().unwrap_or("none"),
                             "rejecting connection: per-client cap reached"
                         );
+                        core.blocked.record(
+                            peer.ip(),
+                            peer.port(),
+                            crate::server::blocked::BlockReason::PerClientCap,
+                        );
                         closing = true;
                         break;
                     }

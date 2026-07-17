@@ -190,12 +190,17 @@ pub enum CommandType {
 pub enum HostQueryType {
     /// Cache health for the settings panel (covers cached, building, ready).
     CacheStatus = 1,
+    /// Recently rejected connection attempts (address filter / caps) for the
+    /// settings panel's "Blocked connections" view. Returns a MessagePack array
+    /// of `BlockedConnection`, newest first.
+    RecentBlocked = 2,
 }
 
 impl HostQueryType {
     pub fn from_i32(value: i32) -> Option<Self> {
         match value {
             1 => Some(Self::CacheStatus),
+            2 => Some(Self::RecentBlocked),
             _ => None,
         }
     }
@@ -214,6 +219,8 @@ pub enum HostCommandType {
     /// Rebuild only the cover cache in the background. Expensive - re-fetches and
     /// re-resizes artwork per album.
     RebuildCovers = 2,
+    /// Clear the in-memory blocked-connection log (the panel's "Clear" button).
+    ClearBlockedLog = 3,
 }
 
 impl HostCommandType {
@@ -221,6 +228,7 @@ impl HostCommandType {
         match value {
             1 => Some(Self::RebuildMetadata),
             2 => Some(Self::RebuildCovers),
+            3 => Some(Self::ClearBlockedLog),
             _ => None,
         }
     }
@@ -325,7 +333,12 @@ mod tests {
     #[test]
     fn host_enums_roundtrip_and_reject_unknown() {
         assert_eq!(HostQueryType::from_i32(1), Some(HostQueryType::CacheStatus));
+        assert_eq!(
+            HostQueryType::from_i32(2),
+            Some(HostQueryType::RecentBlocked)
+        );
         assert_eq!(HostQueryType::from_i32(0), None);
+        assert_eq!(HostQueryType::from_i32(3), None);
         assert_eq!(
             HostCommandType::from_i32(1),
             Some(HostCommandType::RebuildMetadata)
@@ -334,7 +347,11 @@ mod tests {
             HostCommandType::from_i32(2),
             Some(HostCommandType::RebuildCovers)
         );
-        assert_eq!(HostCommandType::from_i32(3), None);
+        assert_eq!(
+            HostCommandType::from_i32(3),
+            Some(HostCommandType::ClearBlockedLog)
+        );
+        assert_eq!(HostCommandType::from_i32(4), None);
         // HostEventType is core -> host (no from_i32), but its contract value is
         // still pinned so the C# enum stays in sync.
         assert_eq!(HostEventType::CacheStatusChanged as i32, 1);

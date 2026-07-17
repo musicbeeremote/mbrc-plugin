@@ -107,12 +107,14 @@ namespace MusicBeePlugin.Ffi.Generated
     public enum HostQueryType
     {
         CacheStatus = 1,
+        RecentBlocked = 2,
     }
 
     public enum HostCommandType
     {
         RebuildMetadata = 1,
         RebuildCovers = 2,
+        ClearBlockedLog = 3,
     }
 
     public enum HostEventType

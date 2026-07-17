@@ -143,3 +143,21 @@ pub struct PathsParams {
 pub struct SyncDeltaParams {
     pub updated_since: i64,
 }
+
+/// A rejected inbound connection attempt, surfaced to the settings panel's
+/// "Blocked connections" view (result of the `RecentBlocked` host query). Unlike
+/// the params above this is a Rust -> C# *result*; the C# side reads a
+/// `List<BlockedConnection>`. In-memory only (see [`crate::server::blocked`]).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedConnection {
+    /// When the attempt was rejected, Unix epoch milliseconds (UTC). C# renders
+    /// it in local time.
+    pub unix_ms: i64,
+    /// The rejected peer's IP address (textual form).
+    pub ip: String,
+    /// The rejected peer's source port.
+    pub port: u16,
+    /// Human-readable reason (e.g. "Address not allowed", "Too many connections
+    /// from this address").
+    pub reason: String,
+}

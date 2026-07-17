@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -370,6 +371,17 @@ namespace MusicBeePlugin.Ffi
 
         /// <summary>Trigger a background rebuild of the cover cache.</summary>
         public bool RebuildCovers() => Command(HostCommandType.RebuildCovers);
+
+        /// <summary>
+        ///     Recent rejected connection attempts (newest first) for the settings
+        ///     panel's blocked-connections view. Never null - an empty or
+        ///     unavailable log yields an empty list.
+        /// </summary>
+        public List<BlockedConnection> ReadBlockedConnections() =>
+            Query<List<BlockedConnection>>(HostQueryType.RecentBlocked) ?? new List<BlockedConnection>();
+
+        /// <summary>Clear the core's in-memory blocked-connection log.</summary>
+        public bool ClearBlockedConnections() => Command(HostCommandType.ClearBlockedLog);
 
         /// <summary>
         ///     Apply the log level to the core's filter live (no restart needed).

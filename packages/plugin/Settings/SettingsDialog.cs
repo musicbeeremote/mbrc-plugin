@@ -57,11 +57,13 @@ namespace MusicBeePlugin.Settings
         private TextBox _baseIp;
         private NumericUpDown _lastOctet;
         private TextBox _allowedAddresses;
+        private Button _blockedBtn;
         private ComboBox _searchSource;
         private ComboBox _logLevel;
         private CheckBox _firewall;
         private Label _status;
         private Label _cacheStatus;
+        private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
         private Button _rebuildCovers;
 
@@ -82,16 +84,26 @@ namespace MusicBeePlugin.Settings
             BuildLayout();
             LoadFromCore();
             LoadCacheStatus();
+            LoadBlockedCount();
             RunConnectionTest();
 
             // The core pushes a CacheStatusChanged event when a rebuild starts or
             // finishes; refresh the line live while this dialog is open.
             _host.CoreEvent += OnCoreEvent;
+
+            // The blocked-connections log has no push event (it is polled), so keep
+            // the count button current while this panel is open: a device blocked
+            // during troubleshooting bumps the number without reopening.
+            _blockedTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            _blockedTimer.Tick += (s, e) => LoadBlockedCount();
+            _blockedTimer.Start();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             _host.CoreEvent -= OnCoreEvent;
+            _blockedTimer?.Stop();
+            _blockedTimer?.Dispose();
             base.OnFormClosed(e);
         }
 
@@ -192,6 +204,20 @@ namespace MusicBeePlugin.Settings
                 Anchor = AnchorStyles.Left,
             };
 
+            // A count-only button that opens the blocked-connections view; kept
+            // out of the main layout so the panel stays uncluttered when nothing
+            // is being blocked. Disabled (greyed) while the count is zero.
+            _blockedBtn = new Button
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0),
+                Enabled = false,
+                Text = "Blocked connections (0)",
+            };
+            _blockedBtn.Click += (s, e) => ShowBlockedConnections();
+
             var layout = GroupLayout();
             AddRow(layout, "Allowed clients", _filterMode);
             AddRow(layout, "Range (base IPv4)", rangePanel);
@@ -203,6 +229,7 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
                 Anchor = AnchorStyles.Left,
             });
+            AddRow(layout, "Blocked", _blockedBtn);
             return WrapGroup("Access control", layout);
         }
 
@@ -485,6 +512,31 @@ namespace MusicBeePlugin.Settings
         {
             _rebuildMeta.Enabled = enabled;
             _rebuildCovers.Enabled = enabled;
+        }
+
+        /// <summary>
+        ///     Refresh the "Blocked connections (N)" button from the core's
+        ///     in-memory log. The button opens the detail view; it is greyed while
+        ///     the log is empty.
+        /// </summary>
+        private void LoadBlockedCount()
+        {
+            var count = _host.ReadBlockedConnections().Count;
+            _blockedBtn.Text = $"Blocked connections ({count})";
+            _blockedBtn.Enabled = count > 0;
+        }
+
+        /// <summary>
+        ///     Open the modal blocked-connections view, then refresh the count
+        ///     button (the view can clear the log).
+        /// </summary>
+        private void ShowBlockedConnections()
+        {
+            using (var dialog = new BlockedConnectionsDialog(_host))
+            {
+                dialog.ShowDialog(this);
+            }
+            LoadBlockedCount();
         }
 
         // Self-test: connect to the running server on loopback and round-trip a

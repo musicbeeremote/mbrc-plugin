@@ -16,6 +16,7 @@ use crate::ffi::types::{HostCommandType, HostQueryType, MbrcResult, Notification
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
+use crate::server::blocked::BlockedLog;
 use crate::server::broadcaster::Broadcaster;
 use crate::server::registry::ConnectionRegistry;
 use crate::server::{self, notifications, NetHandle, RebuildScope};
@@ -42,6 +43,9 @@ pub struct Core {
     /// Bounds concurrent connections (per IP + per client_id) and supersedes a
     /// stale main socket on reconnect.
     pub registry: Arc<ConnectionRegistry>,
+    /// Recent rejected connection attempts (address filter / caps), surfaced to
+    /// the settings panel. In-memory ring buffer, not persisted.
+    pub blocked: BlockedLog,
     conn_counter: AtomicU64,
     /// Wakes the background library Scanner to run a delta sooner. A library
     /// change notification (`FileAddedToLibrary`) is a debounced nudge on this,
@@ -72,6 +76,7 @@ impl Core {
             metadata_cache,
             reconciling: AtomicBool::new(false),
             registry,
+            blocked: BlockedLog::default(),
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
         }
@@ -188,6 +193,7 @@ struct CacheStatus {
 pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
     match kind {
         HostQueryType::CacheStatus => cache_status_bytes(),
+        HostQueryType::RecentBlocked => recent_blocked_bytes(),
     }
 }
 
@@ -197,6 +203,7 @@ pub fn host_command(kind: HostCommandType, _params: &[u8]) -> MbrcResult {
     match kind {
         HostCommandType::RebuildMetadata => rebuild(RebuildScope::Metadata),
         HostCommandType::RebuildCovers => rebuild(RebuildScope::Covers),
+        HostCommandType::ClearBlockedLog => clear_blocked(),
     }
 }
 
@@ -215,6 +222,29 @@ fn cache_status_bytes() -> Option<Vec<u8>> {
         metadata_ready: core.metadata_cache.is_validated(),
     };
     rmp_serde::to_vec_named(&status).ok()
+}
+
+/// Serialize the recent blocked-connection entries (newest first) as MessagePack
+/// for the settings panel. `None` if the core is not initialized; an empty log
+/// serializes to an empty array (not `None`).
+fn recent_blocked_bytes() -> Option<Vec<u8>> {
+    let core = {
+        let guard = lock();
+        guard.as_ref()?.core.clone()
+    };
+    rmp_serde::to_vec_named(&core.blocked.recent()).ok()
+}
+
+/// Clear the in-memory blocked-connection log (the panel's "Clear" button).
+fn clear_blocked() -> MbrcResult {
+    let guard = lock();
+    match guard.as_ref() {
+        Some(runtime) => {
+            runtime.core.blocked.clear();
+            MbrcResult::Ok
+        }
+        None => MbrcResult::NotInitialized,
+    }
 }
 
 /// Kick a background rebuild of the requested cache (the settings panel's per-

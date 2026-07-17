@@ -2,6 +2,7 @@
 //! connections and (Slice 3) fans out broadcasts. The pure handshake/dispatch
 //! logic lives in [`session`]; the per-connection IO in [`connection`].
 
+pub mod blocked;
 pub mod broadcaster;
 pub mod commands;
 pub mod connection;
@@ -339,6 +340,11 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                 // shipped plugin - so the app shows "not allowed", not a silent drop.
                 if !core.config.is_client_allowed(peer.ip()) {
                     tracing::debug!(%peer, "rejecting client: address not allowed");
+                    core.blocked.record(
+                        peer.ip(),
+                        peer.port(),
+                        blocked::BlockReason::AddressNotAllowed,
+                    );
                     tokio::spawn(reject_client(stream));
                     continue;
                 }
@@ -346,6 +352,8 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                 // so it pairs with the release after the connection ends.
                 if !core.registry.try_admit_ip(peer.ip()) {
                     tracing::debug!(%peer, "rejecting client: per-IP connection cap reached");
+                    core.blocked
+                        .record(peer.ip(), peer.port(), blocked::BlockReason::PerIpCap);
                     tokio::spawn(reject_client(stream));
                     continue;
                 }
