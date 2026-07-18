@@ -84,6 +84,14 @@ impl Db {
         if storage_path.is_empty() {
             return Db(None);
         }
+        // Ensure the storage directory exists before redb tries to create the
+        // file in it. MusicBee's persistent-storage path normally exists, but on
+        // a portable install pointed at a not-yet-created path this turns a
+        // silent "persistence disabled" into a working cache. Best-effort: a
+        // failure here just falls through to the graceful degrade below.
+        if let Err(e) = std::fs::create_dir_all(storage_path) {
+            tracing::warn!(error = %e, path = storage_path, "could not create storage dir");
+        }
         let path = Path::new(storage_path).join("mbrc.redb");
         match Self::create_db(&path) {
             Ok(db) => Db(Some(Arc::new(db))),
@@ -271,6 +279,20 @@ mod tests {
             Ok(t.get("k")?.map(|g| g.value().to_string()))
         });
         assert_eq!(got, Some(Some("hash".to_string())));
+    }
+
+    #[test]
+    fn open_creates_missing_storage_dir() {
+        // A storage path whose (nested) directory does not exist yet must be
+        // created, not silently degrade to persistence-disabled - the robustness
+        // side of issue #123 (portable install, missing cache dir).
+        let base = temp_dir("missing-parent");
+        let nested = base.join("deep").join("not-there");
+        assert!(!nested.exists());
+
+        let db = Db::open(nested.to_str().unwrap());
+        assert!(db.is_active(), "persistence should be enabled");
+        assert!(nested.join("mbrc.redb").exists());
     }
 
     #[test]
