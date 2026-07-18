@@ -57,7 +57,13 @@ namespace MusicBeePlugin
             _about.Revision = Convert.ToInt16(version.Build);
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
-            _about.ReceiveNotifications = ReceiveNotificationFlags.PlayerEvents;
+            // PlayerEvents drives the now-playing/transport broadcasts; TagEvents
+            // delivers the library-change notifications the Scanner reacts to
+            // (FileAddedToLibrary, TagsChanged, FileDeleted, LibrarySwitched) so a
+            // tag/artwork edit refreshes the metadata + cover caches without a
+            // restart. Unhandled types are ignored in ReceiveNotification.
+            _about.ReceiveNotifications =
+                ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents;
             // Non-zero height tells MusicBee this plugin has a preferences panel;
             // MusicBee then calls Configure(panelHandle) to populate it. The panel
             // now holds only a Configure button, so it needs little room.
@@ -230,6 +236,12 @@ namespace MusicBeePlugin
                     coreType = FfiGen.NotificationType.NowPlayingListChanged;
                     break;
                 case NotificationType.FileAddedToLibrary:
+                // Tag edits (artwork included) and deletions change the library
+                // exactly like an add from the core's view: nudge the Scanner to
+                // run a metadata + cover delta. Mapped to the same core
+                // notification so no extra FFI variant is needed.
+                case NotificationType.TagsChanged:
+                case NotificationType.FileDeleted:
                     coreType = FfiGen.NotificationType.FileAddedToLibrary;
                     break;
                 case NotificationType.LibrarySwitched:

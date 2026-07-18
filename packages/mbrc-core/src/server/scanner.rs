@@ -44,7 +44,10 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
             _ = core.scanner_nudge.notified() => {
                 // Debounce: let a burst of per-file nudges settle before scanning.
                 tokio::time::sleep(Duration::from_secs(DEBOUNCE_SECS)).await;
-                scan(&core).await;
+                // A nudge means the library actually changed (a file was added,
+                // its tags edited, or it was deleted), so refresh the cover cache
+                // too - the only place a runtime artwork edit reaches the grid.
+                scan(&core, true).await;
             }
             _ = interval.tick() => {
                 if core.broadcaster.client_count() > 0 {
@@ -58,7 +61,10 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
                         clients = core.broadcaster.client_count(),
                         "core memory sample"
                     );
-                    scan(&core).await;
+                    // Periodic safety net for metadata only; the album cover
+                    // delta rides the nudge path (an explicit change signal), so
+                    // an idle tick never does the extra album-enumeration FFI.
+                    scan(&core, false).await;
                 }
             }
         }
@@ -66,16 +72,29 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
 }
 
 /// Run one delta pass on a blocking worker, under the reconcile single-flight
-/// guard (so it never races an init/library-switch rebuild).
-async fn scan(core: &Arc<Core>) {
+/// guard (so it never races an init/library-switch rebuild). When `covers` is
+/// set (the nudge path), the album cover cache is delta-refreshed too.
+async fn scan(core: &Arc<Core>, covers: bool) {
+    use crate::ffi::types::HostEventType;
+
     let core = core.clone();
     let _ = tokio::task::spawn_blocking(move || {
         if !core.try_begin_reconcile() {
             tracing::debug!("scanner: reconcile in progress; skipping delta");
             return;
         }
+        // Tell the settings panel a scan is running (its cache-status line reads
+        // `is_reconciling`), matching what a manual rebuild emits. Paired with the
+        // finish event below so the line clears once the delta completes.
+        core.providers
+            .emit_event(HostEventType::CacheStatusChanged, &[]);
         commands::library::refresh_library_delta(&core.metadata_cache, core.providers.as_ref());
+        if covers {
+            super::refresh_covers_delta(&core);
+        }
         core.end_reconcile();
+        core.providers
+            .emit_event(HostEventType::CacheStatusChanged, &[]);
     })
     .await;
 }

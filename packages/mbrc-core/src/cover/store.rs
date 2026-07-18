@@ -595,4 +595,59 @@ mod tests {
 
         assert!(!orphan.exists(), "orphaned cover file should be pruned");
     }
+
+    #[test]
+    fn deleting_one_album_keeps_a_cover_another_album_still_uses() {
+        // Two albums whose artwork resizes to identical bytes share ONE
+        // content-hashed file. Removing one album (its last track deleted, so it
+        // drops out of the album list) must NOT delete that file while the other
+        // album still references it - and must delete it once nothing does. This
+        // is the deletion-safety the Scanner's nudge-path cover delta relies on.
+        let (db, dir) = temp_storage("shared-delete");
+        let store = CoverStore::new(db.clone(), &dir);
+        let art = jpeg_bytes(200, 200);
+
+        store.warm_up(&[
+            AlbumIdentity {
+                key: "alb1".into(),
+                path: "/a.mp3".into(),
+                modified: 0,
+            },
+            AlbumIdentity {
+                key: "alb2".into(),
+                path: "/b.mp3".into(),
+                modified: 0,
+            },
+        ]);
+        store.build(|_| Some(art.clone()), false);
+
+        // Same artwork -> same hash -> one shared file referenced by both albums.
+        let hash = store.hash_for("alb1").expect("alb1 cached");
+        assert_eq!(store.hash_for("alb2"), Some(hash.clone()), "shared hash");
+        assert!(store.cover_file(&hash).exists());
+
+        // Delete alb2 (gone from the album list). alb1 still holds the hash, so a
+        // re-warm + build keeps the shared file.
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&[AlbumIdentity {
+            key: "alb1".into(),
+            path: "/a.mp3".into(),
+            modified: 0,
+        }]);
+        store.build(|_| Some(art.clone()), false);
+        assert_eq!(store.hash_for("alb2"), None, "deleted album key dropped");
+        assert!(
+            store.cover_file(&hash).exists(),
+            "shared cover file must survive while another album uses it"
+        );
+
+        // Delete alb1 too: nothing references the hash now, so it is pruned.
+        let store = CoverStore::new(db, &dir);
+        store.warm_up(&[]);
+        store.build(|_| Some(art.clone()), false);
+        assert!(
+            !store.cover_file(&hash).exists(),
+            "cover file pruned once no album references it"
+        );
+    }
 }

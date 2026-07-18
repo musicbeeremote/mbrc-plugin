@@ -316,6 +316,80 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     core.end_reconcile();
 }
 
+/// Incremental album-cover refresh, run from the Scanner's nudge path (a
+/// `FileAddedToLibrary` / `TagsChanged` / `FileDeleted` notification). Unlike
+/// [`run_reconcile`] this does no metadata work and stays quiet: it only
+/// broadcasts `librarycovercachebuildstatus` when the cached cover set actually
+/// changed, so a nudge that touched no artwork produces no client traffic and no
+/// status-bar churn.
+///
+/// The delta is entirely `warm_up` + `build`:
+/// - `warm_up` re-maps album keys from the live `album_identifiers` and drops the
+///   covers of albums that were modified (artwork edited) or removed (last track
+///   deleted). An album key survives while any track keeps it in the library, and
+///   `prune_orphans` only deletes a content-hashed file once no key references it,
+///   so a delete never removes a cover another album still uses.
+/// - `build` refetches the dropped/new albums' artwork.
+///
+/// The caller must already hold the reconcile single-flight guard (the Scanner
+/// does), so this can't race an init/library-switch/manual rebuild.
+pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
+    use crate::cover::{cover_identifier, from_base64, store::AlbumIdentity};
+
+    let identities: Vec<AlbumIdentity> = match core.providers.album_identifiers() {
+        Ok(identifiers) => identifiers
+            .into_iter()
+            .map(|a| AlbumIdentity {
+                key: cover_identifier(&a.artist, &a.album),
+                path: a.path,
+                modified: a.modified,
+            })
+            .collect(),
+        Err(e) => {
+            tracing::warn!(error = %e, "cover delta: album enumeration failed");
+            return;
+        }
+    };
+
+    // `dropped` (covers invalidated by an edit/delete) plus `stored` (covers
+    // (re)fetched) together tell us whether the grid changed. A pure deletion
+    // drops without storing; a new album with art stores without dropping.
+    let before = core.cover_store.cached_count();
+    core.cover_store.warm_up(&identities);
+    let kept = core.cover_store.cached_count();
+    let dropped = before.saturating_sub(kept);
+
+    let providers = core.providers.clone();
+    let stats = core.cover_store.build(
+        |path| {
+            let b64 = providers.artwork_raw(path).ok()?;
+            if b64.is_empty() {
+                return None;
+            }
+            from_base64(&b64)
+        },
+        core.config.log_level.is_trace(),
+    );
+
+    let changed = dropped > 0 || stats.stored > 0;
+    tracing::debug!(
+        albums = identities.len(),
+        dropped,
+        stored = stats.stored,
+        cached = core.cover_store.cached_count(),
+        changed,
+        "cover delta complete"
+    );
+    if changed {
+        // A single `false` frame means "cover cache updated, refetch the grid" -
+        // the same signal the init/switch build sends on completion.
+        core.broadcaster.broadcast(&[notifications::frame(
+            "librarycovercachebuildstatus",
+            serde_json::json!(false),
+        )]);
+    }
+}
+
 /// RAII release of a reserved per-IP connection slot. Dropping it (normal end
 /// OR a panic unwinding the connection task) returns the slot to the registry,
 /// so a panicking connection can't slowly exhaust an IP's cap.
@@ -382,4 +456,64 @@ async fn reject_client(mut stream: tokio::net::TcpStream) {
     let frame = mbrc_wire::frame_line(&notifications::frame("notallowed", serde_json::json!("")));
     let _ = stream.write_all(frame.as_bytes()).await;
     let _ = stream.shutdown().await;
+}
+
+#[cfg(test)]
+mod cover_delta_tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::protocol::messages::AlbumIdentifier;
+    use crate::providers::MockProviders;
+    use tokio::sync::mpsc;
+
+    /// Build a `Core` on a fresh temp storage dir with a mock host that returns
+    /// `albums` for the album scan and one canned JPEG for every artwork fetch.
+    fn temp_core(name: &str, albums: Vec<AlbumIdentifier>) -> Arc<Core> {
+        let dir = std::env::temp_dir().join(format!("mbrc-cover-delta-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mock = MockProviders {
+            album_identifiers: albums,
+            artwork_raw: crate::cover::to_base64(&crate::cover::test_jpeg_bytes(300, 300)),
+            ..MockProviders::default()
+        };
+        let config = Config {
+            storage_path: dir.to_string_lossy().into_owned(),
+            ..Config::default()
+        };
+        Arc::new(Core::new(Arc::new(mock), config))
+    }
+
+    fn album(artist: &str, name: &str, path: &str, modified: i64) -> AlbumIdentifier {
+        AlbumIdentifier {
+            artist: artist.into(),
+            album: name.into(),
+            path: path.into(),
+            modified,
+        }
+    }
+
+    /// The nudge-path cover delta broadcasts `librarycovercachebuildstatus` only
+    /// when the cached cover set actually changed: once for the initial build,
+    /// then silence on a re-run that touched nothing (issue #91's requirement -
+    /// no idle-nudge spam to connected clients).
+    #[test]
+    fn broadcasts_on_change_and_stays_silent_otherwise() {
+        let core = temp_core("gate", vec![album("Artist", "Album", "/a.mp3", 0)]);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        core.broadcaster.register(1, tx);
+
+        // First pass builds the album's cover -> grid changed -> one status frame.
+        refresh_covers_delta(&core);
+        let frame = rx.try_recv().expect("a built cover must broadcast");
+        assert!(frame.contains("librarycovercachebuildstatus"), "{frame}");
+        assert!(rx.try_recv().is_err(), "exactly one frame for one change");
+
+        // Second pass: same unmodified album -> nothing dropped, nothing built.
+        refresh_covers_delta(&core);
+        assert!(
+            rx.try_recv().is_err(),
+            "an unchanged cover delta must not broadcast"
+        );
+    }
 }
