@@ -40,46 +40,57 @@ namespace MusicBeePlugin
         /// <returns></returns>
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
-            _api = new MusicBeeApiInterface();
-            _api.Initialise(apiInterfacePtr);
+            // MusicBee calls this directly; an exception escaping here would take
+            // the host down. The whole body is guarded so a failure leaves the
+            // plugin degraded (remote off) but MusicBee running, returning the
+            // (field-initialized) _about either way.
+            try
+            {
+                _api = new MusicBeeApiInterface();
+                _api.Initialise(apiInterfacePtr);
 
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-            _version = version.ToString();
+                var version = Assembly.GetExecutingAssembly().GetName().Version;
+                _version = version.ToString();
 
-            _about.PluginInfoVersion = PluginInfoVersion;
-            _about.Name = "MusicBee Remote: Plugin";
-            _about.Description = "Remote Control for server to be used with android application.";
-            _about.Author = "Konstantinos Paparas (aka Kelsos)";
-            _about.TargetApplication = "MusicBee Remote";
-            _about.Type = PluginType.General;
-            _about.VersionMajor = Convert.ToInt16(version.Major);
-            _about.VersionMinor = Convert.ToInt16(version.Minor);
-            _about.Revision = Convert.ToInt16(version.Build);
-            _about.MinInterfaceVersion = MinInterfaceVersion;
-            _about.MinApiRevision = MinApiRevision;
-            // PlayerEvents drives the now-playing/transport broadcasts; TagEvents
-            // delivers the library-change notifications the Scanner reacts to
-            // (FileAddedToLibrary, TagsChanged, FileDeleted, LibrarySwitched) so a
-            // tag/artwork edit refreshes the metadata + cover caches without a
-            // restart. Unhandled types are ignored in ReceiveNotification.
-            _about.ReceiveNotifications =
-                ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents;
-            // Non-zero height tells MusicBee this plugin has a preferences panel;
-            // MusicBee then calls Configure(panelHandle) to populate it. The panel
-            // now holds only a Configure button, so it needs little room.
-            _about.ConfigurationPanelHeight = 120;
+                _about.PluginInfoVersion = PluginInfoVersion;
+                _about.Name = "MusicBee Remote: Plugin";
+                _about.Description = "Remote Control for server to be used with android application.";
+                _about.Author = "Konstantinos Paparas (aka Kelsos)";
+                _about.TargetApplication = "MusicBee Remote";
+                _about.Type = PluginType.General;
+                _about.VersionMajor = Convert.ToInt16(version.Major);
+                _about.VersionMinor = Convert.ToInt16(version.Minor);
+                _about.Revision = Convert.ToInt16(version.Build);
+                _about.MinInterfaceVersion = MinInterfaceVersion;
+                _about.MinApiRevision = MinApiRevision;
+                // PlayerEvents drives the now-playing/transport broadcasts; TagEvents
+                // delivers the library-change notifications the Scanner reacts to
+                // (FileAddedToLibrary, TagsChanged, FileDeleted, LibrarySwitched) so a
+                // tag/artwork edit refreshes the metadata + cover caches without a
+                // restart. Unhandled types are ignored in ReceiveNotification.
+                _about.ReceiveNotifications =
+                    ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents;
+                // Non-zero height tells MusicBee this plugin has a preferences panel;
+                // MusicBee then calls Configure(panelHandle) to populate it. The panel
+                // now holds only a Configure button, so it needs little room.
+                _about.ConfigurationPanelHeight = 120;
 
-            if (_api.ApiRevision < MinApiRevision)
-                return _about;
+                if (_api.ApiRevision < MinApiRevision)
+                    return _about;
 
-            InitializeHost(version);
+                InitializeHost(version);
 
-            // A Tools menu entry opens the same settings dialog as the Configure
-            // button, matching the classic plugin's layout.
-            _api.MB_AddMenuItem(
-                "mnuTools/MusicBee Remote",
-                "MusicBee Remote: open settings",
-                (sender, args) => OpenSettingsDialog());
+                // A Tools menu entry opens the same settings dialog as the Configure
+                // button, matching the classic plugin's layout.
+                _api.MB_AddMenuItem(
+                    "mnuTools/MusicBee Remote",
+                    "MusicBee Remote: open settings",
+                    (sender, args) => OpenSettingsDialog());
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("FATAL: Plugin Initialise failed", ex);
+            }
 
             return _about;
         }
@@ -93,8 +104,18 @@ namespace MusicBeePlugin
             if (_host == null)
                 return;
 
-            using (var dialog = new SettingsDialog(_host, _version))
-                dialog.ShowDialog();
+            // Invoked by MusicBee (Tools-menu callback) and by the Configure
+            // button; guard so a dialog-construction failure never escapes to the
+            // host.
+            try
+            {
+                using (var dialog = new SettingsDialog(_host, _version))
+                    dialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Settings dialog failed", ex);
+            }
         }
 
         /// <summary>
@@ -114,23 +135,33 @@ namespace MusicBeePlugin
             {
                 // Log the error to a fallback location and ensure the plugin
                 // never crashes MusicBee.
-                try
-                {
-                    var fallbackPath = Path.Combine(
-                        _api.Setting_GetPersistentStoragePath(),
-                        "mb_remote",
-                        "initialization_error.log");
-                    Directory.CreateDirectory(Path.GetDirectoryName(fallbackPath));
-                    File.AppendAllText(fallbackPath,
-                        $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.ffffffZ}] FATAL: Plugin initialization failed: {ex}\n");
-                }
-                catch
-                {
-                    // If logging fails, continue silently to prevent MusicBee crash
-                }
+                LogToFallback("FATAL: Plugin initialization failed", ex);
 
                 // Ensure _host is null so other methods handle it gracefully.
                 _host = null;
+            }
+        }
+
+        /// <summary>
+        ///     Best-effort error log to a fallback file, used by the MusicBee-facing
+        ///     entry points so a failure is recorded but never propagates into the
+        ///     host. Swallows its own errors (including a missing/failed API).
+        /// </summary>
+        private void LogToFallback(string context, Exception ex)
+        {
+            try
+            {
+                var fallbackPath = Path.Combine(
+                    _api.Setting_GetPersistentStoragePath(),
+                    "mb_remote",
+                    "initialization_error.log");
+                Directory.CreateDirectory(Path.GetDirectoryName(fallbackPath));
+                File.AppendAllText(fallbackPath,
+                    $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.ffffffZ}] {context}: {ex}\n");
+            }
+            catch
+            {
+                // If logging fails, continue silently to prevent MusicBee crash.
             }
         }
 
@@ -149,13 +180,23 @@ namespace MusicBeePlugin
             if (_host == null || panelHandle == IntPtr.Zero)
                 return false;
 
-            var panel = Control.FromHandle(panelHandle);
-            if (panel == null)
-                return false;
+            // MusicBee calls this directly; guard so a panel-construction failure
+            // returns false instead of propagating into the host.
+            try
+            {
+                var panel = Control.FromHandle(panelHandle);
+                if (panel == null)
+                    return false;
 
-            _configPanel = new ConfigurationPanel(_host, _version);
-            _configPanel.AttachTo(panel);
-            return true;
+                _configPanel = new ConfigurationPanel(_host, _version);
+                _configPanel.AttachTo(panel);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Configure panel failed", ex);
+                return false;
+            }
         }
 
         /// <summary>

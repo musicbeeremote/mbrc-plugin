@@ -525,7 +525,16 @@ namespace MusicBeePlugin.Ffi
 
         private void OnFreeBuffer(IntPtr buf)
         {
-            if (buf != IntPtr.Zero) Marshal.FreeHGlobal(buf);
+            // Called from the core across the FFI boundary; never throw back into
+            // native code (a managed exception unwinding into Rust is UB).
+            try
+            {
+                if (buf != IntPtr.Zero) Marshal.FreeHGlobal(buf);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "free buffer callback threw");
+            }
         }
 
         // Core -> host push. Called from a core/background thread; just re-raise
