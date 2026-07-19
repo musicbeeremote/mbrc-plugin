@@ -1,0 +1,1 @@
+{"name":"playlist_list","request":"{\"id\":1,\"kind\":\"request\",\"op\":\"playlist_list\",\"data\":{\"offset\":0,\"limit\":100}}","response":"{\"id\":1,\"kind\":\"response\",\"data\":{\"total\":1,\"offset\":0,\"items\":[{\"url\":\"playlist://x\",\"name\":\"X\"}]}}"}

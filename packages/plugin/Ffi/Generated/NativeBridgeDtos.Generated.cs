@@ -129,6 +129,22 @@ namespace MusicBeePlugin.Ffi
         public string genre { get; set; }
     }
 
+    public class TrackTags
+    {
+        public string src { get; set; }
+        public string artist { get; set; }
+        public string title { get; set; }
+        public string album { get; set; }
+        public string album_artist { get; set; }
+        public int track_no { get; set; }
+        public int disc_no { get; set; }
+        public string genre { get; set; }
+        public string year { get; set; }
+        public string duration { get; set; }
+        public string rating { get; set; }
+        public string date_added { get; set; }
+    }
+
     public class AlbumCover
     {
         public string album { get; set; }

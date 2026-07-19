@@ -139,6 +139,16 @@ namespace MusicBeePlugin.Providers
         List<Track> GetTracksForPaths(IEnumerable<string> paths);
 
         /// <summary>
+        ///     Read the V6 typed-track tags for a page's paths: the base browse
+        ///     fields plus the raw extended tags (Year/Duration/Rating/DateAdded)
+        ///     the core parses into the typed V6 `track` schema. DateAdded is
+        ///     converted to ISO-8601 UTC here (the core has no locale context).
+        /// </summary>
+        /// <param name="paths">The page's track paths.</param>
+        /// <returns>One TrackTags per path, in the input order.</returns>
+        List<TrackTags> GetTrackTags(IEnumerable<string> paths);
+
+        /// <summary>
         ///     Library changes (Music category) since <paramref name="updatedSince" />
         ///     unix seconds, for the core's incremental scan. Deleted detection needs
         ///     the full cached-paths set, which the core does not marshal back, so
