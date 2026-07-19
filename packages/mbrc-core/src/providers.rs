@@ -21,7 +21,7 @@ use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
     LastfmStatus, Lyrics, NowPlayingListTrack, OutputDevices, Page, PlaybackPositionResponse,
     PlayerState, Playlist, QueueType, RadioStation, RepeatMode, SyncDelta, Track, TrackDetails,
-    TrackInfo, TrackMetadata,
+    TrackInfo, TrackMetadata, TrackTags,
 };
 
 /// The MusicBee data/command surface, as the core sees it. Handlers take
@@ -61,7 +61,13 @@ pub trait Providers: Send + Sync {
     fn set_rating(&self, value: &str) -> Result<(), String>;
     fn lfm_rating(&self) -> Result<LastfmStatus, String>;
     fn set_lfm_rating(&self, status: LastfmStatus) -> Result<(), String>;
+    /// Whether a last.fm account is configured, so the core can reject scrobbling /
+    /// love / ban with a proper `unavailable` error rather than a generic failure.
+    fn has_lastfm_account(&self) -> Result<bool, String>;
     fn set_tag(&self, tag: &str, value: &str) -> Result<(), String>;
+    /// Synchronized lyrics for the now-playing track (synced-preferred, #113). The
+    /// raw text may carry LRC timestamps; the V6 codec parses them.
+    fn now_playing_synced_lyrics(&self) -> Result<Lyrics, String>;
 
     // Now playing - list. `now_playing_list` is the sequential page (Android);
     // `now_playing_list_ordered` anchors at the current track and carries
@@ -118,6 +124,10 @@ pub trait Providers: Send + Sync {
     // `sync_delta` lists library changes since a watermark for the Scanner.
     fn track_paths(&self) -> Result<Vec<String>, String>;
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String>;
+    /// V6 typed tags per path: the base browse fields plus the raw extended tags
+    /// (Year/Duration/Rating/DateAdded) the V6 `track` schema derives its typed
+    /// fields from. Separate from `tracks_for_paths` (the thin V4 browse track).
+    fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String>;
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String>;
 
     fn radio_stations(&self, offset: i32, limit: i32) -> Result<Page<RadioStation>, String>;
@@ -231,6 +241,10 @@ impl Providers for FfiProviders {
     fn lyrics(&self) -> Result<Lyrics, String> {
         self.callbacks.query_no_params(QueryType::Lyrics)
     }
+    fn now_playing_synced_lyrics(&self) -> Result<Lyrics, String> {
+        self.callbacks
+            .query_no_params(QueryType::NowPlayingLyricsSynced)
+    }
     fn rating(&self) -> Result<String, String> {
         self.callbacks.query_no_params(QueryType::NowPlayingRating)
     }
@@ -249,6 +263,9 @@ impl Providers for FfiProviders {
     fn set_lfm_rating(&self, status: LastfmStatus) -> Result<(), String> {
         self.callbacks
             .execute_command(CommandType::SetLfmRating, &SetLfmRatingParams { status })
+    }
+    fn has_lastfm_account(&self) -> Result<bool, String> {
+        self.callbacks.query_no_params(QueryType::HasLastFmAccount)
     }
     fn set_tag(&self, tag: &str, value: &str) -> Result<(), String> {
         self.callbacks.execute_command(
@@ -410,6 +427,10 @@ impl Providers for FfiProviders {
         self.callbacks
             .query(QueryType::LibraryTracksForPaths, &PathsParams { paths })
     }
+    fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
+        self.callbacks
+            .query(QueryType::LibraryTrackTags, &PathsParams { paths })
+    }
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String> {
         self.callbacks.query(
             QueryType::LibrarySyncDelta,
@@ -525,6 +546,9 @@ impl Providers for NullProviders {
     fn lyrics(&self) -> Result<Lyrics, String> {
         Ok(Lyrics::default())
     }
+    fn now_playing_synced_lyrics(&self) -> Result<Lyrics, String> {
+        Ok(Lyrics::default())
+    }
     fn rating(&self) -> Result<String, String> {
         Ok(String::new())
     }
@@ -536,6 +560,9 @@ impl Providers for NullProviders {
     }
     fn set_lfm_rating(&self, _status: LastfmStatus) -> Result<(), String> {
         Ok(())
+    }
+    fn has_lastfm_account(&self) -> Result<bool, String> {
+        Ok(true)
     }
     fn set_tag(&self, _tag: &str, _value: &str) -> Result<(), String> {
         Ok(())
@@ -624,6 +651,9 @@ impl Providers for NullProviders {
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(Vec::new())
     }
+    fn tracks_detailed_for_paths(&self, _paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
+        Ok(Vec::new())
+    }
     fn sync_delta(&self, _updated_since: i64) -> Result<SyncDelta, String> {
         Ok(SyncDelta::default())
     }
@@ -672,11 +702,13 @@ pub struct MockProviders {
     pub album_cover: AlbumCover,
     pub album_cover_page: Page<AlbumCoverItem>,
     pub cover_cache_status: bool,
+    pub has_lastfm_account: bool,
     pub album_identifiers: Vec<AlbumIdentifier>,
     pub artwork_raw: String,
     pub batch_metadata: Vec<TrackMetadata>,
     pub track_paths: Vec<String>,
     pub tracks_for_paths: Vec<Track>,
+    pub tracks_detailed: Vec<TrackTags>,
     pub sync_delta: SyncDelta,
     pub radio_stations: Page<RadioStation>,
     pub playlists: Page<Playlist>,
@@ -780,6 +812,10 @@ impl Providers for MockProviders {
         self.record("lyrics");
         Ok(self.lyrics.clone())
     }
+    fn now_playing_synced_lyrics(&self) -> Result<Lyrics, String> {
+        self.record("now_playing_synced_lyrics");
+        Ok(self.lyrics.clone())
+    }
     fn rating(&self) -> Result<String, String> {
         self.record("rating");
         Ok(self.rating.clone())
@@ -795,6 +831,10 @@ impl Providers for MockProviders {
     fn set_lfm_rating(&self, status: LastfmStatus) -> Result<(), String> {
         self.record(format!("set_lfm_rating({status:?})"));
         Ok(())
+    }
+    fn has_lastfm_account(&self) -> Result<bool, String> {
+        self.record("has_lastfm_account");
+        Ok(self.has_lastfm_account)
     }
     fn set_tag(&self, tag: &str, value: &str) -> Result<(), String> {
         self.record(format!("set_tag({tag},{value})"));
@@ -900,6 +940,10 @@ impl Providers for MockProviders {
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String> {
         self.record(format!("tracks_for_paths({})", paths.len()));
         Ok(self.tracks_for_paths.clone())
+    }
+    fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
+        self.record(format!("tracks_detailed_for_paths({})", paths.len()));
+        Ok(self.tracks_detailed.clone())
     }
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String> {
         self.record(format!("sync_delta({updated_since})"));
