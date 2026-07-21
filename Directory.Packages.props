@@ -8,11 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Runtime / shared. MessagePack held at 2.5.x: it is the load-bearing FFI
-         serializer (dynamic formatter emit on net48 + Costura) and was live-
-         validated here. v3.x is net48-compatible (net472/netstandard2.0) but the
-         major bump needs a live FFI round-trip smoke test before adoption. -->
-    <PackageVersion Include="MessagePack" Version="2.5.302" />
+    <!-- Runtime / shared. MessagePack is the load-bearing FFI serializer (dynamic
+         formatter emit on net48 + Costura). v3.x targets net472/netstandard2.0, so
+         it stays net48-compatible; the contractless resolver + Serialize/Deserialize
+         surface is unchanged from 2.5.x. Needs a live FFI round-trip smoke test in
+         MusicBee to confirm the merged single-DLL still deserializes core payloads. -->
+    <PackageVersion Include="MessagePack" Version="3.1.8" />
 
     <!-- Plugin packaging (Costura embeds managed deps into mb_remote.dll) -->
     <PackageVersion Include="Costura.Fody" Version="6.2.0" />
