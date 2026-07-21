@@ -51,6 +51,14 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         string GetNowPlayingLyrics();
 
+        /// <summary>
+        ///     Gets synchronized (LRC) lyrics for the currently playing track,
+        ///     preferring Synchronised then UnSynchronised via Library_GetLyrics,
+        ///     falling back to the default now-playing lyrics. The core parses the
+        ///     (possibly LRC-timestamped) text into structured lines (V6, #113).
+        /// </summary>
+        string GetSyncedLyrics();
+
         // Now Playing List Operations
 
         /// <summary>

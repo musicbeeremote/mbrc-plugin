@@ -1,0 +1,3 @@
+{"name":"unknown_op","request":"{\"id\":1,\"kind\":\"request\",\"op\":\"no_such_op\",\"data\":{}}","response":"{\"id\":1,\"kind\":\"response\",\"error\":{\"code\":\"unknown_op\",\"message\":\"unknown op: no_such_op\"}}"}
+{"name":"missing_field","request":"{\"id\":2,\"kind\":\"request\",\"op\":\"track_get\",\"data\":{}}","response":"{\"id\":2,\"kind\":\"response\",\"error\":{\"code\":\"missing_field\",\"message\":\"missing required field: src\"}}"}
+{"name":"invalid_field","request":"{\"id\":3,\"kind\":\"request\",\"op\":\"library_tracks\",\"data\":{\"offset\":\"nope\"}}","response":"{\"id\":3,\"kind\":\"response\",\"error\":{\"code\":\"invalid_field\",\"message\":\"offset must be an integer\"}}"}

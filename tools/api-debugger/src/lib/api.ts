@@ -8,6 +8,12 @@ export interface WireMessage {
   direction: Direction;
   context: string;
   raw: string;
+  // V6 envelope fields, present only for V6 frames (parsed by the backend).
+  id?: number;
+  kind?: string;
+  op?: string;
+  event?: string;
+  error_code?: string;
 }
 
 export interface StateEvent {
@@ -21,6 +27,8 @@ export interface ConnectOptions {
   client_type: string;
   protocol_version: number;
   no_broadcast: boolean;
+  /** Per-install id for a V6 connection (ignored by legacy). */
+  client_id?: string;
 }
 
 export type ProxyDir = "c2s" | "s2c";

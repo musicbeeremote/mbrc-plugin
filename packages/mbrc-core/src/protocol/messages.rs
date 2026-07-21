@@ -259,6 +259,45 @@ pub struct Track {
     pub genre: String,
 }
 
+/// One track's V6 tags for a path (`LibraryTrackTags`): the base browse fields
+/// plus the raw extended tags MusicBee ships as strings. The V6 `track` schema
+/// derives its typed `year`/`duration_ms`/`rating`/`date_added` from these
+/// (`server::commands_v6::track`). Kept separate from [`Track`] (which V4
+/// `browsetracks` serializes byte-identically, so it cannot grow fields).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TrackTags {
+    #[serde(default)]
+    pub src: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub album: String,
+    #[serde(default)]
+    pub album_artist: String,
+    #[serde(default)]
+    pub track_no: i32,
+    #[serde(default)]
+    pub disc_no: i32,
+    #[serde(default)]
+    pub genre: String,
+    /// Raw MusicBee Year tag - may be a full date (e.g. `"12/03/2007"`); the core
+    /// extracts the 4-digit year.
+    #[serde(default)]
+    pub year: String,
+    /// Formatted duration (`"m:ss"` / `"h:mm:ss"`); parsed to ms core-side (#112).
+    #[serde(default)]
+    pub duration: String,
+    /// Raw rating tag (`"3.5"` / `"3,5"` / `"0"`); parsed to a float core-side.
+    #[serde(default)]
+    pub rating: String,
+    /// Date added, ISO-8601 UTC - formatted C#-side to avoid the locale ambiguity
+    /// of MusicBee's display string (#114). Empty when unknown.
+    #[serde(default)]
+    pub date_added: String,
+}
+
 /// Single-cover response (`libraryalbumcover`). Field order matches the shipped
 /// C# `AlbumCoverPayload` (album, artist, cover, status, hash); everything but
 /// `status` is omitted when empty, so a typical single-cover reply is

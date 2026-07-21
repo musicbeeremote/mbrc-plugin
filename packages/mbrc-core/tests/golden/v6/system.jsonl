@@ -1,0 +1,1 @@
+{"name":"system_info","request":"{\"id\":1,\"kind\":\"request\",\"op\":\"system_info\",\"data\":{}}","response":"{\"id\":1,\"kind\":\"response\",\"data\":{\"plugin_version\":\"1.4.0\",\"protocol_version\":6}}"}

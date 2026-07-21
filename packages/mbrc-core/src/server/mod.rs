@@ -5,12 +5,39 @@
 pub mod blocked;
 pub mod broadcaster;
 pub mod commands;
+pub mod commands_v6;
 pub mod connection;
 pub mod monitor;
 pub mod notifications;
+pub mod notifications_v6;
 pub mod registry;
+pub mod route;
 pub mod scanner;
 pub mod session;
+pub mod session_v6;
+
+/// Registration metadata a handshaked connection exposes to the IO layer,
+/// uniform across the legacy ([`session::Session`]) and V6
+/// ([`session_v6::V6Session`]) state machines, so `connection.rs` drives registry
+/// admission + broadcast subscription without forking on protocol.
+///
+/// `is_main` means "the client's primary broadcast connection": it drives registry
+/// supersession *and* whether the connection subscribes to broadcasts + receives
+/// server pings. Legacy sets it from `!no_broadcast`; V6 leaves it `false` in step 1
+/// (V6 has no event surface yet, and V4-shaped broadcasts must never reach a V6
+/// socket).
+#[derive(Debug, Clone)]
+pub struct RegMeta {
+    /// Client-provided grouping id (per-client caps + supersession). Always present
+    /// for V6 (required); optional for legacy (iOS/old Android send none).
+    pub client_id: Option<String>,
+    /// The client's primary broadcast connection - see the struct docs.
+    pub is_main: bool,
+    /// Platform / client-type label, for logging only.
+    pub platform: Option<String>,
+    /// Negotiated protocol version, for logging only.
+    pub protocol: u8,
+}
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -194,6 +221,10 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
             core.broadcaster.broadcast(&[notifications::frame(
                 "librarycovercachebuildstatus",
                 serde_json::json!(building),
+            )]);
+            core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+                "cover_cache_changed",
+                serde_json::json!({ "building": building }),
             )]);
         }
     };
@@ -386,6 +417,10 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
         core.broadcaster.broadcast(&[notifications::frame(
             "librarycovercachebuildstatus",
             serde_json::json!(false),
+        )]);
+        core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+            "cover_cache_changed",
+            serde_json::json!({ "building": false }),
         )]);
     }
 }

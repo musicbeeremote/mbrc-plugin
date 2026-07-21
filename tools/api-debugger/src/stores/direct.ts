@@ -12,6 +12,7 @@ import {
   type Direction,
   type Discovered,
 } from "../lib/api";
+import { V6_INIT_OPS } from "../lib/commands.v6";
 
 /** Which connection a log entry / send belongs to. */
 export type Channel = ConnectionSlot;
@@ -60,6 +61,22 @@ export const useDirectStore = defineStore("direct", () => {
   const clientType = ref("Android");
   const protocolVersion = ref(4);
   const noBroadcast = ref(false);
+  // When a V6 channel finishes its (backend-driven) handshake, replay the read
+  // burst a real client sends on connect. On by default; toggle off to inspect a
+  // bare handshake. V6 only - the legacy path has no equivalent here.
+  const autoInitV6 = ref(true);
+
+  // A persisted per-install id for V6 connections (generated once, reused across
+  // relaunches - mirrors how a real client persists its client_id).
+  const CLIENT_ID_KEY = "mbrc-v6-client-id";
+  let clientId = localStorage.getItem(CLIENT_ID_KEY) ?? "";
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem(CLIENT_ID_KEY, clientId);
+  }
+  // Per-connection V6 request-id counter (client ops start at 1; the handshake is
+  // id 0). Reset each time a channel connects.
+  const v6Ids: Record<Channel, number> = { primary: 1, secondary: 1 };
 
   // ── composer ────────────────────────────────────────────────────────────────
   const command = ref('{"context":"verifyconnection","data":{}}');
@@ -106,6 +123,7 @@ export const useDirectStore = defineStore("direct", () => {
 
   async function connect(channel: Channel) {
     statusOf(channel).value = "Connecting...";
+    v6Ids[channel] = 1; // fresh id sequence per connection
     try {
       await apiConnect(channel, {
         host: host.value,
@@ -114,6 +132,7 @@ export const useDirectStore = defineStore("direct", () => {
         protocol_version: protocolVersion.value,
         // Secondary is always no_broadcast (data-fetch pattern).
         no_broadcast: channel === "secondary" ? true : noBroadcast.value,
+        client_id: clientId,
       });
     } catch (e) {
       statusOf(channel).value = `Error: ${e}`;
@@ -125,11 +144,42 @@ export const useDirectStore = defineStore("direct", () => {
     await apiDisconnect(channel);
   }
 
+  /**
+   * Fire the post-handshake init burst on a freshly-connected V6 channel, each
+   * as a proper `{kind:"request", id, op, data:{}}` envelope with a correlation
+   * id from the channel's sequence. Sent in order; a failed send is logged but
+   * doesn't abort the rest.
+   */
+  async function runV6Init(channel: Channel) {
+    for (const op of V6_INIT_OPS) {
+      const env = { kind: "request", id: v6Ids[channel]++, op, data: {} };
+      try {
+        await apiSendCommand(channel, JSON.stringify(env));
+      } catch (e) {
+        push(channel, "error", op, String(e));
+      }
+    }
+  }
+
   async function send() {
     const ch = sendTarget.value;
     if (!connectedOf(ch).value) return;
-    const json = command.value.trim();
-    if (!json) return;
+    const raw = command.value.trim();
+    if (!raw) return;
+    let json = raw;
+    // V6 sends an envelope: force kind:"request" and inject the correlation id, so
+    // the composer template only needs `op`/`data`.
+    if (protocolVersion.value === 6) {
+      try {
+        const env = JSON.parse(raw) as Record<string, unknown>;
+        env.kind = "request";
+        env.id = v6Ids[ch]++;
+        json = JSON.stringify(env);
+      } catch (e) {
+        push(ch, "error", "send", `invalid V6 envelope JSON: ${e}`);
+        return;
+      }
+    }
     try {
       await apiSendCommand(ch, json);
     } catch (e) {
@@ -148,8 +198,15 @@ export const useDirectStore = defineStore("direct", () => {
       unlisten.push(await onMessage(ch, (m) => push(ch, m.direction, m.context, m.raw)));
       unlisten.push(
         await onState(ch, (s) => {
+          const was = connectedOf(ch).value;
           connectedOf(ch).value = s.connected;
           statusOf(ch).value = s.connected ? "Connected" : (s.detail ?? "Disconnected");
+          // On the false->true edge (handshake complete), replay a real client's
+          // init burst for V6 - primary only (the secondary is the no_broadcast
+          // data-fetch channel; it shouldn't fire the warm-up burst).
+          if (ch === "primary" && s.connected && !was && protocolVersion.value === 6 && autoInitV6.value) {
+            void runV6Init(ch);
+          }
         }),
       );
     }
@@ -174,6 +231,7 @@ export const useDirectStore = defineStore("direct", () => {
     clientType,
     protocolVersion,
     noBroadcast,
+    autoInitV6,
     command,
     sendTarget,
     channelFilter,

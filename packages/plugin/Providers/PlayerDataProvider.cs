@@ -203,7 +203,7 @@ namespace MusicBeePlugin.Providers
         /// be unbound on older API revisions; when we can't tell, assume an
         /// account exists rather than block scrobbling outright.
         /// </summary>
-        private bool HasLastFmAccount()
+        public bool HasLastFmAccount()
         {
             var getUserId = _api.Setting_GetLastFmUserId;
             return getUserId == null || !string.IsNullOrEmpty(getUserId());

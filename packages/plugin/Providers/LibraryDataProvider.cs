@@ -32,6 +32,18 @@ namespace MusicBeePlugin.Providers
             Plugin.MetaDataType.TrackNo, Plugin.MetaDataType.DiscNo,
         };
 
+        // The V6 typed-track tags: the browse fields plus the raw extended metadata
+        // tags the core parses (Year/Rating). Duration and DateAdded are file
+        // properties (read via GetFileProperty), not metadata tags. Index order is
+        // consumed by GetTrackTags.
+        private static readonly Plugin.MetaDataType[] TrackTagFields =
+        {
+            Plugin.MetaDataType.Artist, Plugin.MetaDataType.TrackTitle, Plugin.MetaDataType.Album,
+            Plugin.MetaDataType.AlbumArtist, Plugin.MetaDataType.Genre,
+            Plugin.MetaDataType.TrackNo, Plugin.MetaDataType.DiscNo,
+            Plugin.MetaDataType.Year, Plugin.MetaDataType.Rating,
+        };
+
         private static readonly Plugin.MetaDataType[] AlbumTrackFields =
         {
             Plugin.MetaDataType.Artist, Plugin.MetaDataType.TrackTitle, Plugin.MetaDataType.AlbumArtist,
@@ -439,6 +451,55 @@ namespace MusicBeePlugin.Providers
             }
 
             return tracks;
+        }
+
+        public List<TrackTags> GetTrackTags(IEnumerable<string> paths)
+        {
+            var tracks = new List<TrackTags>();
+            foreach (var path in paths ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                _api.Library_GetFileTags(path, TrackTagFields, out var tags);
+                // Duration ("m:ss") and DateAdded (display date) are file properties,
+                // not metadata tags.
+                var duration = _api.Library_GetFileProperty(path, Plugin.FilePropertyType.Duration);
+                var dateAdded = _api.Library_GetFileProperty(path, Plugin.FilePropertyType.DateAdded);
+
+                tracks.Add(new TrackTags
+                {
+                    src = path,
+                    artist = Tag(tags, 0).Cleanup(),
+                    title = Tag(tags, 1).Cleanup(),
+                    album = Tag(tags, 2).Cleanup(),
+                    album_artist = Tag(tags, 3).Cleanup(),
+                    genre = Tag(tags, 4).Cleanup(),
+                    track_no = ParseTag(tags, 5),
+                    disc_no = ParseTag(tags, 6),
+                    // Raw values, parsed core-side (year 4-digit extract, rating float).
+                    year = Tag(tags, 7),
+                    rating = Tag(tags, 8),
+                    // Duration parsed to ms core-side; DateAdded is locale-ambiguous as
+                    // a display string, so convert to ISO-8601 UTC here (#114).
+                    duration = duration ?? string.Empty,
+                    date_added = ToIso8601(dateAdded),
+                });
+            }
+
+            return tracks;
+        }
+
+        /// <summary>
+        ///     Convert a MusicBee date display string (running culture) to ISO-8601
+        ///     UTC, e.g. "2025-07-09T01:27:00Z". Empty when unparseable, so the core
+        ///     surfaces `date_added: null` rather than a bad value.
+        /// </summary>
+        private static string ToIso8601(string raw)
+        {
+            return DateTime.TryParse(raw, out var dt)
+                ? dt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)
+                : string.Empty;
         }
 
         public (List<string> Added, List<string> Updated, List<string> Deleted) GetSyncDelta(long updatedSince)

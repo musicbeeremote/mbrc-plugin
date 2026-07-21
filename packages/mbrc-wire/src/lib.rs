@@ -8,6 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod v6;
+
 /// Line terminator for the legacy CRLF-JSON protocol.
 pub const TERMINATOR: &str = "\r\n";
 
@@ -178,9 +180,14 @@ impl ClientHandshake {
     }
 }
 
-/// Splits a byte stream into CRLF-delimited frames, matching the legacy client's
-/// strict `\r\n` framing. Bytes are appended with [`push_bytes`](Self::push_bytes)
-/// and complete frames drained with [`next_frame`](Self::next_frame).
+/// Splits a byte stream into newline-delimited frames. It breaks on `\n` and
+/// trims a single trailing `\r`, so it handles **both** the legacy CRLF (`\r\n`)
+/// framing and V6's bare-LF (`\n`) framing identically. That matters because a
+/// connection is routed to V4/V5 vs V6 only *after* its first frame is read, so
+/// one accumulator must decode the socket before the protocol is known. For a
+/// well-formed CRLF stream this yields byte-identical frames to the old `\r\n`
+/// split. Bytes are appended with [`push_bytes`](Self::push_bytes) and complete
+/// frames drained with [`next_frame`](Self::next_frame).
 #[derive(Default)]
 pub struct FrameAccumulator {
     acc: String,
@@ -192,11 +199,15 @@ impl FrameAccumulator {
     }
 
     /// Pop the next complete frame (terminator stripped), or `None` if no full
-    /// frame has arrived yet.
+    /// frame has arrived yet. Splits on `\n`; a trailing `\r` (the CR of a legacy
+    /// `\r\n`) is stripped, since a JSON frame body never ends in `\r`.
     pub fn next_frame(&mut self) -> Option<String> {
-        let idx = self.acc.find(TERMINATOR)?;
-        let line = self.acc[..idx].to_string();
-        self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
+        let idx = self.acc.find('\n')?;
+        let mut line = self.acc[..idx].to_string();
+        if line.ends_with('\r') {
+            line.pop();
+        }
+        self.acc = self.acc[idx + 1..].to_string();
         Some(line)
     }
 }

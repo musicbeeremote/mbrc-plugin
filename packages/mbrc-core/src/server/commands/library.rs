@@ -19,9 +19,11 @@ use crate::providers::Providers;
 // NOT here: it is the one list large enough to OOM the 32-bit core as a blob, so
 // it lives in the ordinal index + path-keyed tag cache (MBRCIP-0001), not the
 // generic metadata cache.
-const KEY_BROWSE_GENRES: &str = "browse_genres";
-const KEY_BROWSE_ALBUMS: &str = "browse_albums";
-fn key_browse_artists(album_artists: bool) -> String {
+// pub(crate) so the V6 library domain reuses the SAME cached blob lists the V4
+// reconcile prewarms (no double storage).
+pub(crate) const KEY_BROWSE_GENRES: &str = "browse_genres";
+pub(crate) const KEY_BROWSE_ALBUMS: &str = "browse_albums";
+pub(crate) fn key_browse_artists(album_artists: bool) -> String {
     format!("browse_artists:aa={album_artists}")
 }
 

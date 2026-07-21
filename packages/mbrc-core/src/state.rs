@@ -28,7 +28,11 @@ use crate::store::Db;
 pub struct Core {
     pub providers: Arc<dyn Providers>,
     pub config: Config,
+    /// Fan-out to legacy V4/V5 broadcast subscribers (V4-shaped frames).
     pub broadcaster: Broadcaster,
+    /// Fan-out to V6 broadcast subscribers (V6 event frames). Separate client set
+    /// so V4-shaped frames never reach a V6 socket and vice-versa.
+    pub v6_broadcaster: Broadcaster,
     pub now_playing: NowPlayingCache,
     /// The on-disk album cover cache (resize/hash/store/serve). Rooted at
     /// `config.storage_path`; the background build is kicked when networking
@@ -71,6 +75,7 @@ impl Core {
             providers,
             config,
             broadcaster: Broadcaster::default(),
+            v6_broadcaster: Broadcaster::default(),
             now_playing,
             cover_store,
             metadata_cache,
@@ -280,6 +285,17 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
         }
     };
 
+    dispatch_notification(&core, ntype);
+    MbrcResult::Ok
+}
+
+/// Dispatch a MusicBee notification against a specific `core`: maintain caches for
+/// library-changing notifications, emit the V6 `library_changed` marker
+/// imperatively (the pure `on_notification` builder cannot - it has no owned
+/// `Arc<Core>`), then build and fan out the per-notification V4/V6 frames. Split
+/// out of [`handle_notification`] so the imperative emission is testable without
+/// the global runtime.
+pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
     // Library-changing notifications maintain the metadata cache. Handled here
     // (not in the pure `on_notification`) because the switch needs the owned
     // `Arc<Core>` to spawn the reconcile on a plain thread - the C# notification
@@ -289,9 +305,10 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
             // Gate reads off + clear immediately so nothing stale is served in
             // the gap; the reconcile re-fingerprints, re-prewarms, re-validates.
             core.metadata_cache.invalidate();
+            broadcast_library_changed(core);
             let reconcile_core = core.clone();
             std::thread::spawn(move || server::reconcile_library(&reconcile_core));
-            return MbrcResult::Ok;
+            return;
         }
         NotificationType::FileAddedToLibrary => {
             // A file changed the library: nudge the background Scanner to run a
@@ -300,13 +317,24 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
             // this per-file collapses to a scan or two - NOT a full cache clear
             // per file (which would wipe the whole ordinal index each time).
             core.scanner_nudge.notify_one();
+            broadcast_library_changed(core);
         }
         _ => {}
     }
 
-    let frames = notifications::on_notification(&core, ntype);
-    core.broadcaster.broadcast(&frames);
-    MbrcResult::Ok
+    let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
+    core.broadcaster.broadcast(&v4_frames);
+    core.v6_broadcaster.broadcast(&v6_frames);
+}
+
+/// Fan out the V6 `library_changed` event (best-effort marker; the client
+/// re-queries library state). V4 has no equivalent broadcast - library changes
+/// there are cache maintenance only - so this is V6-only.
+fn broadcast_library_changed(core: &Core) {
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "library_changed",
+        serde_json::json!({}),
+    )]);
 }
 
 /// Stop networking (if running) and drop the core, allowing a later re-init.

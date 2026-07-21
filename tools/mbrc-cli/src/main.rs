@@ -9,6 +9,7 @@ use std::time::Duration;
 mod args;
 mod capture;
 mod compare;
+mod conform;
 mod fuzz;
 mod inspect;
 mod monitor;
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
         Some("inspect") => inspect::run(rest),
         Some("send") => send::run(rest),
         Some("monitor") => monitor::run(rest),
+        Some("conform") => conform::run(rest),
         Some("capture") => capture::run(rest),
         Some("serve") => serve::run(rest),
         Some("trim") => trim::run(rest),
@@ -88,6 +90,7 @@ fn print_usage() {
          \x20 inspect  <capture.jsonl>                  summarise an mbrc-capture/2 trace\n\
          \x20 send     [--host H] [--port P] [--json C] connect, handshake, send a command\n\
          \x20          [--client-type T] [--protocol V] [--no-broadcast] [--wait-ms N]\n\
+         \x20          --protocol 6 [--client-id U] [--op N]  drive the V6 spine (handshake + op)\n\
          \x20 capture  --output F [--listen A]          headless tee proxy -> mbrc-capture/2\n\
          \x20          [--upstream B] [--seconds N]\n\
          \x20 serve    --golden <file|dir> [--listen A] replay a capture as a mock server\n\
@@ -97,10 +100,13 @@ fn print_usage() {
          \x20 replay   --golden <file|dir> [--host H]   drive a golden against a live server,\n\
          \x20          [--port P] [--values]              record responses, diff vs the golden\n\
          \x20 fuzz     [--host H] [--port P] [--seed N]  seeded protocol fuzzer (read-only\n\
-         \x20          [--iterations K] [--corpus G]      default; --diff-host for differential)\n\
+         \x20          [--iterations K] [--corpus G]      default; --diff-host for differential;\n\
+         \x20          [--protocol 4|6]                   --protocol 6 = V6 read-only path)\n\
          \x20 monitor  [--host H] [--port P]             read-only paging/keepalive validator\n\
          \x20          [--client-type Android|iOS]        (invariants + JSONL + persistence sig)\n\
          \x20          [--concurrency N] [--duration D]   D = inf|<n>[s|m|h]\n\
-         \x20          [--page-size N] [--out FILE]\n"
+         \x20          [--page-size N] [--out FILE]\n\
+         \x20 conform  [--host H] [--port P]             V6 protocol conformance harness:\n\
+         \x20          [--allow-writes] [--wait-ms N]     capability-driven invariant checks\n"
     );
 }

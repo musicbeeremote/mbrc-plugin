@@ -5,6 +5,7 @@ import { useClipboard, useVirtualList } from "@vueuse/core";
 import type { Direction } from "../lib/api";
 import { highlightJson } from "../lib/jsonHighlight";
 import { COMMAND_CATALOG, findCommand } from "../lib/commands";
+import { V6_COMMAND_CATALOG, findV6Command } from "../lib/commands.v6";
 import { useDirectStore, type Channel } from "../stores/direct";
 import PlayerPane from "./PlayerPane.vue";
 
@@ -27,6 +28,7 @@ const {
   clientType,
   protocolVersion,
   noBroadcast,
+  autoInitV6,
   command,
   sendTarget,
   channelFilter,
@@ -95,9 +97,34 @@ const canSend = computed(() =>
   sendTarget.value === "primary" ? primaryConnected.value : secondaryConnected.value,
 );
 
+// V6 (envelope ops) vs legacy ({context,data}) - selected by the protocol dropdown.
+const isV6 = computed(() => protocolVersion.value === 6);
+
 // The catalog entry matching what's currently in the composer (for the format
-// hint + Android-usage badge).
-const currentCmd = computed(() => findCommand(command.value));
+// hint + usage badges). Legacy and V6 have separate catalogs.
+const currentCmd = computed(() => (isV6.value ? undefined : findCommand(command.value)));
+const currentV6Cmd = computed(() => (isV6.value ? findV6Command(command.value) : undefined));
+
+const V6_DEFAULT = V6_COMMAND_CATALOG[0].commands[0].template;
+const LEGACY_DEFAULT = '{"context":"verifyconnection","data":{}}';
+
+/** Whether the current composer text is a V6 envelope (has `kind` or `op`). */
+function looksLikeV6(json: string): boolean {
+  try {
+    const o = JSON.parse(json) as { kind?: unknown; op?: unknown };
+    return typeof o.kind === "string" || typeof o.op === "string";
+  } catch {
+    return false;
+  }
+}
+
+// Swap the composer to the matching protocol's default when the user changes the
+// protocol - but only if the current text still belongs to the other protocol, so
+// in-protocol edits are preserved.
+watch(protocolVersion, (v) => {
+  if (v === 6 && !looksLikeV6(command.value)) command.value = V6_DEFAULT;
+  if (v !== 6 && looksLikeV6(command.value)) command.value = LEGACY_DEFAULT;
+});
 </script>
 
 <template>
@@ -139,11 +166,16 @@ const currentCmd = computed(() => findCommand(command.value));
             class="rounded bg-zinc-800 px-2 py-1 text-sm text-zinc-100 outline-none disabled:opacity-50"
           >
             <option :value="4">4</option>
+            <option :value="6">6 (V6)</option>
           </select>
         </label>
         <label class="flex items-center gap-2 text-xs text-zinc-400">
           <input v-model="noBroadcast" type="checkbox" :disabled="primaryConnected" />
           no_broadcast
+        </label>
+        <label v-if="isV6" class="flex items-center gap-2 text-xs text-zinc-400" title="Replay a real client's read burst after the handshake">
+          <input v-model="autoInitV6" type="checkbox" :disabled="primaryConnected" />
+          auto-init
         </label>
 
         <button
@@ -256,7 +288,21 @@ const currentCmd = computed(() => findCommand(command.value));
         </button>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <!-- V6 op catalog when Protocol = 6; the legacy {context,data} catalog otherwise -->
         <select
+          v-if="isV6"
+          class="rounded border border-zinc-800 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 outline-none"
+          @change="pickCommand"
+        >
+          <option value="">Insert V6 op…</option>
+          <optgroup v-for="g in V6_COMMAND_CATALOG" :key="g.name" :label="g.name">
+            <option v-for="cmd in g.commands" :key="cmd.op" :value="cmd.template">
+              {{ cmd.op }} - {{ cmd.label }}
+            </option>
+          </optgroup>
+        </select>
+        <select
+          v-else
           class="rounded border border-zinc-800 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 outline-none"
           @change="pickCommand"
         >
@@ -285,6 +331,16 @@ const currentCmd = computed(() => findCommand(command.value));
         </span>
         <span v-if="currentCmd" class="text-[11px] text-zinc-500">
           <span class="text-zinc-400">{{ currentCmd.context }}</span> data: {{ currentCmd.hint }}
+        </span>
+        <span v-if="currentV6Cmd" class="text-[11px] text-zinc-500">
+          <span class="text-zinc-400">op: {{ currentV6Cmd.op }}</span> data: {{ currentV6Cmd.hint }}
+        </span>
+        <span
+          v-if="isV6"
+          class="rounded border border-violet-500/40 bg-violet-500/15 px-1 text-[10px] font-semibold text-violet-300"
+          title="V6 clean-slate protocol (MBRCIP-0003 / #118). Handshake is automatic; id is injected on send."
+        >
+          V6
         </span>
 
         <span class="ml-auto text-[11px] text-zinc-600">sends over channel {{ channelLabel(sendTarget) }}</span>

@@ -13,6 +13,8 @@
 # Config files
 *.config text eol=crlf
 *.json text eol=lf
+# Golden wire traces are byte-compared LF-exact by the test harness.
+*.jsonl text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 

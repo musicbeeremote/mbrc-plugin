@@ -116,10 +116,13 @@ cargo test -p mbrc-core --target i686-pc-windows-msvc   # Rust core + integratio
   schema summary) / TRACE (full body); INFO is the default and logs no frames.
 
 ### Protocol
-- **V4 only.** Pre-V4 clients are rejected at handshake. V4 is a maintained legacy target: its
-  quirks are preserved byte-for-byte for compatibility with shipped Android (1.1.0-1.6.1) and iOS
-  clients. See `docs/protocol.md` for the full command/event reference.
-- Request: `{"context":"<command>","data":<...>}`; response/broadcast: `{"context":"<event>","data":<...>}`.
+- **Two protocols on one port**, routed by first-frame shape. See `docs/protocol.md` (index),
+  which links `docs/protocol-v4.md` (V4/V5 legacy reference) and `docs/protocol-v6.md` (V6 reference).
+- **V4 / V5** (legacy, frozen): CRLF-delimited `{"context":"<command>","data":<...>}`;
+  response/broadcast `{"context":"<event>","data":<...>}`. Pre-V4 clients are rejected at handshake.
+  Quirks are preserved byte-for-byte for shipped Android (1.1.0-1.6.1) and iOS clients; not extended.
+- **V6** (clean-slate, active): newline-delimited JSON envelope `{"id":N,"kind":"request","op":"<op>","data":<...>}`;
+  string enums, typed fields, `id` correlation, handshake capability negotiation. New protocol work goes here.
 
 ## Important Considerations
 
