@@ -178,26 +178,73 @@ impl ClientHandshake {
     }
 }
 
+/// Maximum bytes the accumulator buffers while waiting for a terminator. A
+/// legitimate frame is at most a couple MiB (an inline base64 cover), so 16 MiB
+/// leaves a large margin - it never truncates a valid frame, it only bounds a
+/// peer that streams bytes without ever sending a terminator (issue #138).
+pub const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
+
 /// Splits a byte stream into CRLF-delimited frames, matching the legacy client's
 /// strict `\r\n` framing. Bytes are appended with [`push_bytes`](Self::push_bytes)
 /// and complete frames drained with [`next_frame`](Self::next_frame).
-#[derive(Default)]
+///
+/// Buffering is bounded by a max-frame cap (default [`DEFAULT_MAX_FRAME_BYTES`]):
+/// bytes accumulated past the cap with no terminator are dropped and
+/// [`overflowed`](Self::overflowed) latches true, so an unauthenticated peer
+/// cannot exhaust memory by never sending a terminator.
 pub struct FrameAccumulator {
     acc: String,
+    max_frame: usize,
+    overflow: bool,
+}
+
+impl Default for FrameAccumulator {
+    fn default() -> Self {
+        Self::with_max_frame_bytes(DEFAULT_MAX_FRAME_BYTES)
+    }
 }
 
 impl FrameAccumulator {
+    /// An accumulator with an explicit max-buffer cap. Bytes buffered past the
+    /// cap without a terminator are dropped and [`overflowed`](Self::overflowed)
+    /// latches true.
+    pub fn with_max_frame_bytes(max_frame: usize) -> Self {
+        Self {
+            acc: String::new(),
+            max_frame,
+            overflow: false,
+        }
+    }
+
     pub fn push_bytes(&mut self, bytes: &[u8]) {
         self.acc.push_str(&String::from_utf8_lossy(bytes));
     }
 
     /// Pop the next complete frame (terminator stripped), or `None` if no full
-    /// frame has arrived yet.
+    /// frame has arrived yet. When the buffer grows past the cap with no
+    /// terminator, the accumulated bytes are dropped and
+    /// [`overflowed`](Self::overflowed) latches true so the caller can close the
+    /// connection.
     pub fn next_frame(&mut self) -> Option<String> {
-        let idx = self.acc.find(TERMINATOR)?;
-        let line = self.acc[..idx].to_string();
-        self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
-        Some(line)
+        if let Some(idx) = self.acc.find(TERMINATOR) {
+            let line = self.acc[..idx].to_string();
+            self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
+            return Some(line);
+        }
+        // No complete frame. A buffer past the cap with no terminator in sight is
+        // an unbounded-buffer attack (or a badly broken peer): drop it and latch
+        // overflow so the caller closes the socket.
+        if self.acc.len() > self.max_frame {
+            self.acc.clear();
+            self.overflow = true;
+        }
+        None
+    }
+
+    /// True once a frame exceeded the max-buffer cap without a terminator. Latches
+    /// (stays true); the caller is expected to close the connection.
+    pub fn overflowed(&self) -> bool {
+        self.overflow
     }
 }
 
@@ -297,5 +344,36 @@ mod tests {
         acc.push_bytes(b"\n");
         assert_eq!(acc.next_frame().as_deref(), Some(r#"{"b":2}"#));
         assert_eq!(acc.next_frame(), None);
+    }
+
+    #[test]
+    fn accumulator_caps_terminatorless_stream() {
+        // Tiny cap so the test never allocates the 16 MiB default.
+        let mut acc = FrameAccumulator::with_max_frame_bytes(64);
+        // Stream bytes with no terminator, past the cap.
+        for _ in 0..10 {
+            acc.push_bytes(&[b'x'; 16]);
+            // Never a complete frame - there is no terminator.
+            assert_eq!(acc.next_frame(), None);
+        }
+        // The cap was exceeded: the buffer was dropped and overflow latched.
+        assert!(acc.overflowed());
+        // The accumulator is still usable - a normal frame after the drop parses,
+        // so the drop never corrupts framing state.
+        acc.push_bytes(b"{\"a\":1}\r\n");
+        assert_eq!(acc.next_frame().as_deref(), Some(r#"{"a":1}"#));
+    }
+
+    #[test]
+    fn accumulator_allows_large_frame_up_to_cap() {
+        // A frame right up to the cap (with its terminator) is NOT dropped: the
+        // cap must never truncate a legitimate frame.
+        let mut acc = FrameAccumulator::with_max_frame_bytes(1024);
+        let body = "y".repeat(1000);
+        acc.push_bytes(body.as_bytes());
+        assert_eq!(acc.next_frame(), None); // no terminator yet, still under cap
+        acc.push_bytes(b"\r\n");
+        assert_eq!(acc.next_frame().as_deref(), Some(body.as_str()));
+        assert!(!acc.overflowed());
     }
 }

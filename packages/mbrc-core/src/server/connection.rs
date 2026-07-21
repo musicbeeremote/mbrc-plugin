@@ -184,6 +184,21 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 break;
             }
         }
+
+        // A frame that blew past the accumulator's cap with no terminator is an
+        // unbounded-buffer attack or a badly broken peer. The accumulator has
+        // already dropped the buffered bytes; close the socket (issue #138). A
+        // handshaked socket is never idle-reaped, so this is the only bound on a
+        // handshaked peer that streams a terminator-less flood.
+        if accumulator.overflowed() {
+            tracing::warn!(
+                %peer,
+                conn_id,
+                "frame exceeded max size ({} bytes) with no terminator; closing connection",
+                mbrc_wire::DEFAULT_MAX_FRAME_BYTES
+            );
+            break;
+        }
     }
 
     core.broadcaster.unregister(conn_id);
