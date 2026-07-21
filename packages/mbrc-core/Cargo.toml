@@ -37,7 +37,7 @@ tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so
 # i686-msvc cross-compiles with no C/zlib toolchain.
-flate2 = { version = "=1.0.35", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),
