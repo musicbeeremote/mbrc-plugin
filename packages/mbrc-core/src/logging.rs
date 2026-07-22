@@ -184,17 +184,20 @@ pub fn init(storage_path: &str) {
     let _ = INIT.set(());
 }
 
-/// Render a wire frame for logging with oversized string values (base64 cover
-/// art, lyrics) replaced by `<base64 N bytes>`, so the log stays readable and
-/// small. Non-JSON input is truncated. Use for every c2s/s2c frame we log.
-/// Render a frame for logging: base64/oversized strings become `<base64 N bytes>`
-/// always. When `max_array` is `Some(n)`, long list bodies collapse to the first
-/// `n` elements plus a `<+N more items; keys: …>` schema summary (the DEBUG wire
+/// Render a wire frame for logging. Redaction is **key-aware**: values under
+/// known blob fields (cover art, image data, lyrics) become `<base64 N bytes>`
+/// regardless of length, while every other field - notably file `path`s - stays
+/// readable. A generous length cap is still applied to non-blob strings as a
+/// safety net, but with a neutral `<N chars>` label rather than being
+/// mislabeled as base64. Non-JSON input is truncated.
+///
+/// When `max_array` is `Some(n)`, long list bodies collapse to the first `n`
+/// elements plus a `<+N more items; keys: …>` schema summary (the DEBUG wire
 /// line); `None` keeps every element (the TRACE wire line).
 pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
     match serde_json::from_str::<Value>(frame) {
         Ok(mut v) => {
-            redact_value(&mut v, max_array);
+            redact_value(&mut v, None, max_array);
             v.to_string()
         }
         Err(_) => {
@@ -207,14 +210,35 @@ pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
     }
 }
 
-/// Replace any string longer than the threshold with a `<base64 N bytes>`
-/// placeholder, and (when `max_array` is set) cap long arrays, recursing into
-/// arrays/objects.
-fn redact_value(v: &mut Value, max_array: Option<usize>) {
-    const MAX_STR: usize = 96;
+/// Field names whose values are always opaque blobs (base64 cover art, image
+/// data, lyrics). Their values are elided regardless of length; every other
+/// field is left readable so wire logs stay useful.
+const BLOB_KEYS: &[&str] = &["cover", "image", "art", "lyrics"];
+
+/// Safety cap for non-blob string values. Well above any realistic filesystem
+/// path (Windows `MAX_PATH` is 260), so real `path` fields stay fully readable;
+/// only a pathologically long non-blob string is shortened, and then with a
+/// neutral `<N chars>` label - never mislabeled as base64.
+const MAX_STR: usize = 512;
+
+/// Whether `key` names a known blob field (case-insensitive).
+fn is_blob_key(key: Option<&str>) -> bool {
+    key.is_some_and(|k| BLOB_KEYS.iter().any(|b| k.eq_ignore_ascii_case(b)))
+}
+
+/// Redact a value for logging. `key` is the object field name the value sits
+/// under (`None` at the frame root / inside arrays): blob fields are always
+/// elided as `<base64 N bytes>`, other over-long strings get a neutral
+/// `<N chars>` label. When `max_array` is set, long arrays are capped. Recurses
+/// into arrays/objects.
+fn redact_value(v: &mut Value, key: Option<&str>, max_array: Option<usize>) {
     match v {
-        Value::String(s) if s.len() > MAX_STR => {
-            *v = Value::String(format!("<base64 {} bytes>", s.len()));
+        Value::String(s) => {
+            if is_blob_key(key) {
+                *v = Value::String(format!("<base64 {} bytes>", s.len()));
+            } else if s.len() > MAX_STR {
+                *v = Value::String(format!("<{} chars>", s.len()));
+            }
         }
         Value::Array(items) => {
             if let Some(max) = max_array {
@@ -223,15 +247,19 @@ fn redact_value(v: &mut Value, max_array: Option<usize>) {
                     let schema = array_schema(&items[max]);
                     items.truncate(max);
                     for it in items.iter_mut() {
-                        redact_value(it, max_array);
+                        redact_value(it, key, max_array);
                     }
                     items.push(Value::String(format!("<+{extra} more items{schema}>")));
                     return;
                 }
             }
-            items.iter_mut().for_each(|it| redact_value(it, max_array));
+            items
+                .iter_mut()
+                .for_each(|it| redact_value(it, key, max_array));
         }
-        Value::Object(map) => map.values_mut().for_each(|it| redact_value(it, max_array)),
+        Value::Object(map) => map
+            .iter_mut()
+            .for_each(|(k, it)| redact_value(it, Some(k.as_str()), max_array)),
         _ => {}
     }
 }
@@ -284,7 +312,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn redact_replaces_long_strings_only() {
+    fn redact_elides_blob_fields() {
         let big: String = "A".repeat(500);
         let frame =
             format!(r#"{{"context":"nowplayingcover","data":{{"status":200,"cover":"{big}"}}}}"#);
@@ -294,6 +322,32 @@ mod tests {
         // Short strings are left intact.
         let small = r#"{"context":"playershuffle","data":"autodj"}"#;
         assert_eq!(redact_frame(small, None), small);
+    }
+
+    #[test]
+    fn redact_keeps_long_paths_readable() {
+        // A realistic long filesystem path (well over the old 96-char cutoff)
+        // must stay fully readable and must NOT be mislabeled as base64.
+        let long_path = format!("/media/music/{}track.flac", "artist-album/".repeat(20));
+        assert!(long_path.len() > 96 && long_path.len() < MAX_STR);
+        let frame = format!(r#"{{"context":"nowplayingtrack","data":{{"path":"{long_path}"}}}}"#);
+        let out = redact_frame(&frame, None);
+        assert!(
+            out.contains(&long_path),
+            "path should stay intact, got: {out}"
+        );
+        assert!(!out.contains("base64"), "got: {out}");
+    }
+
+    #[test]
+    fn redact_caps_huge_non_blob_strings_neutrally() {
+        // A pathologically long non-blob string is still shortened as a safety
+        // net, but with a neutral label rather than a base64 claim.
+        let big = "x".repeat(1000);
+        let frame = format!(r#"{{"context":"c","data":{{"note":"{big}"}}}}"#);
+        let out = redact_frame(&frame, None);
+        assert!(out.contains("<1000 chars>"), "got: {out}");
+        assert!(!out.contains("base64"), "got: {out}");
     }
 
     #[test]
