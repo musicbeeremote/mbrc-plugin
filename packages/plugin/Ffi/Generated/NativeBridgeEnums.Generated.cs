@@ -108,6 +108,7 @@ namespace MusicBeePlugin.Ffi.Generated
     {
         CacheStatus = 1,
         RecentBlocked = 2,
+        ListeningAddresses = 3,
     }
 
     public enum HostCommandType

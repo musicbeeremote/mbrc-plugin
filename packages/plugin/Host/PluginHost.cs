@@ -91,6 +91,12 @@ namespace MusicBeePlugin.Host
         /// <summary>The core's cache status, for the configuration panel's cache line.</summary>
         public CoreCacheStatus ReadCacheStatus() => _bridge.ReadCacheStatus();
 
+        /// <summary>
+        ///     The addresses a client can reach the server on (interface IPv4s +
+        ///     the bound port), for the configuration panel's connection group.
+        /// </summary>
+        public Ffi.ListeningInfo ReadListeningAddresses() => _bridge.ReadListeningAddresses();
+
         /// <summary>Trigger a background rebuild of the metadata (browse) cache.</summary>
         public bool RebuildMetadata() => _bridge.RebuildMetadata();
 

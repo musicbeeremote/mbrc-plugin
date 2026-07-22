@@ -194,6 +194,10 @@ pub enum HostQueryType {
     /// settings panel's "Blocked connections" view. Returns a MessagePack array
     /// of `BlockedConnection`, newest first.
     RecentBlocked = 2,
+    /// The addresses a client can reach the server on: candidate interface IPv4s
+    /// plus the bound port. The settings panel shows these so the user knows what
+    /// to point the phone at. Returns a MessagePack `ListeningInfo`.
+    ListeningAddresses = 3,
 }
 
 impl HostQueryType {
@@ -201,6 +205,7 @@ impl HostQueryType {
         match value {
             1 => Some(Self::CacheStatus),
             2 => Some(Self::RecentBlocked),
+            3 => Some(Self::ListeningAddresses),
             _ => None,
         }
     }
@@ -337,8 +342,12 @@ mod tests {
             HostQueryType::from_i32(2),
             Some(HostQueryType::RecentBlocked)
         );
+        assert_eq!(
+            HostQueryType::from_i32(3),
+            Some(HostQueryType::ListeningAddresses)
+        );
         assert_eq!(HostQueryType::from_i32(0), None);
-        assert_eq!(HostQueryType::from_i32(3), None);
+        assert_eq!(HostQueryType::from_i32(4), None);
         assert_eq!(
             HostCommandType::from_i32(1),
             Some(HostCommandType::RebuildMetadata)

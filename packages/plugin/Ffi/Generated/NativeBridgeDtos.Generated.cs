@@ -283,4 +283,10 @@ namespace MusicBeePlugin.Ffi
         public string reason { get; set; }
     }
 
+    public class ListeningInfo
+    {
+        public ushort port { get; set; }
+        public List<string> addresses { get; set; }
+    }
+
 }

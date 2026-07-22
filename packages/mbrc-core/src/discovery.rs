@@ -153,7 +153,11 @@ fn same_subnet(a: Ipv4Addr, b: Ipv4Addr, mask: Ipv4Addr) -> bool {
 /// a client can never reach: loopback, unspecified, and `169.254.x`
 /// link-local (APIPA). Virtual-adapter subnets are left in - the subnet match
 /// against the client sorts those out; they only surface as a fallback.
-fn usable_ipv4_ifaces() -> Vec<(Ipv4Addr, Ipv4Addr)> {
+///
+/// Also the source for the settings panel's "reachable at" list (via
+/// `HostQueryType::ListeningAddresses`): the same set the discovery responder
+/// would advertise is exactly what the user should point a client at.
+pub(crate) fn usable_ipv4_ifaces() -> Vec<(Ipv4Addr, Ipv4Addr)> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()

@@ -161,3 +161,17 @@ pub struct BlockedConnection {
     /// from this address").
     pub reason: String,
 }
+
+/// The addresses a client can reach the server on, surfaced to the settings
+/// panel (result of the `ListeningAddresses` host query) so the user knows what
+/// to point the phone client at - the way the shipped C# 1.4.1 panel listed the
+/// candidate IPs. A Rust -> C# *result*; the C# side reads a `ListeningInfo`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListeningInfo {
+    /// The TCP port the command server is bound to (the configured port; the
+    /// listener binds `0.0.0.0`, so every address below is reachable on it).
+    pub port: u16,
+    /// Candidate interface IPv4 addresses (textual), loopback/link-local
+    /// dropped. Empty when the host has no reachable non-loopback interface.
+    pub addresses: Vec<String>,
+}

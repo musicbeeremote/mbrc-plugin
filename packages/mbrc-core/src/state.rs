@@ -194,6 +194,7 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
     match kind {
         HostQueryType::CacheStatus => cache_status_bytes(),
         HostQueryType::RecentBlocked => recent_blocked_bytes(),
+        HostQueryType::ListeningAddresses => listening_info_bytes(),
     }
 }
 
@@ -233,6 +234,22 @@ fn recent_blocked_bytes() -> Option<Vec<u8>> {
         guard.as_ref()?.core.clone()
     };
     rmp_serde::to_vec_named(&core.blocked.recent()).ok()
+}
+
+/// Serialize the addresses a client can reach the server on (candidate interface
+/// IPv4s + the bound port) as MessagePack for the settings panel. `None` if the
+/// core is not initialized; an interface-less host yields an empty address list.
+fn listening_info_bytes() -> Option<Vec<u8>> {
+    let port = {
+        let guard = lock();
+        guard.as_ref()?.core.config.port
+    };
+    let addresses = crate::discovery::usable_ipv4_ifaces()
+        .into_iter()
+        .map(|(ip, _mask)| ip.to_string())
+        .collect();
+    let info = crate::ffi::dtos::ListeningInfo { port, addresses };
+    rmp_serde::to_vec_named(&info).ok()
 }
 
 /// Clear the in-memory blocked-connection log (the panel's "Clear" button).
@@ -419,6 +436,15 @@ mod tests {
             host_command(HostCommandType::ClearBlockedLog, &[]),
             MbrcResult::Ok
         );
+
+        // Listening-addresses host dispatch: reports the in-memory bound port
+        // (4321, not the 5555 just written - a write doesn't hot-reload). The
+        // address list is interface-dependent (empty on a loopback-only runner),
+        // so only the port is pinned here.
+        let listening =
+            host_query(HostQueryType::ListeningAddresses, &[]).expect("listening query");
+        let info: crate::ffi::dtos::ListeningInfo = rmp_serde::from_slice(&listening).unwrap();
+        assert_eq!(info.port, 4321);
 
         let _ = shutdown();
     }

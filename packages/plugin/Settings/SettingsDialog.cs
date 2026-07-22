@@ -52,6 +52,7 @@ namespace MusicBeePlugin.Settings
 
         private NumericUpDown _port;
         private Label _connStatus;
+        private Label _addresses;
         private Button _testConn;
         private ComboBox _filterMode;
         private TextBox _baseIp;
@@ -83,6 +84,7 @@ namespace MusicBeePlugin.Settings
 
             BuildLayout();
             LoadFromCore();
+            LoadListeningAddresses();
             LoadCacheStatus();
             LoadBlockedCount();
             RunConnectionTest();
@@ -176,9 +178,21 @@ namespace MusicBeePlugin.Settings
             statusRow.Controls.Add(_testConn);
             statusRow.Controls.Add(_connStatus);
 
+            // Read-only list of the addresses a client can reach this server on
+            // (each interface IPv4 + the bound port), so the user knows what to
+            // enter in the phone app - as the shipped 1.4.1 panel showed.
+            _addresses = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 4, 0, 0),
+                ForeColor = SystemColors.GrayText,
+            };
+
             var layout = GroupLayout();
             AddRow(layout, "Listening port", _port);
             AddRow(layout, "Status", statusRow);
+            AddRow(layout, "Reachable at", _addresses);
             return WrapGroup("Connection", layout);
         }
 
@@ -482,6 +496,32 @@ namespace MusicBeePlugin.Settings
             _firewall.Checked = s.update_firewall;
             UpdateFilterEnabled();
             SetStatus(string.Empty, true);
+        }
+
+        /// <summary>
+        ///     Render the addresses a client can reach this server on (each
+        ///     interface IPv4 + the bound port), read from the core. Shown so the
+        ///     user knows what to enter in the phone app. The list reflects the
+        ///     running server, so it does not change while the dialog is open.
+        /// </summary>
+        private void LoadListeningAddresses()
+        {
+            var info = _host.ReadListeningAddresses();
+            if (info == null)
+            {
+                _addresses.Text = "Unavailable (core not running).";
+                return;
+            }
+
+            if (info.addresses == null || info.addresses.Count == 0)
+            {
+                _addresses.Text = "No reachable network address detected.";
+                return;
+            }
+
+            _addresses.Text = string.Join(
+                Environment.NewLine,
+                info.addresses.Select(a => a + ":" + info.port.ToString(CultureInfo.InvariantCulture)));
         }
 
         /// <summary>Read the cache status from the core and render the line.</summary>

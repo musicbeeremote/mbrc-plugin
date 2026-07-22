@@ -366,6 +366,15 @@ namespace MusicBeePlugin.Ffi
         /// <summary>Read the core's cache status for the settings panel.</summary>
         public CoreCacheStatus ReadCacheStatus() => Query<CoreCacheStatus>(HostQueryType.CacheStatus);
 
+        /// <summary>
+        ///     The addresses a client can reach the server on (candidate
+        ///     interface IPv4s + the bound port), for the settings panel to show
+        ///     the user what to point the phone client at. Null if the core is
+        ///     not initialized or the read fails.
+        /// </summary>
+        public ListeningInfo ReadListeningAddresses() =>
+            Query<ListeningInfo>(HostQueryType.ListeningAddresses);
+
         /// <summary>Trigger a background rebuild of the metadata (browse) cache.</summary>
         public bool RebuildMetadata() => Command(HostCommandType.RebuildMetadata);
 
