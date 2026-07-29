@@ -81,71 +81,33 @@ jobs:
     name: build nightly
     needs: check
     if: needs.check.outputs.should_build == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      version-suffix: nightly.${{ needs.check.outputs.version }}
+      artifact-name: nightly-dist-${{ needs.check.outputs.version }}
+
+  package:
+    name: package nightly
+    needs: [ check, build ]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
-      - name: setup MSBuild
-        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+      - name: download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-dist-${{ needs.check.outputs.version }}
+          path: build/dist
 
-      - name: setup NuGet
-        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
-
-      # The plugin build compiles mbrc_core.dll for i686 via build.ps1 -Rust.
-      - name: setup Rust (i686 target)
-        run: rustup target add i686-pc-windows-msvc
-
-      - name: cache Rust build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: restore packages
-        run: nuget restore MBRC.sln -OutputDirectory .nuget -NonInteractive -LockedMode
-
-      - name: build
-        env:
-          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
-        run: |
-          $version = $env:NIGHTLY_VERSION
-          msbuild MBRC.sln /p:Configuration="Release" /p:VersionSuffix="-nightly.$version" /m /v:M /nr:false
-
-      - name: prepare artifacts
-        run: |
-          mkdir -p build/dist
-          cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
-          cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
-          cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
-          cp LICENSE build/dist
-          cp installer/README.txt build/dist
-
-      - name: install NSIS
-        run: choco install nsis -y
-
-      - name: get version prefix
-        id: version_prefix
-        run: |
-          $xml = [xml](Get-Content Directory.Build.props)
-          $prefix = $xml.Project.PropertyGroup.VersionPrefix
-          echo "PREFIX=$prefix" >> $env:GITHUB_OUTPUT
-
-      - name: build installer
-        env:
-          VERSION_PREFIX: ${{ steps.version_prefix.outputs.PREFIX }}
-          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
-        run: |
-          $version = "${env:VERSION_PREFIX}-nightly.${env:NIGHTLY_VERSION}"
-          $env:PLUGIN_VERSION = $version
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer\MusicBeeRemote.nsi
-          mv "installer\musicbee_remote_$version.exe" "build\dist\"
-
-      - name: create zip
-        env:
-          VERSION_PREFIX: ${{ steps.version_prefix.outputs.PREFIX }}
-          NIGHTLY_VERSION: ${{ needs.check.outputs.version }}
-        run: |
-          $version = "${env:VERSION_PREFIX}-nightly.${env:NIGHTLY_VERSION}"
-          Compress-Archive -Path "build\dist\mb_remote.dll", "build\dist\mbrc_core.dll", "build\dist\firewall-utility.exe", "build\dist\LICENSE", "build\dist\README.txt" -DestinationPath "build\dist\musicbee_remote_$version.zip"
+      # Attestation stays off until nightlies publish to a real release
+      # (rolling `nightly` tag) rather than a 7-day workflow artifact. See #148.
+      - name: package
+        uses: ./.github/actions/package
+        with:
+          version: ${{ needs.build.outputs.version }}
+          attest: 'false'
 
       - name: upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -154,4 +116,5 @@ jobs:
           path: |
             build/dist/*.exe
             build/dist/*.zip
+            build/dist/*.sha512
           retention-days: 7

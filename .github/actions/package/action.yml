@@ -1,0 +1,90 @@
+name: package
+description: >-
+  Build the NSIS installer and zip from build/dist, emit SHA512 sidecars, and
+  optionally attest build provenance. Shared by release.yml and nightly.yml so
+  the packaging logic exists once.
+
+inputs:
+  version:
+    description: 'Full version string, e.g. 1.5.0 or 1.5.0-nightly.20260729.'
+    required: true
+  attest:
+    description: 'Publish build provenance attestations. Requires id-token: write and attestations: write on the calling job.'
+    required: false
+    default: 'false'
+
+outputs:
+  installer:
+    description: 'Path to the built installer.'
+    value: ${{ steps.names.outputs.INSTALLER }}
+  zip:
+    description: 'Path to the built zip archive.'
+    value: ${{ steps.names.outputs.ZIP }}
+
+runs:
+  using: composite
+  steps:
+    - name: resolve artifact names
+      id: names
+      shell: pwsh
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        # build/dist is fixed rather than an input: MusicBeeRemote.nsi pulls its
+        # payload from a hardcoded ..\build\dist.
+        $base = "musicbee_remote_$env:VERSION"
+        echo "BASE=$base" >> $env:GITHUB_OUTPUT
+        echo "INSTALLER=build/dist/$base.exe" >> $env:GITHUB_OUTPUT
+        echo "ZIP=build/dist/$base.zip" >> $env:GITHUB_OUTPUT
+
+    - name: install NSIS
+      shell: pwsh
+      run: choco install nsis -y
+
+    - name: build installer
+      shell: pwsh
+      env:
+        VERSION: ${{ inputs.version }}
+        BASE: ${{ steps.names.outputs.BASE }}
+      run: |
+        # MusicBeeRemote.nsi reads PLUGIN_VERSION from the environment.
+        $env:PLUGIN_VERSION = $env:VERSION
+        & "C:\Program Files (x86)\NSIS\makensis.exe" installer\MusicBeeRemote.nsi
+        mv "installer\$env:BASE.exe" "build\dist\"
+
+    - name: create zip archive
+      shell: pwsh
+      env:
+        BASE: ${{ steps.names.outputs.BASE }}
+      run: |
+        $files = @(
+          "build\dist\mb_remote.dll",
+          "build\dist\mbrc_core.dll",
+          "build\dist\firewall-utility.exe",
+          "build\dist\LICENSE",
+          "build\dist\README.txt"
+        )
+        Compress-Archive -Path $files -DestinationPath "build\dist\$env:BASE.zip"
+
+    - name: generate checksums
+      shell: pwsh
+      env:
+        BASE: ${{ steps.names.outputs.BASE }}
+      run: |
+        foreach ($ext in @('exe', 'zip')) {
+          $name = "$env:BASE.$ext"
+          $hash = (Get-FileHash -Algorithm SHA512 "build\dist\$name").Hash.ToLower()
+          "$hash  $name" | Out-File -Encoding ascii "build\dist\$name.sha512"
+        }
+
+    - name: attest build provenance (installer)
+      if: inputs.attest == 'true'
+      uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      with:
+        subject-path: ${{ steps.names.outputs.INSTALLER }}
+
+    - name: attest build provenance (zip)
+      if: inputs.attest == 'true'
+      uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      with:
+        subject-path: ${{ steps.names.outputs.ZIP }}

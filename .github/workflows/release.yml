@@ -1,0 +1,93 @@
+name: release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 1.5.0. Dry runs only; no release is published.'
+        type: string
+        required: true
+
+# Least-privilege default; the publish job opts into more.
+permissions:
+  contents: read
+
+# Let a tag run finish rather than cancelling it mid-publish.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version || github.ref_name }}
+      artifact-name: mbrc-plugin-release
+      run-format-check: true
+      run-tests: true
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: write      # create the GitHub release and upload its assets
+      id-token: write      # OIDC token used to sign the build provenance attestation
+      attestations: write  # publish the provenance attestation
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # The bundle is downloaded rather than rebuilt so the bytes that get
+      # hashed, attested and published are the exact bytes that were tested.
+      - name: download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mbrc-plugin-release
+          path: build/dist
+
+      - name: package
+        id: package
+        uses: ./.github/actions/package
+        with:
+          version: ${{ needs.build.outputs.version }}
+          attest: 'true'
+
+      - name: create GitHub release
+        # Dry runs (workflow_dispatch) build and attest but never publish.
+        if: startsWith(github.ref, 'refs/tags/v')
+        # zizmor: ignore[superfluous-actions] — kept intentionally: the action bundles
+        # release-notes generation + multi-asset upload that a raw `gh release` step would reimplement.
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          files: |
+            ${{ steps.package.outputs.installer }}
+            ${{ steps.package.outputs.installer }}.sha512
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha512
+          generate_release_notes: true
+          body: |
+            See the [CHANGELOG](https://github.com/musicbeeremote/mbrc-plugin/blob/main/CHANGELOG.md) for details.
+
+            ## MusicBee Microsoft Store version
+
+            If you are using the Microsoft Store version of MusicBee, install the plugin using the zip file.
+
+            Go to MusicBee -> Edit -> Preferences -> Plugins and use the "Add Plugin" button to install directly from the zip file.
+
+            ## Verify integrity
+
+            To verify the downloaded file integrity you can use Windows PowerShell:
+
+            ```powershell
+            cd Downloads
+            Get-FileHash -Path .\musicbee_remote_${{ needs.build.outputs.version }}.exe -Algorithm SHA512
+            ```
+
+            Ensure that the Hash matches the one in the corresponding `.sha512` file.

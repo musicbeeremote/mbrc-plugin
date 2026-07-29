@@ -1,0 +1,159 @@
+name: build
+
+# Reusable build for the plugin bundle. Called by ci.yml, release.yml and
+# nightly.yml so the MSBuild + Rust steps exist in exactly one place.
+#
+# Version handling: callers pass EITHER a full `version` (release, from the tag)
+# OR a `version-suffix` appended to VersionPrefix from Directory.Build.props
+# (ci, nightly). The resolved value is passed to MSBuild as /p:Version so the
+# assembly version and the packaged filenames can never disagree, and is
+# re-exported as the `version` output for the packaging step.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Full version, e.g. 1.5.0. A leading "v" is stripped. Wins over version-suffix.'
+        type: string
+        default: ''
+      version-suffix:
+        description: 'Prerelease suffix appended to VersionPrefix, e.g. nightly.20260729. No leading dash.'
+        type: string
+        default: ''
+      artifact-name:
+        description: 'Name of the uploaded build/dist artifact.'
+        type: string
+        required: true
+      run-format-check:
+        description: 'Run dotnet format --verify-no-changes.'
+        type: boolean
+        default: false
+      run-tests:
+        description: 'Run the xUnit suite.'
+        type: boolean
+        default: false
+      upload-coverage:
+        description: 'Upload coverage to Codecov. Requires run-tests and the CODECOV_TOKEN secret.'
+        type: boolean
+        default: false
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+    outputs:
+      version:
+        description: 'The resolved full version string.'
+        value: ${{ jobs.build.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build & test
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: setup MSBuild
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+
+      - name: setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: '10.0.x'  # kept in sync with global.json
+
+      - name: setup NuGet
+        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
+
+      # The plugin build invokes build.ps1 -Rust (MSBuild BuildRustCore target),
+      # which compiles mbrc_core.dll for i686. The runner ships Rust; we just add
+      # the 32-bit target the plugin links against.
+      - name: setup Rust (i686 target)
+        run: rustup target add i686-pc-windows-msvc
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: restore packages
+        run: nuget restore MBRC.sln -OutputDirectory .nuget -NonInteractive -LockedMode
+
+      - name: resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SUFFIX: ${{ inputs.version-suffix }}
+        run: |
+          if ($env:INPUT_VERSION) {
+            $version = $env:INPUT_VERSION -replace '^v', ''
+          } else {
+            $xml = [xml](Get-Content Directory.Build.props)
+            $prefix = ($xml.Project.PropertyGroup.VersionPrefix | Where-Object { $_ }).Trim()
+            if (-not $prefix) {
+              Write-Error "VersionPrefix not found in Directory.Build.props"
+              exit 1
+            }
+            if ($env:INPUT_SUFFIX) {
+              # Single dash: MSBuild's own VersionPrefix/VersionSuffix join uses one,
+              # and the packaged filenames are derived from this same string.
+              $version = "$prefix-$($env:INPUT_SUFFIX)"
+            } else {
+              $version = $prefix
+            }
+          }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Building version: $version"
+
+      - name: check code formatting
+        if: inputs.run-format-check
+        run: |
+          echo "Checking code formatting..."
+          echo "Running dotnet format --exclude=firewall-utility --verify-no-changes"
+          dotnet format --exclude="firewall-utility" --verify-no-changes --verbosity normal
+          if ($LASTEXITCODE -ne 0) {
+            echo "❌ Code formatting issues found! Run 'dotnet format --exclude=firewall-utility' to fix them."
+            echo "Note: Some analyzer warnings (CA####) are expected and don't affect formatting."
+            exit 1
+          }
+          echo "✅ Code formatting is clean!"
+
+      - name: build with strict analysis
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          echo "🔍 Building with strict static analysis (warnings as errors)..."
+          msbuild MBRC.sln /p:Configuration="Release" /p:MSBuildCI="true" /p:Version=$env:VERSION /m /v:M /fl /nr:false
+
+      - name: run tests with coverage
+        if: inputs.run-tests
+        run: |
+          dotnet test tests/csharp/MusicBeeRemote.Core.Tests.csproj --configuration Release --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: upload coverage to Codecov
+        if: inputs.run-tests && inputs.upload-coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./TestResults
+          flags: csharp
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: copy to dist
+        run: |
+          mkdir -p build/dist
+          cp build/bin/plugin/Release/net48/mb_remote.dll build/dist
+          # Native core (Release -> the `plugin` cargo profile); must ship next to
+          # mb_remote.dll. Not embedded by Costura (managed-only).
+          cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
+          cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
+          cp LICENSE build/dist
+          cp installer/README.txt build/dist
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: build/dist
