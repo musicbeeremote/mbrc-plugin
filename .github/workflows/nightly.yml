@@ -107,6 +107,7 @@ jobs:
         uses: ./.github/actions/package
         with:
           version: ${{ needs.build.outputs.version }}
+          channel: nightly
           attest: 'false'
 
       - name: upload artifacts

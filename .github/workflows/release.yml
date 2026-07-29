@@ -10,7 +10,7 @@ on:
         type: string
         required: true
 
-# Least-privilege default; the publish job opts into more.
+# Least-privilege default; each job opts into what it needs.
 permissions:
   contents: read
 
@@ -29,23 +29,21 @@ jobs:
       run-format-check: true
       run-tests: true
 
-  publish:
-    name: publish
+  package:
+    name: package
     needs: build
     runs-on: windows-latest
-    environment: release
     permissions:
-      contents: write      # create the GitHub release and upload its assets
+      contents: read
       id-token: write      # OIDC token used to sign the build provenance attestation
       attestations: write  # publish the provenance attestation
-
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
       # The bundle is downloaded rather than rebuilt so the bytes that get
-      # hashed, attested and published are the exact bytes that were tested.
+      # hashed, signed, attested and published are the bytes that were tested.
       - name: download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -53,24 +51,119 @@ jobs:
           path: build/dist
 
       - name: package
-        id: package
         uses: ./.github/actions/package
         with:
           version: ${{ needs.build.outputs.version }}
+          channel: stable
           attest: 'true'
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mbrc-plugin-packaged
+          path: build/dist
+
+  # Signing is deliberately its own job, on Linux, gated on the `release`
+  # environment. It is the only job that ever sees the private key, and it does
+  # nothing but read one JSON file and emit a signature: the packaging job runs
+  # Chocolatey and NSIS, and third-party installers have no business sharing a
+  # runner with a release signing key.
+  sign:
+    name: sign manifest
+    needs: [ build, package ]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: download packaged artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mbrc-plugin-packaged
+          path: build/dist
+
+      - name: install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      # Parse the generated manifest with the same code the plugin uses, before
+      # signing it. A drift between the PowerShell generator and the Rust parser
+      # then fails the release instead of shipping a manifest no installed
+      # plugin can read.
+      - name: validate manifest against the parser
+        run: cargo run -p mbrc-update --example validate-manifest -- build/dist/manifest.json
+
+      - name: sign manifest
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$(mktemp)"
+          trap 'shred -u "$key" 2>/dev/null || rm -f "$key"' EXIT
+
+          printf '%s' "$MINISIGN_SECRET_KEY" | base64 -d > "$key"
+          printf '%s\n' "$MINISIGN_PASSWORD" | minisign \
+            -S -s "$key" \
+            -m build/dist/manifest.json \
+            -x build/dist/manifest.json.minisig \
+            -t "MusicBee Remote $VERSION"
+
+      # Verifying with the committed public key catches a mismatched
+      # MINISIGN_SECRET_KEY here rather than on every user's machine after the
+      # release has already shipped.
+      - name: verify signature against the committed public keys
+        run: |
+          set -euo pipefail
+          verified=0
+          for pub in packages/mbrc-update/keys/*.pub; do
+            if minisign -V -p "$pub" -m build/dist/manifest.json -q; then
+              echo "manifest verifies against $(basename "$pub")"
+              verified=1
+              break
+            fi
+          done
+          if [ "$verified" -ne 1 ]; then
+            echo "::error::manifest does not verify against any committed release public key"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mbrc-plugin-signed
+          path: build/dist
+
+  publish:
+    name: publish
+    needs: [ build, sign ]
+    # Dry runs (workflow_dispatch) build, package, sign and attest, but never publish.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the GitHub release and upload its assets
+    steps:
+      - name: download signed artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mbrc-plugin-signed
+          path: build/dist
+
       - name: create GitHub release
-        # Dry runs (workflow_dispatch) build and attest but never publish.
-        if: startsWith(github.ref, 'refs/tags/v')
         # zizmor: ignore[superfluous-actions] — kept intentionally: the action bundles
         # release-notes generation + multi-asset upload that a raw `gh release` step would reimplement.
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: |
-            ${{ steps.package.outputs.installer }}
-            ${{ steps.package.outputs.installer }}.sha512
-            ${{ steps.package.outputs.zip }}
-            ${{ steps.package.outputs.zip }}.sha512
+            build/dist/musicbee_remote_${{ needs.build.outputs.version }}.exe
+            build/dist/musicbee_remote_${{ needs.build.outputs.version }}.exe.sha512
+            build/dist/musicbee_remote_${{ needs.build.outputs.version }}.zip
+            build/dist/musicbee_remote_${{ needs.build.outputs.version }}.zip.sha512
+            build/dist/manifest.json
+            build/dist/manifest.json.minisig
           generate_release_notes: true
           body: |
             See the [CHANGELOG](https://github.com/musicbeeremote/mbrc-plugin/blob/main/CHANGELOG.md) for details.
@@ -91,3 +184,31 @@ jobs:
             ```
 
             Ensure that the Hash matches the one in the corresponding `.sha512` file.
+
+            ## Verify authenticity
+
+            A hash only proves the download was not corrupted. To prove the files came
+            from this project, verify a signature.
+
+            `manifest.json` lists the SHA512 of every published artifact and is signed
+            with the project's release key. This is what the plugin's own updater checks
+            automatically; the key is built into the plugin, so it needs nothing extra.
+
+            To check it yourself, easiest first:
+
+            **With the GitHub CLI** (already installed for many, `winget install GitHub.cli`):
+
+            ```
+            gh attestation verify musicbee_remote_${{ needs.build.outputs.version }}.zip --repo musicbeeremote/mbrc-plugin
+            ```
+
+            **With [minisign](https://jedisct1.github.io/minisign/)**, which also works
+            fully offline (`winget install jedisct1.minisign`):
+
+            ```
+            minisign -Vm manifest.json -P RWSvA74oRp/zMFdIdbo3fPVjT4DPO7jaZPOwKY/ca0Oa9j+SeKbMbRq5
+            ```
+
+            then check that the `sha512` values in `manifest.json` match the files you
+            downloaded. All release public keys are committed at
+            [`packages/mbrc-update/keys/`](https://github.com/musicbeeremote/mbrc-plugin/tree/main/packages/mbrc-update/keys).

@@ -175,3 +175,6 @@ tests/captures/
 
 # Test results
 TestResults/
+
+# Release signing keys: private halves must never be committed.
+mbrc-release-*.key

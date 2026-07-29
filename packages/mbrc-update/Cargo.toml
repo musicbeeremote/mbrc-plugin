@@ -1,0 +1,15 @@
+[package]
+name = "mbrc-update"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+description = "Signed release manifest parsing and verification shared by the core and the updater."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+# Zero-dependency Ed25519 minisign verification. The signing half never lives
+# here: releases are signed in CI with the `minisign` CLI.
+minisign-verify = "=0.2.5"
+sha2 = "=0.10.9"
+hex = "=0.4.3"

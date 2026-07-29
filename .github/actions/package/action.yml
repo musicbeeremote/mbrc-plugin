@@ -1,13 +1,21 @@
 name: package
 description: >-
-  Build the NSIS installer and zip from build/dist, emit SHA512 sidecars, and
-  optionally attest build provenance. Shared by release.yml and nightly.yml so
-  the packaging logic exists once.
+  Build the NSIS installer and zip from build/dist, emit SHA512 sidecars and the
+  signed-release manifest, and optionally attest build provenance. Shared by
+  release.yml and nightly.yml so the packaging logic exists once.
 
 inputs:
   version:
     description: 'Full version string, e.g. 1.5.0 or 1.5.0-nightly.20260729.'
     required: true
+  channel:
+    description: 'Release channel recorded in the manifest: stable or nightly.'
+    required: false
+    default: 'stable'
+  notes-url:
+    description: 'Release notes URL recorded in the manifest.'
+    required: false
+    default: ''
   attest:
     description: 'Publish build provenance attestations. Requires id-token: write and attestations: write on the calling job.'
     required: false
@@ -20,6 +28,9 @@ outputs:
   zip:
     description: 'Path to the built zip archive.'
     value: ${{ steps.names.outputs.ZIP }}
+  manifest:
+    description: 'Path to the unsigned release manifest.'
+    value: ${{ steps.names.outputs.MANIFEST }}
 
 runs:
   using: composite
@@ -36,6 +47,7 @@ runs:
         echo "BASE=$base" >> $env:GITHUB_OUTPUT
         echo "INSTALLER=build/dist/$base.exe" >> $env:GITHUB_OUTPUT
         echo "ZIP=build/dist/$base.zip" >> $env:GITHUB_OUTPUT
+        echo "MANIFEST=build/dist/manifest.json" >> $env:GITHUB_OUTPUT
 
     - name: install NSIS
       shell: pwsh
@@ -77,6 +89,79 @@ runs:
           "$hash  $name" | Out-File -Encoding ascii "build\dist\$name.sha512"
         }
 
+    - name: generate manifest
+      shell: pwsh
+      env:
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+        NOTES_URL: ${{ inputs.notes-url }}
+        BASE: ${{ steps.names.outputs.BASE }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # The two constants below are read from the sources that already own
+        # them, so the manifest cannot drift from what the plugin enforces.
+        $abiSrc = Get-Content packages/mbrc-core/src/ffi/types.rs -Raw
+        if ($abiSrc -notmatch 'MBRC_ABI_VERSION:\s*i32\s*=\s*(\d+)') {
+          throw "MBRC_ABI_VERSION not found in packages/mbrc-core/src/ffi/types.rs"
+        }
+        $abiVersion = [int]$Matches[1]
+
+        $nsiSrc = Get-Content installer/MusicBeeRemote.nsi -Raw
+        if ($nsiSrc -notmatch '\$R4\s*<\s*(\d+)') {
+          throw "minimum MusicBee build not found in installer/MusicBeeRemote.nsi"
+        }
+        $minBuild = [int]$Matches[1]
+
+        function Get-Artifact($path, $name) {
+          [ordered]@{
+            name   = $name
+            size   = (Get-Item $path).Length
+            sha512 = (Get-FileHash -Algorithm SHA512 $path).Hash.ToLower()
+          }
+        }
+
+        # Exactly the files the updater installs. LICENSE and README.txt ride
+        # along in the zip but are not applied, so they are not listed: the
+        # extractor writes only what appears here.
+        $bundled = @('mb_remote.dll', 'mbrc_core.dll', 'firewall-utility.exe')
+        $files = foreach ($name in $bundled) {
+          [ordered]@{
+            path   = $name
+            sha512 = (Get-FileHash -Algorithm SHA512 "build\dist\$name").Hash.ToLower()
+          }
+        }
+
+        $notesUrl = $env:NOTES_URL
+        if (-not $notesUrl) {
+          $notesUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$env:VERSION"
+        }
+
+        $manifest = [ordered]@{
+          schema             = 1
+          channel            = $env:CHANNEL
+          version            = $env:VERSION
+          released_at        = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+          abi_version        = $abiVersion
+          min_musicbee_build = $minBuild
+          notes_url          = $notesUrl
+          artifacts          = [ordered]@{
+            zip       = Get-Artifact "build\dist\$env:BASE.zip" "$env:BASE.zip"
+            installer = Get-Artifact "build\dist\$env:BASE.exe" "$env:BASE.exe"
+          }
+          files              = @($files)
+        }
+
+        # No BOM: the signature covers these bytes exactly, and minisign-verify
+        # on the plugin side sees whatever is written here.
+        $json = ($manifest | ConvertTo-Json -Depth 6) + "`n"
+        [System.IO.File]::WriteAllText(
+          (Join-Path $PWD 'build\dist\manifest.json'),
+          $json,
+          (New-Object System.Text.UTF8Encoding $false)
+        )
+        Get-Content build\dist\manifest.json
+
     - name: attest build provenance (installer)
       if: inputs.attest == 'true'
       uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
@@ -88,3 +173,9 @@ runs:
       uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
       with:
         subject-path: ${{ steps.names.outputs.ZIP }}
+
+    - name: attest build provenance (manifest)
+      if: inputs.attest == 'true'
+      uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      with:
+        subject-path: ${{ steps.names.outputs.MANIFEST }}

@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "channel": "stable",
+  "version": "1.5.0",
+  "released_at": "2026-07-29T12:00:00Z",
+  "abi_version": 3,
+  "min_musicbee_build": 6500,
+  "notes_url": "https://github.com/musicbeeremote/mbrc-plugin/releases/tag/v1.5.0",
+  "artifacts": {
+    "zip": {
+      "name": "musicbee_remote_1.5.0.zip",
+      "size": 1234567,
+      "sha512": "d21e7175e3d304aefdab300d64584a78e33e20fe5644dd53b9225418d7dd479fa6a16639434b636f207f5c4f6f3d00e900824f205de8877f87ba82636cc03703"
+    },
+    "installer": {
+      "name": "musicbee_remote_1.5.0.exe",
+      "size": 2345678,
+      "sha512": "6860154acde0508ec43840aacba3b8ee2ae7301e0b06c29d4e4b3196ffaf7c15919c19cc169d0b416d9d55a2e1b078721a024e4c7de12127b77dcc64d034afff"
+    }
+  },
+  "files": [
+    {
+      "path": "mb_remote.dll",
+      "sha512": "15add527ed4efb168bf47312d86eca3266bef4394b313aa32c94324bb42ea157c348006eace7c6ccd1487b1798ba3300ef213ae57474e5fde7aadf2d90c39188"
+    },
+    {
+      "path": "mbrc_core.dll",
+      "sha512": "4861687f1f9300739223e7ad4c37393abf6e264d49c15167650c6eaee9db6791a0cf0436553b85c198076b373127cc3cb631cb8e1a0b6ebe896c6340b8866a90"
+    },
+    {
+      "path": "mbrc-helper.exe",
+      "sha512": "74dea802804d8d236611b5372f26811227bf3b0302ba95aeccd600c1fd0a78a1fb551b0c7b9f66410c95cd8e13a72789582a4a9a1bc768410b1654fa49fc9f96"
+    }
+  ]
+}
