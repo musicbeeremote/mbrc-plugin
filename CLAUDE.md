@@ -71,13 +71,15 @@ cargo test -p mbrc-core --target i686-pc-windows-msvc   # Rust core + integratio
   (wire codec/handshake, UDP discovery, capture/fixture tooling).
 - `packages/plugin/` - the C# plugin (`mb_remote.dll`): `Plugin.cs` entry point, `Ffi/` FFI shim
   + generated bindings, `Providers/` MusicBee API callbacks, `Settings/`, `Host/`.
-- `packages/firewall-utility/` - elevated helper that adds the Windows firewall rule.
+- `packages/mbrc-helper/` - `mbrc-helper.exe`, the elevated helper: adds the Windows
+  firewall rule (`firewall --port <n>`) and, later, applies staged updates. Replaces the
+  retired C# `firewall-utility`.
 - `tools/mbrc-cli/` - the `mbrc` CLI (`send`, `monitor`, `capture`, `replay`, `trim`, ...); the
   read-only `monitor` subcommand is the validation harness.
 - `tools/api-debugger/` - standalone Tauri + Vue API testing app (its own CI, not in `MBRC.sln`;
   use pnpm, not npm).
 - `tests/golden/` - committed golden wire traces (`legacy-v4-{android,ios}.jsonl`).
-- `MBRC.sln` - the C# projects (plugin, firewall-utility, MusicBeeRemote.Core.Tests). The Rust
+- `MBRC.sln` - the C# projects (plugin, MusicBeeRemote.Core.Tests). The Rust
   crates are a separate Cargo workspace (root `Cargo.toml`).
 
 ## Architecture Overview

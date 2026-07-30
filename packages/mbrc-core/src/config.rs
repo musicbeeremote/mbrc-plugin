@@ -123,7 +123,7 @@ pub struct Config {
     /// reads it from its settings snapshot and casts back. Default 1 (Library).
     pub search_source: i32,
     /// Whether the host adds a Windows firewall rule on save (host-facing
-    /// preference; persisted here, acted on C#-side via firewall-utility).
+    /// preference; persisted here, acted on C#-side by launching mbrc-helper).
     pub update_firewall: bool,
     /// How verbose the core log is (`info` / `debug` / `trace`).
     pub log_level: LogLevel,

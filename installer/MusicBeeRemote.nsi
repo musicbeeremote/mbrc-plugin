@@ -88,7 +88,11 @@ Section "MainSection" SEC01
 	; The native Rust core the plugin loads at runtime. Costura embeds only the
 	; managed deps into mb_remote.dll; mbrc_core.dll must ship side-by-side.
 	File ..\build\dist\mbrc_core.dll
-	File ..\build\dist\firewall-utility.exe
+	; Elevated helper: firewall rule creation, and applying staged updates.
+	File ..\build\dist\mbrc-helper.exe
+	; Retire the C# utility mbrc-helper replaces. Installs from before 1.5.0
+	; shipped it, and nothing else would ever remove it.
+	Delete "$INSTDIR\Plugins\firewall-utility.exe"
 	SetOverwrite off
 SectionEnd
 
@@ -117,6 +121,9 @@ Section Uninstall
 	; Plugin files live under $INSTDIR\Plugins (see SetOutPath above).
 	Delete "$INSTDIR\Plugins\mb_remote.dll"
 	Delete "$INSTDIR\Plugins\mbrc_core.dll"
+	Delete "$INSTDIR\Plugins\mbrc-helper.exe"
+	; Also clear the pre-1.5.0 C# utility, in case this uninstall follows an
+	; upgrade from an install that had it.
 	Delete "$INSTDIR\Plugins\firewall-utility.exe"
 	Delete "$INSTDIR\Plugins\mbremoteuninstall.exe"
 	RmDir /r "$APPDATA\MusicBee\mb_remote"

@@ -97,11 +97,12 @@
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</RepoRoot>
   </PropertyGroup>
 
-  <!-- Build the Rust core (mbrc_core.dll) as part of the plugin build, so a
-       single "Build"/Run in the IDE produces both halves. build.ps1 -Rust also
-       stages mbrc_core.dll next to the plugin in app\MusicBee\Plugins. -->
+  <!-- Build the Rust side (mbrc_core.dll and mbrc-helper.exe) as part of the
+       plugin build, so a single "Build"/Run in the IDE produces every half.
+       build.ps1 -Rust also stages both next to the plugin in
+       app\MusicBee\Plugins. -->
   <Target Name="BuildRustCore" BeforeTargets="BeforeBuild">
-    <Message Text="Building Rust core (mbrc_core.dll, $(Configuration))..." Importance="high" />
+    <Message Text="Building Rust core and helper (mbrc_core.dll, mbrc-helper.exe, $(Configuration))..." Importance="high" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RepoRoot)build.ps1&quot; -Rust -Configuration $(Configuration)"
           WorkingDirectory="$(RepoRoot)" />
   </Target>

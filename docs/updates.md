@@ -36,7 +36,7 @@ know is an updater that installs the wrong bytes.
   "files": [
     { "path": "mb_remote.dll",        "sha512": "..." },
     { "path": "mbrc_core.dll",        "sha512": "..." },
-    { "path": "firewall-utility.exe", "sha512": "..." }
+    { "path": "mbrc-helper.exe",      "sha512": "..." }
   ]
 }
 ```

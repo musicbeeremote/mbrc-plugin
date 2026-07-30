@@ -11,6 +11,7 @@ resolver = "2"
 members = [
     "packages/mbrc-core",
     "packages/mbrc-update",
+    "packages/mbrc-helper",
     "packages/mbrc-discovery",
     "packages/mbrc-wire",
     "packages/mbrc-capture",

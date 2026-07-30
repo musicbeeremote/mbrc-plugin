@@ -72,7 +72,7 @@ runs:
         $files = @(
           "build\dist\mb_remote.dll",
           "build\dist\mbrc_core.dll",
-          "build\dist\firewall-utility.exe",
+          "build\dist\mbrc-helper.exe",
           "build\dist\LICENSE",
           "build\dist\README.txt"
         )
@@ -124,7 +124,7 @@ runs:
         # Exactly the files the updater installs. LICENSE and README.txt ride
         # along in the zip but are not applied, so they are not listed: the
         # extractor writes only what appears here.
-        $bundled = @('mb_remote.dll', 'mbrc_core.dll', 'firewall-utility.exe')
+        $bundled = @('mb_remote.dll', 'mbrc_core.dll', 'mbrc-helper.exe')
         $files = foreach ($name in $bundled) {
           [ordered]@{
             path   = $name

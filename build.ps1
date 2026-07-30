@@ -1,6 +1,6 @@
-# Unified build for MusicBee Remote: the Rust core (mbrc_core.dll, x86) and the
-# C# plugin (mb_remote.dll). By default builds both; pass -Rust or -Plugin to
-# build just one.
+# Unified build for MusicBee Remote: the Rust core (mbrc_core.dll, x86), the
+# elevated helper (mbrc-helper.exe, x86) and the C# plugin (mb_remote.dll). By
+# default builds both sides; pass -Rust or -Plugin to build just one.
 #
 #   .\build.ps1                      # both, Release
 #   .\build.ps1 -Configuration Debug # both, Debug (copies to app\MusicBee\Plugins)
@@ -34,7 +34,7 @@ if ($Clean -and (Test-Path "$root\build")) {
 
 # ---------------------------------------------------------------- Rust core ---
 if ($buildRust) {
-    Write-Step "Building Rust core (mbrc-core, $target, $Configuration)"
+    Write-Step "Building Rust core + helper (mbrc-core, mbrc-helper, $target, $Configuration)"
 
     if (-not (rustup target list --installed | Select-String -SimpleMatch $target)) {
         Write-Host "Installing rust target $target..." -ForegroundColor Yellow
@@ -42,12 +42,16 @@ if ($buildRust) {
     }
 
     # Release -> the size-optimised, unwind `plugin` profile; Debug -> dev.
+    # The helper is built with the same profile as the core rather than plain
+    # `release`: it shares dependencies with the core, so one profile means one
+    # set of compiled artifacts and one output directory. `panic = "unwind"`
+    # exists for the cdylib's FFI catch_unwind and is simply inert in an exe.
     if ($Configuration -eq "Release") {
-        cargo build -p mbrc-core --target $target --profile plugin
+        cargo build -p mbrc-core -p mbrc-helper --target $target --profile plugin
         $profileDir = "plugin"
     }
     else {
-        cargo build -p mbrc-core --target $target
+        cargo build -p mbrc-core -p mbrc-helper --target $target
         $profileDir = "debug"
     }
     if ($LASTEXITCODE -ne 0) { Write-Error "Rust build failed"; exit $LASTEXITCODE }
@@ -55,6 +59,10 @@ if ($buildRust) {
     $script:CoreDll = "$root\target\$target\$profileDir\mbrc_core.dll"
     if (-not (Test-Path $script:CoreDll)) { Write-Error "mbrc_core.dll not found at $($script:CoreDll)"; exit 1 }
     Write-Host "Built $($script:CoreDll)" -ForegroundColor Green
+
+    $script:HelperExe = "$root\target\$target\$profileDir\mbrc-helper.exe"
+    if (-not (Test-Path $script:HelperExe)) { Write-Error "mbrc-helper.exe not found at $($script:HelperExe)"; exit 1 }
+    Write-Host "Built $($script:HelperExe)" -ForegroundColor Green
 }
 
 # ---------------------------------------------------------------- C# plugin ---
@@ -90,8 +98,10 @@ if ($buildPlugin) {
     if ($LASTEXITCODE -ne 0) { Write-Error "Plugin build failed"; exit $LASTEXITCODE }
 }
 
-# ---------------------------------------------- Stage the native core dll ------
-# Place mbrc_core.dll side-by-side with mb_remote.dll wherever the plugin lives.
+# ------------------------------ Stage the native core dll and the helper -------
+# Place mbrc_core.dll and mbrc-helper.exe side-by-side with mb_remote.dll
+# wherever the plugin lives. The plugin resolves the helper by its own directory,
+# so all three have to travel together.
 if ($buildRust -and $script:CoreDll) {
     $dests = @()
     $pluginOut = "$root\build\bin\plugin\$Configuration\net48"
@@ -103,6 +113,8 @@ if ($buildRust -and $script:CoreDll) {
     foreach ($dest in $dests) {
         Copy-Item $script:CoreDll -Destination $dest -Force
         Write-Host "Staged mbrc_core.dll -> $dest" -ForegroundColor Green
+        Copy-Item $script:HelperExe -Destination $dest -Force
+        Write-Host "Staged mbrc-helper.exe -> $dest" -ForegroundColor Green
     }
 }
 

@@ -111,10 +111,10 @@ jobs:
         if: inputs.run-format-check
         run: |
           echo "Checking code formatting..."
-          echo "Running dotnet format --exclude=firewall-utility --verify-no-changes"
-          dotnet format --exclude="firewall-utility" --verify-no-changes --verbosity normal
+          echo "Running dotnet format --verify-no-changes"
+          dotnet format --verify-no-changes --verbosity normal
           if ($LASTEXITCODE -ne 0) {
-            echo "❌ Code formatting issues found! Run 'dotnet format --exclude=firewall-utility' to fix them."
+            echo "❌ Code formatting issues found! Run 'dotnet format' to fix them."
             echo "Note: Some analyzer warnings (CA####) are expected and don't affect formatting."
             exit 1
           }
@@ -149,7 +149,8 @@ jobs:
           # Native core (Release -> the `plugin` cargo profile); must ship next to
           # mb_remote.dll. Not embedded by Costura (managed-only).
           cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
-          cp build/bin/firewall-utility/Release/net48/firewall-utility.exe build/dist
+          # Elevated helper, built alongside the core by build.ps1 -Rust.
+          cp target/i686-pc-windows-msvc/plugin/mbrc-helper.exe build/dist
           cp LICENSE build/dist
           cp installer/README.txt build/dist
 

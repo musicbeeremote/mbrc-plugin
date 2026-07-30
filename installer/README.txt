@@ -7,8 +7,10 @@ INSTALLATION
 The contents of this archive must be extracted to the MusicBee plugins folder.
 Usually this is: C:\Program Files (x86)\MusicBee\Plugins\
 
-Only mb_remote.dll is required for the plugin to function.
-The firewall-utility.exe is optional and can be used to configure Windows Firewall.
+mb_remote.dll and mbrc_core.dll are both required: the plugin loads the native
+core at startup, and they must sit side by side in the same folder.
+The mbrc-helper.exe is optional and is used to add the Windows Firewall rule for
+the listening port.
 
 For Microsoft Store version of MusicBee:
 Go to MusicBee -> Edit -> Preferences -> Plugins and use the "Add Plugin" button

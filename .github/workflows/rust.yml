@@ -68,14 +68,16 @@ jobs:
       - name: test
         run: cargo test --locked
 
-      # mbrc-core ships as the plugin's native cdylib built for 32-bit Windows.
-      # Cross-build it on the Windows runner so i686-only breakage (linking,
-      # target-cfg, pointer width) is caught here, not only in the C# CI.
-      - name: build mbrc-core (i686 plugin profile)
+      # mbrc-core ships as the plugin's native cdylib built for 32-bit Windows,
+      # and mbrc-helper ships beside it as the elevated helper exe. Cross-build
+      # both on the Windows runner so i686-only breakage (linking, target-cfg,
+      # pointer width) is caught here, not only in the C# CI. The helper's COM
+      # code is `cfg(windows)`, so this is the only job that compiles it at all.
+      - name: build mbrc-core + mbrc-helper (i686 plugin profile)
         if: matrix.os == 'windows-latest'
         run: |
           rustup target add i686-pc-windows-msvc
-          cargo build -p mbrc-core --target i686-pc-windows-msvc --profile plugin --locked
+          cargo build -p mbrc-core -p mbrc-helper --target i686-pc-windows-msvc --profile plugin --locked
 
   coverage:
     name: coverage

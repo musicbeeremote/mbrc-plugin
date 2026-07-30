@@ -198,25 +198,25 @@ namespace MusicBeePlugin.Host
         }
 
         /// <summary>
-        ///     Run the bundled firewall-utility (elevated) to add/refresh the
-        ///     inbound rule for the listening port. Best-effort - a missing helper
-        ///     or a declined UAC prompt is logged, never fatal.
+        ///     Run the bundled mbrc-helper (elevated) to add/refresh the inbound
+        ///     rule for the listening port. Best-effort - a missing helper or a
+        ///     declined UAC prompt is logged, never fatal.
         /// </summary>
         private void UpdateFirewallRule(int port)
         {
             try
             {
-                var cmd = $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\firewall-utility.exe";
+                var cmd = $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\mbrc-helper.exe";
                 if (!File.Exists(cmd))
                 {
-                    _logger.Warn("firewall-utility.exe not found; skipping firewall rule");
+                    _logger.Warn("mbrc-helper.exe not found; skipping firewall rule");
                     return;
                 }
 
                 Process.Start(new ProcessStartInfo(cmd)
                 {
                     Verb = "runas",
-                    Arguments = $"-s {port}"
+                    Arguments = $"firewall --port {port}"
                 });
             }
             catch (Exception ex)
