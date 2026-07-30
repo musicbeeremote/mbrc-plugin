@@ -98,9 +98,13 @@ cargo test -p mbrc-core --target i686-pc-windows-msvc   # Rust core + integratio
   change the Rust `#[no_mangle]` surface and regenerate.
 - FFI DTOs are serialized with **MessagePack** using the contractless resolver (property names
   as keys - match Rust serde field names). Rust->C# msgpack must use `to_vec_named`.
-- **ILRepack** merges the C# core into `mb_remote.dll` with `Internalize=true`; an
-  `InternalizeExclude` keeps the FFI DTO types public (MessagePack's dynamic formatter needs
-  public types at runtime).
+- **FFI DTO types must stay `public`.** MessagePack's dynamic formatter emits IL at runtime
+  and refuses non-public types ("Building dynamic formatter only allows public type"), which
+  compiles fine and fails on the first FFI query. There is no longer an ILRepack/Internalize
+  step to work around here: the C# core was folded into the plugin project, so the managed
+  side builds as a single `mb_remote.dll` and Costura.Fody embeds the managed NuGet
+  dependencies into it. `mbrc_core.dll` and `mbrc-helper.exe` are native/unmanaged and ship
+  side-by-side rather than embedded.
 
 ### Rust core responsibilities
 - **Server** (`server/`): accept loop, per-connection tasks, session state machine, command

@@ -1,18 +1,26 @@
 //! Windows Firewall rule management for the listening port.
 //!
-//! Ported from the retired C# `firewall-utility`. Two things are load-bearing
-//! for compatibility with installs that already ran the old utility:
+//! Ported from the retired C# `firewall-utility`, with two deliberate
+//! departures from it.
 //!
-//! * [`RULE_NAME`] is byte-identical to the name the C# utility used. Changing
-//!   it would leave every existing user with a stale rule plus a duplicate.
-//! * A disabled firewall is a silent no-op, not an error. The old utility
-//!   returned early in that case and callers depend on it being non-fatal.
+//! [`RULE_NAME`] is *not* one of them: it is byte-identical to the name the C#
+//! utility used, because changing it would leave every existing user with a
+//! stale rule plus a duplicate.
 //!
-//! One deliberate behaviour change: the C# read
+//! **The rule is written even when the firewall is disabled.** The C# returned
+//! early in that case. That made sense when nothing had been spent to get there,
+//! but the plugin launches this helper with `runas`, so by the time the check
+//! runs the user has already been shown a UAC prompt and approved it - and then
+//! got nothing for it. Worse, a rule that was never written is missing the day
+//! the firewall is turned back on, and the failure looks like a plugin bug. A
+//! rule added while the firewall is off is inert, persists, and applies the
+//! moment it is enabled, so writing it unconditionally costs nothing.
+//!
+//! **The enabled state is read per active profile**, where the C# read
 //! `INetFwMgr.LocalPolicy.CurrentProfile.FirewallEnabled`, the XP-era API that
-//! flattens the multi-profile case. This uses
-//! `INetFwPolicy2::get_FirewallEnabled(CurrentProfileTypes())`, which is correct
-//! when domain, private and public profiles are active simultaneously.
+//! flattens the multi-profile case. Since the answer no longer gates anything it
+//! is purely diagnostic, and a failure to read it must not stop the rule being
+//! written - hence [`Report::firewall_active`] being an `Option`.
 
 use std::fmt;
 
@@ -20,11 +28,9 @@ use std::fmt;
 /// `firewall-utility` wrote, or upgrades leave a stale duplicate behind.
 pub const RULE_NAME: &str = "MusicBee Remote: Listening Port";
 
-/// What [`ensure_rule`] actually did, so the caller can report it.
+/// What [`ensure_rule`] did to the rule itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// The firewall is off for the current profiles; nothing to do.
-    FirewallDisabled,
     /// No rule with this name existed, so one was added.
     Created,
     /// A rule with this name existed and its port list was rewritten.
@@ -34,9 +40,31 @@ pub enum Outcome {
 impl fmt::Display for Outcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Outcome::FirewallDisabled => f.write_str("firewall is disabled; no rule needed"),
             Outcome::Created => f.write_str("rule created"),
             Outcome::Updated => f.write_str("rule already present; port updated"),
+        }
+    }
+}
+
+/// The result of [`ensure_rule`]: what happened to the rule, plus the firewall
+/// state observed on the way through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Report {
+    pub outcome: Outcome,
+    /// Whether the firewall was on for any active profile. `None` means the
+    /// query failed, which is reported but never blocks the rule being written.
+    pub firewall_active: Option<bool>,
+}
+
+impl fmt::Display for Report {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.outcome)?;
+        match self.firewall_active {
+            Some(true) => Ok(()),
+            Some(false) => {
+                f.write_str(" (the firewall is currently off; the rule applies when it is enabled)")
+            }
+            None => f.write_str(" (could not read the firewall's enabled state)"),
         }
     }
 }
@@ -93,12 +121,13 @@ pub trait FirewallPolicy {
 
 /// Create the rule, or point the existing one at `port`.
 ///
-/// Idempotent by design: running it twice with the same port is a no-op the
+/// Runs regardless of whether the firewall is enabled; see the module docs for
+/// why. Idempotent by design: running it twice with the same port is a no-op the
 /// second time apart from rewriting an identical port list.
-pub fn ensure_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Result<Outcome> {
-    if !policy.is_enabled()? {
-        return Ok(Outcome::FirewallDisabled);
-    }
+pub fn ensure_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Result<Report> {
+    // Diagnostic only, and explicitly not a gate: a firewall whose state cannot
+    // be read is still a firewall that needs the rule.
+    let firewall_active = policy.is_enabled().ok();
 
     let ports = port.to_string();
     // Match on the exact name, as the C# `x.Name == ruleName` did. Firewall
@@ -106,16 +135,21 @@ pub fn ensure_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Resu
     // stays an ordinal comparison rather than a case-insensitive one.
     let existing = policy.rules()?.into_iter().find(|(n, _)| n == name);
 
-    match existing {
+    let outcome = match existing {
         Some((_, rule)) => {
             policy.set_local_ports(&rule, &ports)?;
-            Ok(Outcome::Updated)
+            Outcome::Updated
         }
         None => {
             policy.add_rule(name, &ports)?;
-            Ok(Outcome::Created)
+            Outcome::Created
         }
-    }
+    };
+
+    Ok(Report {
+        outcome,
+        firewall_active,
+    })
 }
 
 #[cfg(windows)]
@@ -135,12 +169,16 @@ mod tests {
         added: RefCell<Vec<(String, String)>>,
         updated: RefCell<Vec<(String, String)>>,
         fail_enumeration: bool,
+        fail_enabled_query: bool,
     }
 
     impl FirewallPolicy for FakePolicy {
         type Rule = String;
 
         fn is_enabled(&self) -> Result<bool> {
+            if self.fail_enabled_query {
+                return Err(Error::Com("enabled query failed".into()));
+            }
             Ok(self.enabled)
         }
 
@@ -167,21 +205,37 @@ mod tests {
     }
 
     #[test]
-    fn disabled_firewall_is_a_silent_no_op() {
+    fn writes_the_rule_even_when_the_firewall_is_disabled() {
+        // The old C# returned early here. It must not: the UAC prompt has
+        // already been paid for by the time this runs, and a rule that was never
+        // written is missing the day the firewall is switched back on.
         let policy = FakePolicy {
             enabled: false,
-            // A rule is present, to prove the disabled check short-circuits
-            // before enumeration rather than after it.
-            rules: vec![RULE_NAME.to_string()],
             ..Default::default()
         };
 
+        let report = ensure_rule(&policy, RULE_NAME, 3000).unwrap();
+        assert_eq!(report.outcome, Outcome::Created);
+        assert_eq!(report.firewall_active, Some(false));
         assert_eq!(
-            ensure_rule(&policy, RULE_NAME, 3000).unwrap(),
-            Outcome::FirewallDisabled
+            policy.added.borrow().as_slice(),
+            &[(RULE_NAME.to_string(), "3000".to_string())]
         );
-        assert!(policy.added.borrow().is_empty());
-        assert!(policy.updated.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_failed_enabled_query_does_not_block_the_write() {
+        // The state is diagnostic, so failing to read it must not cost the user
+        // their rule.
+        let policy = FakePolicy {
+            fail_enabled_query: true,
+            ..Default::default()
+        };
+
+        let report = ensure_rule(&policy, RULE_NAME, 3000).unwrap();
+        assert_eq!(report.outcome, Outcome::Created);
+        assert_eq!(report.firewall_active, None);
+        assert_eq!(policy.added.borrow().len(), 1);
     }
 
     #[test]
@@ -192,10 +246,9 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(
-            ensure_rule(&policy, RULE_NAME, 3000).unwrap(),
-            Outcome::Created
-        );
+        let report = ensure_rule(&policy, RULE_NAME, 3000).unwrap();
+        assert_eq!(report.outcome, Outcome::Created);
+        assert_eq!(report.firewall_active, Some(true));
         assert_eq!(
             policy.added.borrow().as_slice(),
             &[(RULE_NAME.to_string(), "3000".to_string())]
@@ -211,10 +264,8 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(
-            ensure_rule(&policy, RULE_NAME, 3001).unwrap(),
-            Outcome::Updated
-        );
+        let report = ensure_rule(&policy, RULE_NAME, 3001).unwrap();
+        assert_eq!(report.outcome, Outcome::Updated);
         assert!(policy.added.borrow().is_empty());
         assert_eq!(
             policy.updated.borrow().as_slice(),
@@ -237,7 +288,7 @@ mod tests {
         };
 
         assert_eq!(
-            ensure_rule(&policy, RULE_NAME, 3000).unwrap(),
+            ensure_rule(&policy, RULE_NAME, 3000).unwrap().outcome,
             Outcome::Created
         );
     }
@@ -252,7 +303,7 @@ mod tests {
 
         for _ in 0..3 {
             assert_eq!(
-                ensure_rule(&policy, RULE_NAME, 3000).unwrap(),
+                ensure_rule(&policy, RULE_NAME, 3000).unwrap().outcome,
                 Outcome::Updated
             );
         }

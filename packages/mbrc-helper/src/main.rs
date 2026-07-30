@@ -120,8 +120,8 @@ fn run_firewall(port: u16) -> u8 {
     };
 
     match ensure_rule(&policy, RULE_NAME, port) {
-        Ok(outcome) => {
-            println!("mbrc-helper: port {port}: {outcome}");
+        Ok(report) => {
+            println!("mbrc-helper: port {port}: {report}");
             EXIT_OK
         }
         Err(e) => report(e),
