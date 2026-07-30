@@ -17,6 +17,12 @@
 //! the user. The old utility printed to a console nobody saw and always exited
 //! 0, so a declined elevation prompt was indistinguishable from success.
 
+// Off Windows nothing in here is reachable from `main` - the COM implementation
+// is `cfg(windows)` and `run_firewall` becomes a stub - so every item reads as
+// dead code. The module still compiles and its unit tests still run on Linux,
+// which is the point: the create-or-update logic is platform-independent and CI
+// exercises it on both runners.
+#[cfg_attr(not(windows), allow(dead_code))]
 mod firewall;
 
 use std::collections::BTreeMap;
@@ -26,10 +32,18 @@ use std::process::ExitCode;
 /// is switched off, which is a normal outcome rather than a degraded one.
 const EXIT_OK: u8 = 0;
 /// The operation ran and failed for a reason the user cannot act on directly.
+///
+/// Only reachable from the COM path, which is `cfg(windows)`. The constant is
+/// kept unconditionally so the exit-code contract is documented in one place
+/// rather than split by platform.
+#[cfg_attr(not(windows), allow(dead_code))]
 const EXIT_FAILED: u8 = 1;
 /// The arguments were wrong. Never reachable from the plugin; means a bug.
 const EXIT_USAGE: u8 = 2;
 /// Not elevated. The caller can retry with an elevation prompt.
+///
+/// Windows-only for the same reason as [`EXIT_FAILED`].
+#[cfg_attr(not(windows), allow(dead_code))]
 const EXIT_ACCESS_DENIED: u8 = 3;
 /// The subcommand exists but is not implemented in this build.
 const EXIT_NOT_IMPLEMENTED: u8 = 4;
