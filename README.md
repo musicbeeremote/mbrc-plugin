@@ -57,23 +57,40 @@ calls of the MusicBee API.
 
 ### Built With
 
-* [Autofac](https://github.com/autofac/Autofac) - Dependency Injection
-* [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json) - JSON serialization
-* [NLog](https://github.com/NLog/NLog) - Logging
+The plugin core is written in Rust; the C# side is a thin shim over MusicBee's
+plugin API.
+
+* [serde](https://serde.rs/) / [serde_json](https://github.com/serde-rs/json) - wire codec
+* [tokio](https://tokio.rs/) - the socket server and its per-connection tasks
+* [redb](https://github.com/cberner/redb) - embedded store for the library and cover caches
+* [MessagePack-CSharp](https://github.com/MessagePack-CSharp/MessagePack-CSharp) - FFI DTO serialization
+* [Costura.Fody](https://github.com/Fody/Costura) - embeds the managed dependencies into `mb_remote.dll`
+* [minisign-verify](https://github.com/jedisct1/rust-minisign-verify) - release manifest signatures
 
 ### Project Structure
 
 ```
 mbrc-plugin/
-├── core/             # Core library - business logic, services, protocol handling
-├── plugin/           # MusicBee plugin - API integration, adapters
-├── tests/            # Unit tests (xUnit, FluentAssertions, Moq)
-├── firewall-utility/ # Windows firewall configuration tool
+├── packages/
+│   ├── mbrc-core/      # Rust core (mbrc_core.dll): server, dispatch, caches, FFI
+│   ├── mbrc-wire/      # Wire codec and handshake
+│   ├── mbrc-discovery/ # UDP multicast discovery responder
+│   ├── mbrc-capture/   # Capture and fixture tooling
+│   ├── mbrc-update/    # Signed release manifest parsing and verification
+│   ├── mbrc-helper/    # Elevated helper exe: firewall rule, staged update apply
+│   └── plugin/         # MusicBee plugin (mb_remote.dll): entry point, API callbacks
+├── tests/
+│   ├── csharp/         # xUnit suite for the C# shim
+│   └── golden/         # Committed golden wire traces
 └── tools/
-    └── api-debugger/ # Protocol testing tool (Tauri + Vue, standalone)
+    ├── mbrc-cli/       # Headless CLI: send, monitor, capture, replay
+    └── api-debugger/   # Protocol testing app (Tauri + Vue, standalone)
 ```
 
-The `core` library is merged into `plugin` during build using ILRepack, producing a single `mb_remote.dll`.
+The C# core was folded into the plugin project, so the managed side builds as a
+single `mb_remote.dll` with its NuGet dependencies embedded by Costura. The
+native `mbrc_core.dll` and `mbrc-helper.exe` are not embedded and ship
+side-by-side with it.
 
 ## Installation
 
@@ -94,10 +111,12 @@ Use this method for the Microsoft Store version of MusicBee or if you prefer man
 
 1. Download `musicbee_remote_x.x.x.zip`
 2. Extract the contents
-3. Copy `mb_remote.dll` to your MusicBee Plugins folder:
+3. Copy **both** `mb_remote.dll` and `mbrc_core.dll` to your MusicBee Plugins folder:
    - Regular installation: `C:\Program Files (x86)\MusicBee\Plugins\`
    - Store version: `%LOCALAPPDATA%\Packages\...\LocalCache\Roaming\MusicBee\Plugins\`
-4. Optionally copy `firewall-utility.exe` if you need to configure Windows Firewall
+
+   The plugin loads the native core at startup, so they must sit side by side.
+4. Optionally copy `mbrc-helper.exe` if you want the Windows Firewall rule added for you
 5. Restart MusicBee
 
 ### Verify Installation
@@ -205,7 +224,11 @@ The version is centralized in `Directory.Build.props`:
 <VersionPrefix>1.5.0</VersionPrefix>
 ```
 
-All projects (plugin, core, firewall-utility) inherit this version automatically.
+Every shipped component inherits this version automatically: the C# assemblies
+through MSBuild, and `mbrc-helper.exe` through its `build.rs`, which reads the
+same `<VersionPrefix>` at compile time. Bumping it here is the only edit needed.
+CI may override the helper's stamp via the `MBRC_VERSION` environment variable so
+nightlies carry their full suffixed version.
 
 ### Creating a Release
 
