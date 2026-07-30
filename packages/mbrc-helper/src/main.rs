@@ -22,8 +22,8 @@ mod firewall;
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
-/// The operation succeeded. A disabled firewall counts as success: there is
-/// nothing to do and it is not the user's problem to fix.
+/// The operation succeeded. This includes writing the rule while the firewall
+/// is switched off, which is a normal outcome rather than a degraded one.
 const EXIT_OK: u8 = 0;
 /// The operation ran and failed for a reason the user cannot act on directly.
 const EXIT_FAILED: u8 = 1;
@@ -102,7 +102,7 @@ fn run(args: &[String]) -> Result<u8, String> {
             eprintln!(
                 "mbrc-helper: `update` is not implemented in this build \
                  (manifest schema {} will be re-verified before any file is replaced)",
-                mbrc_update::SCHEMA_VERSION
+                mbrc_release::SCHEMA_VERSION
             );
             Ok(EXIT_NOT_IMPLEMENTED)
         }

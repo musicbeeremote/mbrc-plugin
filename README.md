@@ -76,7 +76,7 @@ mbrc-plugin/
 │   ├── mbrc-wire/      # Wire codec and handshake
 │   ├── mbrc-discovery/ # UDP multicast discovery responder
 │   ├── mbrc-capture/   # Capture and fixture tooling
-│   ├── mbrc-update/    # Signed release manifest parsing and verification
+│   ├── mbrc-release/   # Release manifest parsing, signature verification
 │   ├── mbrc-helper/    # Elevated helper exe: firewall rule, staged update apply
 │   └── plugin/         # MusicBee plugin (mb_remote.dll): entry point, API callbacks
 ├── tests/
@@ -178,19 +178,30 @@ dotnet build -c Release
 ```
 
 The build process:
-1. Compiles `core` and `plugin` projects
-2. Uses ILRepack to merge `MusicBeeRemote.Core.dll` into `mb_remote.dll`
-3. In Debug mode, copies `mb_remote.dll` to MusicBee's Plugins folder
+1. Builds the Rust core and helper for `i686-pc-windows-msvc`
+2. Compiles the plugin project into `mb_remote.dll`, with Costura embedding the
+   managed NuGet dependencies
+3. In Debug mode, copies `mb_remote.dll`, `mbrc_core.dll` and `mbrc-helper.exe`
+   to MusicBee's Plugins folder
+
+Note that `build-msbuild.ps1` builds only the C# solution. Use `.\build.ps1` for
+a full build of both halves.
 
 ## Testing
 
-The test project uses xUnit with FluentAssertions and Moq:
+The C# suite uses xUnit:
 
 ```bash
-dotnet test tests/MusicBeeRemote.Core.Tests.csproj
+dotnet test tests/csharp/MusicBeeRemote.Core.Tests.csproj
 ```
 
-Note: Tests require Windows to run (net48 target framework).
+Note: these require Windows to run (net48 target framework).
+
+The Rust suites run for the target the plugin actually ships as:
+
+```bash
+cargo test --workspace --target i686-pc-windows-msvc
+```
 
 ## Formatting
 

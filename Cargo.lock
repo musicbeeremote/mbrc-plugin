@@ -473,12 +473,12 @@ dependencies = [
 name = "mbrc-helper"
 version = "0.1.0"
 dependencies = [
- "mbrc-update",
+ "mbrc-release",
  "windows",
 ]
 
 [[package]]
-name = "mbrc-update"
+name = "mbrc-release"
 version = "0.1.0"
 dependencies = [
  "hex",

@@ -1,5 +1,5 @@
 [package]
-name = "mbrc-update"
+name = "mbrc-release"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true

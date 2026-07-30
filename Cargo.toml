@@ -10,7 +10,7 @@
 resolver = "2"
 members = [
     "packages/mbrc-core",
-    "packages/mbrc-update",
+    "packages/mbrc-release",
     "packages/mbrc-helper",
     "packages/mbrc-discovery",
     "packages/mbrc-wire",
@@ -38,7 +38,7 @@ if-addrs = "=0.15.0"
 mbrc-wire = { path = "packages/mbrc-wire" }
 mbrc-capture = { path = "packages/mbrc-capture" }
 mbrc-discovery = { path = "packages/mbrc-discovery" }
-mbrc-update = { path = "packages/mbrc-update" }
+mbrc-release = { path = "packages/mbrc-release" }
 
 # Size-optimised release build; only affects `--release` (cargo test uses dev).
 [profile.release]

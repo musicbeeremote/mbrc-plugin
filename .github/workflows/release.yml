@@ -93,7 +93,7 @@ jobs:
       # then fails the release instead of shipping a manifest no installed
       # plugin can read.
       - name: validate manifest against the parser
-        run: cargo run -p mbrc-update --example validate-manifest -- build/dist/manifest.json
+        run: cargo run -p mbrc-release --example validate-manifest -- build/dist/manifest.json
 
       - name: sign manifest
         env:
@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           verified=0
-          for pub in packages/mbrc-update/keys/*.pub; do
+          for pub in packages/mbrc-release/keys/*.pub; do
             if minisign -V -p "$pub" -m build/dist/manifest.json -q; then
               echo "manifest verifies against $(basename "$pub")"
               verified=1
@@ -211,4 +211,4 @@ jobs:
 
             then check that the `sha512` values in `manifest.json` match the files you
             downloaded. All release public keys are committed at
-            [`packages/mbrc-update/keys/`](https://github.com/musicbeeremote/mbrc-plugin/tree/main/packages/mbrc-update/keys).
+            [`packages/mbrc-release/keys/`](https://github.com/musicbeeremote/mbrc-plugin/tree/main/packages/mbrc-release/keys).

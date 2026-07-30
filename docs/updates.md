@@ -81,7 +81,7 @@ before users do.
 
 ## Keys and rotation
 
-Public keys live in [`packages/mbrc-update/keys/`](../packages/mbrc-update/keys/)
+Public keys live in [`packages/mbrc-release/keys/`](../packages/mbrc-release/keys/)
 and are compiled into the verifier by `build.rs`. **Any** of them is accepted.
 
 More than one key ships because rotation only works if the replacement was
@@ -117,7 +117,7 @@ gh attestation verify musicbee_remote_1.5.0.zip --repo musicbeeremote/mbrc-plugi
 **With minisign**, which works fully offline:
 
 ```
-minisign -Vm manifest.json -P <public key from packages/mbrc-update/keys/release-1.pub>
+minisign -Vm manifest.json -P <public key from packages/mbrc-release/keys/release-1.pub>
 ```
 
 then confirm the `sha512` values in the manifest match your downloads.

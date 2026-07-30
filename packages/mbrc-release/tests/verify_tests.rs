@@ -4,11 +4,11 @@
 //! `tests/keys/`, never the release keys. Regenerate the fixture signature with:
 //!
 //! ```text
-//! cd packages/mbrc-update/tests/fixtures
+//! cd packages/mbrc-release/tests/fixtures
 //! minisign -S -s ../keys/test.key -m manifest.json -t "mbrc test manifest"
 //! ```
 
-use mbrc_update::{
+use mbrc_release::{
     verify_bundled_file, verify_sha512, verify_signature_with, Manifest, TrustedKey, TRUSTED_KEYS,
 };
 
@@ -111,7 +111,7 @@ fn bundled_file_must_be_in_the_allowlist() {
 fn compiled_in_release_keys_are_well_formed() {
     assert!(
         !TRUSTED_KEYS.is_empty(),
-        "no release keys compiled in; see packages/mbrc-update/keys/README.md"
+        "no release keys compiled in; see packages/mbrc-release/keys/README.md"
     );
 
     for key in TRUSTED_KEYS {

@@ -4,7 +4,7 @@
 //! `.github/actions/package` and this parser fails here rather than during a
 //! release.
 
-use mbrc_update::{Channel, Manifest, SCHEMA_VERSION};
+use mbrc_release::{Channel, Manifest, SCHEMA_VERSION};
 
 const GOLDEN: &str = include_str!("fixtures/manifest.json");
 

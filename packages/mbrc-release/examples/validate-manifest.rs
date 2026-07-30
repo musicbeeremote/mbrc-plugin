@@ -5,12 +5,12 @@
 //! rather than shipping a manifest no installed plugin can read.
 //!
 //! ```text
-//! cargo run -p mbrc-update --example validate-manifest -- build/dist/manifest.json
+//! cargo run -p mbrc-release --example validate-manifest -- build/dist/manifest.json
 //! ```
 
 use std::{fs, process::ExitCode};
 
-use mbrc_update::Manifest;
+use mbrc_release::Manifest;
 
 fn main() -> ExitCode {
     let Some(path) = std::env::args().nth(1) else {

@@ -10,12 +10,16 @@ name = "mbrc-helper"
 path = "src/main.rs"
 
 [dependencies]
-mbrc-update.workspace = true
+mbrc-release.workspace = true
 
 # COM interface wrappers (INetFwPolicy2/INetFwRule) exist only in `windows`, not
-# in `windows-sys`, which is why this crate takes the heavier of the two. It is
-# confined to the helper binary: mbrc-core depends on mbrc-update, never on this
-# crate, so mbrc_core.dll does not grow.
+# in `windows-sys`, which is why this crate takes the heavier of the two.
+#
+# Keeping the helper in its own crate is what confines that dependency to the
+# exe. #149 makes mbrc-core depend on mbrc-release for the update check, so a
+# helper bin target living inside mbrc-release would put `windows` in the core's
+# graph -- Cargo dependencies are per-crate, not per-target. Nothing depends on
+# this crate, so mbrc_core.dll does not grow.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "=0.62.2", features = [
     "Win32_NetworkManagement_WindowsFirewall",
