@@ -25,13 +25,7 @@ fn free_port() -> u16 {
 #[test]
 fn server_completes_v4_handshake_and_keepalive() {
     let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            port,
-            ..Config::default()
-        },
-    ));
+    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
     let net = server::start(core).expect("server should bind and start");
 
     let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
@@ -84,13 +78,7 @@ fn server_completes_v4_handshake_and_keepalive() {
 #[test]
 fn server_rejects_pre_v4_client() {
     let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            port,
-            ..Config::default()
-        },
-    ));
+    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
     let net = server::start(core).expect("server should bind and start");
 
     let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
@@ -127,10 +115,9 @@ fn reaps_idle_connection_that_never_handshakes() {
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
         Config {
-            port,
             ping_interval_secs: 1,
             unhandshaked_timeout_secs: 2,
-            ..Config::default()
+            ..Config::for_test(port)
         },
     ));
     let net = server::start(core).expect("server should bind and start");
@@ -179,9 +166,8 @@ fn broadcast_subscriber_is_not_reaped_while_silent() {
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
         Config {
-            port,
             ping_interval_secs: 1,
-            ..Config::default()
+            ..Config::for_test(port)
         },
     ));
     let net = server::start(core).expect("server should bind and start");
@@ -249,10 +235,9 @@ fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
         Config {
-            port,
             ping_interval_secs: 1,
             unhandshaked_timeout_secs: 2,
-            ..Config::default()
+            ..Config::for_test(port)
         },
     ));
     let net = server::start(core).expect("server should bind and start");
@@ -316,13 +301,7 @@ fn new_main_supersedes_old_main_of_same_client() {
     // Two main (broadcast) connections carrying the same client_id: the newer one
     // supersedes the older, which the server closes.
     let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            port,
-            ..Config::default()
-        },
-    ));
+    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
     let net = server::start(core).expect("server should bind and start");
 
     let handshake = concat!(
@@ -374,13 +353,7 @@ fn new_main_supersedes_old_main_of_same_client() {
 #[test]
 fn broadcast_reaches_a_handshaked_client() {
     let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            port,
-            ..Config::default()
-        },
-    ));
+    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
     let net = server::start(core.clone()).expect("server should bind and start");
 
     let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");

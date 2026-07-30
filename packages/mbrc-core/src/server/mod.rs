@@ -83,7 +83,21 @@ fn run_thread(
     };
 
     runtime.block_on(async move {
-        let listener = match TcpListener::bind(("0.0.0.0", core.config.port)).await {
+        // A bad address in core_settings.json falls back to listening on every
+        // interface rather than refusing to start, since a plugin that silently
+        // never listens is the worst of the available failures.
+        let bind_ip: std::net::IpAddr = match core.config.bind_address.parse() {
+            Ok(ip) => ip,
+            Err(_) => {
+                tracing::warn!(
+                    bind_address = %core.config.bind_address,
+                    "invalid bind_address; falling back to 0.0.0.0"
+                );
+                std::net::IpAddr::from([0, 0, 0, 0])
+            }
+        };
+
+        let listener = match TcpListener::bind((bind_ip, core.config.port)).await {
             Ok(listener) => {
                 let _ = ready.send(Ok(()));
                 listener
@@ -93,9 +107,25 @@ fn run_thread(
                 return;
             }
         };
-        tracing::info!(port = core.config.port, "command server listening");
+        tracing::info!(
+            %bind_ip,
+            port = core.config.port,
+            "command server listening"
+        );
 
-        let discovery = tokio::spawn(crate::discovery::run(core.config.port, shutdown.clone()));
+        // Discovery advertises this host to the LAN over UDP multicast, which
+        // makes no sense for a loopback-only listener that nothing off-box can
+        // reach anyway. Skipping it also keeps it from binding INADDR_ANY and
+        // raising the Windows Firewall prompt during tests.
+        let discovery = if bind_ip.is_loopback() {
+            tracing::debug!("discovery responder skipped (bound to loopback)");
+            None
+        } else {
+            Some(tokio::spawn(crate::discovery::run(
+                core.config.port,
+                shutdown.clone(),
+            )))
+        };
         let monitor = tokio::spawn(monitor::run(core.clone(), shutdown.clone()));
         let scanner = tokio::spawn(scanner::run(core.clone(), shutdown.clone()));
 
@@ -118,7 +148,9 @@ fn run_thread(
             _ = accept_loop(listener, core.clone()) => {}
             _ = shutdown.notified() => tracing::info!("networking shutdown requested"),
         }
-        discovery.abort();
+        if let Some(discovery) = discovery {
+            discovery.abort();
+        }
         monitor.abort();
         scanner.abort();
     });

@@ -488,10 +488,7 @@ fn assert_golden_covered(golden_path: &str, client_type_hint: &str) {
     let port = free_port();
     let core = Arc::new(Core::new(
         Arc::new(FixtureProviders),
-        Config {
-            port,
-            ..Config::default()
-        },
+        Config::for_test(port),
     ));
     // The paginated `libraryalbumcover` is served from the CoverStore. The test
     // Config has no storage path, so the background build is skipped; pre-warm

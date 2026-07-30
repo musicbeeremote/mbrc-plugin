@@ -61,6 +61,11 @@ impl LogLevel {
     }
 }
 
+/// Listen on every interface. Clients are phones elsewhere on the LAN.
+fn default_bind_address() -> String {
+    "0.0.0.0".to_string()
+}
+
 fn default_ping_interval_secs() -> u64 {
     15
 }
@@ -88,6 +93,22 @@ fn default_tcp_keepalive_secs() -> u64 {
 pub struct Config {
     /// TCP port the command server listens on.
     pub port: u16,
+    /// Local address the command server binds to.
+    ///
+    /// `0.0.0.0` in production: the whole point of the plugin is to accept
+    /// connections from phones on the LAN, so it must listen on every
+    /// interface. The field exists so tests can bind loopback instead.
+    ///
+    /// That is not cosmetic. A listener on `0.0.0.0` makes Windows Firewall
+    /// raise its "allow this app?" prompt, and it raises it per *program path*.
+    /// Cargo puts a fresh hash in every test binary's filename, so each rebuild
+    /// looked like a brand new program and left behind another firewall rule.
+    /// Loopback listeners are never filtered and never prompt.
+    ///
+    /// An unparseable value falls back to `0.0.0.0` rather than refusing to
+    /// start: a typo in `core_settings.json` should not leave the user with a
+    /// plugin that silently never listens.
+    pub bind_address: String,
     /// The client-address filtering mode (`all` / `range` / `specific`).
     pub filter_mode: FilterMode,
     /// Range mode: the base IPv4 whose first three octets bound the /24; its
@@ -136,10 +157,31 @@ pub struct Config {
     pub storage_path: String,
 }
 
+impl Config {
+    /// A config for integration tests: defaults, but bound to loopback.
+    ///
+    /// Tests must not bind `0.0.0.0`. Doing so makes Windows Firewall prompt
+    /// for every test binary, and since Cargo rebuilds them under a new hash
+    /// each time, every rebuild leaves another stale rule behind. Loopback is
+    /// never filtered, so the prompt never appears and the tests are unaffected
+    /// - they connect to `127.0.0.1` regardless.
+    ///
+    /// This lives here rather than in each test file so a new test gets the
+    /// right behaviour by reaching for the obvious constructor.
+    pub fn for_test(port: u16) -> Self {
+        Self {
+            port,
+            bind_address: "127.0.0.1".to_string(),
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             port: default_port(),
+            bind_address: default_bind_address(),
             filter_mode: FilterMode::default(),
             base_ip: String::new(),
             last_octet_max: default_last_octet_max(),
