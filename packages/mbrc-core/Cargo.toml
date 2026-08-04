@@ -45,10 +45,15 @@ flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backe
 memory-stats = "=1.2.0"
 tokio = { workspace = true }
 mbrc-wire = { workspace = true }
+# The update pipeline: manifest verification plus the check/download/stage half
+# (`client`), which the helper deliberately does not take.
+mbrc-release = { workspace = true, features = ["client"] }
+time = { workspace = true }
 if-addrs = { workspace = true }
 socket2 = "=0.6.4"
 
 [build-dependencies]
+mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
 syn = { version = "=2.0.118", features = ["full"] }
 

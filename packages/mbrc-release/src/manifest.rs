@@ -15,10 +15,13 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// Length of a hex-encoded SHA512 digest.
 const SHA512_HEX_LEN: usize = 128;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Channel {
+    /// Released versions. The default: nobody ends up on nightlies by omission.
+    #[default]
     Stable,
+    /// The rolling `nightly` tag (#148).
     Nightly,
 }
 
@@ -138,20 +141,53 @@ fn check_hash(hash: &str, field: &str) -> Result<()> {
 ///
 /// This is the zip-slip guard, enforced at parse time rather than at extraction
 /// time so no caller can forget it. Path separators, drive letters, and `..` all
-/// escape the target directory, and the updater writes as an elevated process.
+/// escape the target directory, and the files this names are later written by an
+/// elevated process.
 fn check_filename(name: &str, field: &str) -> Result<()> {
-    let bad = name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains(':')
-        || name == "."
-        || name == ".."
-        || name.starts_with('.');
-
-    if bad {
+    if !is_bare_filename(name) {
         return Err(UpdateError::Invalid(format!(
             "{field}: {name:?} is not a bare filename"
         )));
     }
     Ok(())
+}
+
+/// Windows treats these as device names in any directory, extension or not, so
+/// `NUL` and `nul.dll` both address a device rather than a file.
+const RESERVED_DEVICE_NAMES: &[&str] = &[
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+    "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+];
+
+/// Whether `name` is a plain filename that can only ever resolve inside the
+/// directory it is joined to.
+///
+/// Shared by the manifest parser and the staging extractor, so the one rule that
+/// keeps an update from writing outside its own directory has one definition. It
+/// is deliberately a allowlist-shaped rejection list rather than a
+/// canonicalize-and-compare: this has to hold for names that do not exist on disk
+/// yet, on a machine whose filesystem semantics we are not the ones deciding.
+pub fn is_bare_filename(name: &str) -> bool {
+    if name.is_empty() || name == "." || name == ".." {
+        return false;
+    }
+    // A leading dot hides the file on the platforms that care and buys nothing
+    // here; a trailing dot or space is silently stripped by Windows, so
+    // `mb_remote.dll.` and `mb_remote.dll` would name the same file.
+    if name.starts_with('.') || name.ends_with('.') || name.ends_with(' ') {
+        return false;
+    }
+    // Separators and drive letters escape the directory outright. The rest are
+    // characters Windows refuses in a filename, and control characters, which
+    // exist in a name only to make a log line lie about what was written.
+    if name.chars().any(|c| {
+        matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*') || c.is_control()
+    }) {
+        return false;
+    }
+
+    let stem = name.split('.').next().unwrap_or(name);
+    !RESERVED_DEVICE_NAMES
+        .iter()
+        .any(|reserved| stem.eq_ignore_ascii_case(reserved))
 }

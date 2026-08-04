@@ -60,6 +60,69 @@ plugin and installer actually enforce.
 `LICENSE` and `README.txt` ride along in the zip but are not listed, because they
 are not installed.
 
+## Checking
+
+The core asks GitHub for the channel's release, verifies the manifest's
+signature, and only then compares versions. Nothing is decided on unverified
+bytes and nothing is downloaded on the strength of a version number.
+
+| | stable | nightly |
+|---|---|---|
+| Endpoint | `releases/latest` | `releases/tags/nightly` |
+| Manifest `channel` must be | `stable` | `nightly` |
+
+The version the check compares against is the running plugin's, reported over FFI
+as a four-component .NET string (`1.5.0.0`). Only major.minor.patch has ever been
+meaningful here, so it is normalized to three parts before it reaches `semver`,
+which cannot parse four. Prerelease suffixes are kept, which is what makes a
+nightly order correctly: `1.7.0-nightly.20260804` is below `1.7.0` and above
+`1.6.0`, so a nightly user is offered the release it is a prerelease of and never
+an older stable.
+
+Checks are rate-limited by an interval (24 hours by default) and by an `ETag`:
+the release document is requested with `If-None-Match`, and a `304` ends the
+check without downloading or verifying anything. GitHub allows 60 unauthenticated
+requests an hour per IP, which a daily check never approaches. A failed check
+backs off - 15 minutes, doubling to a cap - so a machine that is offline retries
+sooner than the interval but does not retry on every tick.
+
+What the check has done - the last check time, the cached `ETag`, a version the
+user skipped - is written to `update_state.json`, not to `core_settings.json`.
+Those are not preferences, and keeping them out of the settings file means a save
+from the Configure panel cannot silently un-skip a release.
+
+## Staging
+
+A verified update is downloaded and unpacked to
+`%APPDATA%\MusicBee\mb_remote\updates\<version>\`, which the NSIS uninstaller
+already removes wholesale. The zip is verified against the manifest's hash before
+it is opened, and every file is verified after extraction; `pending.json` is
+written last, so its presence means the whole bundle checked out.
+
+Staging runs unelevated but everything it writes is later read by a process
+running as administrator, so the boundaries are part of the design:
+
+- **One directory, derived rather than supplied.** No caller passes a destination
+  in. `<version>` and every filename must be a bare filename before it becomes a
+  path segment, so nothing out of the manifest or the archive can name a
+  directory of its own choosing.
+- **Nothing is followed.** The staging directories are refused if they exist as
+  symlinks or junctions. Otherwise anyone able to create a reparse point in
+  `%APPDATA%` could aim the unelevated write, and the elevated copy that follows
+  it, somewhere neither of us chose.
+- **The whole archive is refused over one bad name.** An entry that is not a bare
+  filename fails the bundle rather than being skipped: CI produces a flat zip, so
+  anything else means the bytes are not what the manifest describes. Entries that
+  are safe but unlisted (`LICENSE`, `README.txt`) are simply never extracted.
+- **`pending.json` contains no paths.** It names a version. The helper derives the
+  storage directory itself and re-checks that version is a bare filename before
+  joining it, so a tampered marker can name a directory that does not exist but
+  cannot name one outside the staging root.
+- **Staging-time verification is not apply-time verification.** The staged files
+  sit somewhere an unelevated process can write, so the signed `manifest.json` and
+  its `.minisig` are staged alongside them and the helper re-verifies from those
+  before copying anything into the plugins directory.
+
 ## Signing
 
 minisign (ed25519). Authenticode was rejected on cost, and GPG on the verifier

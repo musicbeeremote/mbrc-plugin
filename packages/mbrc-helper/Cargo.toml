@@ -10,7 +10,18 @@ name = "mbrc-helper"
 path = "src/main.rs"
 
 [dependencies]
+# Without the `client` feature: the helper verifies manifests and applies staged
+# files, so it has no use for the HTTP/check/stage half. The workspace
+# declaration turns the default features off and the core opts back in.
+#
+# Cargo unifies features per build, so a single `cargo build -p mbrc-core -p
+# mbrc-helper` still compiles one mbrc-release with `client` on for both. What
+# this buys is the dependency edge: nothing the helper calls can reach into that
+# half, and building the helper on its own does not pull semver/zip/time in.
 mbrc-release.workspace = true
+
+[build-dependencies]
+mbrc-buildinfo.workspace = true
 
 # COM interface wrappers (INetFwPolicy2/INetFwRule) exist only in `windows`, not
 # in `windows-sys`, which is why this crate takes the heavier of the two.

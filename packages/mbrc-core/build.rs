@@ -9,6 +9,10 @@
 //!
 //! Both outputs are checked in; a CI guard (`git diff --exit-code`) fails if
 //! either drifts from the Rust source.
+//!
+//! It also stamps `MBRC_VERSION` from `Directory.Build.props`, so the core
+//! reports the product's version rather than the crate's workspace-internal
+//! 0.1.0.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -35,6 +39,8 @@ fn main() {
     for f in DTO_SOURCES {
         println!("cargo:rerun-if-changed={f}");
     }
+
+    mbrc_buildinfo::emit_version();
 
     generate_abi_bindings();
     generate_dtos();

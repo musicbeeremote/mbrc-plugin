@@ -4,11 +4,20 @@
 //! This is the single source of truth for runtime config. At cutover the C#
 //! `Configure()` UI edits this file and signals a reload; there is no parallel
 //! C# settings store for these values.
+//!
+//! Preferences only. What the updater has already *done* - when it last checked,
+//! the cached ETag, a version the user skipped - is machine-written state and
+//! lives in `update_state.json` (`mbrc_release::UpdateState`) instead. Mixing the
+//! two would mean a save from the settings panel could quietly un-skip a release.
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+
+/// The release channel the update check follows. The manifest's own `channel`
+/// type, so the setting and the thing it is compared against cannot drift.
+pub use mbrc_release::Channel as UpdateChannel;
 
 fn default_port() -> u16 {
     3000
@@ -86,6 +95,14 @@ fn default_tcp_keepalive_secs() -> u64 {
     45
 }
 
+fn default_update_check_enabled() -> bool {
+    true
+}
+
+fn default_update_check_interval_hours() -> u64 {
+    24
+}
+
 /// The core's runtime configuration. Every field has a default so a missing or
 /// partial `core_settings.json` still yields a usable config.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -150,6 +167,22 @@ pub struct Config {
     /// the kernel detects and drops dead half-open connections.
     #[serde(default = "default_tcp_keepalive_secs")]
     pub tcp_keepalive_secs: u64,
+    /// Whether the core checks for plugin updates at all. A check is a request
+    /// to github.com, so it is a preference, and one the user can turn off.
+    #[serde(default = "default_update_check_enabled")]
+    pub update_check_enabled: bool,
+    /// Which release channel to follow (`stable` / `nightly`).
+    #[serde(default)]
+    pub update_channel: UpdateChannel,
+    /// Hours between automatic checks. The panel's "Check now" ignores it.
+    #[serde(default = "default_update_check_interval_hours")]
+    pub update_check_interval_hours: u64,
+    /// A proxy to use instead of the one Windows detects, as
+    /// `http://host:port`. Empty means automatic detection, which is right
+    /// almost everywhere; this is the escape hatch for the networks where WinHTTP
+    /// guesses wrong and the user would otherwise have no recourse.
+    #[serde(default)]
+    pub proxy_override: String,
     /// The storage directory handed to `mbrc_initialize` (not read from JSON;
     /// set by [`Config::load`]). Roots the on-disk cover cache. Empty in unit
     /// tests that build a `Config` literal - the cover build is skipped then.
@@ -194,6 +227,10 @@ impl Default for Config {
             max_conns_per_client: default_max_conns_per_client(),
             max_conns_per_ip: default_max_conns_per_ip(),
             tcp_keepalive_secs: default_tcp_keepalive_secs(),
+            update_check_enabled: default_update_check_enabled(),
+            update_channel: UpdateChannel::default(),
+            update_check_interval_hours: default_update_check_interval_hours(),
+            proxy_override: String::new(),
             storage_path: String::new(),
         }
     }
@@ -575,6 +612,47 @@ mod tests {
         assert_eq!(c.filter_mode, FilterMode::Range);
         assert_eq!(c.base_ip, "192.168.1.5");
         assert_eq!(c.last_octet_max, 120);
+    }
+
+    #[test]
+    fn update_settings_default_and_round_trip() {
+        // Defaults: checking on, stable, daily, no proxy override.
+        let c = Config::default();
+        assert!(c.update_check_enabled);
+        assert_eq!(c.update_channel, UpdateChannel::Stable);
+        assert_eq!(c.update_check_interval_hours, 24);
+        assert!(c.proxy_override.is_empty());
+
+        let json = serde_json::to_string(&Config {
+            update_check_enabled: false,
+            update_channel: UpdateChannel::Nightly,
+            update_check_interval_hours: 6,
+            proxy_override: "http://proxy.local:8080".into(),
+            ..Config::default()
+        })
+        .unwrap();
+        assert!(json.contains("\"update_channel\":\"nightly\""), "{json}");
+
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert!(!back.update_check_enabled);
+        assert_eq!(back.update_channel, UpdateChannel::Nightly);
+        assert_eq!(back.update_check_interval_hours, 6);
+        assert_eq!(back.proxy_override, "http://proxy.local:8080");
+
+        // Nothing the updater writes for itself belongs in here; that state
+        // lives in update_state.json.
+        assert!(!json.contains("last_check"), "{json}");
+        assert!(!json.contains("skipped_version"), "{json}");
+        assert!(!json.contains("etag"), "{json}");
+    }
+
+    #[test]
+    fn an_older_settings_file_gains_the_update_defaults() {
+        // A file written before these fields existed must keep working, with
+        // checking on rather than silently off.
+        let c: Config = serde_json::from_str(r#"{"port":3000}"#).unwrap();
+        assert!(c.update_check_enabled);
+        assert_eq!(c.update_channel, UpdateChannel::Stable);
     }
 
     #[test]

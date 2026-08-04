@@ -5,11 +5,43 @@ edition.workspace = true
 authors.workspace = true
 description = "Signed release manifest parsing and verification shared by the core and the updater."
 
+[features]
+# The check/download/stage half. On by default so the crate tests itself in
+# full; `mbrc-helper` takes the crate without it, because an elevated exe should
+# carry the manifest verifier and nothing else.
+default = ["client"]
+client = ["dep:semver", "dep:zip", "dep:flate2", "dep:time"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 # Zero-dependency Ed25519 minisign verification. The signing half never lives
 # here: releases are signed in CI with the `minisign` CLI.
 minisign-verify = "=0.2.5"
+sha2 = "=0.10.9"
+hex = "=0.4.3"
+
+# Version comparison. Zero dependencies (std only, serde opted out), and it is
+# Cargo's own implementation: prerelease precedence is a well known source of
+# subtle bugs and not somewhere to hand-roll, least of all in the component that
+# decides whether to replace a DLL.
+semver = { version = "=1.0.28", optional = true }
+# Reading the update zip. `deflate-flate2` and NOT `deflate`: the latter pulls in
+# zopfli, a *compressor*, and this crate only ever decompresses. flate2 rides on
+# pure-Rust miniz_oxide, so the i686 target stays free of a C toolchain.
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"], optional = true }
+# `deflate-flate2` selects flate2 but no backend, so the backend is chosen here:
+# miniz_oxide, the same pure-Rust one mbrc-core already uses for its log gzip. No
+# C toolchain, and one decompressor in the workspace rather than two.
+flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"], optional = true }
+# Timestamps for the check interval and the staging marker.
+time = { workspace = true, features = ["parsing"], optional = true }
+
+# Integration tests build their own archives and hashes: a crate's own
+# dependencies are not in scope for `tests/`, so the ones they use directly are
+# repeated here.
+[dev-dependencies]
+time = { workspace = true, features = ["parsing"] }
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
 sha2 = "=0.10.9"
 hex = "=0.4.3"
