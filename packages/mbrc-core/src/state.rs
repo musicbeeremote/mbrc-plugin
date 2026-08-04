@@ -151,6 +151,12 @@ pub fn read_settings_bytes() -> Option<Vec<u8>> {
 /// file stays JSON on disk; only the transport is MessagePack. The running core
 /// is NOT hot-reloaded here; the host re-inits (when the change needs it) to
 /// apply. Returns an error string on parse/validation/write failure.
+///
+/// The write is a **merge**, not a replace: the host's payload is applied key by
+/// key over the config currently on disk. The panel only knows a subset of
+/// [`Config`]'s fields, and deserializing its payload straight into a fresh
+/// `Config` would reset every field it omits back to its default - so saving the
+/// panel would silently wipe any Rust-only setting.
 pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     let storage = {
         let guard = lock();
@@ -162,13 +168,35 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
             .storage_path
             .clone()
     };
-    let mut config: Config =
+    let patch: serde_json::Value =
         rmp_serde::from_slice(bytes).map_err(|e| format!("invalid settings msgpack: {e}"))?;
+    let mut config = merge_settings(Config::load(&storage), &patch)?;
     config.validate()?;
     config.storage_path = storage.clone();
     let pretty = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     let path = std::path::Path::new(&storage).join("core_settings.json");
     std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
+}
+
+/// Apply the host's settings payload over `base`, field by field.
+///
+/// Going through `serde_json::Value` keeps this free of a hand-maintained list
+/// of settable fields: whatever keys the payload carries win, everything else
+/// keeps its on-disk value. Keys the core does not know are dropped (`base` is
+/// re-serialized from a typed `Config`, so a stale key like the pre-`log_level`
+/// `debug` bool is not resurrected). The payload must be a map.
+fn merge_settings(base: Config, patch: &serde_json::Value) -> Result<Config, String> {
+    let patch = patch
+        .as_object()
+        .ok_or("invalid settings payload: expected a map")?;
+    let mut merged = serde_json::to_value(&base).map_err(|e| e.to_string())?;
+    let object = merged
+        .as_object_mut()
+        .expect("Config serializes to a JSON object");
+    for (key, value) in patch {
+        object.insert(key.clone(), value.clone());
+    }
+    serde_json::from_value(merged).map_err(|e| format!("invalid settings payload: {e}"))
 }
 
 /// Cache health surfaced to the settings panel. Field names are the MessagePack
@@ -423,6 +451,33 @@ mod tests {
         .unwrap();
         assert!(write_settings_bytes(&bad).is_err());
 
+        // A panel-shaped payload (the 8 fields the C# `CoreSettings` DTO carries)
+        // must not disturb the fields it doesn't know about. Seed the file with
+        // non-default values for two of those, then save from the "panel".
+        std::fs::write(
+            dir.join("core_settings.json"),
+            r#"{"port":3000,"bind_address":"127.0.0.1","tcp_keepalive_secs":99}"#,
+        )
+        .unwrap();
+        let panel = serde_json::json!({
+            "port": 6001,
+            "filter_mode": "all",
+            "base_ip": "",
+            "last_octet_max": 254,
+            "allowed_addresses": [],
+            "search_source": 1,
+            "update_firewall": false,
+            "log_level": "debug",
+        });
+        write_settings_bytes(&rmp_serde::to_vec_named(&panel).unwrap()).expect("panel write");
+        let saved: Config =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("core_settings.json")).unwrap())
+                .unwrap();
+        assert_eq!(saved.port, 6001); // the panel's edit landed
+        assert_eq!(saved.log_level, crate::config::LogLevel::Debug);
+        assert_eq!(saved.bind_address, "127.0.0.1"); // not clobbered back to 0.0.0.0
+        assert_eq!(saved.tcp_keepalive_secs, 99); // nor to its default
+
         // Blocked-connection host dispatch (folded in here to avoid a second
         // concurrent STATE test): an empty log queries to an empty array - Some,
         // not None - and the clear command succeeds. Populating the log needs the
@@ -447,5 +502,48 @@ mod tests {
         assert_eq!(info.port, 4321);
 
         let _ = shutdown();
+    }
+
+    #[test]
+    fn merge_applies_only_the_keys_the_payload_carries() {
+        let base = Config {
+            port: 3000,
+            tcp_keepalive_secs: 99,
+            allowed_addresses: vec!["10.0.0.1".to_string()],
+            ..Config::default()
+        };
+        let merged = merge_settings(
+            base,
+            &serde_json::json!({"port": 7000, "allowed_addresses": ["10.0.0.2"]}),
+        )
+        .unwrap();
+        assert_eq!(merged.port, 7000);
+        assert_eq!(merged.allowed_addresses, vec!["10.0.0.2"]); // lists replace
+        assert_eq!(merged.tcp_keepalive_secs, 99); // absent key untouched
+    }
+
+    #[test]
+    fn merge_rejects_a_non_map_payload_and_bad_field_types() {
+        assert!(merge_settings(Config::default(), &serde_json::json!([1, 2])).is_err());
+        assert!(merge_settings(
+            Config::default(),
+            &serde_json::json!({"port": "not a number"})
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn merge_drops_keys_the_core_does_not_know() {
+        // A stale key on disk (the pre-`log_level` `debug` bool) is not carried
+        // through the merge, and an unknown key in the payload is ignored rather
+        // than written back.
+        let merged = merge_settings(
+            Config::default(),
+            &serde_json::json!({"debug": true, "port": 4000}),
+        )
+        .unwrap();
+        assert_eq!(merged.port, 4000);
+        let json = serde_json::to_string(&merged).unwrap();
+        assert!(!json.contains("debug"));
     }
 }
