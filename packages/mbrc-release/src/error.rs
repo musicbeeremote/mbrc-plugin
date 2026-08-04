@@ -21,6 +21,23 @@ pub enum UpdateError {
         expected: String,
         actual: String,
     },
+    /// A version string could not be normalized to comparable semver.
+    Version(String),
+    /// The request never produced a response (DNS, TLS, proxy, timeout).
+    Network(String),
+    /// The server answered, but not with something usable.
+    Http { status: u16, url: String },
+    /// A local file operation failed while staging.
+    Io(String),
+    /// The downloaded zip could not be read as one.
+    Archive(String),
+    /// The zip carries an entry whose name is not a bare filename. The whole
+    /// bundle is refused rather than the entry skipped: a release built by CI
+    /// never contains one, so its presence means the archive is not what the
+    /// manifest describes.
+    UnsafeEntry(String),
+    /// The manifest lists a file the zip does not contain.
+    MissingEntry(String),
 }
 
 impl fmt::Display for UpdateError {
@@ -49,6 +66,19 @@ impl fmt::Display for UpdateError {
             } => write!(
                 f,
                 "sha512 mismatch for {path}: manifest says {expected}, file is {actual}"
+            ),
+            Self::Version(m) => write!(f, "cannot read version: {m}"),
+            Self::Network(m) => write!(f, "request failed: {m}"),
+            Self::Http { status, url } => write!(f, "HTTP {status} from {url}"),
+            Self::Io(m) => write!(f, "staging failed: {m}"),
+            Self::Archive(m) => write!(f, "update archive is not readable: {m}"),
+            Self::UnsafeEntry(name) => write!(
+                f,
+                "update archive contains {name:?}, which is not a bare filename"
+            ),
+            Self::MissingEntry(name) => write!(
+                f,
+                "update archive is missing {name:?}, which the manifest lists"
             ),
         }
     }

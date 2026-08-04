@@ -15,6 +15,7 @@ use crate::{
 };
 
 /// A release public key compiled in from `keys/*.pub`.
+#[derive(Debug)]
 pub struct TrustedKey {
     /// The key's filename stem, for logging which key verified a release.
     pub name: &'static str,
@@ -30,7 +31,19 @@ include!(concat!(env!("OUT_DIR"), "/trusted_keys.rs"));
 /// reaches the schema logic. Returns the manifest and the name of the key that
 /// verified it.
 pub fn verify_manifest(manifest_bytes: &[u8], signature: &str) -> Result<(Manifest, &'static str)> {
-    let key_name = verify_signature(manifest_bytes, signature)?;
+    verify_manifest_with(manifest_bytes, signature, TRUSTED_KEYS)
+}
+
+/// [`verify_manifest`] against an explicit trust list, for the same reason
+/// [`verify_signature_with`] exists: the tests above the network seam drive the
+/// whole check against the committed test keypair, and the release keys stay
+/// unreachable from a test build.
+pub fn verify_manifest_with(
+    manifest_bytes: &[u8],
+    signature: &str,
+    keys: &'static [TrustedKey],
+) -> Result<(Manifest, &'static str)> {
+    let key_name = verify_signature_with(manifest_bytes, signature, keys)?;
     let manifest = Manifest::parse(manifest_bytes)?;
     Ok((manifest, key_name))
 }

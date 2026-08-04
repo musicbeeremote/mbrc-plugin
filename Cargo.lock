@@ -413,6 +413,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbrc-buildinfo"
+version = "0.1.0"
+
+[[package]]
 name = "mbrc-capture"
 version = "0.1.0"
 dependencies = [
@@ -444,7 +448,9 @@ dependencies = [
  "flate2",
  "if-addrs",
  "image",
+ "mbrc-buildinfo",
  "mbrc-capture",
+ "mbrc-release",
  "mbrc-wire",
  "memory-stats",
  "proptest",
@@ -455,6 +461,7 @@ dependencies = [
  "sha1",
  "socket2",
  "syn",
+ "time",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -473,6 +480,7 @@ dependencies = [
 name = "mbrc-helper"
 version = "0.1.0"
 dependencies = [
+ "mbrc-buildinfo",
  "mbrc-release",
  "windows",
 ]
@@ -481,11 +489,15 @@ dependencies = [
 name = "mbrc-release"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "hex",
  "minisign-verify",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
+ "time",
+ "zip",
 ]
 
 [[package]]
@@ -802,6 +814,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+
+[[package]]
 name = "serde"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1080,6 +1098,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1355,6 +1379,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "zip"
+version = "8.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "typed-path",
 ]
 
 [[package]]

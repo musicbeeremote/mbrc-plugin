@@ -9,6 +9,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "packages/mbrc-buildinfo",
     "packages/mbrc-core",
     "packages/mbrc-release",
     "packages/mbrc-helper",
@@ -37,8 +38,13 @@ time = { version = "=0.3.53", features = ["formatting"] }
 if-addrs = "=0.15.0"
 mbrc-wire = { path = "packages/mbrc-wire" }
 mbrc-capture = { path = "packages/mbrc-capture" }
+mbrc-buildinfo = { path = "packages/mbrc-buildinfo" }
 mbrc-discovery = { path = "packages/mbrc-discovery" }
-mbrc-release = { path = "packages/mbrc-release" }
+# default-features = false so the helper gets only the manifest verifier; the
+# core opts into `client` (the check/download/stage half) explicitly. Declared
+# here rather than per-member because Cargo does not let a member turn off a
+# workspace dependency's default features.
+mbrc-release = { path = "packages/mbrc-release", default-features = false }
 
 # Size-optimised release build; only affects `--release` (cargo test uses dev).
 [profile.release]

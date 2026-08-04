@@ -114,6 +114,28 @@ fn rejects_paths_that_are_not_bare_filenames() {
     }
 }
 
+/// Names that stay inside the directory but still do not mean what they look
+/// like on Windows, where these files are written.
+#[test]
+fn rejects_windows_traps_that_are_not_path_traversal() {
+    for evil in [
+        "nul",              // a device, in every directory
+        "NUL.dll",          // still a device: the extension is ignored
+        "com1.dll",         //
+        "mb_remote.dll.",   // the trailing dot is stripped, so this is the same file
+        "mb_remote.dll ",   // as is the trailing space
+        "mb_remote:stream", // an alternate data stream on the real file
+        "mb_remote*.dll",   // a wildcard, refused by the filesystem anyway
+        "mb\u{0}remote.dll",
+    ] {
+        let json = GOLDEN.replace("\"mb_remote.dll\"", &format!("{evil:?}"));
+        assert!(
+            Manifest::parse(json.as_bytes()).is_err(),
+            "{evil:?} should be rejected as a file path"
+        );
+    }
+}
+
 #[test]
 fn rejects_artifact_names_that_are_not_bare_filenames() {
     let json = GOLDEN.replace(

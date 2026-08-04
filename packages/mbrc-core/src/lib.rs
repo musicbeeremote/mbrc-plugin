@@ -17,6 +17,7 @@ pub mod providers;
 pub mod server;
 pub mod state;
 pub mod store;
+pub mod updates;
 pub mod wire;
 
 use std::ffi::{c_char, c_int, CStr, CString};
