@@ -6,8 +6,8 @@
 //! reports over FFI.
 //!
 //! Nothing here reaches the network on its own. It takes an
-//! [`HttpClient`](mbrc_release::HttpClient), whose one production implementation
-//! (WinHTTP) arrives with the Windows half of this work; the panel and the
+//! [`HttpClient`](mbrc_release::HttpClient); [`http_client`] builds the
+//! production one (WinHTTP) from the user's settings, and the panel and the
 //! background schedule that call in arrive with the UI (#152).
 
 use mbrc_release::{
@@ -22,6 +22,20 @@ use crate::config::Config;
 /// The update check compares against the version the *plugin* reports over FFI;
 /// this is what the core says about itself in the log.
 pub const CORE_VERSION: &str = env!("MBRC_VERSION");
+
+/// Builds the production HTTP client from the user's settings.
+///
+/// The `User-Agent` is not decoration: GitHub rejects requests without one, and
+/// carrying the version means a rate-limit complaint can be traced to a build
+/// rather than to "some plugin". `proxy_override` is passed straight through -
+/// empty means WinHTTP auto-detects, which is what almost everyone gets.
+#[cfg(windows)]
+pub fn http_client(config: &Config) -> Result<mbrc_release::WinHttpClient> {
+    mbrc_release::WinHttpClient::new(
+        &format!("mbrc-plugin/{CORE_VERSION} (+https://github.com/musicbeeremote/mbrc-plugin)"),
+        Some(config.proxy_override.as_str()),
+    )
+}
 
 /// Runs a check according to the user's settings, persisting what it learns.
 ///

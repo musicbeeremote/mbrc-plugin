@@ -16,6 +16,9 @@
 //!   `client` feature, which is on by default but off for the helper: an
 //!   elevated process should carry as little as it can get away with.
 //!
+//! - [`winhttp`] - the one production `HttpClient`. Windows-only, and the only
+//!   thing here that is.
+//!
 //! Everything in the client half sits above the [`http::HttpClient`] trait, so
 //! all of it is tested against a stub on any host. Only the WinHTTP
 //! implementation of that one trait is Windows-bound.
@@ -34,6 +37,8 @@ pub mod stage;
 pub mod state;
 #[cfg(feature = "client")]
 pub mod version;
+#[cfg(all(feature = "client", windows))]
+pub mod winhttp;
 
 pub use error::{Result, UpdateError};
 pub use manifest::{
@@ -52,3 +57,5 @@ pub use http::{HttpClient, HttpResponse};
 pub use stage::{clear_staged, read_pending, stage, Pending, StagedUpdate};
 #[cfg(feature = "client")]
 pub use state::UpdateState;
+#[cfg(all(feature = "client", windows))]
+pub use winhttp::WinHttpClient;

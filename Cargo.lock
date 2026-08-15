@@ -497,6 +497,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "time",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

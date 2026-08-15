@@ -10,7 +10,7 @@ description = "Signed release manifest parsing and verification shared by the co
 # full; `mbrc-helper` takes the crate without it, because an elevated exe should
 # carry the manifest verifier and nothing else.
 default = ["client"]
-client = ["dep:semver", "dep:zip", "dep:flate2", "dep:time"]
+client = ["dep:semver", "dep:zip", "dep:flate2", "dep:time", "dep:windows-sys"]
 
 [dependencies]
 serde.workspace = true
@@ -36,6 +36,17 @@ zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate
 flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"], optional = true }
 # Timestamps for the check interval and the staging marker.
 time = { workspace = true, features = ["parsing"], optional = true }
+
+# The one production `HttpClient`. WinHTTP rather than a Rust HTTP stack because
+# it brings the system proxy (PAC/WPAD included) and the OS root store, which an
+# unattended updater needs years after its build date, and because rustls' crypto
+# providers want NASM or CMake for the i686 target. `windows-sys` and not
+# `windows`: this is flat C API, no COM, so the lighter of the two is enough.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinHttp",
+], optional = true }
 
 # Integration tests build their own archives and hashes: a crate's own
 # dependencies are not in scope for `tests/`, so the ones they use directly are

@@ -91,6 +91,34 @@ user skipped - is written to `update_state.json`, not to `core_settings.json`.
 Those are not preferences, and keeping them out of the settings file means a save
 from the Configure panel cannot silently un-skip a release.
 
+## Fetching
+
+Requests go out through WinHTTP, not a Rust HTTP stack. Two of its properties are
+ones an updater cannot add after the fact:
+
+- **The system proxy, PAC and WPAD included.** `HTTP_PROXY`-style environment
+  variables are not how a managed Windows desktop is configured, and on one where
+  the proxy is the only route out, an updater that ignores it fails silently and
+  invisibly. A `proxy_override` setting exists for the networks auto-detection
+  still gets wrong.
+- **The OS root store**, which Windows Update keeps current. A compiled-in root
+  snapshot ages, and this component's whole job is to still work years after its
+  build date.
+
+It also keeps the i686 target free of NASM and CMake, which rustls' crypto
+providers need.
+
+TLS is pinned to 1.2 and 1.3 explicitly. Windows still negotiates TLS 1.0 by
+default in places, GitHub refuses it, and the machines running those defaults are
+exactly the ones least likely to be updated by hand. Plain-HTTP URLs are refused
+before a socket is opened, and an HTTPS-to-HTTP redirect is refused by policy.
+
+The cost is one file of `unsafe` FFI (`winhttp.rs`) that cannot run on a non-Windows
+host, which is why the [`HttpClient`] seam is where it is: everything that decides
+anything sits above it and is tested against a stub. What only a real run can prove
+- TLS against GitHub, cross-host redirects to the asset CDN, `ETag` round-tripping
+- is covered by `#[ignore]`d tests in that file, run with `--ignored` on Windows.
+
 ## Staging
 
 A verified update is downloaded and unpacked to
