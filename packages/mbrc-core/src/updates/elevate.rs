@@ -243,6 +243,11 @@ fn spawn(exe: &Path, arguments: &[String], _elevate: bool) -> UpdateLaunch {
 
 /// Joins arguments into a command line, quoting each.
 ///
+/// Only the Windows launch path builds a command line - off Windows the
+/// arguments go to `Command::args` as a list - so this reads as dead code there
+/// while its test still runs, which is the point of keeping it compiled.
+#[cfg_attr(not(windows), allow(dead_code))]
+///
 /// Every argument here is either a literal or a path we derived, so this is not
 /// trying to be a general Windows quoting routine - it is making sure a path
 /// with a space in it (`C:\Program Files\...`, which is the common case) arrives
