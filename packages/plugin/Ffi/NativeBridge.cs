@@ -275,6 +275,32 @@ namespace MusicBeePlugin.Ffi
         }
 
         /// <summary>
+        ///     Ask the core to apply a staged update: it verifies the staged helper,
+        ///     prompts for elevation if the plugins directory needs it, and starts
+        ///     the helper, which waits for MusicBee to exit before swapping files.
+        ///     Takes no arguments by design - every path is derived inside the core,
+        ///     so there is nothing here that could name a directory to overwrite.
+        ///     On <see cref="UpdateLaunch.Launched" /> the caller is expected to shut
+        ///     MusicBee down; <see cref="UpdateLaunch.Cancelled" /> means the user
+        ///     declined the prompt and the staged update is still there to retry.
+        /// </summary>
+        public UpdateLaunch ApplyStagedUpdate()
+        {
+            if (!_initialized) return UpdateLaunch.Failed;
+            try
+            {
+                var result = (UpdateLaunch)NativeMethods.mbrc_apply_staged_update();
+                _logger.Info("Update launch result: {0}", result);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to launch the update helper");
+                return UpdateLaunch.Failed;
+            }
+        }
+
+        /// <summary>
         ///     Persist new settings to the Rust core (which validates then writes
         ///     core_settings.json). Returns false if the core rejected them.
         /// </summary>

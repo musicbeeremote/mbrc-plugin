@@ -158,16 +158,7 @@ pub fn read_settings_bytes() -> Option<Vec<u8>> {
 /// `Config` would reset every field it omits back to its default - so saving the
 /// panel would silently wipe any Rust-only setting.
 pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
-    let storage = {
-        let guard = lock();
-        guard
-            .as_ref()
-            .ok_or("core not initialized")?
-            .core
-            .config
-            .storage_path
-            .clone()
-    };
+    let storage = storage_path().ok_or("core not initialized")?;
     let patch: serde_json::Value =
         rmp_serde::from_slice(bytes).map_err(|e| format!("invalid settings msgpack: {e}"))?;
     let mut config = merge_settings(Config::load(&storage), &patch)?;
@@ -176,6 +167,14 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     let pretty = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     let path = std::path::Path::new(&storage).join("core_settings.json");
     std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
+}
+
+/// The storage directory MusicBee handed the core at init, or `None` before
+/// then. The one place that answer lives, so nothing has to be told it twice.
+pub fn storage_path() -> Option<String> {
+    lock()
+        .as_ref()
+        .map(|state| state.core.config.storage_path.clone())
 }
 
 /// Apply the host's settings payload over `base`, field by field.

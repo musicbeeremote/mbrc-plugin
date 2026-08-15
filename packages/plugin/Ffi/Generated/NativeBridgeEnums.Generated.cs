@@ -19,6 +19,15 @@ namespace MusicBeePlugin.Ffi.Generated
         AbiVersionMismatch = -9,
     }
 
+    public enum UpdateLaunch
+    {
+        Launched = 0,
+        NothingStaged = 1,
+        Cancelled = 2,
+        VerifyFailed = 3,
+        Failed = 4,
+    }
+
     public enum NotificationType
     {
         TrackChanged = 0,

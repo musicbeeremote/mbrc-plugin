@@ -52,6 +52,21 @@ time = { workspace = true }
 if-addrs = { workspace = true }
 socket2 = "=0.6.4"
 
+# ShellExecuteExW (the elevation prompt for the update helper) and the loader
+# calls that answer "which directory was this DLL loaded from", which is how the
+# plugins directory is derived rather than taken from the caller. `windows-sys`
+# and not `windows`: flat C API, no COM.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    # SHELLEXECUTEINFOW carries an HKEY field, so the struct lives behind the
+    # registry feature even though nothing here touches the registry.
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"

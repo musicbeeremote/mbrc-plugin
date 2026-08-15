@@ -200,6 +200,29 @@ MusicBee is relaunched **through Explorer**, not as a child of the helper. A chi
 would inherit elevation and run MusicBee as administrator for the rest of the
 session, writing its settings and cache as the wrong user.
 
+### Getting there: `mbrc_apply_staged_update()`
+
+The panel calls one FFI export that takes **no arguments**. The storage directory
+comes from the initialized core, the plugins directory is where `mbrc_core.dll`
+was loaded from (asked of the loader, so it is true by construction), MusicBee is
+the current process, and the pid is our own. A caller that could name the
+directory to overwrite would be a caller worth attacking; there is nothing to
+pass, so there is nothing to tamper with.
+
+Before launching, the core verifies the **staged** helper against the staged
+signed manifest. That copy is what runs, never the installed one: a release
+replaces `mbrc-helper.exe` too, and a running image cannot overwrite itself. It
+runs elevated out of a user-writable directory, so checking it before *execution*
+- earlier than the check it then performs on the DLLs - is the boundary.
+
+Elevation is requested with `ShellExecuteExW` and the `runas` verb, chosen by
+probing whether the plugins directory is writable (by writing, not by reading an
+ACL). The prompt therefore appears while the user is still looking at the button
+they pressed. Declining it comes back as `ERROR_CANCELLED` and is reported as a
+normal outcome with the staged download intact - the concrete gain over letting
+the helper self-elevate, where the prompt would arrive after MusicBee had already
+exited and there would be no UI left to report into.
+
 ## Signing
 
 minisign (ed25519). Authenticode was rejected on cost, and GPG on the verifier

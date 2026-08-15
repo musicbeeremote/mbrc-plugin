@@ -25,7 +25,8 @@ use std::sync::Arc;
 
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::types::{
-    HostCommandType, HostQueryType, MbrcCallbacks, MbrcResult, NotificationType, MBRC_ABI_VERSION,
+    HostCommandType, HostQueryType, MbrcCallbacks, MbrcResult, NotificationType, UpdateLaunch,
+    MBRC_ABI_VERSION,
 };
 use crate::providers::{FfiProviders, Providers};
 
@@ -302,6 +303,30 @@ pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
         match logging::set_level(&directive) {
             Ok(()) => MbrcResult::Ok as c_int,
             Err(_) => MbrcResult::InvalidArgument as c_int,
+        }
+    })
+}
+
+/// Apply the staged update: verify the staged helper, elevate if the plugins
+/// directory needs it, and start the helper.
+///
+/// Takes nothing, deliberately. The storage directory comes from the initialized
+/// core, the plugins directory is where this DLL was loaded from, MusicBee is
+/// this process, and the pid is our own. A caller that could name the directory
+/// to overwrite would be a caller worth attacking; there is nothing to pass, so
+/// there is nothing to tamper with.
+///
+/// Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
+/// waiting for MusicBee to exit - the caller is expected to shut MusicBee down
+/// next. `Cancelled` (the user declined elevation) is a normal outcome and
+/// leaves the staged update in place for a retry.
+#[no_mangle]
+pub extern "C" fn mbrc_apply_staged_update() -> c_int {
+    ffi_guard("mbrc_apply_staged_update", || match state::storage_path() {
+        Some(storage) => updates::elevate::launch(&storage) as c_int,
+        None => {
+            tracing::error!("cannot apply an update before the core is initialized");
+            UpdateLaunch::Failed as c_int
         }
     })
 }

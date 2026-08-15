@@ -10,6 +10,8 @@
 //! production one (WinHTTP) from the user's settings, and the panel and the
 //! background schedule that call in arrive with the UI (#152).
 
+pub mod elevate;
+
 use mbrc_release::{
     check::{self, CheckOptions, CheckOutcome},
     stage, AvailableUpdate, HttpClient, Result, StagedUpdate, UpdateState,

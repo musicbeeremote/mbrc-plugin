@@ -136,6 +136,24 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_set_log_level(byte* directive);
 
         /// <summary>
+        ///  Apply the staged update: verify the staged helper, elevate if the plugins
+        ///  directory needs it, and start the helper.
+        ///
+        ///  Takes nothing, deliberately. The storage directory comes from the initialized
+        ///  core, the plugins directory is where this DLL was loaded from, MusicBee is
+        ///  this process, and the pid is our own. A caller that could name the directory
+        ///  to overwrite would be a caller worth attacking; there is nothing to pass, so
+        ///  there is nothing to tamper with.
+        ///
+        ///  Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
+        ///  waiting for MusicBee to exit - the caller is expected to shut MusicBee down
+        ///  next. `Cancelled` (the user declined elevation) is a normal outcome and
+        ///  leaves the staged update in place for a retry.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "mbrc_apply_staged_update", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int mbrc_apply_staged_update();
+
+        /// <summary>
         ///  Free a string previously returned to C# by the core. Null-safe. This is the
         ///  only Rust-owned allocation the C# side frees through us.
         ///

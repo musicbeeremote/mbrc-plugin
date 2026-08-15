@@ -33,6 +33,31 @@ pub enum MbrcResult {
     AbiVersionMismatch = -9,
 }
 
+/// What happened when the panel asked for a staged update to be applied.
+///
+/// Its own enum rather than more [`MbrcResult`] variants: every value here is a
+/// distinct thing to *tell the user*, and only one of them is an error. In
+/// particular `Cancelled` is a normal outcome - the user declined the elevation
+/// prompt, the staged download is untouched, and pressing the button again is
+/// the obvious next move.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateLaunch {
+    /// The helper was started. MusicBee is expected to exit next; the helper is
+    /// waiting for exactly that.
+    Launched = 0,
+    /// No update is staged, so there was nothing to apply.
+    NothingStaged = 1,
+    /// The user declined the elevation prompt.
+    Cancelled = 2,
+    /// The staged helper is not what the release signed. Nothing was started,
+    /// and this is the one outcome that should be reported loudly: it means the
+    /// staged bundle was tampered with after it was downloaded.
+    VerifyFailed = 3,
+    /// Something else went wrong; the detail is in the log.
+    Failed = 4,
+}
+
 /// Notifications forwarded from MusicBee via `Plugin.ReceiveNotification`.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
