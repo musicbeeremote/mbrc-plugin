@@ -24,6 +24,7 @@
 // exercises it on both runners.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod firewall;
+mod update;
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -45,8 +46,21 @@ const EXIT_USAGE: u8 = 2;
 /// Windows-only for the same reason as [`EXIT_FAILED`].
 #[cfg_attr(not(windows), allow(dead_code))]
 const EXIT_ACCESS_DENIED: u8 = 3;
-/// The subcommand exists but is not implemented in this build.
+/// The subcommand exists but is not implemented in this build. Now only
+/// reachable off Windows, where `firewall` has no implementation; kept in the
+/// contract because a caller written against exit code 4 should keep meaning it.
+#[cfg_attr(windows, allow(dead_code))]
 const EXIT_NOT_IMPLEMENTED: u8 = 4;
+/// The staged update did not verify. Nothing was changed.
+const EXIT_VERIFY_FAILED: u8 = 5;
+/// MusicBee was still running when the wait expired. Nothing was changed.
+const EXIT_STILL_RUNNING: u8 = 6;
+/// The swap failed part way and the previous files were restored. The install is
+/// intact; the update did not happen.
+const EXIT_ROLLED_BACK: u8 = 7;
+/// The swap failed *and* the restore failed. The only outcome that leaves the
+/// install possibly inconsistent, so the caller tells the user to reinstall.
+const EXIT_ROLLBACK_FAILED: u8 = 8;
 
 const USAGE: &str = "\
 mbrc-helper - elevated helper for MusicBee Remote
@@ -58,9 +72,16 @@ USAGE:
 
 COMMANDS:
     firewall    Add or update the inbound firewall rule for the listening port.
-    update      Apply a staged update. Not implemented yet.
+    update      Re-verify and apply a staged update, then relaunch MusicBee.
 
-Both commands require administrative rights.";
+Both commands require administrative rights.
+
+EXIT CODES:
+    0  success                    5  the staged update did not verify
+    1  failed                     6  MusicBee did not exit in time
+    2  bad arguments              7  failed part way; previous files restored
+    3  not elevated               8  failed part way; restore also failed
+    4  not implemented";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -102,25 +123,65 @@ fn run(args: &[String]) -> Result<u8, String> {
             Ok(run_firewall(port))
         }
         "update" => {
-            // Argument shape is validated now so the contract is settled and the
-            // caller can be written against it; applying the update is issue
-            // #151. Verification, backup, swap and rollback all land there.
             let flags = parse_flags(&args[1..], &["pid", "staged", "target", "relaunch"])?;
             for name in ["pid", "staged", "target", "relaunch"] {
                 require(&flags, name)?;
             }
             let pid = require(&flags, "pid")?;
-            pid.parse::<u32>()
+            let pid: u32 = pid
+                .parse()
                 .map_err(|_| format!("--pid must be a process id, got {pid:?}"))?;
 
-            eprintln!(
-                "mbrc-helper: `update` is not implemented in this build \
-                 (manifest schema {} will be re-verified before any file is replaced)",
-                mbrc_release::SCHEMA_VERSION
-            );
-            Ok(EXIT_NOT_IMPLEMENTED)
+            Ok(run_update(&update::Request {
+                pid,
+                staged: require(&flags, "staged")?,
+                target: require(&flags, "target")?,
+                relaunch: require(&flags, "relaunch")?,
+            }))
         }
         other => Err(format!("unknown command {other:?}\n\n{USAGE}")),
+    }
+}
+
+/// Applies a staged update, mapping the outcome to the exit-code contract.
+///
+/// The distinction the caller acts on: everything up to and including
+/// [`EXIT_STILL_RUNNING`] left the install untouched and can simply be retried,
+/// [`EXIT_ROLLED_BACK`] means the install is intact but the update did not
+/// happen, and [`EXIT_ROLLBACK_FAILED`] is the one that needs the user told.
+fn run_update(request: &update::Request<'_>) -> u8 {
+    let plan = match update::plan(request) {
+        Ok(plan) => plan,
+        Err(e) => {
+            eprintln!("mbrc-helper: {e}");
+            return EXIT_USAGE;
+        }
+    };
+
+    match update::apply(&plan) {
+        Ok(applied) => {
+            println!(
+                "mbrc-helper: applied {} ({} file(s))",
+                applied.version,
+                applied.files.len()
+            );
+            // Only after the swap succeeded: a staged bundle that is still there
+            // is one the user can retry with.
+            update::clear_staged(&plan);
+            update::relaunch(&plan.relaunch);
+            EXIT_OK
+        }
+        Err(e) => {
+            eprintln!("mbrc-helper: {e}");
+            match e {
+                update::Error::Rejected(_) => EXIT_USAGE,
+                update::Error::Verify(_) => EXIT_VERIFY_FAILED,
+                update::Error::StillRunning { .. } => EXIT_STILL_RUNNING,
+                update::Error::Failed(_) => EXIT_FAILED,
+                update::Error::RolledBack { .. } => EXIT_ROLLED_BACK,
+                update::Error::RollbackFailed { .. } => EXIT_ROLLBACK_FAILED,
+            }
+        }
     }
 }
 
@@ -274,12 +335,15 @@ mod tests {
     }
 
     #[test]
-    fn update_is_accepted_but_not_implemented() {
+    fn update_refuses_paths_it_cannot_vouch_for() {
+        // Well-formed argv, unusable paths: the argv parser is happy and the
+        // path checks are what stop it. Nothing is touched, and the exit code
+        // says "bad arguments" rather than "failed".
         let code = run(&argv(
             "update --pid 1234 --staged a --target b --relaunch c",
         ))
         .unwrap();
-        assert_eq!(code, EXIT_NOT_IMPLEMENTED);
+        assert_eq!(code, EXIT_USAGE);
     }
 
     #[test]

@@ -1,0 +1,812 @@
+//! Applying a staged update: re-verify, wait, back up, swap, roll back.
+//!
+//! This runs elevated, with every path in its argv supplied by an unelevated
+//! process. That shapes the whole module:
+//!
+//! - **The signature is the gate on contents.** The staged bundle sits in a
+//!   directory any user process can write, so nothing in it is trusted because
+//!   the core staged it. The manifest is re-verified against the compiled-in
+//!   release keys and every file re-hashed before a single byte is copied, which
+//!   is the same check the core did and deliberately not the same *evidence*.
+//! - **The bytes that are verified are the bytes that are written.** Files are
+//!   read into memory, verified there, and that buffer is what lands in the
+//!   plugins directory. Re-reading from disk after verifying would leave a window
+//!   for someone to swap the file in between.
+//! - **Paths are gates on destination.** Canonicalized, absolute, no UNC, no
+//!   reparse points, and every filename written must appear in the verified
+//!   manifest. The signature says *what* may be written; these say *where*.
+//!
+//! Why `--staged` is taken from argv at all, when an elevated process should not
+//! accept paths from an unelevated one: elevation can run this as a *different*
+//! administrator account, so `%APPDATA%` here is not the user's `%APPDATA%` and a
+//! derived path would point at the wrong profile or nowhere. The path is
+//! therefore an input, hardened as above, and the signature carries the trust.
+
+use std::fmt;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use mbrc_release::{is_bare_filename, verify_manifest_with, Manifest, TrustedKey, TRUSTED_KEYS};
+
+/// Asset names the core stages alongside the payload.
+const MANIFEST_ASSET: &str = "manifest.json";
+const SIGNATURE_ASSET: &str = "manifest.json.minisig";
+
+/// Where replaced files are kept, under the same storage directory as the
+/// staging tree, which the NSIS uninstaller removes wholesale.
+const BACKUP_DIR: &str = "backup";
+
+/// How long to wait for MusicBee to exit before giving up. Generous: a library
+/// with a large cache can take a while to shut down, and the failure mode for
+/// being impatient is replacing a DLL that is still mapped.
+const EXIT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// What the caller asked for, after argv parsing but before path checking.
+pub struct Request<'a> {
+    pub pid: u32,
+    pub staged: &'a str,
+    pub target: &'a str,
+    pub relaunch: &'a str,
+}
+
+/// A request whose paths have been checked and resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub pid: u32,
+    pub staged: PathBuf,
+    pub target: PathBuf,
+    pub relaunch: PathBuf,
+}
+
+/// What an apply did, for the log line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Applied {
+    pub version: String,
+    pub files: Vec<String>,
+    pub backup: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+pub enum Error {
+    /// A path or argument the elevated helper will not act on.
+    Rejected(String),
+    /// The staged bundle did not verify. Nothing was touched.
+    Verify(mbrc_release::UpdateError),
+    /// MusicBee was still running when the wait expired. Nothing was touched.
+    StillRunning { pid: u32 },
+    /// A file operation failed before anything was replaced.
+    Failed(String),
+    /// The swap failed part way and the previous files were put back.
+    RolledBack { cause: String },
+    /// The swap failed part way and the restore failed too. The install may be
+    /// inconsistent, which is why this is its own outcome and its own exit code:
+    /// it is the one case where the user has to be told to reinstall.
+    RollbackFailed { cause: String, restore: String },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Rejected(m) => write!(f, "refusing to continue: {m}"),
+            Self::Verify(e) => write!(f, "the staged update did not verify: {e}"),
+            Self::StillRunning { pid } => write!(
+                f,
+                "MusicBee (pid {pid}) did not exit within {}s; nothing was changed",
+                EXIT_TIMEOUT.as_secs()
+            ),
+            Self::Failed(m) => write!(f, "{m}"),
+            Self::RolledBack { cause } => {
+                write!(
+                    f,
+                    "update failed ({cause}); the previous files were restored"
+                )
+            }
+            Self::RollbackFailed { cause, restore } => write!(
+                f,
+                "update failed ({cause}) and the previous files could not be restored \
+                 ({restore}); reinstall MusicBee Remote"
+            ),
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
+/// Checks and resolves the paths in a request.
+///
+/// Every rejection here is a refusal to act, not a repair: an elevated process
+/// given an argv it does not fully understand should stop.
+pub fn plan(request: &Request<'_>) -> Result<Plan> {
+    let staged = checked_dir(request.staged, "--staged")?;
+    let target = checked_dir(request.target, "--target")?;
+    let relaunch = checked_file(request.relaunch, "--relaunch")?;
+
+    if staged == target {
+        return Err(Error::Rejected(
+            "--staged and --target are the same directory".into(),
+        ));
+    }
+    // The staged tree is user-writable by design. If the plugins directory were
+    // inside it, "verified bundle" and "install" would be the same bytes and the
+    // check above would be the only thing between them.
+    if target.starts_with(&staged) || staged.starts_with(&target) {
+        return Err(Error::Rejected(
+            "--staged and --target must not contain one another".into(),
+        ));
+    }
+
+    Ok(Plan {
+        pid: request.pid,
+        staged,
+        target,
+        relaunch,
+    })
+}
+
+/// Re-verifies the staged bundle, waits for MusicBee to exit, and swaps the
+/// files, restoring the previous ones if anything goes wrong part way.
+pub fn apply(plan: &Plan) -> Result<Applied> {
+    apply_with(plan, TRUSTED_KEYS, wait_for_exit)
+}
+
+/// The seam the tests drive: the trust list and the wait are injected so an
+/// apply can be exercised end to end without the release keys and without a
+/// process to wait for. Everything else is the production path.
+pub fn apply_with(
+    plan: &Plan,
+    keys: &'static [TrustedKey],
+    wait: fn(u32, Duration) -> bool,
+) -> Result<Applied> {
+    let bundle = verify_staged(&plan.staged, keys)?;
+
+    // After verification, before anything is touched. A DLL that is still mapped
+    // cannot be replaced, and finding that out half way through the swap is the
+    // situation the rollback exists for - no reason to walk into it.
+    if !wait(plan.pid, EXIT_TIMEOUT) {
+        return Err(Error::StillRunning { pid: plan.pid });
+    }
+
+    let backup = back_up(plan, &bundle)?;
+    match write_all(plan, &bundle) {
+        Ok(()) => {
+            prune_backups(plan, &bundle.manifest.version);
+            Ok(Applied {
+                version: bundle.manifest.version,
+                files: bundle.files.iter().map(|(n, _)| n.clone()).collect(),
+                backup,
+            })
+        }
+        Err(cause) => Err(restore(backup.as_deref(), &plan.target, &bundle, cause)),
+    }
+}
+
+/// A staged bundle that has verified: the manifest, and the payload bytes as
+/// they were hashed.
+struct Bundle {
+    manifest: Manifest,
+    files: Vec<(String, Vec<u8>)>,
+}
+
+/// Re-verifies a staged directory: signature over the manifest first, then every
+/// file the manifest lists.
+///
+/// The manifest drives this, not the directory listing. A file sitting in the
+/// staged directory that the manifest does not name is never read and never
+/// copied, whatever it is called.
+fn verify_staged(staged: &Path, keys: &'static [TrustedKey]) -> Result<Bundle> {
+    let manifest_bytes = read(&staged.join(MANIFEST_ASSET))?;
+    let signature = read(&staged.join(SIGNATURE_ASSET))?;
+    let signature = String::from_utf8(signature)
+        .map_err(|e| Error::Verify(mbrc_release::UpdateError::MalformedSignature(e.to_string())))?;
+
+    let (manifest, key_name) =
+        verify_manifest_with(&manifest_bytes, &signature, keys).map_err(Error::Verify)?;
+    println!(
+        "mbrc-helper: manifest for {} signed by {key_name}",
+        manifest.version
+    );
+
+    let mut files = Vec::with_capacity(manifest.files.len());
+    for entry in &manifest.files {
+        // `Manifest::parse` already enforces this; re-checked because this is the
+        // step that turns a manifest string into a path in an elevated process.
+        if !is_bare_filename(&entry.path) {
+            return Err(Error::Rejected(format!(
+                "the manifest names {:?}, which is not a bare filename",
+                entry.path
+            )));
+        }
+        let path = staged.join(&entry.path);
+        refuse_reparse_point(&path)?;
+        let bytes = read(&path)?;
+        mbrc_release::verify_sha512(&bytes, &entry.sha512, &entry.path).map_err(Error::Verify)?;
+        files.push((entry.path.clone(), bytes));
+    }
+
+    Ok(Bundle { manifest, files })
+}
+
+/// Copies the files about to be replaced into `backup/<version>/`.
+///
+/// Named for the version being applied - "what installing 1.6.0 replaced" -
+/// because the version being replaced is not recorded anywhere the helper can
+/// read. Returns `None` when there was nothing to back up, which is a fresh
+/// install rather than an error.
+fn back_up(plan: &Plan, bundle: &Bundle) -> Result<Option<PathBuf>> {
+    let root = backup_root(&plan.staged)?.join(&bundle.manifest.version);
+    if root.exists() {
+        std::fs::remove_dir_all(&root).map_err(|e| failed(&root, e))?;
+    }
+
+    let mut saved = 0usize;
+    for (name, _) in &bundle.files {
+        let current = plan.target.join(name);
+        if !current.exists() {
+            continue;
+        }
+        refuse_reparse_point(&current)?;
+        if saved == 0 {
+            std::fs::create_dir_all(&root).map_err(|e| failed(&root, e))?;
+        }
+        std::fs::copy(&current, root.join(name)).map_err(|e| failed(&current, e))?;
+        saved += 1;
+    }
+
+    if saved == 0 {
+        return Ok(None);
+    }
+    println!(
+        "mbrc-helper: backed up {saved} file(s) to {}",
+        root.display()
+    );
+    Ok(Some(root))
+}
+
+/// Writes the verified bytes into the plugins directory.
+fn write_all(plan: &Plan, bundle: &Bundle) -> std::result::Result<(), String> {
+    for (name, bytes) in &bundle.files {
+        let path = plan.target.join(name);
+        // A reparse point here would redirect an elevated write out of the
+        // plugins directory entirely.
+        if path.exists() {
+            refuse_reparse_point(&path).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        println!("mbrc-helper: wrote {}", path.display());
+    }
+    Ok(())
+}
+
+/// Puts the previous files back after a failed swap.
+fn restore(backup: Option<&Path>, target: &Path, bundle: &Bundle, cause: String) -> Error {
+    let Some(backup) = backup else {
+        // Nothing was replaced, so there is nothing to put back: this was a
+        // fresh install that failed part way.
+        return Error::RolledBack { cause };
+    };
+
+    let mut failures = Vec::new();
+    for (name, _) in &bundle.files {
+        let from = backup.join(name);
+        if !from.exists() {
+            continue;
+        }
+        let to = target.join(name);
+        if let Err(e) = std::fs::copy(&from, &to) {
+            // The file that could not be *written* is usually the one that
+            // cannot be written back either - read-only, locked, out of space.
+            // That is not a failed restore if the installed file was never
+            // replaced: it is already what the backup holds.
+            if already_restored(&from, &to) {
+                continue;
+            }
+            failures.push(format!("{name}: {e}"));
+        }
+    }
+
+    if failures.is_empty() {
+        Error::RolledBack { cause }
+    } else {
+        Error::RollbackFailed {
+            cause,
+            restore: failures.join("; "),
+        }
+    }
+}
+
+/// Whether the installed file already holds what the backup would put there.
+///
+/// Compared by content rather than assumed from the write having failed: the
+/// point is to distinguish "never replaced" from "replaced and now unrecoverable",
+/// and only the bytes say which.
+fn already_restored(backup: &Path, installed: &Path) -> bool {
+    match (std::fs::read(backup), std::fs::read(installed)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Keeps the newest backup and removes the rest. One is enough for a manual
+/// rollback; more is a slow leak in the user's profile.
+fn prune_backups(plan: &Plan, keep: &str) {
+    let Ok(root) = backup_root(&plan.staged) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name() == std::ffi::OsStr::new(keep) {
+            continue;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                eprintln!("mbrc-helper: could not remove {}: {e}", path.display());
+            }
+        }
+    }
+}
+
+/// Removes the staged bundle once it has been applied.
+///
+/// Best effort and deliberately not fatal: the update is already installed, and
+/// the marker being left behind costs a redundant offer, not a broken install.
+pub fn clear_staged(plan: &Plan) {
+    // `<storage>/updates/<version>` -> remove the version directory and the
+    // marker beside it, which is what tells the core something is pending.
+    if let Err(e) = std::fs::remove_dir_all(&plan.staged) {
+        eprintln!(
+            "mbrc-helper: could not remove {}: {e}",
+            plan.staged.display()
+        );
+    }
+    if let Some(updates) = plan.staged.parent() {
+        let marker = updates.join("pending.json");
+        if marker.exists() {
+            if let Err(e) = std::fs::remove_file(&marker) {
+                eprintln!("mbrc-helper: could not remove {}: {e}", marker.display());
+            }
+        }
+    }
+}
+
+/// `<storage>/backup`, derived from the staged directory
+/// (`<storage>/updates/<version>`) rather than taken from argv.
+fn backup_root(staged: &Path) -> Result<PathBuf> {
+    staged
+        .parent()
+        .and_then(Path::parent)
+        .map(|storage| storage.join(BACKUP_DIR))
+        .ok_or_else(|| {
+            Error::Rejected(format!(
+                "{} is not inside a staging directory",
+                staged.display()
+            ))
+        })
+}
+
+/// Resolves a directory argument, refusing everything an elevated process should
+/// not follow.
+fn checked_dir(raw: &str, flag: &str) -> Result<PathBuf> {
+    let path = checked_path(raw, flag)?;
+    if !path.is_dir() {
+        return Err(Error::Rejected(format!(
+            "{flag} {raw:?} is not a directory"
+        )));
+    }
+    Ok(path)
+}
+
+/// As [`checked_dir`], for a file argument.
+fn checked_file(raw: &str, flag: &str) -> Result<PathBuf> {
+    let path = checked_path(raw, flag)?;
+    if !path.is_file() {
+        return Err(Error::Rejected(format!("{flag} {raw:?} is not a file")));
+    }
+    Ok(path)
+}
+
+/// The shared path rules.
+///
+/// Checked on the *input* before canonicalizing, because canonicalization is
+/// what would hide a relative path or resolve a link the caller chose.
+fn checked_path(raw: &str, flag: &str) -> Result<PathBuf> {
+    if raw.trim().is_empty() {
+        return Err(Error::Rejected(format!("{flag} is empty")));
+    }
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err(Error::Rejected(format!("{flag} {raw:?} is not absolute")));
+    }
+    // A UNC path points at another machine, and an elevated process following one
+    // is reachable by anyone who can answer as that host.
+    if raw.starts_with("\\\\") || raw.starts_with("//") {
+        return Err(Error::Rejected(format!("{flag} {raw:?} is a network path")));
+    }
+    refuse_reparse_point(path)?;
+    std::fs::canonicalize(path)
+        .map_err(|e| Error::Rejected(format!("{flag} {raw:?} cannot be resolved: {e}")))
+}
+
+/// Refuses a symlink or, on Windows, a junction. Missing is not a link.
+fn refuse_reparse_point(path: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(Error::Rejected(format!(
+            "{} is a link; refusing to follow it",
+            path.display()
+        ))),
+        _ => Ok(()),
+    }
+}
+
+fn read(path: &Path) -> Result<Vec<u8>> {
+    std::fs::read(path).map_err(|e| failed(path, e))
+}
+
+fn failed(path: &Path, e: std::io::Error) -> Error {
+    Error::Failed(format!("{}: {e}", path.display()))
+}
+
+/// Waits for a process to exit. `true` means it is gone.
+///
+/// A pid that cannot be opened is treated as already gone: the process either
+/// exited before we looked or is not ours to wait on, and both mean waiting will
+/// never tell us anything.
+#[cfg(windows)]
+fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{
+        OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+    };
+
+    // SAFETY: a pid is a value, not a pointer; the handle is closed on both
+    // paths below.
+    let handle = match unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) } {
+        Ok(handle) => handle,
+        Err(_) => return true,
+    };
+    // SAFETY: `handle` came from OpenProcess and has not been closed.
+    let result = unsafe { WaitForSingleObject(handle, timeout.as_millis() as u32) };
+    // SAFETY: as above; closed exactly once.
+    let _ = unsafe { CloseHandle(handle) };
+    result == WAIT_OBJECT_0
+}
+
+#[cfg(not(windows))]
+fn wait_for_exit(_pid: u32, _timeout: Duration) -> bool {
+    // Nothing to wait for off Windows; the apply path is exercised by tests that
+    // inject their own wait.
+    true
+}
+
+/// Starts MusicBee again after a successful update.
+///
+/// Launched **through Explorer**, not directly. This process is elevated, and a
+/// child inherits that: starting MusicBee from here would leave it running as
+/// administrator for the rest of the session, writing its settings and cache as
+/// a different user. Explorer runs at the user's own integrity level, so handing
+/// it the path gets MusicBee back at the level it had before.
+pub fn relaunch(exe: &Path) {
+    #[cfg(windows)]
+    {
+        match std::process::Command::new("explorer.exe").arg(exe).spawn() {
+            Ok(_) => println!("mbrc-helper: relaunched {}", exe.display()),
+            Err(e) => eprintln!("mbrc-helper: could not relaunch {}: {e}", exe.display()),
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = exe;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The committed test key. The release keys never sign anything a test can
+    /// produce, so an end-to-end apply is driven with this trust list, exactly
+    /// as `mbrc-release`'s own tests do.
+    const TEST_KEYS: &[TrustedKey] = &[TrustedKey {
+        name: "test",
+        base64: "RWT+ztjSHP1aBowOy75aVsw0jf2Vn6MMbzuTIAPRaN5EWVPjPU9fjwAj",
+    }];
+
+    /// The golden fixture: a real signed manifest for 1.5.0. Its file hashes are
+    /// over the byte strings in [`PAYLOAD`].
+    const MANIFEST: &str = include_str!("../../mbrc-release/tests/fixtures/manifest.json");
+    const SIGNATURE: &str = include_str!("../../mbrc-release/tests/fixtures/manifest.json.minisig");
+    const PAYLOAD: &[(&str, &[u8])] = &[
+        ("mb_remote.dll", b"mb_remote.dll bytes"),
+        ("mbrc_core.dll", b"mbrc_core.dll bytes"),
+        ("mbrc-helper.exe", b"mbrc-helper.exe bytes"),
+    ];
+
+    fn exited(_pid: u32, _timeout: Duration) -> bool {
+        true
+    }
+
+    fn still_running(_pid: u32, _timeout: Duration) -> bool {
+        false
+    }
+
+    /// A storage tree shaped like the real one: `<root>/updates/1.5.0` staged,
+    /// `<root>/plugins` standing in for the plugins directory.
+    struct Fixture {
+        root: PathBuf,
+        staged: PathBuf,
+        target: PathBuf,
+    }
+
+    impl Fixture {
+        fn new(name: &str) -> Self {
+            let root = std::env::temp_dir().join(format!("mbrc-helper-{name}"));
+            let _ = std::fs::remove_dir_all(&root);
+            let staged = root.join("updates").join("1.5.0");
+            let target = root.join("plugins");
+            std::fs::create_dir_all(&staged).unwrap();
+            std::fs::create_dir_all(&target).unwrap();
+
+            std::fs::write(staged.join(MANIFEST_ASSET), MANIFEST).unwrap();
+            std::fs::write(staged.join(SIGNATURE_ASSET), SIGNATURE).unwrap();
+            for (name, bytes) in PAYLOAD {
+                std::fs::write(staged.join(name), bytes).unwrap();
+            }
+
+            Self {
+                root,
+                staged,
+                target,
+            }
+        }
+
+        /// Pre-existing installed files, so there is something to back up.
+        fn with_installed(self, bytes: &[u8]) -> Self {
+            for (name, _) in PAYLOAD {
+                std::fs::write(self.target.join(name), bytes).unwrap();
+            }
+            self
+        }
+
+        fn plan(&self) -> Plan {
+            Plan {
+                pid: 0,
+                staged: self.staged.clone(),
+                target: self.target.clone(),
+                relaunch: self.root.join("MusicBee.exe"),
+            }
+        }
+
+        fn installed(&self, name: &str) -> Vec<u8> {
+            std::fs::read(self.target.join(name)).unwrap()
+        }
+    }
+
+    #[test]
+    fn applies_every_manifest_file() {
+        let fixture = Fixture::new("apply").with_installed(b"old");
+        let applied = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap();
+
+        assert_eq!(applied.version, "1.5.0");
+        assert_eq!(applied.files.len(), 3);
+        for (name, bytes) in PAYLOAD {
+            assert_eq!(fixture.installed(name), *bytes, "{name} was not replaced");
+        }
+    }
+
+    #[test]
+    fn backs_up_what_it_replaces() {
+        let fixture = Fixture::new("backup").with_installed(b"old");
+        let applied = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap();
+
+        let backup = applied.backup.expect("a backup must be taken");
+        assert_eq!(backup, fixture.root.join("backup").join("1.5.0"));
+        for (name, _) in PAYLOAD {
+            assert_eq!(std::fs::read(backup.join(name)).unwrap(), b"old");
+        }
+    }
+
+    #[test]
+    fn a_fresh_install_needs_no_backup() {
+        let fixture = Fixture::new("fresh");
+        let applied = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap();
+        assert!(applied.backup.is_none());
+        assert_eq!(fixture.installed("mb_remote.dll"), b"mb_remote.dll bytes");
+    }
+
+    #[test]
+    fn keeps_only_the_newest_backup() {
+        let fixture = Fixture::new("prune").with_installed(b"old");
+        let stale = fixture.root.join("backup").join("1.4.0");
+        std::fs::create_dir_all(&stale).unwrap();
+        std::fs::write(stale.join("mb_remote.dll"), b"older").unwrap();
+
+        apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap();
+
+        assert!(!stale.exists(), "the older backup should have been pruned");
+        assert!(fixture.root.join("backup").join("1.5.0").exists());
+    }
+
+    #[test]
+    fn a_tampered_payload_stops_before_anything_is_written() {
+        let fixture = Fixture::new("tampered").with_installed(b"old");
+        std::fs::write(fixture.staged.join("mbrc_core.dll"), b"not what was signed").unwrap();
+
+        let err = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap_err();
+        assert!(matches!(err, Error::Verify(_)), "{err}");
+        // Crucially, not even the file that *did* verify: verification finishes
+        // before the first write.
+        for (name, _) in PAYLOAD {
+            assert_eq!(fixture.installed(name), b"old", "{name} was touched");
+        }
+    }
+
+    #[test]
+    fn a_tampered_manifest_is_refused() {
+        let fixture = Fixture::new("resigned").with_installed(b"old");
+        let doctored = MANIFEST.replace("\"version\": \"1.5.0\"", "\"version\": \"9.9.9\"");
+        std::fs::write(fixture.staged.join(MANIFEST_ASSET), doctored).unwrap();
+
+        let err = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap_err();
+        assert!(matches!(err, Error::Verify(_)), "{err}");
+    }
+
+    #[test]
+    fn the_release_keys_do_not_trust_the_test_fixture() {
+        // The production entry point uses TRUSTED_KEYS; this is what stops a
+        // test-signed bundle being applied by a shipped helper.
+        let fixture = Fixture::new("realkeys");
+        let err = apply(&fixture.plan()).unwrap_err();
+        assert!(matches!(err, Error::Verify(_)), "{err}");
+    }
+
+    #[test]
+    fn a_file_the_manifest_does_not_name_is_ignored() {
+        let fixture = Fixture::new("extra").with_installed(b"old");
+        std::fs::write(fixture.staged.join("evil.dll"), b"payload").unwrap();
+
+        apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap();
+        assert!(
+            !fixture.target.join("evil.dll").exists(),
+            "an unlisted file was copied"
+        );
+    }
+
+    #[test]
+    fn a_running_musicbee_stops_the_apply() {
+        let fixture = Fixture::new("running").with_installed(b"old");
+        let err = apply_with(&fixture.plan(), TEST_KEYS, still_running).unwrap_err();
+        assert!(matches!(err, Error::StillRunning { .. }), "{err}");
+        assert_eq!(fixture.installed("mb_remote.dll"), b"old");
+    }
+
+    /// Marks a file read-only, which is how the tests make one write fail while
+    /// the backup copy that precedes it still succeeds.
+    ///
+    /// Windows-only, and not because the logic is: a read-only bit does not stop
+    /// root, so the same test would pass for the wrong reason in a container
+    /// running as root. The rollback paths themselves are platform-independent
+    /// and this is the one runner where the trick is reliable.
+    #[cfg(windows)]
+    fn set_read_only(path: &Path, read_only: bool) {
+        let mut permissions = std::fs::metadata(path).unwrap().permissions();
+        permissions.set_readonly(read_only);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_failed_write_restores_the_previous_files() {
+        let fixture = Fixture::new("rollback").with_installed(b"old");
+        // The last file the manifest lists, so the two before it have already
+        // been replaced when the write fails.
+        let blocked = fixture.target.join("mbrc-helper.exe");
+        set_read_only(&blocked, true);
+
+        let err = apply_with(&fixture.plan(), TEST_KEYS, exited).unwrap_err();
+        set_read_only(&blocked, false);
+
+        assert!(matches!(err, Error::RolledBack { .. }), "{err}");
+        for (name, _) in PAYLOAD {
+            assert_eq!(
+                fixture.installed(name),
+                b"old",
+                "{name} was not rolled back"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_restore_that_cannot_put_a_replaced_file_back_says_so() {
+        let fixture = Fixture::new("rollback-failed").with_installed(b"old");
+        // The *first* file is replaced successfully, then made unwritable, so
+        // the restore of a genuinely changed file fails. This is the outcome
+        // that tells the user to reinstall, and it must not be confused with the
+        // read-only-but-untouched case above.
+        let plan = fixture.plan();
+        let bundle = verify_staged(&plan.staged, TEST_KEYS).unwrap();
+        let backup = back_up(&plan, &bundle).unwrap();
+        std::fs::write(fixture.target.join("mb_remote.dll"), b"half-written").unwrap();
+        let blocked = fixture.target.join("mb_remote.dll");
+        set_read_only(&blocked, true);
+
+        let err = restore(backup.as_deref(), &plan.target, &bundle, "disk full".into());
+        set_read_only(&blocked, false);
+        assert!(matches!(err, Error::RollbackFailed { .. }), "{err}");
+    }
+
+    #[test]
+    fn clearing_removes_the_bundle_and_the_marker() {
+        let fixture = Fixture::new("clear");
+        let marker = fixture.staged.parent().unwrap().join("pending.json");
+        std::fs::write(&marker, "{}").unwrap();
+
+        clear_staged(&fixture.plan());
+        assert!(!fixture.staged.exists());
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn relative_and_network_paths_are_refused() {
+        let fixture = Fixture::new("paths");
+        let staged = fixture.staged.to_string_lossy().into_owned();
+        let target = fixture.target.to_string_lossy().into_owned();
+        let exe = fixture.root.join("MusicBee.exe");
+        std::fs::write(&exe, b"stub").unwrap();
+        let relaunch = exe.to_string_lossy().into_owned();
+
+        let cases = [
+            ("relative", "plugins"),
+            ("network", "\\\\server\\share\\plugins"),
+            ("empty", ""),
+        ];
+        for (label, bad) in cases {
+            let request = Request {
+                pid: 1,
+                staged: &staged,
+                target: bad,
+                relaunch: &relaunch,
+            };
+            assert!(
+                matches!(plan(&request), Err(Error::Rejected(_))),
+                "{label} path was accepted"
+            );
+        }
+
+        // The good case, so the rejections above are not passing for some
+        // unrelated reason.
+        let request = Request {
+            pid: 1,
+            staged: &staged,
+            target: &target,
+            relaunch: &relaunch,
+        };
+        assert!(plan(&request).is_ok());
+    }
+
+    #[test]
+    fn overlapping_staged_and_target_are_refused() {
+        let fixture = Fixture::new("overlap");
+        let exe = fixture.root.join("MusicBee.exe");
+        std::fs::write(&exe, b"stub").unwrap();
+        let inner = fixture.staged.join("inner");
+        std::fs::create_dir_all(&inner).unwrap();
+
+        let request = Request {
+            pid: 1,
+            staged: &fixture.staged.to_string_lossy(),
+            target: &inner.to_string_lossy(),
+            relaunch: &exe.to_string_lossy(),
+        };
+        assert!(matches!(plan(&request), Err(Error::Rejected(_))));
+    }
+
+    #[test]
+    fn the_backup_root_is_derived_from_the_staged_directory() {
+        let staged = Path::new("/storage/updates/1.5.0");
+        assert_eq!(
+            backup_root(staged).unwrap(),
+            Path::new("/storage").join(BACKUP_DIR)
+        );
+    }
+}

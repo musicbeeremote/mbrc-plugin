@@ -151,6 +151,55 @@ running as administrator, so the boundaries are part of the design:
   its `.minisig` are staged alongside them and the helper re-verifies from those
   before copying anything into the plugins directory.
 
+## Applying
+
+`mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>`,
+run elevated. In order: re-verify, wait, back up, swap, roll back if needed.
+
+**Re-verification comes first and is not a formality.** The staged bundle sits
+where any user process can write, so nothing in it is trusted because the core
+put it there. The manifest is checked against the compiled-in release keys and
+every listed file re-hashed before a byte is copied. The files are read into
+memory, verified there, and *that buffer* is what gets written - re-reading from
+disk after verifying would leave a window to swap the file in between.
+
+**Only then does it wait for MusicBee to exit** (120s). A mapped DLL cannot be
+replaced, and discovering that half way through the swap is the situation the
+rollback exists for; there is no reason to walk into it deliberately.
+
+**Paths are checked separately from contents.** The signature says *what* may be
+written, and the path rules say *where*: absolute only, no UNC, no reparse points,
+canonicalized, and `--staged` and `--target` may not contain one another. Every
+filename written must appear in the verified manifest, so a file sitting in the
+staged directory that the manifest does not name is never read and never copied.
+
+`--staged` is taken from argv rather than derived, which is a deliberate departure
+from "an elevated process should not accept paths from an unelevated one".
+Elevation can run the helper as a *different* administrator account, so
+`%APPDATA%` inside it is not the user's `%APPDATA%`, and a derived path would name
+the wrong profile or nothing at all. The path is an input; the signature is the
+trust.
+
+Replaced files go to `<storage>/backup/<version>/` - "what installing that version
+replaced" - and one generation is kept. A failed write restores them. A restore
+that cannot put back a file whose installed copy is already identical to the
+backup is not a failure: that file was never replaced.
+
+Exit codes are the contract with the panel:
+
+| | |
+|---|---|
+| 0 | applied |
+| 2 | arguments refused; nothing touched |
+| 5 | the staged bundle did not verify; nothing touched |
+| 6 | MusicBee did not exit in time; nothing touched |
+| 7 | failed part way, previous files restored; the install is intact |
+| 8 | failed part way *and* the restore failed; the user must reinstall |
+
+MusicBee is relaunched **through Explorer**, not as a child of the helper. A child
+would inherit elevation and run MusicBee as administrator for the rest of the
+session, writing its settings and cache as the wrong user.
+
 ## Signing
 
 minisign (ed25519). Authenticode was rejected on cost, and GPG on the verifier
