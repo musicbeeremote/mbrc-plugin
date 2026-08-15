@@ -135,11 +135,7 @@ impl WinHttpClient {
             None => open_autodetecting_session(&agent)?,
         };
 
-        set_option(
-            &session,
-            WINHTTP_OPTION_SECURE_PROTOCOLS,
-            secure_protocols(),
-        )?;
+        set_secure_protocols(&session)?;
         set_option(
             &session,
             WINHTTP_OPTION_REDIRECT_POLICY,
@@ -260,6 +256,29 @@ fn secure_protocols() -> u32 {
     WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3
 }
 
+/// Restricts the session to sound TLS versions, narrowing rather than failing on
+/// a Windows that has never heard of TLS 1.3.
+///
+/// WinHTTP validates the mask and rejects unknown bits outright with
+/// `ERROR_INVALID_PARAMETER`, and the TLS 1.3 bit is unknown before Windows 10
+/// 1903. Treating that as fatal would mean the whole updater refuses to start on
+/// exactly the older machines the proxy fallback above is there to support - and
+/// it would say so as error 87, which tells the user nothing. So the combined
+/// mask is attempted first and TLS 1.2 alone is the fallback.
+///
+/// The one thing that never happens is giving up on the option: unset, the
+/// session may offer TLS 1.0, which GitHub refuses.
+fn set_secure_protocols(session: &Handle) -> Result<()> {
+    if set_option(session, WINHTTP_OPTION_SECURE_PROTOCOLS, secure_protocols()).is_ok() {
+        return Ok(());
+    }
+    set_option(
+        session,
+        WINHTTP_OPTION_SECURE_PROTOCOLS,
+        WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2,
+    )
+}
+
 /// Sets one `u32`-valued option on a handle.
 fn set_option(handle: &Handle, option: u32, value: u32) -> Result<()> {
     // SAFETY: `value` lives across the call and its length is its real size,
@@ -367,8 +386,30 @@ fn header(request: &Handle, info_level: u32) -> Result<Option<String>> {
 
     let chars = (bytes as usize) / 2;
     let value = String::from_utf16_lossy(&buffer[..chars.min(buffer.len())]);
-    let value = value.trim_end_matches('\0').trim().to_owned();
+    let value = sanitize(value.trim_end_matches('\0'));
     Ok(if value.is_empty() { None } else { Some(value) })
+}
+
+/// The most a header value may be before it is treated as junk. An `ETag` is a
+/// short opaque token; anything near this is not one.
+const MAX_HEADER_VALUE: usize = 512;
+
+/// Makes a server-supplied header value safe to store and echo back.
+///
+/// The `ETag` read here is persisted to `update_state.json` and sent out again as
+/// `If-None-Match` on the next check. `WinHttpAddRequestHeaders` takes a raw
+/// header block, so a value carrying CR or LF would be split into headers of the
+/// server's choosing. Reaching that needs a server that emits a folded or
+/// malformed value, which GitHub does not - but the fix is a filter, and the
+/// alternative is trusting a remote string with the shape of a request.
+fn sanitize(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !matches!(c, '\r' | '\n' | '\0'))
+        .take(MAX_HEADER_VALUE)
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 
 /// Drains the response body.
@@ -457,23 +498,28 @@ impl Target {
         // SAFETY: both pointers came from `WinHttpCrackUrl` and point into
         // `wide_url` with the lengths it reported.
         let host = unsafe { slice(components.lpszHostName, components.dwHostNameLength) };
-        let path = unsafe {
-            // Path and query are adjacent in the source string, so one slice
-            // spanning both is the object name WinHTTP wants.
-            slice(
-                components.lpszUrlPath,
-                components.dwUrlPathLength + components.dwExtraInfoLength,
-            )
-        };
+        // SAFETY: as above.
+        let url_path = unsafe { slice(components.lpszUrlPath, components.dwUrlPathLength) };
+        // SAFETY: as above.
+        let query = unsafe { slice(components.lpszExtraInfo, components.dwExtraInfoLength) };
+
+        // Taken as two pieces and rejoined rather than as one slice spanning
+        // both: `https://host?x=1` cracks to an empty path and a non-empty query,
+        // and a slice of the pair would hand WinHttpOpenRequest an object name
+        // starting at `?`, which is not a request target. The root has to be put
+        // back explicitly.
+        let mut object = Vec::with_capacity(url_path.len() + query.len() + 1);
+        if url_path.is_empty() {
+            object.push(u16::from(b'/'));
+        } else {
+            object.extend_from_slice(url_path);
+        }
+        object.extend_from_slice(query);
 
         Ok(Self {
             host: null_terminated(host),
             port: components.nPort,
-            path: null_terminated(if path.is_empty() {
-                &[b'/' as u16]
-            } else {
-                path
-            }),
+            path: null_terminated(&object),
         })
     }
 }
@@ -569,6 +615,14 @@ mod tests {
     }
 
     #[test]
+    fn a_query_with_no_path_keeps_the_root_in_front_of_it() {
+        // WinHttpCrackUrl reports an empty path here, and an object name that
+        // begins at `?` is not a request target.
+        let target = Target::parse("https://example.com?x=1").unwrap();
+        assert_eq!(text(&target.path), "/?x=1");
+    }
+
+    #[test]
     fn an_explicit_port_is_kept() {
         let target = Target::parse("https://example.com:8443/x").unwrap();
         assert_eq!(target.port, 8443);
@@ -592,9 +646,47 @@ mod tests {
         assert_ne!(protocols & WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3, 0);
         // The point of setting the option at all: the defaults below TLS 1.2 are
         // what GitHub refuses.
-        assert_eq!(protocols & 0x0000_0008, 0, "SSL 3.0 must not be enabled");
+        assert_eq!(protocols & 0x0000_0008, 0, "SSL 2.0 must not be enabled");
+        assert_eq!(protocols & 0x0000_0020, 0, "SSL 3.0 must not be enabled");
         assert_eq!(protocols & 0x0000_0080, 0, "TLS 1.0 must not be enabled");
         assert_eq!(protocols & 0x0000_0200, 0, "TLS 1.1 must not be enabled");
+        // The fallback for a Windows without TLS 1.3 narrows to 1.2; it must not
+        // widen to anything the loop above rules out.
+        assert_eq!(WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2, 0x0000_0800);
+    }
+
+    #[test]
+    fn winhttp_rejects_a_protocol_bit_it_does_not_know() {
+        // The premise of the TLS 1.3 fallback: WinHTTP validates this mask rather
+        // than ignoring what it cannot use, so a session on a Windows without TLS
+        // 1.3 would fail to open unless the narrower mask is tried. If this ever
+        // starts passing, the fallback is dead code and can go.
+        let client = WinHttpClient::new("mbrc-test/0.0", None).unwrap();
+        let unknown = 0x0000_4000;
+        assert!(
+            set_option(&client.session, WINHTTP_OPTION_SECURE_PROTOCOLS, unknown).is_err(),
+            "an unknown protocol bit was accepted"
+        );
+        // And the mask the fallback uses is one it does know.
+        assert!(set_option(
+            &client.session,
+            WINHTTP_OPTION_SECURE_PROTOCOLS,
+            WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn a_header_value_cannot_smuggle_in_a_second_header() {
+        // What matters is the CR/LF: the value is echoed back as `If-None-Match`
+        // into a raw header block on the next check.
+        assert_eq!(
+            sanitize("\"abc\"\r\nX-Injected: yes"),
+            "\"abc\"X-Injected: yes"
+        );
+        assert!(!sanitize("\"abc\"\r\nX-Injected: yes").contains('\r'));
+        assert_eq!(sanitize("  \"abc\"  "), "\"abc\"");
+        assert_eq!(sanitize(&"x".repeat(10_000)).len(), MAX_HEADER_VALUE);
     }
 
     #[test]
