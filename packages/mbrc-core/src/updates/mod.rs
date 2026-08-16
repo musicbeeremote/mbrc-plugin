@@ -7,10 +7,12 @@
 //!
 //! Nothing here reaches the network on its own. It takes an
 //! [`HttpClient`](mbrc_release::HttpClient); [`http_client`] builds the
-//! production one (WinHTTP) from the user's settings, and the panel and the
-//! background schedule that call in arrive with the UI (#152).
+//! production one (WinHTTP) from the user's settings, and [`service`] is what
+//! decides when to hand it one - the panel's buttons and the one check the core
+//! runs shortly after networking starts.
 
 pub mod elevate;
+pub mod service;
 
 use mbrc_release::{
     check::{self, CheckOptions, CheckOutcome},

@@ -79,6 +79,14 @@ nightly order correctly: `1.7.0-nightly.20260804` is below `1.7.0` and above
 `1.6.0`, so a nightly user is offered the release it is a prerelease of and never
 an older stable.
 
+**Automatic checking is opt-in.** `update_check_enabled` defaults to *off*: a
+check is an unprompted outbound request to github.com, so making one is the
+user's decision. When it is on, the core runs exactly one check per session, a
+minute after networking starts - late enough that the library reconcile and the
+cover-cache build have the machine to themselves first. The panel's "Check now"
+button forces a check regardless of the setting and regardless of the interval;
+never being able to ask would be the other way to get this wrong.
+
 Checks are rate-limited by an interval (24 hours by default) and by an `ETag`:
 the release document is requested with `If-None-Match`, and a `304` ends the
 check without downloading or verifying anything. GitHub allows 60 unauthenticated
@@ -222,6 +230,66 @@ they pressed. Declining it comes back as `ERROR_CANCELLED` and is reported as a
 normal outcome with the staged download intact - the concrete gain over letting
 the helper self-elevate, where the prompt would arrive after MusicBee had already
 exited and there would be no UI left to report into.
+
+## The panel
+
+The Configure dialog's Updates group is the whole user-facing surface: a status
+line, one action button, and a "Check for updates automatically" checkbox.
+
+The core owns the state machine (`updates::service`) and the panel renders it.
+Check, download and skip are fire-and-forget host commands that start a
+background thread, so nothing the user presses blocks MusicBee's UI thread on a
+network request; the status comes back through the `UpdateStatus` host query and
+an `UpdateStatusChanged` push event.
+
+| `state` | the button offers |
+|---|---|
+| `unknown` / `up_to_date` / `skipped` / `disabled` / `error` | Check now |
+| `available` | Download |
+| `download_failed` | Retry download |
+| `downloading` / `checking` | nothing (disabled) |
+| `staged` | Install and restart |
+
+A failed *check* renders as "No update could be found", not as the underlying
+diagnostic: an unreachable host, a release without a manifest, and a signature
+that did not verify all leave the user with the same next move, and the core has
+already written the real reason to `mbrc-core.log`. A failed *download* is a
+separate state precisely so it does not say that - the update is known, named,
+and worth retrying.
+
+Three rules that are not obvious from the table:
+
+- **One job at a time.** A check and a download both talk to github.com and both
+  write the same status. A second request while one runs is refused, not queued.
+- **A check with no news changes nothing.** A `304` (the release document is
+  unchanged since the cached `ETag`) and a not-due check are not answers, so they
+  neither rewrite the status nor discard the verified update behind an offer.
+  Without that, pressing "Check now" twice would retract the Download button the
+  first press produced - the second request is a `304` almost every time.
+- **A staged bundle outlives a later check.** If a check cannot reach GitHub at
+  all, the status stays `staged`, with the failure carried alongside as a
+  message. Losing the restart button would strand a download the user has already
+  approved.
+- **The download is never named by the host.** `DownloadUpdate` fetches the
+  update the core's own verified check produced, or is refused. There is no
+  parameter to point it somewhere else.
+
+`min_musicbee_build` is enforced here rather than in the check, because the core
+cannot see MusicBee's version and the panel can: it reads the build from
+`MusicBee.exe`'s file version - the same number the NSIS installer gates on - and
+greys out the download when the release needs a newer one.
+
+The dialog itself is fixed-size, and six groups plus the footer do not fit a 720p
+screen - nor a 1080p one at 150% scaling, which is the same thing in logical
+pixels. Its height is therefore clamped to the screen's work area and the group
+column scrolls, with the Save/Close footer docked outside the scrolling region so
+it can never end up off-screen.
+
+After `mbrc_apply_staged_update()` returns `Launched`, the panel closes MusicBee
+by posting `WM_CLOSE` to its main window, the same message its title bar sends. A
+MusicBee configured to minimize on close will not exit; the helper then times out
+after two minutes having touched nothing (exit 6), and the staged update simply
+waits for the next real exit.
 
 ## Signing
 

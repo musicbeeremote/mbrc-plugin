@@ -118,6 +118,7 @@ namespace MusicBeePlugin.Ffi.Generated
         CacheStatus = 1,
         RecentBlocked = 2,
         ListeningAddresses = 3,
+        UpdateStatus = 4,
     }
 
     public enum HostCommandType
@@ -125,11 +126,15 @@ namespace MusicBeePlugin.Ffi.Generated
         RebuildMetadata = 1,
         RebuildCovers = 2,
         ClearBlockedLog = 3,
+        CheckForUpdate = 4,
+        DownloadUpdate = 5,
+        SkipUpdate = 6,
     }
 
     public enum HostEventType
     {
         CacheStatusChanged = 1,
+        UpdateStatusChanged = 2,
     }
 
 }

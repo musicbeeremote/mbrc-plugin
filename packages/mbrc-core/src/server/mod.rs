@@ -21,6 +21,12 @@ use tokio::sync::Notify;
 
 use crate::state::Core;
 
+/// How long after networking starts the session's one update check runs. Long
+/// enough that the library reconcile and cover build have the machine to
+/// themselves first; short enough that a user who opens the panel to look finds
+/// the answer already there.
+const STARTUP_UPDATE_CHECK_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Handle to a running networking stack. Call [`NetHandle::stop`] to shut it
 /// down and join the server thread.
 pub struct NetHandle {
@@ -143,6 +149,21 @@ fn run_thread(
         // MusicBee calls.
         let cache_core = core.clone();
         tokio::task::spawn_blocking(move || reconcile_library(&cache_core));
+
+        // One update check per session, and only if the user asked for them.
+        // Delayed so it does not compete with the library reconcile and cover
+        // build above, which are what MusicBee was actually opened for; the
+        // interval in the settings still decides whether the check does anything
+        // once it fires. Skipped outright when the preference is off, so a staged
+        // update stays the panel's headline instead of being overwritten with
+        // "checking is disabled".
+        if core.config.update_check_enabled {
+            let update_core = core.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(STARTUP_UPDATE_CHECK_DELAY).await;
+                crate::updates::service::start_check(update_core, false);
+            });
+        }
 
         tokio::select! {
             _ = accept_loop(listener, core.clone()) => {}

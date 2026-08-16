@@ -20,6 +20,14 @@ namespace MusicBeePlugin.Host
     public sealed class PluginHost : IDisposable
     {
         private readonly NativeBridge _bridge;
+
+        /// <summary>
+        ///     MusicBee's API struct. Kept (a copy of the delegate table) only for
+        ///     the few host-level calls that are not part of a provider - closing
+        ///     MusicBee to finish an update is the one that matters.
+        /// </summary>
+        private readonly Plugin.MusicBeeApiInterface _api;
+
         private readonly UserSettingsService _userSettings;
         private readonly ISystemOperations _system;
         private readonly IPluginLogger _logger;
@@ -32,6 +40,7 @@ namespace MusicBeePlugin.Host
             // folder the core writes mbrc-core.log to (<storage>/mb_remote).
             var storageDir = Path.Combine(storagePath, "mb_remote");
             _logger = new FfiLogger("mbrc.host", storageDir);
+            _api = api;
 
             // MusicBee-API-bound leaves: providers wrap the raw interface struct.
             _system = new SystemOperations(api);
@@ -111,6 +120,31 @@ namespace MusicBeePlugin.Host
 
         /// <summary>Clear the core's in-memory blocked-connection log.</summary>
         public bool ClearBlockedConnections() => _bridge.ClearBlockedConnections();
+
+        /// <summary>Where the update flow stands, for the panel's Updates group.</summary>
+        public Ffi.UpdateStatus ReadUpdateStatus() => _bridge.ReadUpdateStatus();
+
+        /// <summary>Start a background check for a newer release (always forced).</summary>
+        public bool CheckForUpdate() => _bridge.CheckForUpdate();
+
+        /// <summary>Download and stage the update the last check found.</summary>
+        public bool DownloadUpdate() => _bridge.DownloadUpdate();
+
+        /// <summary>Record that the user does not want this version offered again.</summary>
+        public bool SkipUpdate() => _bridge.SkipUpdate();
+
+        /// <summary>
+        ///     Hand the staged update to the elevated helper. On
+        ///     <see cref="Ffi.Generated.UpdateLaunch.Launched" /> the helper is up and
+        ///     waiting for MusicBee to exit, so the caller must close MusicBee next.
+        /// </summary>
+        public Ffi.Generated.UpdateLaunch ApplyStagedUpdate() => _bridge.ApplyStagedUpdate();
+
+        /// <summary>
+        ///     MusicBee's own window, so the panel can ask it to close once an
+        ///     update has been handed to the helper.
+        /// </summary>
+        public IntPtr MusicBeeWindow => _api.MB_GetWindowHandle();
 
         /// <summary>
         ///     Core -> host push events (raised on a background thread). The

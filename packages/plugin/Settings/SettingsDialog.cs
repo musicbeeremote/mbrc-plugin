@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -47,6 +48,29 @@ namespace MusicBeePlugin.Settings
         // Plugin help / documentation, opened from the footer link.
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
 
+        // The dialog's fixed width, and the height it wants when the screen has
+        // room. Six groups plus the footer do not fit a 720p screen (or a 1080p
+        // one at 150% scaling, which is the same thing in logical pixels), so the
+        // height is what actually gets clamped - see PreferredDialogHeight.
+        private const int DialogWidth = 560;
+        private const int DialogHeight = 780;
+
+        // Usable width of a group's value column: the dialog's client width less
+        // the 140px label column and the layout's padding. Wrapping labels are
+        // capped to it so a long sentence stays inside the fixed-width dialog.
+        // Kept clear of the value column's full width so that a vertical
+        // scrollbar (about 17px) appearing on a short screen cannot push the
+        // longest line into needing a horizontal one too.
+        private const int StatusWidth = 355;
+
+        // Closing MusicBee after an update is handed to the helper: the same
+        // message its own title bar sends.
+        private const uint WM_CLOSE = 0x0010;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
         private readonly PluginHost _host;
         private readonly string _version;
 
@@ -67,6 +91,19 @@ namespace MusicBeePlugin.Settings
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
         private Button _rebuildCovers;
+        private Label _updateStatus;
+        private Button _updateAction;
+        private Button _updateSkip;
+        private LinkLabel _releaseNotes;
+        private CheckBox _autoCheck;
+        private string _updateState = UpdateStates.Unknown;
+        private string _notesUrl = string.Empty;
+
+        /// <summary>
+        ///     The offered release needs a newer MusicBee than this one, so the
+        ///     action button re-checks instead of downloading.
+        /// </summary>
+        private bool _updateBlocked;
 
         public SettingsDialog(PluginHost host, string version)
         {
@@ -80,17 +117,19 @@ namespace MusicBeePlugin.Settings
             MinimizeBox = false;
             ShowInTaskbar = false;
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(560, 660);
+            ClientSize = new Size(DialogWidth, PreferredDialogHeight());
 
             BuildLayout();
             LoadFromCore();
             LoadListeningAddresses();
             LoadCacheStatus();
             LoadBlockedCount();
+            LoadUpdateStatus();
             RunConnectionTest();
 
-            // The core pushes a CacheStatusChanged event when a rebuild starts or
-            // finishes; refresh the line live while this dialog is open.
+            // The core pushes CacheStatusChanged when a rebuild starts or
+            // finishes, and UpdateStatusChanged when a check or download does;
+            // refresh those lines live while this dialog is open.
             _host.CoreEvent += OnCoreEvent;
 
             // The blocked-connections log has no push event (it is polled), so keep
@@ -109,21 +148,60 @@ namespace MusicBeePlugin.Settings
             base.OnFormClosed(e);
         }
 
+        /// <summary>
+        ///     The dialog's client height: what the layout wants, or as much of it
+        ///     as the screen can actually show. A fixed-size window taller than the
+        ///     work area puts its bottom-docked footer - Save included - off-screen
+        ///     with no way to scroll to it, which is worse than a shorter window
+        ///     that scrolls. Measured against the work area, so the taskbar counts.
+        /// </summary>
+        private static int PreferredDialogHeight()
+        {
+            try
+            {
+                // Screen coordinates are physical pixels and ClientSize is logical,
+                // but the form has not been created yet, so there is no scale factor
+                // to ask for. The margin below absorbs the difference; getting this
+                // slightly conservative is the harmless direction.
+                var available = Screen.PrimaryScreen.WorkingArea.Height - ChromeAllowance;
+                return available < DialogHeight ? Math.Max(available, MinimumDialogHeight) : DialogHeight;
+            }
+            catch (Exception)
+            {
+                // No screen to ask (a headless or unusual session): take the small
+                // size, which fits everywhere.
+                return MinimumDialogHeight;
+            }
+        }
+
+        // Room left for the title bar and borders, plus a little slack so the
+        // window does not sit flush against the taskbar.
+        private const int ChromeAllowance = 60;
+
+        // Below this the dialog stops shrinking and just scrolls further.
+        private const int MinimumDialogHeight = 420;
+
         private void BuildLayout()
         {
+            // Docked to the top and auto-sizing, so the table grows to whatever
+            // height its groups need instead of squeezing them into the window.
+            // That overflow is what the scroller below can then scroll: a
+            // Dock=Fill table lays its rows out inside its own bounds and clips
+            // them, leaving AutoScroll nothing to act on.
             var root = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
                 ColumnCount = 1,
                 Padding = new Padding(12),
-                AutoSize = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // connection
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // access
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // library
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // advanced
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // cache
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // spacer
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // updates
 
             // No title label: the window title bar already reads "MusicBee Remote";
             // the version sits bottom-left in the button row instead.
@@ -132,18 +210,36 @@ namespace MusicBeePlugin.Settings
             root.Controls.Add(BuildLibraryGroup());
             root.Controls.Add(BuildAdvancedGroup());
             root.Controls.Add(BuildCacheGroup());
-            root.Controls.Add(new Panel { Dock = DockStyle.Fill }); // spacer
+            root.Controls.Add(BuildUpdatesGroup());
+            // No trailing spacer row: a Percent-100 row would absorb every
+            // overflow and the scroller below would never see one.
+
+            // The scrolling viewport. The groups live in here; the footer does
+            // not, which is the point - on a screen too short for the whole
+            // dialog the settings scroll and Save/Close stay put.
+            // The scroll extent is measured from where the child controls end,
+            // which counts neither the table's bottom padding nor the last
+            // group's margin - so the bottom of the last group stays just out of
+            // reach. AutoScrollMargin is the knob for that: it pads the
+            // scrollable area itself, and it has to clear both.
+            var scroller = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                AutoScrollMargin = new Size(0, 24),
+            };
+            scroller.Controls.Add(root);
 
             // The button row is docked to the bottom of the form so it (and the
             // version/Help footer inside it) always stays on-screen even if the
-            // grouped settings above overflow the fixed dialog height. Add the
+            // grouped settings above overflow the dialog height. Add the
             // bottom-docked row first, then the fill panel, so the fill claims the
             // remaining space above it.
             var footer = BuildButtonRow();
             footer.Dock = DockStyle.Bottom;
             footer.Padding = new Padding(12, 6, 12, 10);
             Controls.Add(footer);
-            Controls.Add(root);
+            Controls.Add(scroller);
         }
 
         private Control BuildConnectionGroup()
@@ -334,6 +430,79 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Cache", layout);
         }
 
+        private Control BuildUpdatesGroup()
+        {
+            _updateStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 6, 0, 0),
+                ForeColor = SystemColors.GrayText,
+                // Wrap instead of running off the fixed-width dialog: this line
+                // carries whole sentences (a failure reason, a build
+                // requirement), not the one-word status the other groups show.
+                MaximumSize = new Size(StatusWidth, 0),
+            };
+
+            // One button whose meaning follows the state (check / download /
+            // install), because at any moment there is exactly one sensible next
+            // step and three permanently-greyed buttons explain nothing.
+            _updateAction = new Button
+            {
+                Text = "Check now",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 8, 0),
+            };
+            _updateAction.Click += (s, e) => RunUpdateAction();
+
+            _updateSkip = new Button
+            {
+                Text = "Skip this version",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 8, 0),
+                Visible = false,
+            };
+            _updateSkip.Click += (s, e) => SkipUpdate();
+
+            _releaseNotes = new LinkLabel
+            {
+                Text = "Release notes",
+                AutoSize = true,
+                Padding = new Padding(0, 5, 0, 0),
+                Margin = new Padding(0),
+                Visible = false,
+            };
+            _releaseNotes.LinkClicked += (s, e) => OpenReleaseNotes();
+
+            var buttons = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0),
+            };
+            buttons.Controls.Add(_updateAction);
+            buttons.Controls.Add(_updateSkip);
+            buttons.Controls.Add(_releaseNotes);
+
+            _autoCheck = new CheckBox
+            {
+                Text = "Check for updates automatically",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+
+            var layout = GroupLayout();
+            AddRow(layout, "Status", _updateStatus);
+            AddRow(layout, string.Empty, buttons);
+            AddRow(layout, string.Empty, _autoCheck);
+            return WrapGroup("Updates", layout);
+        }
+
         private Control BuildButtonRow()
         {
             // Bottom-left: the version (the title bar already names the plugin), a
@@ -494,6 +663,7 @@ namespace MusicBeePlugin.Settings
             _searchSource.SelectedIndex = SourceToIndex(s.search_source);
             _logLevel.SelectedIndex = LogLevelToIndex(s.log_level);
             _firewall.Checked = s.update_firewall;
+            _autoCheck.Checked = s.update_check_enabled;
             UpdateFilterEnabled();
             SetStatus(string.Empty, true);
         }
@@ -577,6 +747,262 @@ namespace MusicBeePlugin.Settings
                 dialog.ShowDialog(this);
             }
             LoadBlockedCount();
+        }
+
+        /// <summary>
+        ///     Render the core's update status: the line, what the one action
+        ///     button currently means, and whether skipping or reading the notes
+        ///     is on offer.
+        /// </summary>
+        private void LoadUpdateStatus()
+        {
+            var status = _host.ReadUpdateStatus();
+            if (status == null)
+            {
+                _updateState = UpdateStates.Unknown;
+                _notesUrl = string.Empty;
+                _updateStatus.Text = "Unavailable (core not running).";
+                _updateAction.Text = "Check now";
+                _updateAction.Enabled = false;
+                _updateSkip.Visible = false;
+                _releaseNotes.Visible = false;
+                return;
+            }
+
+            _updateState = status.state ?? UpdateStates.Unknown;
+            _notesUrl = status.notes_url ?? string.Empty;
+
+            // The core cannot see MusicBee's version, so the manifest's floor is
+            // enforced here, where the running build is a process away.
+            // An update the panel could download: the states where the button
+            // fetches rather than checks or installs. The core cannot see
+            // MusicBee's version, so the manifest's floor is enforced here, where
+            // the running build is a process away.
+            var offered = _updateState == UpdateStates.Available
+                          || _updateState == UpdateStates.DownloadFailed;
+            var build = MusicBeeBuild();
+            _updateBlocked = offered
+                             && build > 0
+                             && status.min_musicbee_build > 0
+                             && build < status.min_musicbee_build;
+
+            _updateStatus.Text = DescribeUpdate(status, _updateBlocked, build);
+            // A release that needs a newer MusicBee leaves the button offering a
+            // re-check rather than greying it out: greyed, the only control in the
+            // group would be dead for the rest of the session, with nothing to
+            // press after upgrading MusicBee or once a compatible release lands.
+            _updateAction.Text = _updateBlocked ? "Check now" : ActionLabel(_updateState);
+            _updateAction.Enabled = _updateState != UpdateStates.Checking
+                                    && _updateState != UpdateStates.Downloading;
+            _updateSkip.Visible = offered;
+            _releaseNotes.Visible = _notesUrl.Length > 0
+                                    && (offered || _updateState == UpdateStates.Staged);
+        }
+
+        private static string ActionLabel(string state)
+        {
+            switch (state)
+            {
+                case UpdateStates.Available: return "Download";
+                case UpdateStates.DownloadFailed: return "Retry download";
+                case UpdateStates.Staged: return "Install and restart";
+                case UpdateStates.Checking: return "Checking...";
+                case UpdateStates.Downloading: return "Downloading...";
+                default: return "Check now";
+            }
+        }
+
+        private static string DescribeUpdate(Ffi.UpdateStatus status, bool tooOld, int build)
+        {
+            var version = status.version ?? string.Empty;
+            if (tooOld)
+                return $"Version {version} needs MusicBee build {status.min_musicbee_build} or newer "
+                       + $"(this is build {build}).";
+
+            switch (status.state)
+            {
+                case UpdateStates.Checking:
+                    return "Checking for updates...";
+                case UpdateStates.Available:
+                    return $"Version {version} is available." + LastChecked(status);
+                case UpdateStates.Downloading:
+                    return $"Downloading version {version}...";
+                case UpdateStates.DownloadFailed:
+                    return $"Version {version} could not be downloaded - see the log for details.";
+                case UpdateStates.Staged:
+                    return $"Version {version} is ready to install.";
+                case UpdateStates.Skipped:
+                    return $"Version {version} was skipped." + LastChecked(status);
+                case UpdateStates.UpToDate:
+                    return (version.Length > 0
+                               ? $"Up to date (latest release is {version})."
+                               : "Up to date.")
+                           + LastChecked(status);
+                case UpdateStates.Disabled:
+                    return "Automatic checks are off. Use Check now.";
+                case UpdateStates.Error:
+                    // Whatever went wrong - an unreachable host, a release with no
+                    // manifest, a signature that did not verify - the user's answer
+                    // is the same and the diagnostic is already in mbrc-core.log,
+                    // written by the core as the failure happened.
+                    return "No update could be found." + LastChecked(status);
+                default:
+                    return "Not checked yet.";
+            }
+        }
+
+        /// <summary>
+        ///     " Last checked &lt;local time&gt;." for a status that carries one.
+        ///     The core stores UTC; the user reads local.
+        /// </summary>
+        private static string LastChecked(Ffi.UpdateStatus status)
+        {
+            if (string.IsNullOrEmpty(status.checked_at)) return string.Empty;
+            DateTime when;
+            if (!DateTime.TryParse(
+                    status.checked_at,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out when))
+                return string.Empty;
+            return " Last checked " + when.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) + ".";
+        }
+
+        /// <summary>
+        ///     The action the current state calls for. Every path just kicks the
+        ///     core and re-reads; the core pushes UpdateStatusChanged as the
+        ///     background job progresses.
+        /// </summary>
+        private void RunUpdateAction()
+        {
+            // Blocked on the MusicBee build: the button says Check now and means
+            // it, whatever state the core is in.
+            if (_updateBlocked)
+            {
+                _updateAction.Enabled = false;
+                _updateStatus.Text = "Checking for updates...";
+                if (!_host.CheckForUpdate()) LoadUpdateStatus();
+                return;
+            }
+
+            switch (_updateState)
+            {
+                case UpdateStates.DownloadFailed:
+                case UpdateStates.Available:
+                    _updateAction.Enabled = false;
+                    _updateStatus.Text = "Starting the download...";
+                    if (!_host.DownloadUpdate()) LoadUpdateStatus();
+                    break;
+                case UpdateStates.Staged:
+                    InstallStagedUpdate();
+                    break;
+                default:
+                    _updateAction.Enabled = false;
+                    _updateStatus.Text = "Checking for updates...";
+                    if (!_host.CheckForUpdate()) LoadUpdateStatus();
+                    break;
+            }
+        }
+
+        private void SkipUpdate()
+        {
+            _host.SkipUpdate();
+            LoadUpdateStatus();
+        }
+
+        private void OpenReleaseNotes()
+        {
+            if (string.IsNullOrEmpty(_notesUrl)) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo(_notesUrl) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Couldn't open the release notes: {ex.Message}", false);
+            }
+        }
+
+        /// <summary>
+        ///     Hand the staged update to the elevated helper, then close MusicBee -
+        ///     the helper is already waiting on this process and cannot replace
+        ///     files that are still loaded.
+        /// </summary>
+        private void InstallStagedUpdate()
+        {
+            var confirm = MessageBox.Show(
+                this,
+                "MusicBee will close so the update can be installed, then reopen.\n\n"
+                + "Windows may ask for permission to update the plugin files.\n"
+                + "Any settings changes you have not saved will be lost.",
+                "MusicBee Remote",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Information);
+            if (confirm != DialogResult.OK) return;
+
+            switch (_host.ApplyStagedUpdate())
+            {
+                case Ffi.Generated.UpdateLaunch.Launched:
+                    // From here the helper owns the outcome; it waits two minutes
+                    // for this process to exit before giving up untouched.
+                    Close();
+                    CloseMusicBee();
+                    break;
+                case Ffi.Generated.UpdateLaunch.Cancelled:
+                    _updateStatus.Text =
+                        "Installation needs permission to change the plugin files. "
+                        + "The download is still there - press Install and restart to try again.";
+                    break;
+                case Ffi.Generated.UpdateLaunch.VerifyFailed:
+                    // The one outcome worth interrupting for: the staged bundle no
+                    // longer matches what the release signed.
+                    MessageBox.Show(
+                        this,
+                        "The downloaded update failed its signature check and was not installed.\n\n"
+                        + "Download it again, or install it manually from the releases page.",
+                        "MusicBee Remote",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    LoadUpdateStatus();
+                    break;
+                default:
+                    _updateStatus.Text = "The update could not be started - see the log for details.";
+                    break;
+            }
+        }
+
+        /// <summary>
+        ///     Ask MusicBee's main window to close, the same way the title bar's X
+        ///     does. Posted, not sent: this runs on MusicBee's own UI thread. If it
+        ///     is configured to minimize instead of exit the process stays up and
+        ///     the helper times out having touched nothing, so the update simply
+        ///     waits for the next real exit.
+        /// </summary>
+        private void CloseMusicBee()
+        {
+            var window = _host.MusicBeeWindow;
+            if (window == IntPtr.Zero) return;
+            PostMessage(window, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        /// <summary>
+        ///     MusicBee's build number (the third component of MusicBee.exe's file
+        ///     version, which is what its own installer gates on), or 0 when it
+        ///     cannot be read - in which case nothing is gated on it.
+        /// </summary>
+        private static int MusicBeeBuild()
+        {
+            try
+            {
+                using (var process = Process.GetCurrentProcess())
+                {
+                    return process.MainModule.FileVersionInfo.FileBuildPart;
+                }
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
         }
 
         // Self-test: connect to the running server on loopback and round-trip a
@@ -673,14 +1099,27 @@ namespace MusicBeePlugin.Settings
         }
 
         // Core -> host push (raised on a background thread): marshal to the UI
-        // thread and refresh the cache line when a rebuild starts/finishes.
+        // thread and refresh the line the event is about - the cache one when a
+        // rebuild starts/finishes, the update one when a check or download does.
         private void OnCoreEvent(HostEventType e)
         {
-            if (e != HostEventType.CacheStatusChanged) return;
+            Action refresh;
+            switch (e)
+            {
+                case HostEventType.CacheStatusChanged:
+                    refresh = LoadCacheStatus;
+                    break;
+                case HostEventType.UpdateStatusChanged:
+                    refresh = LoadUpdateStatus;
+                    break;
+                default:
+                    return;
+            }
+
             if (IsDisposed || !IsHandleCreated) return;
             try
             {
-                BeginInvoke((Action)LoadCacheStatus);
+                BeginInvoke(refresh);
             }
             catch (Exception)
             {
@@ -703,6 +1142,7 @@ namespace MusicBeePlugin.Settings
                 search_source = IndexToSource(_searchSource.SelectedIndex),
                 update_firewall = _firewall.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
+                update_check_enabled = _autoCheck.Checked,
             };
         }
 

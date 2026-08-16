@@ -169,6 +169,18 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
 }
 
+/// Whether a core is currently initialized.
+///
+/// For background work that outlives the call that started it: the C# callback
+/// delegates are released at `mbrc_shutdown`, so a long-running job must not
+/// reach back into the host after one. This narrows that window rather than
+/// closing it - a shutdown between the check and the call is still possible -
+/// but it takes a stalled download that finishes minutes after MusicBee exited
+/// out of the picture entirely.
+pub fn is_initialized() -> bool {
+    lock().is_some()
+}
+
 /// The storage directory MusicBee handed the core at init, or `None` before
 /// then. The one place that answer lives, so nothing has to be told it twice.
 pub fn storage_path() -> Option<String> {
@@ -222,6 +234,7 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
         HostQueryType::CacheStatus => cache_status_bytes(),
         HostQueryType::RecentBlocked => recent_blocked_bytes(),
         HostQueryType::ListeningAddresses => listening_info_bytes(),
+        HostQueryType::UpdateStatus => update_status_bytes(),
     }
 }
 
@@ -232,7 +245,30 @@ pub fn host_command(kind: HostCommandType, _params: &[u8]) -> MbrcResult {
         HostCommandType::RebuildMetadata => rebuild(RebuildScope::Metadata),
         HostCommandType::RebuildCovers => rebuild(RebuildScope::Covers),
         HostCommandType::ClearBlockedLog => clear_blocked(),
+        // Forced: the panel's button is an instruction, not a schedule, so it
+        // ignores both the enabled preference and the interval.
+        HostCommandType::CheckForUpdate => {
+            with_core(|core| crate::updates::service::start_check(core, true))
+        }
+        HostCommandType::DownloadUpdate => with_core(crate::updates::service::start_download),
+        HostCommandType::SkipUpdate => {
+            with_core(|core| crate::updates::service::skip_available(&core))
+        }
     }
+}
+
+/// Run `action` against the initialized core, or report `NotInitialized`. The
+/// lock is released before `action` runs: the update jobs it starts touch the
+/// core from their own threads.
+fn with_core(action: impl FnOnce(Arc<Core>) -> MbrcResult) -> MbrcResult {
+    let core = {
+        let guard = lock();
+        match guard.as_ref() {
+            Some(runtime) => runtime.core.clone(),
+            None => return MbrcResult::NotInitialized,
+        }
+    };
+    action(core)
 }
 
 /// Serialize the current cache status as MessagePack for the settings panel.
@@ -277,6 +313,17 @@ fn listening_info_bytes() -> Option<Vec<u8>> {
         .collect();
     let info = crate::ffi::dtos::ListeningInfo { port, addresses };
     rmp_serde::to_vec_named(&info).ok()
+}
+
+/// Serialize where the update flow stands as MessagePack for the settings panel.
+/// `None` if the core is not initialized; every other state is a real answer,
+/// including "nothing has been checked yet".
+fn update_status_bytes() -> Option<Vec<u8>> {
+    let core = {
+        let guard = lock();
+        guard.as_ref()?.core.clone()
+    };
+    crate::updates::service::status_bytes(&core)
 }
 
 /// Clear the in-memory blocked-connection log (the panel's "Clear" button).

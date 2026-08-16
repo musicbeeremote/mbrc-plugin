@@ -95,8 +95,12 @@ fn default_tcp_keepalive_secs() -> u64 {
     45
 }
 
+/// Off. An automatic check is an unprompted outbound request to github.com, so
+/// it is the user's call to make, not ours to assume. The panel's "Check now"
+/// works whatever this says - never being able to ask would be the other way to
+/// get this wrong.
 fn default_update_check_enabled() -> bool {
-    true
+    false
 }
 
 fn default_update_check_interval_hours() -> u64 {
@@ -167,8 +171,9 @@ pub struct Config {
     /// the kernel detects and drops dead half-open connections.
     #[serde(default = "default_tcp_keepalive_secs")]
     pub tcp_keepalive_secs: u64,
-    /// Whether the core checks for plugin updates at all. A check is a request
-    /// to github.com, so it is a preference, and one the user can turn off.
+    /// Whether the core checks for plugin updates *on its own*. A check is a
+    /// request to github.com, so it is opt-in: this defaults to off, and the
+    /// panel's "Check now" runs regardless of it.
     #[serde(default = "default_update_check_enabled")]
     pub update_check_enabled: bool,
     /// Which release channel to follow (`stable` / `nightly`).
@@ -616,15 +621,18 @@ mod tests {
 
     #[test]
     fn update_settings_default_and_round_trip() {
-        // Defaults: checking on, stable, daily, no proxy override.
+        // Defaults: automatic checking OFF (opt-in), stable, daily, no proxy
+        // override.
         let c = Config::default();
-        assert!(c.update_check_enabled);
+        assert!(!c.update_check_enabled);
         assert_eq!(c.update_channel, UpdateChannel::Stable);
         assert_eq!(c.update_check_interval_hours, 24);
         assert!(c.proxy_override.is_empty());
 
+        // Non-default values throughout, so the round-trip proves the fields are
+        // carried rather than re-defaulted.
         let json = serde_json::to_string(&Config {
-            update_check_enabled: false,
+            update_check_enabled: true,
             update_channel: UpdateChannel::Nightly,
             update_check_interval_hours: 6,
             proxy_override: "http://proxy.local:8080".into(),
@@ -634,7 +642,7 @@ mod tests {
         assert!(json.contains("\"update_channel\":\"nightly\""), "{json}");
 
         let back: Config = serde_json::from_str(&json).unwrap();
-        assert!(!back.update_check_enabled);
+        assert!(back.update_check_enabled);
         assert_eq!(back.update_channel, UpdateChannel::Nightly);
         assert_eq!(back.update_check_interval_hours, 6);
         assert_eq!(back.proxy_override, "http://proxy.local:8080");
@@ -648,10 +656,11 @@ mod tests {
 
     #[test]
     fn an_older_settings_file_gains_the_update_defaults() {
-        // A file written before these fields existed must keep working, with
-        // checking on rather than silently off.
+        // A file written before these fields existed must keep working, and it
+        // must not start checking for updates behind the user's back: an upgrade
+        // is not consent.
         let c: Config = serde_json::from_str(r#"{"port":3000}"#).unwrap();
-        assert!(c.update_check_enabled);
+        assert!(!c.update_check_enabled);
         assert_eq!(c.update_channel, UpdateChannel::Stable);
     }
 

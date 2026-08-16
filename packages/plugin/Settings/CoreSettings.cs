@@ -33,5 +33,12 @@ namespace MusicBeePlugin.Settings
 
         /// <summary>Core log verbosity: <c>info</c> / <c>debug</c> / <c>trace</c>.</summary>
         public string log_level { get; set; } = "info";
+
+        /// <summary>
+        ///     Whether the core checks for a newer release on its own. Off by
+        ///     default: an automatic check is an unprompted request to github.com.
+        ///     The panel's "Check now" button works regardless of this.
+        /// </summary>
+        public bool update_check_enabled { get; set; }
     }
 }

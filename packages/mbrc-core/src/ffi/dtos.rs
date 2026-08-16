@@ -162,6 +162,32 @@ pub struct BlockedConnection {
     pub reason: String,
 }
 
+/// Where the update flow stands, surfaced to the settings panel's Updates group
+/// (result of the `UpdateStatus` host query). A Rust -> C# *result*; the C# side
+/// reads an `UpdateStatus`. The state machine that produces it, and the
+/// `STATE_*` spellings `state` carries, live in
+/// [`crate::updates::service`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateStatus {
+    /// One of the `STATE_*` constants: `unknown`, `checking`, `up_to_date`,
+    /// `available`, `downloading`, `staged`, `skipped`, `disabled`, `error`.
+    pub state: String,
+    /// The version the state is about: the available or staged release, or the
+    /// latest published one when up to date. Empty when there is nothing to name.
+    pub version: String,
+    /// Where the release notes live, for the panel's link.
+    pub notes_url: String,
+    /// The MusicBee build the release requires. The core cannot see MusicBee's
+    /// version, so the gate is enforced by the host, which can.
+    pub min_musicbee_build: u32,
+    /// Why a check or download failed. Empty otherwise - a status line that only
+    /// ever carries errors is one the panel can render without interpreting it.
+    pub message: String,
+    /// When the last check that actually reached github.com completed (RFC3339),
+    /// or empty if none ever has.
+    pub checked_at: String,
+}
+
 /// The addresses a client can reach the server on, surfaced to the settings
 /// panel (result of the `ListeningAddresses` host query) so the user knows what
 /// to point the phone client at - the way the shipped C# 1.4.1 panel listed the

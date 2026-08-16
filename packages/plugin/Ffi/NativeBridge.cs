@@ -419,6 +419,32 @@ namespace MusicBeePlugin.Ffi
         public bool ClearBlockedConnections() => Command(HostCommandType.ClearBlockedLog);
 
         /// <summary>
+        ///     Where the update flow stands, for the settings panel's Updates
+        ///     group. Always answers while the core is up, including before any
+        ///     check has run. Null if the core is not initialized.
+        /// </summary>
+        public UpdateStatus ReadUpdateStatus() => Query<UpdateStatus>(HostQueryType.UpdateStatus);
+
+        /// <summary>
+        ///     Start a background check for a newer release. Forced: the panel's
+        ///     button is a direct instruction, so it runs whatever the automatic-
+        ///     check preference says. False if a check or download is already
+        ///     running (or the core is down); the result arrives as an
+        ///     <see cref="HostEventType.UpdateStatusChanged" /> event.
+        /// </summary>
+        public bool CheckForUpdate() => Command(HostCommandType.CheckForUpdate);
+
+        /// <summary>
+        ///     Start a background download of the update the last check found and
+        ///     stage it for the next restart. False when no check has produced one
+        ///     - the host cannot name a release, only accept the verified one.
+        /// </summary>
+        public bool DownloadUpdate() => Command(HostCommandType.DownloadUpdate);
+
+        /// <summary>Record that the user does not want this version offered again.</summary>
+        public bool SkipUpdate() => Command(HostCommandType.SkipUpdate);
+
+        /// <summary>
         ///     Apply the log level to the core's filter live (no restart needed).
         ///     <paramref name="logLevel"/> is the settings value (<c>info</c> /
         ///     <c>debug</c> / <c>trace</c>), mapped to a tracing filter directive.

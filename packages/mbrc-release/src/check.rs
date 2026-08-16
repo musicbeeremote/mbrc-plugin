@@ -123,7 +123,8 @@ pub enum CheckOutcome {
 /// together, so its ABI is internally consistent by construction, and refusing an
 /// update because it bumped the ABI would block exactly the updates that need to
 /// ship. The MusicBee build gate belongs where the MusicBee version is known,
-/// which is the panel (#152), not here.
+/// which is the panel, not here: it reads the build from `MusicBee.exe`'s file
+/// version and greys out the download when the release needs a newer one.
 pub fn check(
     client: &dyn HttpClient,
     options: &CheckOptions<'_>,

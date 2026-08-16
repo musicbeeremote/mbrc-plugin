@@ -223,6 +223,11 @@ pub enum HostQueryType {
     /// plus the bound port. The settings panel shows these so the user knows what
     /// to point the phone at. Returns a MessagePack `ListeningInfo`.
     ListeningAddresses = 3,
+    /// Where the update flow currently stands (never checked / checking /
+    /// up to date / available / downloading / staged / failed), for the panel's
+    /// Updates group. Returns a MessagePack `UpdateStatus`. Always answers, even
+    /// before a check has ever run.
+    UpdateStatus = 4,
 }
 
 impl HostQueryType {
@@ -231,6 +236,7 @@ impl HostQueryType {
             1 => Some(Self::CacheStatus),
             2 => Some(Self::RecentBlocked),
             3 => Some(Self::ListeningAddresses),
+            4 => Some(Self::UpdateStatus),
             _ => None,
         }
     }
@@ -251,6 +257,19 @@ pub enum HostCommandType {
     RebuildCovers = 2,
     /// Clear the in-memory blocked-connection log (the panel's "Clear" button).
     ClearBlockedLog = 3,
+    /// Check github.com for a newer release, in the background. Forced: the
+    /// panel's button is a direct instruction, so it ignores both the
+    /// `update_check_enabled` preference and the interval. The result lands in
+    /// [`HostQueryType::UpdateStatus`] and raises
+    /// [`HostEventType::UpdateStatusChanged`].
+    CheckForUpdate = 4,
+    /// Download and stage the update the last check found, in the background.
+    /// Rejected unless a check has actually produced one - there is nothing the
+    /// host can name here, so it cannot ask for a different download.
+    DownloadUpdate = 5,
+    /// Record that the user does not want to be offered the currently available
+    /// version again.
+    SkipUpdate = 6,
 }
 
 impl HostCommandType {
@@ -259,6 +278,9 @@ impl HostCommandType {
             1 => Some(Self::RebuildMetadata),
             2 => Some(Self::RebuildCovers),
             3 => Some(Self::ClearBlockedLog),
+            4 => Some(Self::CheckForUpdate),
+            5 => Some(Self::DownloadUpdate),
+            6 => Some(Self::SkipUpdate),
             _ => None,
         }
     }
@@ -277,6 +299,10 @@ pub enum HostEventType {
     /// The cache status changed (a reconcile/rebuild started or finished); the
     /// settings panel should re-query [`HostQueryType::CacheStatus`].
     CacheStatusChanged = 1,
+    /// The update flow moved on (a check or a download finished); the settings
+    /// panel should re-query [`HostQueryType::UpdateStatus`]. Raised from the
+    /// background job's own thread, so the host marshals before touching UI.
+    UpdateStatusChanged = 2,
 }
 
 /// Callback table handed from C# to Rust at `mbrc_initialize`.
@@ -371,8 +397,12 @@ mod tests {
             HostQueryType::from_i32(3),
             Some(HostQueryType::ListeningAddresses)
         );
+        assert_eq!(
+            HostQueryType::from_i32(4),
+            Some(HostQueryType::UpdateStatus)
+        );
         assert_eq!(HostQueryType::from_i32(0), None);
-        assert_eq!(HostQueryType::from_i32(4), None);
+        assert_eq!(HostQueryType::from_i32(5), None);
         assert_eq!(
             HostCommandType::from_i32(1),
             Some(HostCommandType::RebuildMetadata)
@@ -385,9 +415,22 @@ mod tests {
             HostCommandType::from_i32(3),
             Some(HostCommandType::ClearBlockedLog)
         );
-        assert_eq!(HostCommandType::from_i32(4), None);
+        assert_eq!(
+            HostCommandType::from_i32(4),
+            Some(HostCommandType::CheckForUpdate)
+        );
+        assert_eq!(
+            HostCommandType::from_i32(5),
+            Some(HostCommandType::DownloadUpdate)
+        );
+        assert_eq!(
+            HostCommandType::from_i32(6),
+            Some(HostCommandType::SkipUpdate)
+        );
+        assert_eq!(HostCommandType::from_i32(7), None);
         // HostEventType is core -> host (no from_i32), but its contract value is
         // still pinned so the C# enum stays in sync.
         assert_eq!(HostEventType::CacheStatusChanged as i32, 1);
+        assert_eq!(HostEventType::UpdateStatusChanged as i32, 2);
     }
 }

@@ -283,6 +283,16 @@ namespace MusicBeePlugin.Ffi
         public string reason { get; set; }
     }
 
+    public class UpdateStatus
+    {
+        public string state { get; set; }
+        public string version { get; set; }
+        public string notes_url { get; set; }
+        public uint min_musicbee_build { get; set; }
+        public string message { get; set; }
+        public string checked_at { get; set; }
+    }
+
     public class ListeningInfo
     {
         public ushort port { get; set; }
