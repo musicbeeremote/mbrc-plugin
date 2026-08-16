@@ -24,7 +24,7 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg", "p
 # build's bottleneck, and this is several times faster than image's scalar
 # `imageops::resize`. Pure Rust with runtime CPU detection, so i686 stays clean.
 fast_image_resize = "=6.1.0"
-base64 = "=0.22.1"
+base64 = "=0.23.1"
 # Embedded key-value store backing the durable caches (album-cover index +
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
 # toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
@@ -78,7 +78,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=2.0.119", features = ["full"] }
+syn = { version = "=3.0.3", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }
