@@ -50,11 +50,16 @@ jobs:
           name: mbrc-plugin-release
           path: build/dist
 
+      # A version with a prerelease suffix (v1.6.0-rc.1) is a testing release.
+      # Everything else about it is identical to a stable one - same build, same
+      # provenance attestation, same signed manifest - because it is a real
+      # published release that people install; only the channel recorded in the
+      # manifest and the pre-release flag on the GitHub release differ.
       - name: package
         uses: ./.github/actions/package
         with:
           version: ${{ needs.build.outputs.version }}
-          channel: stable
+          channel: ${{ contains(needs.build.outputs.version, '-') && 'testing' || 'stable' }}
           attest: 'true'
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -165,6 +170,10 @@ jobs:
             build/dist/manifest.json
             build/dist/manifest.json.minisig
           generate_release_notes: true
+          # Marks it as a pre-release on GitHub, which is what keeps it out of
+          # `releases/latest` - the endpoint the stable channel follows. The
+          # testing channel lists releases instead and so still finds it.
+          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
           body: |
             See the [CHANGELOG](https://github.com/musicbeeremote/mbrc-plugin/blob/main/CHANGELOG.md) for details.
 
