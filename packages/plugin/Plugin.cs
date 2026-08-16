@@ -123,7 +123,10 @@ namespace MusicBeePlugin
                 _about.ConfigurationPanelHeight = 120;
 
                 if (_api.ApiRevision < MinApiRevision)
+                {
+                    ReportUnsupportedHost(_api.ApiRevision);
                     return _about;
+                }
 
                 InitializeHost();
 
@@ -195,6 +198,17 @@ namespace MusicBeePlugin
         /// </summary>
         private void LogToFallback(string context, Exception ex)
         {
+            LogToFallback(context, ex.ToString());
+        }
+
+        /// <summary>
+        ///     As <see cref="LogToFallback(string, Exception)" />, for a condition that
+        ///     is not an exception. The core's own log does not exist yet at this
+        ///     point - it is created by the host - so this file is the only place an
+        ///     early refusal can be recorded.
+        /// </summary>
+        private void LogToFallback(string context, string detail)
+        {
             try
             {
                 var fallbackPath = Path.Combine(
@@ -203,12 +217,35 @@ namespace MusicBeePlugin
                     "initialization_error.log");
                 Directory.CreateDirectory(Path.GetDirectoryName(fallbackPath));
                 File.AppendAllText(fallbackPath,
-                    $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.ffffffZ}] {context}: {ex}\n");
+                    $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.ffffffZ}] {context}: {detail}\n");
             }
             catch
             {
                 // If logging fails, continue silently to prevent MusicBee crash.
             }
+        }
+
+        /// <summary>
+        ///     Explains a MusicBee too old to run this plugin, in the two places
+        ///     someone will actually look.
+        /// </summary>
+        /// <remarks>
+        ///     Without this the refusal is completely silent: the plugin still appears
+        ///     in MusicBee's plugin list because <c>_about</c> is populated, but no
+        ///     server starts, Configure does nothing (there is no host to configure),
+        ///     and no log is written anywhere - the core's log does not exist because
+        ///     the host was never created. That is the hardest possible support case,
+        ///     so the description carries the reason to where the user is already
+        ///     looking, and the fallback file carries it to where a bug report can
+        ///     find it.
+        /// </remarks>
+        private void ReportUnsupportedHost(short apiRevision)
+        {
+            var reason =
+                $"Disabled: needs MusicBee API revision {MinApiRevision} or newer, but this MusicBee reports {apiRevision}. Update MusicBee from https://getmusicbee.com";
+
+            _about.Description = reason;
+            LogToFallback("Unsupported MusicBee version", reason);
         }
 
         /// <summary>
