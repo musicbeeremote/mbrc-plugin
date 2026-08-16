@@ -22,24 +22,26 @@
     <!-- Analyzers (build-time only) -->
     <PackageVersion Include="AsyncFixer" Version="2.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.301" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.302" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
 
     <!-- Test. AwesomeAssertions replaces FluentAssertions (v7+ is the Xceed
          commercial license); it is a drop-in fork under the same namespace,
          Apache-2.0. NSubstitute replaces Moq (BSD, avoids the SponsorLink
          history). Both ship net47/netstandard2.0 -> net48-compatible. -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <!-- xunit v3 (xunit.v3): the v2 `xunit` meta-package is deprecated upstream.
-         v3 targets net472+ so net48 compat holds; the test project builds as an
-         Exe (v3's runnable test host) and still runs under the VSTest adapter via
-         xunit.runner.visualstudio 3.x, so `dotnet test` coverage collection is
-         unchanged. -->
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+         Still net472+, so net48 compat holds; the test project builds as an Exe
+         (v3's runnable test host) and runs under the VSTest adapter via
+         xunit.runner.visualstudio, so `dotnet test` coverage collection is
+         unchanged. The package major (4.x) is the *packaging* line, not a new
+         xunit protocol generation - the two move together and are pinned
+         together for that reason. -->
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="NSubstitute" Version="6.0.0" />
-    <PackageVersion Include="AwesomeAssertions" Version="9.4.0" />
+    <PackageVersion Include="NSubstitute" Version="6.1.0" />
+    <PackageVersion Include="AwesomeAssertions" Version="9.5.0" />
   </ItemGroup>
 
 </Project>
