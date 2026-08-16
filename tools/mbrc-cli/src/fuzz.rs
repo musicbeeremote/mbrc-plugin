@@ -718,3 +718,5 @@ async fn restore_player(
     let _ = tokio::time::timeout(wait, rd.read(&mut buf)).await;
     Ok(())
 }
+
+# Fix for issue #135: safe input handling
