@@ -35,6 +35,13 @@ namespace MusicBeePlugin.Settings
         public string log_level { get; set; } = "info";
 
         /// <summary>
+        ///     Whether the plugin also advertises itself over mDNS / DNS-SD
+        ///     (Bonjour). Additive to the custom UDP discovery, which is
+        ///     unaffected either way, so this is safe to turn off.
+        /// </summary>
+        public bool mdns_enabled { get; set; } = true;
+
+        /// <summary>
         ///     Whether the core checks for a newer release on its own. Off by
         ///     default: an automatic check is an unprompted request to github.com.
         ///     The panel's "Check now" button works regardless of this.

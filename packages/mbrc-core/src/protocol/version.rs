@@ -17,6 +17,14 @@ pub enum ProtocolVersion {
     // V6 is reserved: add the variant + a `wire::v6` formatter and map it below.
 }
 
+/// Every handshake version the core accepts, low to high.
+///
+/// Exists so anything that has to *state* what is supported - the mDNS TXT
+/// record, and whatever else advertises later - reads it from here instead of
+/// carrying its own list that quietly goes stale when a version is added. The
+/// test below pins it to what [`ProtocolVersion::from_negotiated`] will accept.
+pub const SUPPORTED_VERSIONS: &[u8] = &[4, 5];
+
 impl ProtocolVersion {
     /// Map a negotiated handshake version number to a formatter version, or
     /// `None` if unsupported (the handshake already rejects pre-V4).
@@ -40,5 +48,30 @@ impl ProtocolVersion {
     /// (V5+ only; it never fires in a V4 session).
     pub fn accepts_current_position(self) -> bool {
         matches!(self, Self::V5)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_advertised_versions_are_the_accepted_ones() {
+        // The list exists to be published (mDNS TXT). If it ever disagrees with
+        // what the handshake accepts, clients are told something untrue.
+        for &version in SUPPORTED_VERSIONS {
+            assert!(
+                ProtocolVersion::from_negotiated(version).is_some(),
+                "version {version} is advertised but not accepted"
+            );
+        }
+        for version in 0u8..=10 {
+            if ProtocolVersion::from_negotiated(version).is_some() {
+                assert!(
+                    SUPPORTED_VERSIONS.contains(&version),
+                    "version {version} is accepted but not advertised"
+                );
+            }
+        }
     }
 }

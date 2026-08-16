@@ -95,6 +95,13 @@ fn default_tcp_keepalive_secs() -> u64 {
     45
 }
 
+/// On. The custom UDP responder already multicasts, so this adds a standard way
+/// to be found rather than a new kind of chatter, and being findable is the
+/// point of a remote-control plugin.
+fn default_mdns_enabled() -> bool {
+    true
+}
+
 /// Off. An automatic check is an unprompted outbound request to github.com, so
 /// it is the user's call to make, not ours to assume. The panel's "Check now"
 /// works whatever this says - never being able to ask would be the other way to
@@ -171,6 +178,11 @@ pub struct Config {
     /// the kernel detects and drops dead half-open connections.
     #[serde(default = "default_tcp_keepalive_secs")]
     pub tcp_keepalive_secs: u64,
+    /// Whether to advertise over mDNS / DNS-SD as well as the custom UDP
+    /// responder. Additive: turning it off leaves every shipped client working,
+    /// which is why it can be a preference at all.
+    #[serde(default = "default_mdns_enabled")]
+    pub mdns_enabled: bool,
     /// Whether the core checks for plugin updates *on its own*. A check is a
     /// request to github.com, so it is opt-in: this defaults to off, and the
     /// panel's "Check now" runs regardless of it.
@@ -233,6 +245,7 @@ impl Default for Config {
             max_conns_per_client: default_max_conns_per_client(),
             max_conns_per_ip: default_max_conns_per_ip(),
             tcp_keepalive_secs: default_tcp_keepalive_secs(),
+            mdns_enabled: default_mdns_enabled(),
             update_check_enabled: default_update_check_enabled(),
             update_channel: UpdateChannel::default(),
             update_check_interval_hours: default_update_check_interval_hours(),

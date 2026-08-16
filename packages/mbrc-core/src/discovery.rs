@@ -51,7 +51,10 @@ pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
 /// The device name advertised to clients - this host's machine name. On Windows
 /// `COMPUTERNAME` is the equivalent of the shipped plugin's
 /// `Environment.MachineName`; fall back to a generic label if unset.
-fn hostname() -> String {
+///
+/// Shared with the mDNS advertisement, so both mechanisms name this host the
+/// same way in a picker.
+pub(crate) fn hostname() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .ok()

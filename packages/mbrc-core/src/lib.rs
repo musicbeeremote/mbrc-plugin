@@ -10,6 +10,7 @@ pub mod cover;
 pub mod discovery;
 pub mod ffi;
 pub mod logging;
+pub mod mdns;
 pub mod metadata_cache;
 pub mod nowplaying;
 pub mod protocol;

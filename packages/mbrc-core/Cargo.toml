@@ -51,6 +51,11 @@ mbrc-release = { workspace = true, features = ["client"] }
 time = { workspace = true }
 if-addrs = { workspace = true }
 socket2 = "=0.6.4"
+# mDNS / DNS-SD advertisement (#160), additive to the custom UDP responder. Pure
+# Rust with no async-runtime dependency of its own - it runs its own daemon
+# thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
+# crate would pull in `log`, and the core's logging goes through `tracing`.
+mdns-sd = { version = "=0.21.0", default-features = false }
 
 # ShellExecuteExW (the elevation prompt for the update helper) and the loader
 # calls that answer "which directory was this DLL loaded from", which is how the

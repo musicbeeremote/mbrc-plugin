@@ -2080,3 +2080,53 @@ MusicBee Remote supports UDP multicast for service discovery on the local networ
 
 Clients can listen for discovery broadcasts to find available MusicBee instances without
 manual configuration. Discovery is a separate UDP path, independent of the TCP command socket.
+
+The probe carries the client's own address, and the reply names the server interface on the
+*same subnet* - which is what makes a multi-NIC host (Hyper-V, WSL, VirtualBox, Docker) hand
+back an address the phone can actually reach.
+
+### mDNS / DNS-SD
+
+The plugin **also** advertises itself over mDNS, additive to the above. Nothing about the
+custom responder changes, and every shipped client keeps working untouched; this exists so
+that anything not written against our protocol - `NsdManager`, `NWBrowser`, `dns-sd -B`,
+Avahi, a Bonjour browser - can find a MusicBee host.
+
+```
+_mbrc._tcp.local.
+```
+
+| | |
+|---|---|
+| Instance name | the machine name (same one the custom responder reports) |
+| SRV port | the TCP command port |
+| A records | the host's usable IPv4 addresses (loopback and `169.254` link-local dropped) |
+
+TXT records:
+
+| key | example | meaning |
+|---|---|---|
+| `protocol` | `4,5` | handshake versions this server accepts, comma-separated |
+| `version` | `1.5.0` | the plugin's release version |
+| `name` | `LIVING-ROOM-PC` | friendly name; the instance name is DNS-escaped, this is not |
+
+**`protocol` is advisory.** It lets a client that speaks only one version filter before
+connecting, but the handshake remains authoritative - never refuse a server because its TXT
+looked wrong.
+
+Unlike the custom probe, mDNS carries no client-subnet hint, so the record lists every usable
+address and the client picks. On a host with virtual adapters that may include an address
+your client cannot reach; try them in order rather than trusting the first.
+
+Instance-name collisions are resolved by mDNS itself (it suffixes), so two MusicBee hosts on
+one LAN need no coordination. A goodbye packet is sent on shutdown, so a stopped server
+disappears from browsers immediately rather than at TTL expiry.
+
+Advertising can be turned off (`mdns_enabled`, Configure panel → Connection → Discovery); the
+custom responder is unaffected.
+
+Client-side notes: Android needs a `MulticastLock` held while browsing (without it the Wi-Fi
+chipset filters the traffic and discovery silently finds nothing) plus
+`CHANGE_WIFI_MULTICAST_STATE`; iOS needs `NSBonjourServices` and `NSLocalNetworkUsageDescription`
+in `Info.plist` or browsing returns empty with no error. Bonjour browsing needs no entitlement,
+whereas joining our custom multicast group on iOS would require Apple's multicast entitlement.

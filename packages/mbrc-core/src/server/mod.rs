@@ -27,6 +27,11 @@ use crate::state::Core;
 /// the answer already there.
 const STARTUP_UPDATE_CHECK_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// How long networking shutdown waits for the mDNS advertisement to withdraw.
+/// Long enough for the goodbye packets to leave, short enough that a wedged
+/// daemon cannot hold up MusicBee closing.
+const MDNS_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Handle to a running networking stack. Call [`NetHandle::stop`] to shut it
 /// down and join the server thread.
 pub struct NetHandle {
@@ -132,6 +137,22 @@ fn run_thread(
                 shutdown.clone(),
             )))
         };
+        // The standard way to be found, additive to the responder above (#160).
+        // Same loopback rule and for the same two reasons: nothing off-box can
+        // reach a loopback listener, and binding 5353 on a test run would raise
+        // the firewall prompt this suite exists without.
+        let mdns = if bind_ip.is_loopback() || !core.config.mdns_enabled {
+            tracing::debug!(
+                enabled = core.config.mdns_enabled,
+                "mDNS advertisement skipped"
+            );
+            None
+        } else {
+            Some(tokio::spawn(crate::mdns::run(
+                core.config.port,
+                shutdown.clone(),
+            )))
+        };
         let monitor = tokio::spawn(monitor::run(core.clone(), shutdown.clone()));
         let scanner = tokio::spawn(scanner::run(core.clone(), shutdown.clone()));
 
@@ -171,6 +192,19 @@ fn run_thread(
         }
         if let Some(discovery) = discovery {
             discovery.abort();
+        }
+        // Awaited rather than aborted, unlike everything else here: it has a
+        // shutdown path - the goodbye packets that get this host out of every
+        // browser on the LAN - and the whole point of sending them is that they
+        // arrive. Bounded, because a task that will not finish must not be able
+        // to hold MusicBee's shutdown.
+        if let Some(mdns) = mdns {
+            if tokio::time::timeout(MDNS_SHUTDOWN_GRACE, mdns)
+                .await
+                .is_err()
+            {
+                tracing::warn!("mDNS did not withdraw in time");
+            }
         }
         monitor.abort();
         scanner.abort();

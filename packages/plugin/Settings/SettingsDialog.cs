@@ -86,6 +86,7 @@ namespace MusicBeePlugin.Settings
         private ComboBox _searchSource;
         private ComboBox _logLevel;
         private CheckBox _firewall;
+        private CheckBox _mdns;
         private Label _status;
         private Label _cacheStatus;
         private System.Windows.Forms.Timer _blockedTimer;
@@ -285,10 +286,21 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
             };
 
+            // Additive to the custom UDP discovery every shipped client uses, so
+            // clearing it costs nothing those clients depend on - it only stops
+            // the plugin appearing in Bonjour/NsdManager browsers.
+            _mdns = new CheckBox
+            {
+                Text = "Also advertise over mDNS (Bonjour)",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+
             var layout = GroupLayout();
             AddRow(layout, "Listening port", _port);
             AddRow(layout, "Status", statusRow);
             AddRow(layout, "Reachable at", _addresses);
+            AddRow(layout, "Discovery", _mdns);
             return WrapGroup("Connection", layout);
         }
 
@@ -663,6 +675,7 @@ namespace MusicBeePlugin.Settings
             _searchSource.SelectedIndex = SourceToIndex(s.search_source);
             _logLevel.SelectedIndex = LogLevelToIndex(s.log_level);
             _firewall.Checked = s.update_firewall;
+            _mdns.Checked = s.mdns_enabled;
             _autoCheck.Checked = s.update_check_enabled;
             UpdateFilterEnabled();
             SetStatus(string.Empty, true);
@@ -1141,6 +1154,7 @@ namespace MusicBeePlugin.Settings
                     .ToList(),
                 search_source = IndexToSource(_searchSource.SelectedIndex),
                 update_firewall = _firewall.Checked,
+                mdns_enabled = _mdns.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
             };
