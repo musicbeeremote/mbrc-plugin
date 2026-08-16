@@ -68,6 +68,67 @@ fn open_and_send(iface: Ipv4Addr) -> std::io::Result<UdpSocket> {
     Ok(socket)
 }
 
+/// The DNS-SD service type the plugin advertises (#160), alongside the custom
+/// protocol above. Must match `mbrc_core::mdns::SERVICE_TYPE`; the two crates do
+/// not share a dependency, the same way the multicast constants above are
+/// mirrored rather than shared.
+pub const MDNS_SERVICE_TYPE: &str = "_mbrc._tcp.local.";
+
+/// Blocking mDNS browse: collect the plugin instances that answer a DNS-SD query
+/// until `timeout` elapses.
+///
+/// The other half of [`discover_blocking`], and useful for the same reason a
+/// browser is: it answers "is this host advertising, and with what?" without a
+/// packet capture. Where the custom probe returns the one address matching the
+/// client's subnet, this returns whatever the record lists - mDNS has no
+/// subnet hint - so a multi-NIC host can yield several entries for one machine.
+pub fn browse_mdns_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
+    let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| format!("mDNS daemon: {e}"))?;
+    let receiver = daemon
+        .browse(MDNS_SERVICE_TYPE)
+        .map_err(|e| format!("mDNS browse: {e}"))?;
+
+    let mut found: Vec<Discovered> = Vec::new();
+    let deadline = Instant::now() + timeout;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        match receiver.recv_timeout(remaining) {
+            Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
+                let name = info
+                    .get_property_val_str("name")
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| instance_of(info.get_fullname()));
+                for address in info.get_addresses() {
+                    let entry = Discovered {
+                        address: address.to_string(),
+                        port: info.get_port(),
+                        name: name.clone(),
+                    };
+                    if !found
+                        .iter()
+                        .any(|d| d.address == entry.address && d.port == entry.port)
+                    {
+                        found.push(entry);
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(_) => break,
+        }
+    }
+    let _ = daemon.shutdown();
+    Ok(found)
+}
+
+/// The instance label out of a DNS-SD full name (`INSTANCE._mbrc._tcp.local.`),
+/// for when the record carries no `name` in TXT.
+fn instance_of(fullname: &str) -> String {
+    fullname
+        .strip_suffix(MDNS_SERVICE_TYPE)
+        .and_then(|s| s.strip_suffix('.'))
+        .unwrap_or(fullname)
+        .to_owned()
+}
+
 /// Blocking discovery: probe every interface and collect distinct replies until
 /// `timeout` elapses. Runs on the calling thread.
 pub fn discover_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
@@ -159,6 +220,14 @@ mod tests {
             parse_notify(br#"{"context":"notify","address":"10.0.0.2"}"#).expect("should parse");
         assert_eq!(d.port, 3000);
         assert_eq!(d.name, "MusicBee Remote");
+    }
+
+    #[test]
+    fn instance_label_is_taken_from_the_full_name() {
+        assert_eq!(instance_of("THOTH._mbrc._tcp.local."), "THOTH");
+        // Anything that is not the expected shape is passed through rather than
+        // mangled: a label is better than an empty name.
+        assert_eq!(instance_of("odd-name"), "odd-name");
     }
 
     #[test]

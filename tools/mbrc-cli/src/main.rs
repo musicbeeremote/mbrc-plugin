@@ -59,7 +59,15 @@ fn cmd_discover(args: &[String]) -> ExitCode {
         }
     };
     let timeout = Duration::from_millis(timeout_ms.clamp(500, 10_000));
-    match mbrc_discovery::discover_blocking(timeout) {
+    // `--mdns` browses the DNS-SD advertisement instead of the custom protocol.
+    // Both answer "who is out there", and comparing them is the fastest way to
+    // tell a plugin that is not running from one that is not being *found*.
+    let result = if args::has_flag(args, "--mdns") {
+        mbrc_discovery::browse_mdns_blocking(timeout)
+    } else {
+        mbrc_discovery::discover_blocking(timeout)
+    };
+    match result {
         Ok(found) => {
             if found.is_empty() {
                 println!("no instances found");
@@ -84,7 +92,8 @@ fn print_usage() {
          \x20 mbrc <command> [options]\n\
          \n\
          COMMANDS:\n\
-         \x20 discover [--timeout-ms N]                 find plugin instances on the LAN\n\
+         \x20 discover [--timeout-ms N] [--mdns]        find plugin instances on the LAN\n\
+         \x20                                           (--mdns browses DNS-SD instead)\n\
          \x20 inspect  <capture.jsonl>                  summarise an mbrc-capture/2 trace\n\
          \x20 send     [--host H] [--port P] [--json C] connect, handshake, send a command\n\
          \x20          [--client-type T] [--protocol V] [--no-broadcast] [--wait-ms N]\n\

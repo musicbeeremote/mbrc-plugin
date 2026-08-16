@@ -492,6 +492,7 @@ name = "mbrc-discovery"
 version = "0.1.0"
 dependencies = [
  "if-addrs",
+ "mdns-sd",
  "serde",
  "serde_json",
 ]
