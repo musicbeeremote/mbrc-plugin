@@ -34,11 +34,15 @@
          Still net472+, so net48 compat holds; the test project builds as an Exe
          (v3's runnable test host) and runs under the VSTest adapter via
          xunit.runner.visualstudio, so `dotnet test` coverage collection is
-         unchanged. The package major (4.x) is the *packaging* line, not a new
-         xunit protocol generation - the two move together and are pinned
-         together for that reason. -->
-    <PackageVersion Include="xunit.v3" Version="4.0.0" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+         unchanged.
+
+         Held at 3.x: xunit.v3 4.0 moves to Microsoft.Testing.Platform v2, and
+         on the .NET 10 SDK the VSTest bridge MTP used to provide is gone, so
+         the `dotnet test` coverage collection CI runs fails outright. Taking it
+         means migrating the runner and swapping coverlet.collector for the MTP
+         coverage extension, which is its own change, not a version bump. -->
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="NSubstitute" Version="6.1.0" />
     <PackageVersion Include="AwesomeAssertions" Version="9.5.0" />
