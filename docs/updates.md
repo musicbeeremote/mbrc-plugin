@@ -79,6 +79,28 @@ endpoint, so `testing` lists instead and takes the newest entry that is publishe
 and carries a manifest - skipping a draft, or a tag whose assets are still
 uploading, rather than stalling behind it.
 
+### Choosing a channel
+
+There is no UI for this: the channel is a setting in the core's config file, and
+switching it is a deliberate act rather than something to stumble into from a
+dropdown.
+
+```jsonc
+// %APPDATA%\MusicBee\mb_remote\core_settings.json
+{
+  "update_channel": "stable"   // or "testing"
+}
+```
+
+**Restart MusicBee afterwards.** The core reads its configuration at
+`mbrc_initialize`, and only a port or address-filter change triggers a live
+reload, so an edited channel takes effect at the next start.
+
+Saving the Configure panel does not disturb it. Settings writes are a key-by-key
+merge over what is on disk and the panel's DTO has no `update_channel` property,
+so any setting the panel does not know keeps its value - which is what makes it
+safe for a setting to live only in the file.
+
 A `testing` release is cut the same way a stable one is - packaged with build
 provenance attested, its manifest signed by the release job, published with
 `--prerelease`. The signature is not optional: the updater refuses a manifest it
