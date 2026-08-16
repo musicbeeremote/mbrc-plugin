@@ -8,6 +8,6 @@
 # Bumping: change `channel`, then run `cargo fmt --all` and fix any new clippy
 # lints in the SAME commit so the tree stays CI-green.
 [toolchain]
-channel = "1.97.0"
+channel = "1.97.1"
 components = ["rustfmt", "clippy", "llvm-tools-preview"]
 targets = ["i686-pc-windows-msvc"]

@@ -27,14 +27,14 @@ authors = ["Konstantinos Paparas"]
 # Exact-version pins match the api-debugger's supply-chain hardening so both
 # workspaces resolve the shared crates against identical dependency versions.
 [workspace.dependencies]
-serde = { version = "=1.0.228", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
 # preserve_order keeps JSON object keys in the order structs/`json!` literals
 # declare them, instead of BTreeMap's alphabetical sort. The V4 clients (iOS
 # especially) read the wire in the field order the shipped C# plugin emitted,
 # so the core must match that order, not alphabetize.
-serde_json = { version = "=1.0.150", features = ["preserve_order"] }
-tokio = { version = "=1.52.3", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "time", "fs", "signal"] }
-time = { version = "=0.3.53", features = ["formatting"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+tokio = { version = "=1.53.1", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "time", "fs", "signal"] }
+time = { version = "=0.3.55", features = ["formatting"] }
 if-addrs = "=0.15.0"
 mbrc-wire = { path = "packages/mbrc-wire" }
 mbrc-capture = { path = "packages/mbrc-capture" }

@@ -23,7 +23,7 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg", "p
 # SIMD (SSE4.1/AVX2) image resizing - the actual downscale is the from-scratch
 # build's bottleneck, and this is several times faster than image's scalar
 # `imageops::resize`. Pure Rust with runtime CPU detection, so i686 stays clean.
-fast_image_resize = "=6.0.0"
+fast_image_resize = "=6.1.0"
 base64 = "=0.22.1"
 # Embedded key-value store backing the durable caches (album-cover index +
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
@@ -50,7 +50,7 @@ mbrc-wire = { workspace = true }
 mbrc-release = { workspace = true, features = ["client"] }
 time = { workspace = true }
 if-addrs = { workspace = true }
-socket2 = "=0.6.4"
+socket2 = "=0.6.5"
 # mDNS / DNS-SD advertisement (#160), additive to the custom UDP responder. Pure
 # Rust with no async-runtime dependency of its own - it runs its own daemon
 # thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
@@ -78,7 +78,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=2.0.118", features = ["full"] }
+syn = { version = "=2.0.119", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }
