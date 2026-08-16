@@ -34,6 +34,53 @@ namespace MusicBeePlugin
         private string _version;
 
         /// <summary>
+        ///     The version this build actually is, prerelease suffix included.
+        /// </summary>
+        /// <remarks>
+        ///     <para>
+        ///         Not <c>AssemblyVersion</c>: MSBuild strips the suffix from it, so a
+        ///         <c>1.5.0-beta.1</c> build reports <c>1.5.0.0</c> - identical to the
+        ///         final release as far as the updater's comparison is concerned. A
+        ///         beta would then never be offered anything, including the release it
+        ///         is a beta of, which defeats the point of shipping one.
+        ///         <c>AssemblyInformationalVersion</c> keeps the whole string.
+        ///     </para>
+        ///     <para>
+        ///         Build metadata (<c>+&lt;sha&gt;</c>, which the SDK appends when
+        ///         source revision is included) is cut: semver ignores it in
+        ///         comparisons, and it is noise in the panel's footer.
+        ///     </para>
+        ///     <para>
+        ///         This does not reach the V4 wire. <c>pluginversion</c> there is
+        ///         pinned to 1.4.1.0 by the protocol layer, because the iOS client
+        ///         changes its behaviour based on it.
+        ///     </para>
+        /// </remarks>
+        private static string ProductVersion(Version assemblyVersion)
+        {
+            try
+            {
+                var informational = Assembly
+                    .GetExecutingAssembly()
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                    ?.InformationalVersion;
+
+                if (!string.IsNullOrWhiteSpace(informational))
+                {
+                    var plus = informational.IndexOf('+');
+                    return plus >= 0 ? informational.Substring(0, plus) : informational;
+                }
+            }
+            catch (Exception)
+            {
+                // Fall through to the assembly version below; a plugin that cannot
+                // read its own metadata should still load.
+            }
+
+            return assemblyVersion.ToString();
+        }
+
+        /// <summary>
         ///     This function initialized the Plugin.
         /// </summary>
         /// <param name="apiInterfacePtr"></param>
@@ -50,7 +97,7 @@ namespace MusicBeePlugin
                 _api.Initialise(apiInterfacePtr);
 
                 var version = Assembly.GetExecutingAssembly().GetName().Version;
-                _version = version.ToString();
+                _version = ProductVersion(version);
 
                 _about.PluginInfoVersion = PluginInfoVersion;
                 _about.Name = "MusicBee Remote: Plugin";
@@ -78,7 +125,7 @@ namespace MusicBeePlugin
                 if (_api.ApiRevision < MinApiRevision)
                     return _about;
 
-                InitializeHost(version);
+                InitializeHost();
 
                 // A Tools menu entry opens the same settings dialog as the Configure
                 // button, matching the classic plugin's layout.
@@ -123,12 +170,11 @@ namespace MusicBeePlugin
         ///     catch-all so a startup failure leaves the plugin degraded (remote
         ///     off) rather than crashing MusicBee.
         /// </summary>
-        /// <param name="version">The plugin version from assembly.</param>
-        private void InitializeHost(Version version)
+        private void InitializeHost()
         {
             try
             {
-                _host = new PluginHost(_api, _api.Setting_GetPersistentStoragePath(), version);
+                _host = new PluginHost(_api, _api.Setting_GetPersistentStoragePath(), _version);
                 _host.Start();
             }
             catch (Exception ex)

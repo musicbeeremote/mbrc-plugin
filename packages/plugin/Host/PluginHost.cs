@@ -33,7 +33,7 @@ namespace MusicBeePlugin.Host
         private readonly IPluginLogger _logger;
         private bool _disposed;
 
-        public PluginHost(Plugin.MusicBeeApiInterface api, string storagePath, Version version)
+        public PluginHost(Plugin.MusicBeeApiInterface api, string storagePath, string version)
         {
             // All C# logs route through the Rust core's logger (one log file).
             // Pre-init logs fall back to mbrc-bootstrap.log in the same storage
@@ -52,7 +52,11 @@ namespace MusicBeePlugin.Host
             // Settings are Rust-owned; C# caches only the few the host reads
             // (search source, version, storage path), refreshed from the core
             // after init. The core migrates settings.xml and owns the JSON store.
-            var settings = new UserSettingsService { CurrentVersion = version.ToString() };
+            // The product version, prerelease suffix and all - not
+            // AssemblyVersion, which drops it. This is what the update check
+            // compares against, so a beta reporting the final version would
+            // never be offered anything (see Plugin.ProductVersion).
+            var settings = new UserSettingsService { CurrentVersion = version };
             settings.SetStoragePath(storagePath);
             _userSettings = settings;
 

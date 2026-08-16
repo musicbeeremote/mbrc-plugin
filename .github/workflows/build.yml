@@ -123,6 +123,14 @@ jobs:
       - name: build with strict analysis
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
+          # The Rust core and helper stamp themselves from this; without it
+          # mbrc-buildinfo falls back to VersionPrefix in Directory.Build.props,
+          # so every prerelease build would call itself the final version - in
+          # its log lines, in the mDNS TXT record, and in the update check's
+          # fallback when the host cannot report its own version. MSBuild drives
+          # the Rust build through the csproj target, so the environment reaches
+          # it from here.
+          MBRC_VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           echo "🔍 Building with strict static analysis (warnings as errors)..."
           msbuild MBRC.sln /p:Configuration="Release" /p:MSBuildCI="true" /p:Version=$env:VERSION /m /v:M /fl /nr:false
