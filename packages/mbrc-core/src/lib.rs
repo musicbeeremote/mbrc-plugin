@@ -320,16 +320,22 @@ pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
 /// Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
 /// waiting for MusicBee to exit - the caller is expected to shut MusicBee down
 /// next. `Cancelled` (the user declined elevation) is a normal outcome and
-/// leaves the staged update in place for a retry.
+/// leaves the staged update in place for a retry. `NotAnUpgrade` means the
+/// staged bundle verified but is not newer than the running plugin, which is a
+/// refusal rather than a failure: a valid signature does not make a stale
+/// release the right one to install.
 #[no_mangle]
 pub extern "C" fn mbrc_apply_staged_update() -> c_int {
-    ffi_guard("mbrc_apply_staged_update", || match state::storage_path() {
-        Some(storage) => updates::elevate::launch(&storage) as c_int,
-        None => {
-            tracing::error!("cannot apply an update before the core is initialized");
-            UpdateLaunch::Failed as c_int
-        }
-    })
+    ffi_guard(
+        "mbrc_apply_staged_update",
+        || match state::apply_staged_update() {
+            Some(outcome) => outcome as c_int,
+            None => {
+                tracing::error!("cannot apply an update before the core is initialized");
+                UpdateLaunch::Failed as c_int
+            }
+        },
+    )
 }
 
 /// Free a string previously returned to C# by the core. Null-safe. This is the

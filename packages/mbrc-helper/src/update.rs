@@ -173,10 +173,10 @@ pub fn apply_with(
             Ok(Applied {
                 version: bundle.manifest.version,
                 files: bundle.files.iter().map(|(n, _)| n.clone()).collect(),
-                backup,
+                backup: backup.dir,
             })
         }
-        Err(cause) => Err(restore(backup.as_deref(), &plan.target, &bundle, cause)),
+        Err(cause) => Err(restore(&backup, &plan.target, cause)),
     }
 }
 
@@ -226,40 +226,59 @@ fn verify_staged(staged: &Path, keys: &'static [TrustedKey]) -> Result<Bundle> {
     Ok(Bundle { manifest, files })
 }
 
-/// Copies the files about to be replaced into `backup/<version>/`.
+/// The files this apply is replacing: the bytes, and where a copy of them was
+/// also written for a manual recovery.
+struct Backup {
+    /// `backup/<version>/`, or `None` when there was nothing to replace.
+    dir: Option<PathBuf>,
+    /// What was installed before, held in memory. **The restore writes from
+    /// here, not from `dir`.** That directory lives under the user's profile,
+    /// so any unelevated process can rewrite it between the backup and the
+    /// restore; copying it back would turn that write into an elevated one -
+    /// the same reason the payload is verified in memory rather than re-read.
+    files: Vec<(String, Vec<u8>)>,
+}
+
+/// Reads the files about to be replaced, and keeps a copy in `backup/<version>/`.
 ///
 /// Named for the version being applied - "what installing 1.6.0 replaced" -
 /// because the version being replaced is not recorded anywhere the helper can
-/// read. Returns `None` when there was nothing to back up, which is a fresh
-/// install rather than an error.
-fn back_up(plan: &Plan, bundle: &Bundle) -> Result<Option<PathBuf>> {
+/// read. An empty result is a fresh install rather than an error.
+fn back_up(plan: &Plan, bundle: &Bundle) -> Result<Backup> {
     let root = backup_root(&plan.staged)?.join(&bundle.manifest.version);
     if root.exists() {
         std::fs::remove_dir_all(&root).map_err(|e| failed(&root, e))?;
     }
 
-    let mut saved = 0usize;
+    let mut files = Vec::new();
     for (name, _) in &bundle.files {
         let current = plan.target.join(name);
         if !current.exists() {
             continue;
         }
         refuse_reparse_point(&current)?;
-        if saved == 0 {
+        let bytes = read(&current)?;
+        if files.is_empty() {
             std::fs::create_dir_all(&root).map_err(|e| failed(&root, e))?;
         }
-        std::fs::copy(&current, root.join(name)).map_err(|e| failed(&current, e))?;
-        saved += 1;
+        // Written from the bytes just read, so the on-disk copy and the one the
+        // restore would use cannot disagree.
+        std::fs::write(root.join(name), &bytes).map_err(|e| failed(&current, e))?;
+        files.push((name.clone(), bytes));
     }
 
-    if saved == 0 {
-        return Ok(None);
+    if files.is_empty() {
+        return Ok(Backup { dir: None, files });
     }
     println!(
-        "mbrc-helper: backed up {saved} file(s) to {}",
+        "mbrc-helper: backed up {} file(s) to {}",
+        files.len(),
         root.display()
     );
-    Ok(Some(root))
+    Ok(Backup {
+        dir: Some(root),
+        files,
+    })
 }
 
 /// Writes the verified bytes into the plugins directory.
@@ -278,26 +297,31 @@ fn write_all(plan: &Plan, bundle: &Bundle) -> std::result::Result<(), String> {
 }
 
 /// Puts the previous files back after a failed swap.
-fn restore(backup: Option<&Path>, target: &Path, bundle: &Bundle, cause: String) -> Error {
-    let Some(backup) = backup else {
+///
+/// Written from the bytes read during the backup, never re-read from the backup
+/// directory: that directory is under the user's profile and an unelevated
+/// process can rewrite it while this one is running, which would make the
+/// restore an elevated write of somebody else's bytes.
+fn restore(backup: &Backup, target: &Path, cause: String) -> Error {
+    if backup.files.is_empty() {
         // Nothing was replaced, so there is nothing to put back: this was a
         // fresh install that failed part way.
         return Error::RolledBack { cause };
-    };
+    }
 
     let mut failures = Vec::new();
-    for (name, _) in &bundle.files {
-        let from = backup.join(name);
-        if !from.exists() {
+    for (name, bytes) in &backup.files {
+        let to = target.join(name);
+        if refuse_reparse_point(&to).is_err() {
+            failures.push(format!("{name}: became a link"));
             continue;
         }
-        let to = target.join(name);
-        if let Err(e) = std::fs::copy(&from, &to) {
+        if let Err(e) = std::fs::write(&to, bytes) {
             // The file that could not be *written* is usually the one that
             // cannot be written back either - read-only, locked, out of space.
             // That is not a failed restore if the installed file was never
             // replaced: it is already what the backup holds.
-            if already_restored(&from, &to) {
+            if already_restored(bytes, &to) {
                 continue;
             }
             failures.push(format!("{name}: {e}"));
@@ -319,11 +343,8 @@ fn restore(backup: Option<&Path>, target: &Path, bundle: &Bundle, cause: String)
 /// Compared by content rather than assumed from the write having failed: the
 /// point is to distinguish "never replaced" from "replaced and now unrecoverable",
 /// and only the bytes say which.
-fn already_restored(backup: &Path, installed: &Path) -> bool {
-    match (std::fs::read(backup), std::fs::read(installed)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
+fn already_restored(backup: &[u8], installed: &Path) -> bool {
+    matches!(std::fs::read(installed), Ok(current) if current == backup)
 }
 
 /// Keeps the newest backup and removes the rest. One is enough for a manual
@@ -730,9 +751,37 @@ mod tests {
         let blocked = fixture.target.join("mb_remote.dll");
         set_read_only(&blocked, true);
 
-        let err = restore(backup.as_deref(), &plan.target, &bundle, "disk full".into());
+        let err = restore(&backup, &plan.target, "disk full".into());
         set_read_only(&blocked, false);
         assert!(matches!(err, Error::RollbackFailed { .. }), "{err}");
+    }
+
+    #[test]
+    fn the_restore_ignores_a_rewritten_backup_directory() {
+        // The backup directory is under the user's profile, so an unelevated
+        // process can rewrite it while the elevated apply is running. If the
+        // restore read from there, that write would land in the plugins
+        // directory as administrator. It restores from the bytes it read, so
+        // this rewrite is inert.
+        let fixture = Fixture::new("backup-tampered").with_installed(b"old");
+        let plan = fixture.plan();
+        let bundle = verify_staged(&plan.staged, TEST_KEYS).unwrap();
+        let backup = back_up(&plan, &bundle).unwrap();
+
+        let dir = backup.dir.clone().expect("something was replaced");
+        for (name, _) in PAYLOAD {
+            std::fs::write(dir.join(name), b"attacker bytes").unwrap();
+        }
+
+        let err = restore(&backup, &plan.target, "disk full".into());
+        assert!(matches!(err, Error::RolledBack { .. }), "{err}");
+        for (name, _) in PAYLOAD {
+            assert_eq!(
+                fixture.installed(name),
+                b"old",
+                "{name} was restored from the tampered directory"
+            );
+        }
     }
 
     #[test]

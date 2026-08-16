@@ -105,6 +105,39 @@ fn bundled_file_must_be_in_the_allowlist() {
     assert!(err.to_string().contains("not listed"), "{err}");
 }
 
+#[test]
+fn one_unusable_key_does_not_disable_the_others() {
+    // A corrupt entry in the compiled-in list must not take the working keys
+    // down with it: that would fail closed, but it would fail *completely*, and
+    // a trust list exists precisely so that losing one member is survivable.
+    const MIXED: &[TrustedKey] = &[
+        TrustedKey {
+            name: "corrupt",
+            base64: "this is not a minisign key",
+        },
+        TrustedKey {
+            name: "test",
+            base64: "RWT+ztjSHP1aBowOy75aVsw0jf2Vn6MMbzuTIAPRaN5EWVPjPU9fjwAj",
+        },
+    ];
+
+    assert_eq!(
+        verify_signature_with(GOLDEN.as_bytes(), GOLDEN_SIG, MIXED).unwrap(),
+        "test"
+    );
+
+    // With nothing usable left, the malformed key is what gets reported - the
+    // caller should hear "your trust list is broken", not "bad signature".
+    const ONLY_CORRUPT: &[TrustedKey] = &[TrustedKey {
+        name: "corrupt",
+        base64: "this is not a minisign key",
+    }];
+    let err = verify_signature_with(GOLDEN.as_bytes(), GOLDEN_SIG, ONLY_CORRUPT)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("malformed"), "{err}");
+}
+
 /// Guards the real trust list itself: a mangled or truncated `.pub` file should
 /// fail here, at test time, not during a release.
 #[test]

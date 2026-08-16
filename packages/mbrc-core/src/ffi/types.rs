@@ -56,6 +56,11 @@ pub enum UpdateLaunch {
     VerifyFailed = 3,
     /// Something else went wrong; the detail is in the log.
     Failed = 4,
+    /// The staged bundle verified, but it is not newer than what is installed.
+    /// Every release is public and signed, so a signature does not by itself
+    /// make a bundle the right one to apply - this is what stops a stale one
+    /// being used to roll the plugin back.
+    NotAnUpgrade = 5,
 }
 
 /// Notifications forwarded from MusicBee via `Plugin.ReceiveNotification`.

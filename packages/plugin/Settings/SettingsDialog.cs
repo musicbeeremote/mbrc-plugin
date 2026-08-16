@@ -966,6 +966,14 @@ namespace MusicBeePlugin.Settings
                         "Installation needs permission to change the plugin files. "
                         + "The download is still there - press Install and restart to try again.";
                     break;
+                case Ffi.Generated.UpdateLaunch.NotAnUpgrade:
+                    // The bundle verified but is not newer. Every release is
+                    // public and signed, so this is what a stale one staged by
+                    // something other than a check looks like.
+                    _updateStatus.Text =
+                        "The downloaded update is not newer than the installed version, "
+                        + "so it was not applied. Check again for a newer release.";
+                    break;
                 case Ffi.Generated.UpdateLaunch.VerifyFailed:
                     // The one outcome worth interrupting for: the staged bundle no
                     // longer matches what the release signed.

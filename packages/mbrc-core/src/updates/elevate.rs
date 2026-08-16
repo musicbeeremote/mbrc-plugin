@@ -3,17 +3,28 @@
 //! The panel presses a button; this decides whether elevation is needed, proves
 //! the helper it is about to run is the one the release signed, and launches it.
 //!
-//! Three things here are not arbitrary:
+//! Four things here are not arbitrary:
 //!
 //! - **Nothing is taken from the caller.** The plugins directory is where this
 //!   very DLL was loaded from, MusicBee is this process, and the pid is our own.
 //!   A panel that could name the directory to overwrite would be a panel worth
 //!   attacking; there is nothing to pass, so there is nothing to tamper with.
-//! - **The staged helper is verified before it is *executed*.** It runs elevated
-//!   out of a user-writable directory, so its signature check is the security
-//!   boundary, and it lands earlier than the check the helper does on the DLLs.
-//!   The installed helper cannot be used instead: a release replaces
-//!   `mbrc-helper.exe` too, and a running image cannot overwrite itself.
+//! - **The staged helper is verified before it is *executed*, and cannot be
+//!   swapped in between.** It runs elevated out of a user-writable directory, so
+//!   its signature check is the security boundary, and it lands earlier than the
+//!   check the helper performs on the DLLs. Verifying by path and then launching
+//!   by path would leave a window: any process running as this user could
+//!   replace the file after it verified and have *its* binary run as
+//!   administrator, on the prompt the user was expecting. So the file is opened
+//!   denying write and delete sharing, verified through that handle, and the
+//!   handle is held open across the launch. The installed helper cannot be used
+//!   instead: a release replaces `mbrc-helper.exe` too, and a running image
+//!   cannot overwrite itself.
+//! - **A staged bundle that is not newer is refused.** Every release is public
+//!   and legitimately signed, so a signature alone does not make a bundle the
+//!   right one to install: without this, anyone who can write to the staging
+//!   directory could roll the plugin back to an older release - with a valid
+//!   signature - and undo whatever the newer one fixed.
 //! - **Elevation is asked for now, not later.** `runas` prompts while the user is
 //!   still looking at the button they pressed. If the helper self-elevated after
 //!   MusicBee had exited, a declined prompt would leave a closed MusicBee, no UI,
@@ -36,7 +47,7 @@ const SIGNATURE_ASSET: &str = "manifest.json.minisig";
 /// Returns the outcome the panel reports; the detail goes to the log, because a
 /// UI that has to render every failure mode is a UI that renders none of them
 /// well.
-pub fn launch(storage_path: &str) -> UpdateLaunch {
+pub fn launch(storage_path: &str, current_version: &str) -> UpdateLaunch {
     let pending = match mbrc_release::read_pending(storage_path) {
         Ok(Some(pending)) => pending,
         Ok(None) => return UpdateLaunch::NothingStaged,
@@ -57,6 +68,17 @@ pub fn launch(storage_path: &str) -> UpdateLaunch {
         }
     };
 
+    // Signed, but is it *newer*? Every release is public and signed, so a stale
+    // bundle staged by someone else carries a perfectly good signature.
+    if !is_upgrade(&helper.version, current_version) {
+        tracing::error!(
+            staged = %helper.version,
+            installed = current_version,
+            "refusing to apply a staged update that is not newer than what is installed"
+        );
+        return UpdateLaunch::NotAnUpgrade;
+    }
+
     let target = match plugins_dir() {
         Some(dir) => dir,
         None => {
@@ -74,22 +96,64 @@ pub fn launch(storage_path: &str) -> UpdateLaunch {
 
     let elevate = !is_writable(&target);
     tracing::info!(
-        version = %pending.version,
-        helper = %helper.display(),
+        version = %helper.version,
+        helper = %helper.path.display(),
         target = %target.display(),
         elevate,
         "launching the update helper"
     );
 
-    spawn(&helper, &arguments(&staged, &target, &relaunch), elevate)
+    let outcome = spawn(
+        &helper.path,
+        &arguments(&staged, &target, &relaunch),
+        elevate,
+    );
+    // Explicit, so it is obvious that the handle is what has been holding the
+    // verified bytes in place all the way through the launch.
+    drop(helper);
+    outcome
+}
+
+/// Whether `staged` is newer than what is installed.
+///
+/// Unparseable on either side is not an upgrade: a version that cannot be
+/// compared cannot be shown to be newer, and this is the last gate before an
+/// elevated file swap.
+fn is_upgrade(staged: &str, installed: &str) -> bool {
+    match (
+        mbrc_release::version::parse(staged),
+        mbrc_release::version::parse(installed),
+    ) {
+        (Ok(staged), Ok(installed)) => staged > installed,
+        (staged, installed) => {
+            tracing::warn!(
+                staged_ok = staged.is_ok(),
+                installed_ok = installed.is_ok(),
+                "could not compare the staged and installed versions"
+            );
+            false
+        }
+    }
+}
+
+/// A staged helper that has verified, with the handle that keeps it that way.
+///
+/// Holding `_handle` open is what makes the verification mean anything at launch
+/// time: it denies write and delete sharing, so between the hash check and
+/// `ShellExecuteExW` the file cannot be rewritten, renamed or replaced.
+struct VerifiedHelper {
+    path: PathBuf,
+    version: String,
+    _handle: std::fs::File,
 }
 
 /// The staged helper, once the release signature says it is the right bytes.
 ///
 /// Verified from the *staged* manifest and signature, not from anything the core
 /// remembers about the download: the point is to check the file that is about to
-/// run as administrator, now, in the state it is in on disk.
-fn verified_helper(staged: &Path) -> Result<PathBuf, String> {
+/// run as administrator, now, in the state it is in on disk - and, via the
+/// handle, to keep that from changing before it does.
+fn verified_helper(staged: &Path) -> Result<VerifiedHelper, String> {
     let manifest_bytes =
         std::fs::read(staged.join(MANIFEST_ASSET)).map_err(|e| format!("{MANIFEST_ASSET}: {e}"))?;
     let signature = std::fs::read_to_string(staged.join(SIGNATURE_ASSET))
@@ -97,11 +161,41 @@ fn verified_helper(staged: &Path) -> Result<PathBuf, String> {
     let (manifest, key) =
         verify_manifest(&manifest_bytes, &signature).map_err(|e| e.to_string())?;
 
-    let helper = staged.join(HELPER_EXE);
-    let bytes = std::fs::read(&helper).map_err(|e| format!("{HELPER_EXE}: {e}"))?;
+    let path = staged.join(HELPER_EXE);
+    let mut handle = open_exclusive(&path).map_err(|e| format!("{HELPER_EXE}: {e}"))?;
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut handle, &mut bytes)
+        .map_err(|e| format!("{HELPER_EXE}: {e}"))?;
     verify_bundled_file(&manifest, HELPER_EXE, &bytes).map_err(|e| e.to_string())?;
     log_verified(&manifest, key);
-    Ok(helper)
+    Ok(VerifiedHelper {
+        path,
+        version: manifest.version,
+        _handle: handle,
+    })
+}
+
+/// Opens a file for reading while denying write and delete sharing.
+///
+/// Execution is still allowed: Windows counts `FILE_EXECUTE` as read access when
+/// it checks sharing, so the loader can map the image while this handle is open.
+/// What it cannot do is change underneath us.
+#[cfg(windows)]
+fn open_exclusive(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(path)
+}
+
+/// No equivalent sharing model here; the module compiles for the Linux CI runner
+/// and its tests, not for a machine that has MusicBee on it.
+#[cfg(not(windows))]
+fn open_exclusive(path: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::File::open(path)
 }
 
 fn log_verified(manifest: &Manifest, key: &str) {
@@ -275,7 +369,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(
-            launch(&dir.to_string_lossy()),
+            launch(&dir.to_string_lossy(), "1.5.0.0"),
             UpdateLaunch::NothingStaged,
             "an empty storage directory means there is nothing to apply"
         );
@@ -299,7 +393,10 @@ mod tests {
         std::fs::write(staged.join(SIGNATURE_ASSET), "not a signature").unwrap();
         std::fs::write(staged.join(HELPER_EXE), b"not the helper").unwrap();
 
-        assert_eq!(launch(&dir.to_string_lossy()), UpdateLaunch::VerifyFailed);
+        assert_eq!(
+            launch(&dir.to_string_lossy(), "1.5.0.0"),
+            UpdateLaunch::VerifyFailed
+        );
     }
 
     #[test]
@@ -329,6 +426,25 @@ mod tests {
             line,
             "\"--target\" \"C:\\Program Files\\MusicBee\\Plugins\""
         );
+    }
+
+    #[test]
+    fn only_a_newer_bundle_is_an_upgrade() {
+        // The host reports a four-component .NET version; the staged manifest
+        // carries three. Both normalize before they are compared.
+        assert!(is_upgrade("1.6.0", "1.5.0.0"));
+        assert!(is_upgrade("1.5.1", "1.5.0.0"));
+        // The case this gate exists for: a real, signed, older release staged by
+        // someone who could write to the staging directory.
+        assert!(!is_upgrade("1.4.1", "1.5.0.0"));
+        assert!(!is_upgrade("1.5.0", "1.5.0.0"));
+        // A prerelease sits below the release it precedes, so being offered
+        // 1.6.0-rc.1 while running 1.6.0 is not an upgrade either.
+        assert!(!is_upgrade("1.6.0-rc.1", "1.6.0.0"));
+        assert!(is_upgrade("1.6.0-rc.1", "1.5.0.0"));
+        // Unparseable on either side cannot be shown to be newer.
+        assert!(!is_upgrade("not-a-version", "1.5.0.0"));
+        assert!(!is_upgrade("1.6.0", ""));
     }
 
     #[test]

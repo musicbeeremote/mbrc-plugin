@@ -211,6 +211,13 @@ replaced" - and one generation is kept. A failed write restores them. A restore
 that cannot put back a file whose installed copy is already identical to the
 backup is not a failure: that file was never replaced.
 
+**The restore writes from memory, not from that directory.** The backup lives
+under the user's profile, so an unelevated process can rewrite it while the
+elevated apply is running; reading it back would turn that write into an elevated
+one. The bytes read during the backup are what get restored, for the same reason
+the payload is verified in memory rather than re-read from disk. The on-disk copy
+remains, for a manual recovery.
+
 Exit codes are the contract with the panel:
 
 | | |
@@ -240,6 +247,19 @@ signed manifest. That copy is what runs, never the installed one: a release
 replaces `mbrc-helper.exe` too, and a running image cannot overwrite itself. It
 runs elevated out of a user-writable directory, so checking it before *execution*
 - earlier than the check it then performs on the DLLs - is the boundary.
+
+The file is opened **denying write and delete sharing**, verified through that
+handle, and the handle is held open across `ShellExecuteExW`. Verifying by path
+and then launching by path would leave a window in which any process running as
+the user could replace the file after it verified and have its own binary run as
+administrator, on the prompt the user was expecting. Execution still works:
+Windows counts `FILE_EXECUTE` as read access when it checks sharing.
+
+A staged bundle that verifies but is **not newer than the running plugin is
+refused** (`NotAnUpgrade`). Every release is public and signed, so a signature
+proves a bundle is ours, not that it is the right one to install - without this,
+anyone able to write to the staging directory could roll the plugin back to an
+older release, signature and all, and undo whatever the newer one fixed.
 
 Elevation is requested with `ShellExecuteExW` and the `runas` verb, chosen by
 probing whether the plugins directory is writable (by writing, not by reading an

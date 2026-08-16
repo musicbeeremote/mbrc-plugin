@@ -169,6 +169,30 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
 }
 
+/// Hand the staged update to the elevated helper.
+///
+/// The version the host reports is the one the staged bundle has to beat: a
+/// signature proves a bundle is ours, not that it is newer than what is running,
+/// and every release is public. `None` when the core is not initialized.
+pub fn apply_staged_update() -> Option<crate::ffi::types::UpdateLaunch> {
+    let core = {
+        let guard = lock();
+        guard.as_ref()?.core.clone()
+    };
+    let storage = core.config.storage_path.clone();
+    if storage.is_empty() {
+        return None;
+    }
+    // Falling back to the core's own version keeps a host that cannot answer
+    // from turning into an unconditional refusal; the two are stamped from the
+    // same `Directory.Build.props`.
+    let current = core.providers.plugin_version().unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "the host could not report its version; using the core's");
+        crate::updates::CORE_VERSION.to_owned()
+    });
+    Some(crate::updates::elevate::launch(&storage, &current))
+}
+
 /// Whether a core is currently initialized.
 ///
 /// For background work that outlives the call that started it: the C# callback

@@ -65,6 +65,9 @@ mdns-sd = { version = "=0.21.0", default-features = false }
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
+    # FILE_SHARE_READ: the staged helper is opened denying write and delete
+    # sharing so it cannot be swapped between verification and launch.
+    "Win32_Storage_FileSystem",
     # SHELLEXECUTEINFOW carries an HKEY field, so the struct lives behind the
     # registry feature even though nothing here touches the registry.
     "Win32_System_Registry",

@@ -26,6 +26,7 @@ namespace MusicBeePlugin.Ffi.Generated
         Cancelled = 2,
         VerifyFailed = 3,
         Failed = 4,
+        NotAnUpgrade = 5,
     }
 
     public enum NotificationType

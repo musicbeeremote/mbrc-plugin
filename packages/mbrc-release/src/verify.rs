@@ -75,18 +75,34 @@ pub fn verify_signature_with(
     let signature =
         Signature::decode(signature).map_err(|e| UpdateError::MalformedSignature(e.to_string()))?;
 
+    // A key that will not parse is skipped, not fatal. One corrupt entry in the
+    // compiled-in list would otherwise disable verification against every other
+    // key - failing closed, but failing *completely*, and the whole point of a
+    // list is that it survives losing one of them. If none parse there is no
+    // trust list to speak of, so the first failure is reported.
+    let mut malformed: Option<UpdateError> = None;
+    let mut usable = 0usize;
     for key in keys {
-        let public_key =
-            PublicKey::from_base64(key.base64).map_err(|e| UpdateError::MalformedKey {
-                name: key.name.to_owned(),
-                reason: e.to_string(),
-            })?;
+        let public_key = match PublicKey::from_base64(key.base64) {
+            Ok(public_key) => public_key,
+            Err(e) => {
+                malformed.get_or_insert(UpdateError::MalformedKey {
+                    name: key.name.to_owned(),
+                    reason: e.to_string(),
+                });
+                continue;
+            }
+        };
+        usable += 1;
 
         if public_key.verify(bytes, &signature, false).is_ok() {
             return Ok(key.name);
         }
     }
 
+    if usable == 0 {
+        return Err(malformed.unwrap_or(UpdateError::NoTrustedKeys));
+    }
     Err(UpdateError::UntrustedSignature)
 }
 

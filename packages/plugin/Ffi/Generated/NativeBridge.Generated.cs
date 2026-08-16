@@ -148,7 +148,10 @@ namespace MusicBeePlugin.Ffi.Generated
         ///  Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
         ///  waiting for MusicBee to exit - the caller is expected to shut MusicBee down
         ///  next. `Cancelled` (the user declined elevation) is a normal outcome and
-        ///  leaves the staged update in place for a retry.
+        ///  leaves the staged update in place for a retry. `NotAnUpgrade` means the
+        ///  staged bundle verified but is not newer than the running plugin, which is a
+        ///  refusal rather than a failure: a valid signature does not make a stale
+        ///  release the right one to install.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_apply_staged_update", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_apply_staged_update();
