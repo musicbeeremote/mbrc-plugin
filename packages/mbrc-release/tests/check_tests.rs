@@ -48,6 +48,15 @@ fn options(current: &str) -> CheckOptions<'_> {
     }
 }
 
+/// The same, following the testing channel (pre-releases included).
+fn testing(current: &str) -> CheckOptions<'_> {
+    CheckOptions {
+        repo: "test/repo",
+        keys: TEST_KEYS,
+        ..CheckOptions::new(current, Channel::Testing)
+    }
+}
+
 fn forced(current: &str) -> CheckOptions<'_> {
     CheckOptions {
         force: true,
@@ -129,46 +138,92 @@ fn a_nightly_is_never_offered_an_older_stable() {
 
 #[test]
 fn each_channel_asks_the_right_endpoint() {
+    // Stable takes GitHub's own "latest", which excludes pre-releases by its
+    // rule rather than ours. Testing has to list, because there is no "latest
+    // including pre-releases" endpoint.
     assert_eq!(
         options("1.5.0").endpoint(),
         "https://api.github.com/repos/test/repo/releases/latest"
     );
     assert_eq!(
-        CheckOptions {
-            repo: "test/repo",
-            ..CheckOptions::new("1.5.0", Channel::Nightly)
-        }
-        .endpoint(),
-        "https://api.github.com/repos/test/repo/releases/tags/nightly"
+        testing("1.5.0").endpoint(),
+        "https://api.github.com/repos/test/repo/releases?per_page=10"
     );
 }
 
 #[test]
-fn a_manifest_from_the_wrong_channel_is_refused() {
-    // The nightly tag serving the stable manifest: the tag and its assets
-    // disagree, so nothing is offered even though the version would qualify.
+fn the_channels_accept_what_they_should() {
+    // Stable takes only stable. Testing is a superset, so a tester on a
+    // pre-release is offered the final release rather than being stranded.
+    assert!(Channel::Stable.accepted_by(Channel::Stable));
+    assert!(!Channel::Testing.accepted_by(Channel::Stable));
+    assert!(Channel::Stable.accepted_by(Channel::Testing));
+    assert!(Channel::Testing.accepted_by(Channel::Testing));
+}
+
+#[test]
+fn testing_takes_the_newest_listed_release() {
+    // The list comes back newest first; the stable-channel manifest behind it is
+    // accepted, because testing follows both kinds.
     let stub = StubHttp::default();
-    stub.serve_release(API, "releases/tags/nightly", RELEASE_VERSION);
+    stub.serve_release_list(
+        API,
+        "releases?per_page=10",
+        &[(RELEASE_VERSION, false, true), ("1.4.0", false, true)],
+    );
     stub.serve("https://assets.test/manifest.json", MANIFEST.as_bytes());
     stub.serve(
         "https://assets.test/manifest.json.minisig",
         SIGNATURE.as_bytes(),
     );
+    stub.serve(
+        "https://assets.test/musicbee_remote_1.5.0.zip",
+        b"zip bytes",
+    );
 
     let mut state = UpdateState::default();
-    let error = check(
-        &stub,
-        &CheckOptions {
-            repo: "test/repo",
-            keys: TEST_KEYS,
-            ..CheckOptions::new("1.4.0.0", Channel::Nightly)
-        },
-        &mut state,
-        at(NOW),
-    )
-    .unwrap_err();
+    let outcome = check(&stub, &testing("1.4.0.0"), &mut state, at(NOW)).unwrap();
+    assert!(matches!(outcome, CheckOutcome::Available(_)), "{outcome:?}");
+}
+
+#[test]
+fn testing_skips_drafts_and_releases_without_a_manifest() {
+    // A draft is unpublished, and a tag whose assets are missing (or still
+    // uploading) must not stall the channel behind it.
+    let stub = StubHttp::default();
+    stub.serve_release_list(
+        API,
+        "releases?per_page=10",
+        &[
+            ("1.6.0", true, true),   // draft
+            ("1.5.1", false, false), // published, no manifest attached
+            (RELEASE_VERSION, false, true),
+        ],
+    );
+    stub.serve("https://assets.test/manifest.json", MANIFEST.as_bytes());
+    stub.serve(
+        "https://assets.test/manifest.json.minisig",
+        SIGNATURE.as_bytes(),
+    );
+    stub.serve(
+        "https://assets.test/musicbee_remote_1.5.0.zip",
+        b"zip bytes",
+    );
+
+    let mut state = UpdateState::default();
+    let outcome = check(&stub, &testing("1.4.0.0"), &mut state, at(NOW)).unwrap();
+    assert!(matches!(outcome, CheckOutcome::Available(_)), "{outcome:?}");
+}
+
+#[test]
+fn testing_reports_a_list_with_nothing_usable() {
+    let stub = StubHttp::default();
+    stub.serve_release_list(API, "releases?per_page=10", &[("1.6.0", true, true)]);
+
+    let mut state = UpdateState::default();
+    let error = check(&stub, &testing("1.4.0.0"), &mut state, at(NOW)).unwrap_err();
     assert!(
-        matches!(&error, UpdateError::Invalid(m) if m.contains("channel")),
+        matches!(&error, UpdateError::Invalid(m) if m.contains("no release carrying a manifest")),
         "{error:?}"
     );
 }

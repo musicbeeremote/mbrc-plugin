@@ -68,6 +68,38 @@ impl StubHttp {
         );
         self.serve(&format!("{api_base}/{endpoint}"), document.as_bytes());
     }
+
+    /// The testing channel's endpoint answers with a *list*, newest first. Each
+    /// entry is `(version, draft, has_manifest)`, so a test can put a draft or an
+    /// asset-less tag in front of the release that should actually be picked.
+    pub fn serve_release_list(
+        &self,
+        api_base: &str,
+        endpoint: &str,
+        entries: &[(&str, bool, bool)],
+    ) {
+        let documents: Vec<String> = entries
+            .iter()
+            .map(|(version, draft, has_manifest)| {
+                let assets = if *has_manifest {
+                    format!(
+                        r#"{{ "name": "manifest.json", "browser_download_url": "https://assets.test/manifest.json" }},
+                           {{ "name": "manifest.json.minisig", "browser_download_url": "https://assets.test/manifest.json.minisig" }},
+                           {{ "name": "musicbee_remote_{version}.zip", "browser_download_url": "https://assets.test/musicbee_remote_{version}.zip" }}"#
+                    )
+                } else {
+                    String::new()
+                };
+                format!(
+                    r#"{{ "tag_name": "v{version}", "draft": {draft}, "assets": [{assets}] }}"#
+                )
+            })
+            .collect();
+        self.serve(
+            &format!("{api_base}/{endpoint}"),
+            format!("[{}]", documents.join(",")).as_bytes(),
+        );
+    }
 }
 
 impl HttpClient for StubHttp {

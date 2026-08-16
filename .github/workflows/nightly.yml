@@ -101,13 +101,18 @@ jobs:
           name: nightly-dist-${{ needs.check.outputs.version }}
           path: build/dist
 
-      # Attestation stays off until nightlies publish to a real release
-      # (rolling `nightly` tag) rather than a 7-day workflow artifact. See #148.
+      # This job publishes a 7-day workflow artifact, not a release: there is
+      # nothing distributable to attest, and nothing that could verify it later.
+      # Attestation belongs to the path that cuts a real `testing` pre-release
+      # (#148), which should mirror release.yml - package with attest: 'true',
+      # sign the manifest, publish with --prerelease. A testing release must be
+      # signed regardless: the updater refuses a manifest it cannot verify, so an
+      # unsigned pre-release is invisible to the channel that is meant to find it.
       - name: package
         uses: ./.github/actions/package
         with:
           version: ${{ needs.build.outputs.version }}
-          channel: nightly
+          channel: testing
           attest: 'false'
 
       - name: upload artifacts

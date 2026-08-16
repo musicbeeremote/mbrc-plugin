@@ -176,7 +176,8 @@ pub struct Config {
     /// panel's "Check now" runs regardless of it.
     #[serde(default = "default_update_check_enabled")]
     pub update_check_enabled: bool,
-    /// Which release channel to follow (`stable` / `nightly`).
+    /// Which release channel to follow: `stable`, or `testing` to also be
+    /// offered pre-releases.
     #[serde(default)]
     pub update_channel: UpdateChannel,
     /// Hours between automatic checks. The panel's "Check now" ignores it.
@@ -633,17 +634,17 @@ mod tests {
         // carried rather than re-defaulted.
         let json = serde_json::to_string(&Config {
             update_check_enabled: true,
-            update_channel: UpdateChannel::Nightly,
+            update_channel: UpdateChannel::Testing,
             update_check_interval_hours: 6,
             proxy_override: "http://proxy.local:8080".into(),
             ..Config::default()
         })
         .unwrap();
-        assert!(json.contains("\"update_channel\":\"nightly\""), "{json}");
+        assert!(json.contains("\"update_channel\":\"testing\""), "{json}");
 
         let back: Config = serde_json::from_str(&json).unwrap();
         assert!(back.update_check_enabled);
-        assert_eq!(back.update_channel, UpdateChannel::Nightly);
+        assert_eq!(back.update_channel, UpdateChannel::Testing);
         assert_eq!(back.update_check_interval_hours, 6);
         assert_eq!(back.proxy_override, "http://proxy.local:8080");
 

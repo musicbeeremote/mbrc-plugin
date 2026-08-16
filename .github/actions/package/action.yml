@@ -9,7 +9,7 @@ inputs:
     description: 'Full version string, e.g. 1.5.0 or 1.5.0-nightly.20260729.'
     required: true
   channel:
-    description: 'Release channel recorded in the manifest: stable or nightly.'
+    description: 'Release channel recorded in the manifest: stable or testing (published as a GitHub pre-release).'
     required: false
     default: 'stable'
   notes-url:

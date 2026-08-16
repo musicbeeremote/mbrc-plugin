@@ -66,18 +66,36 @@ The core asks GitHub for the channel's release, verifies the manifest's
 signature, and only then compares versions. Nothing is decided on unverified
 bytes and nothing is downloaded on the strength of a version number.
 
-| | stable | nightly |
+| | stable | testing |
 |---|---|---|
-| Endpoint | `releases/latest` | `releases/tags/nightly` |
-| Manifest `channel` must be | `stable` | `nightly` |
+| Endpoint | `releases/latest` | `releases?per_page=10` |
+| Follows | released versions only | releases **and** pre-releases |
+| Manifest `channel` may be | `stable` | `stable` or `testing` |
+
+`releases/latest` is GitHub's own definition of the newest release that is
+neither a draft nor a pre-release, so a pre-release cannot reach a stable user by
+GitHub's rule rather than by ours. There is no "latest including pre-releases"
+endpoint, so `testing` lists instead and takes the newest entry that is published
+and carries a manifest - skipping a draft, or a tag whose assets are still
+uploading, rather than stalling behind it.
+
+A `testing` release is cut the same way a stable one is - packaged with build
+provenance attested, its manifest signed by the release job, published with
+`--prerelease`. The signature is not optional: the updater refuses a manifest it
+cannot verify, so an unsigned pre-release is invisible to the channel meant to
+find it. The scheduled nightly workflow is the exception, and only because it
+uploads a 7-day workflow artifact rather than publishing anything.
+
+**`testing` is a superset of `stable`, not a fork of it.** It accepts a stable
+manifest as well as a testing one, so someone testing `1.6.0-rc.1` is offered
+`1.6.0` when it ships instead of being stranded on pre-releases. The version
+ordering already does the right thing: prerelease suffixes are kept, and semver
+puts `1.6.0-rc.1` below `1.6.0` and above `1.5.0`.
 
 The version the check compares against is the running plugin's, reported over FFI
 as a four-component .NET string (`1.5.0.0`). Only major.minor.patch has ever been
 meaningful here, so it is normalized to three parts before it reaches `semver`,
-which cannot parse four. Prerelease suffixes are kept, which is what makes a
-nightly order correctly: `1.7.0-nightly.20260804` is below `1.7.0` and above
-`1.6.0`, so a nightly user is offered the release it is a prerelease of and never
-an older stable.
+which cannot parse four.
 
 **Automatic checking is opt-in.** `update_check_enabled` defaults to *off*: a
 check is an unprompted outbound request to github.com, so making one is the

@@ -27,8 +27,10 @@ pub const DEFAULT_REPO: &str = "musicbeeremote/mbrc-plugin";
 pub const MANIFEST_ASSET: &str = "manifest.json";
 pub const SIGNATURE_ASSET: &str = "manifest.json.minisig";
 
-/// The rolling tag the nightly channel tracks (#148).
-const NIGHTLY_TAG: &str = "nightly";
+/// How many releases the testing channel looks back through for one it can use.
+/// The newest is almost always the answer; the rest is slack for a release that
+/// is still being published, or a tag with no assets attached.
+const TESTING_PAGE_SIZE: u32 = 10;
 
 /// What the caller wants checked. Assembled from `Config` by the core; kept as a
 /// parameter object so the check itself stays a pure function of its inputs.
@@ -61,15 +63,21 @@ impl<'a> CheckOptions<'a> {
         }
     }
 
-    /// The GitHub API endpoint for the channel. Stable follows `releases/latest`,
-    /// which GitHub resolves to the newest non-prerelease; nightly is a fixed
-    /// rolling tag, which cannot be reached that way.
+    /// The GitHub API endpoint for the channel.
+    ///
+    /// Stable follows `releases/latest`, which GitHub resolves to the newest
+    /// release that is neither a draft nor a pre-release - so a pre-release can
+    /// never reach a stable user, by GitHub's own rule rather than by ours.
+    ///
+    /// Testing has to list instead: there is no "latest including pre-releases"
+    /// endpoint. The list comes back newest first and includes both kinds, which
+    /// is exactly the superset that channel means.
     pub fn endpoint(&self) -> String {
         let repo = self.repo;
         match self.channel {
             Channel::Stable => format!("https://api.github.com/repos/{repo}/releases/latest"),
-            Channel::Nightly => {
-                format!("https://api.github.com/repos/{repo}/releases/tags/{NIGHTLY_TAG}")
+            Channel::Testing => {
+                format!("https://api.github.com/repos/{repo}/releases?per_page={TESTING_PAGE_SIZE}")
             }
         }
     }
@@ -162,8 +170,7 @@ fn run(
         return Ok(CheckOutcome::NotModified);
     }
     let etag = response.etag.clone();
-    let release: Release = serde_json::from_slice(&response.into_body(&endpoint)?)
-        .map_err(|e| UpdateError::Parse(format!("release document: {e}")))?;
+    let release = select_release(options.channel, &response.into_body(&endpoint)?, &endpoint)?;
 
     // Signature first: the manifest's claims are worth nothing until it has been
     // shown to come from a release key.
@@ -178,10 +185,11 @@ fn run(
     .map_err(|e| UpdateError::MalformedSignature(e.to_string()))?;
     let (manifest, key_name) = verify_manifest_with(&manifest_bytes, &signature, options.keys)?;
 
-    // A manifest from the wrong channel means the tag and its assets disagree.
-    // Nightly and stable carry different expectations, so this is refused rather
-    // than quietly accepted.
-    if manifest.channel != options.channel {
+    // A manifest the subscribed channel does not accept means the release and
+    // its assets disagree, which is refused rather than quietly accepted. Note
+    // this is not equality: `testing` is a superset that takes stable releases
+    // too, so a tester is not stranded on pre-releases once the final ships.
+    if !manifest.channel.accepted_by(options.channel) {
         return Err(UpdateError::Invalid(format!(
             "{endpoint} carries a {:?} manifest but the {:?} channel was checked",
             manifest.channel, options.channel
@@ -215,12 +223,38 @@ fn run(
     })))
 }
 
+/// The release the check will act on.
+///
+/// Stable's endpoint returns exactly one; testing's returns a list, newest
+/// first, from which the first usable entry is taken. "Usable" excludes drafts
+/// (unpublished, and only visible to an authenticated request in the first
+/// place) and any release that carries no manifest - a tag published without
+/// assets, or one still being uploaded, should not stall the channel behind it.
+fn select_release(channel: Channel, body: &[u8], endpoint: &str) -> Result<Release> {
+    let parse = |e: serde_json::Error| UpdateError::Parse(format!("release document: {e}"));
+    match channel {
+        Channel::Stable => serde_json::from_slice(body).map_err(parse),
+        Channel::Testing => serde_json::from_slice::<Vec<Release>>(body)
+            .map_err(parse)?
+            .into_iter()
+            .find(|r| !r.draft && r.has_asset(MANIFEST_ASSET))
+            .ok_or_else(|| {
+                UpdateError::Invalid(format!("{endpoint} lists no release carrying a manifest"))
+            }),
+    }
+}
+
 /// The subset of GitHub's release document the updater reads. Unknown fields are
 /// ignored: this is somebody else's schema and it grows.
 #[derive(Debug, Deserialize)]
 struct Release {
     #[serde(default)]
     assets: Vec<Asset>,
+    /// Unpublished. Never present in an unauthenticated response, but the field
+    /// is read rather than assumed so a drafts-visible token cannot change what
+    /// the updater installs.
+    #[serde(default)]
+    draft: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -230,6 +264,10 @@ struct Asset {
 }
 
 impl Release {
+    fn has_asset(&self, name: &str) -> bool {
+        self.assets.iter().any(|a| a.name == name)
+    }
+
     fn asset_url(&self, name: &str) -> Result<&str> {
         self.assets
             .iter()

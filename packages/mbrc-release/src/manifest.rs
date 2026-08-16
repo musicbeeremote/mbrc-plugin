@@ -18,11 +18,29 @@ const SHA512_HEX_LEN: usize = 128;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Channel {
-    /// Released versions. The default: nobody ends up on nightlies by omission.
+    /// Released versions. The default: nobody ends up on test builds by
+    /// omission.
     #[default]
     Stable,
-    /// The rolling `nightly` tag (#148).
-    Nightly,
+    /// Builds published for testing, as GitHub pre-releases (#148).
+    ///
+    /// This is a *superset* of stable, not a fork of it: someone on `testing`
+    /// follows the newest release of either kind, so a tester who has 1.6.0-rc.1
+    /// is offered 1.6.0 when it ships rather than being stranded on
+    /// pre-releases. The version ordering already does the right thing here -
+    /// semver puts `1.6.0-rc.1` below `1.6.0`.
+    Testing,
+}
+
+impl Channel {
+    /// Whether a manifest declaring `self` may be served to a client following
+    /// `subscribed`. Stable takes only stable; testing takes either.
+    pub fn accepted_by(self, subscribed: Channel) -> bool {
+        match subscribed {
+            Channel::Stable => self == Channel::Stable,
+            Channel::Testing => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

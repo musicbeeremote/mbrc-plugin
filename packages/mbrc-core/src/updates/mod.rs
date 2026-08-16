@@ -142,13 +142,13 @@ mod tests {
     #[test]
     fn options_come_from_the_settings() {
         let config = Config {
-            update_channel: Channel::Nightly,
+            update_channel: Channel::Testing,
             update_check_interval_hours: 6,
             ..Config::default()
         };
         let options = check_options(&config, "1.5.0.0", false);
         assert_eq!(options.current_version, "1.5.0.0");
-        assert_eq!(options.channel, Channel::Nightly);
+        assert_eq!(options.channel, Channel::Testing);
         assert_eq!(options.interval_hours, 6);
         assert!(!options.force);
         assert_eq!(options.repo, check::DEFAULT_REPO);
