@@ -27,6 +27,10 @@ use crate::state::Core;
 /// the answer already there.
 const STARTUP_UPDATE_CHECK_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// How long the accept loop pauses after a failed `accept`, so a persistent
+/// failure cannot become a busy loop.
+const ACCEPT_ERROR_BACKOFF: std::time::Duration = std::time::Duration::from_millis(200);
+
 /// How long networking shutdown waits for the mDNS advertisement to withdraw.
 /// Long enough for the goodbye packets to leave, short enough that a wedged
 /// daemon cannot hold up MusicBee closing.
@@ -266,10 +270,10 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     if core.config.storage_path.is_empty() {
         return;
     }
-    if !core.try_begin_reconcile() {
+    let Some(reconcile) = core.begin_reconcile() else {
         tracing::debug!("library reconcile already in progress; skipping");
         return;
-    }
+    };
 
     // Start/finish transitions. The host UI (settings cache line) always
     // refreshes; the `librarycovercachebuildstatus` broadcast to network clients
@@ -399,8 +403,12 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     } else {
         "MusicBee Remote: Done. Library metadata refreshed.".to_string()
     });
+    // Before the finish notification, so a panel refreshing on that event sees
+    // a cache that is no longer building. (The previous explicit
+    // `end_reconcile()` ran after `notify(false)`, so the line could stay on
+    // "Rebuilding cache..." until the next unrelated refresh.)
+    drop(reconcile);
     notify(false);
-    core.end_reconcile();
 }
 
 /// Incremental album-cover refresh, run from the Scanner's nudge path (a
@@ -531,7 +539,14 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                     }
                 });
             }
-            Err(e) => tracing::warn!(error = %e, "accept failed"),
+            // Do not spin. A transient failure is worth retrying immediately in
+            // principle, but a persistent one - descriptor exhaustion, a wedged
+            // listener - would otherwise turn this into a busy loop pegging a core
+            // inside MusicBee and filling the log as fast as it can rotate.
+            Err(e) => {
+                tracing::warn!(error = %e, "accept failed");
+                tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
+            }
         }
     }
 }

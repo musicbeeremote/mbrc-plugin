@@ -288,8 +288,20 @@ namespace MusicBeePlugin
         /// <param name="reason">The reason for closing.</param>
         public void Close(PluginCloseReason reason)
         {
-            _host?.Dispose();
-            _host = null;
+            // MusicBee calls this on its way out; an exception escaping here is a
+            // crash dialog on exit, after the user has already asked to leave.
+            try
+            {
+                _host?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Plugin Close failed", ex);
+            }
+            finally
+            {
+                _host = null;
+            }
         }
 
         /// <summary>
@@ -375,7 +387,19 @@ namespace MusicBeePlugin
                     return;
             }
 
-            _host.HandleNotification((int)coreType);
+            // Guarded like every other MusicBee-facing entry point, and this is the
+            // busiest of them: it fires for every player event and every tag or
+            // library change. The FFI call itself is guarded inside the bridge, so
+            // this is the belt to that braces - a notification must never be able
+            // to throw back into MusicBee's event dispatch.
+            try
+            {
+                _host.HandleNotification((int)coreType);
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("ReceiveNotification failed", ex);
+            }
         }
     }
 }

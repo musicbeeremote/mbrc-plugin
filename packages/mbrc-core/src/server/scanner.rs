@@ -79,10 +79,10 @@ async fn scan(core: &Arc<Core>, covers: bool) {
 
     let core = core.clone();
     let _ = tokio::task::spawn_blocking(move || {
-        if !core.try_begin_reconcile() {
+        let Some(reconcile) = core.begin_reconcile() else {
             tracing::debug!("scanner: reconcile in progress; skipping delta");
             return;
-        }
+        };
         // Tell the settings panel a scan is running (its cache-status line reads
         // `is_reconciling`), matching what a manual rebuild emits. Paired with the
         // finish event below so the line clears once the delta completes.
@@ -92,7 +92,11 @@ async fn scan(core: &Arc<Core>, covers: bool) {
         if covers {
             super::refresh_covers_delta(&core);
         }
-        core.end_reconcile();
+        // Released before the finish event, not after: the panel answers that
+        // event by re-reading `is_reconciling`, so telling it to look while the
+        // guard is still held would leave the line saying "Rebuilding cache..."
+        // until something else happened to refresh it.
+        drop(reconcile);
         core.providers
             .emit_event(HostEventType::CacheStatusChanged, &[]);
     })

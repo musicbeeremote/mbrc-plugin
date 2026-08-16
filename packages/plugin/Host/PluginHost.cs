@@ -214,13 +214,20 @@ namespace MusicBeePlugin.Host
             _userSettings.Source = (SearchSource)s.search_source;
         }
 
-        /// <summary>Only a port or address-filter change needs the listener rebound.</summary>
+        /// <summary>
+        ///     Whether a settings change needs networking restarted: the port and
+        ///     the address filter, because they decide what the listener binds and
+        ///     admits, and mDNS, because the advertisement task is started (or not)
+        ///     when networking starts - without this, unticking the checkbox would
+        ///     appear to do nothing until MusicBee was restarted.
+        /// </summary>
         private static bool NeedsRestart(CoreSettings a, CoreSettings b)
         {
             return a.port != b.port
                    || a.filter_mode != b.filter_mode
                    || a.base_ip != b.base_ip
                    || a.last_octet_max != b.last_octet_max
+                   || a.mdns_enabled != b.mdns_enabled
                    || !ListEqual(a.allowed_addresses, b.allowed_addresses);
         }
 

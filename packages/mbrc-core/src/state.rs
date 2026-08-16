@@ -87,22 +87,38 @@ impl Core {
         self.conn_counter.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Acquire the single-flight reconcile right: `true` if the caller may run
-    /// `reconcile_library` (it must then call [`end_reconcile`](Self::end_reconcile)),
-    /// `false` if one is already in progress.
-    pub fn try_begin_reconcile(&self) -> bool {
-        !self.reconciling.swap(true, Ordering::AcqRel)
-    }
-
-    /// Release the reconcile right acquired by [`try_begin_reconcile`](Self::try_begin_reconcile).
-    pub fn end_reconcile(&self) {
-        self.reconciling.store(false, Ordering::Release);
+    /// Acquire the single-flight reconcile right, or `None` if one is already in
+    /// progress.
+    ///
+    /// A guard rather than a pair of calls, because the work it spans is long
+    /// (a library scan, blocking calls into MusicBee, and a thread pool doing
+    /// the cover build) and the cost of not releasing it is silent and
+    /// permanent: no further rebuild would run for the rest of the session, a
+    /// library switch would be ignored, and the settings panel would sit on
+    /// "Rebuilding cache..." forever. Dropping is the one thing that happens on
+    /// every path out, including a panic.
+    pub fn begin_reconcile(&self) -> Option<ReconcileGuard<'_>> {
+        if self.reconciling.swap(true, Ordering::AcqRel) {
+            None
+        } else {
+            Some(ReconcileGuard(self))
+        }
     }
 
     /// Whether a library reconcile / cache build is currently running. Surfaced
     /// to the settings panel's cache-status line.
     pub fn is_reconciling(&self) -> bool {
         self.reconciling.load(Ordering::Acquire)
+    }
+}
+
+/// Holds the single-flight reconcile right for as long as it is alive; see
+/// [`Core::begin_reconcile`].
+pub struct ReconcileGuard<'a>(&'a Core);
+
+impl Drop for ReconcileGuard<'_> {
+    fn drop(&mut self) {
+        self.0.reconciling.store(false, Ordering::Release);
     }
 }
 

@@ -69,13 +69,26 @@ impl RotatingWriter {
             max_bytes,
         });
         if written >= max_bytes {
-            w.rotate(&mut w.inner.lock().unwrap());
+            w.rotate(&mut w.lock());
         }
         Ok(w)
     }
 
+    /// The writer state, surviving a poisoned lock.
+    ///
+    /// A panic anywhere while this is held would otherwise poison it, and every
+    /// later log call - from every thread, including ones that only log because
+    /// something already went wrong - would panic in turn. The data behind it is
+    /// a file handle and a byte count; neither is left inconsistent by an
+    /// unwind, so taking it back is strictly better than cascading.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn write_line(&self, buf: &[u8]) -> io::Result<usize> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         if let Some(file) = inner.file.as_mut() {
             file.write_all(buf)?;
             inner.written += buf.len() as u64;
