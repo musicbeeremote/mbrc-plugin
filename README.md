@@ -29,6 +29,7 @@
 * [About the Project](#about-the-project)
   * [Built With](#built-with)
   * [Project Structure](#project-structure)
+  * [Documentation](#documentation)
 * [Installation](#installation)
 * [Getting Started](#getting-started)
   * [Prerequisites](#prerequisites)
@@ -66,6 +67,7 @@ plugin API.
 * [MessagePack-CSharp](https://github.com/MessagePack-CSharp/MessagePack-CSharp) - FFI DTO serialization
 * [Costura.Fody](https://github.com/Fody/Costura) - embeds the managed dependencies into `mb_remote.dll`
 * [minisign-verify](https://github.com/jedisct1/rust-minisign-verify) - release manifest signatures
+* [mdns-sd](https://github.com/keepsimple1/mdns-sd) - DNS-SD advertisement, alongside the custom discovery
 
 ### Project Structure
 
@@ -78,6 +80,7 @@ mbrc-plugin/
 │   ├── mbrc-capture/   # Capture and fixture tooling
 │   ├── mbrc-release/   # Release manifest parsing, signature verification
 │   ├── mbrc-helper/    # Elevated helper exe: firewall rule, staged update apply
+│   ├── mbrc-buildinfo/ # Stamps the product version into the Rust binaries
 │   └── plugin/         # MusicBee plugin (mb_remote.dll): entry point, API callbacks
 ├── tests/
 │   ├── csharp/         # xUnit suite for the C# shim
@@ -91,6 +94,13 @@ The C# core was folded into the plugin project, so the managed side builds as a
 single `mb_remote.dll` with its NuGet dependencies embedded by Costura. The
 native `mbrc_core.dll` and `mbrc-helper.exe` are not embedded and ship
 side-by-side with it.
+
+### Documentation
+
+* [`docs/protocol.md`](docs/protocol.md) - the wire protocol: commands, events,
+  and both discovery mechanisms (custom UDP multicast and mDNS / DNS-SD)
+* [`docs/updates.md`](docs/updates.md) - the update mechanism end to end: the
+  signed manifest, the channels, staging, and the elevated helper
 
 ## Installation
 
@@ -116,7 +126,9 @@ Use this method for the Microsoft Store version of MusicBee or if you prefer man
    - Store version: `%LOCALAPPDATA%\Packages\...\LocalCache\Roaming\MusicBee\Plugins\`
 
    The plugin loads the native core at startup, so they must sit side by side.
-4. Optionally copy `mbrc-helper.exe` if you want the Windows Firewall rule added for you
+4. Copy `mbrc-helper.exe` as well. It is optional, but it is what adds the Windows
+   Firewall rule and what installs updates the plugin downloads - without it,
+   "Install and restart" in the settings has nothing to run
 5. Restart MusicBee
 
 ### Verify Installation
@@ -131,6 +143,16 @@ As a developer there are a few steps you need to follow to get started:
 
 * [Visual Studio 2026 Community](https://visualstudio.microsoft.com/vs/community/) (2022 also supported)
 * [.NET Framework 4.8](https://dotnet.microsoft.com/download/dotnet-framework/net48) SDK
+* [Rust](https://rustup.rs/) with the 32-bit Windows target - the core and the
+  helper are Rust, and the plugin is x86, so they must be built for
+  `i686-pc-windows-msvc`:
+
+  ```bash
+  rustup target add i686-pc-windows-msvc
+  ```
+
+  The toolchain version itself is pinned by `rust-toolchain.toml`, so rustup
+  fetches the right one on the first build.
 * [MusicBee](http://getmusicbee.com/) installed (for testing)
 
 After getting the basic environment setup you just need to clone the project from command line:
@@ -173,8 +195,11 @@ dotnet build -c Release
 
 **Build Script (Windows / PowerShell):**
 ```powershell
-.\build-msbuild.ps1                       # Release build (default)
-.\build-msbuild.ps1 -Configuration Debug  # Debug build
+.\build.ps1                       # both halves, Release
+.\build.ps1 -Configuration Debug  # both halves, Debug
+.\build.ps1 -Rust                 # just the Rust core + helper
+.\build.ps1 -Plugin               # just the C# plugin
+.\build.ps1 -Clean                # remove build output first
 ```
 
 The build process:
@@ -182,10 +207,13 @@ The build process:
 2. Compiles the plugin project into `mb_remote.dll`, with Costura embedding the
    managed NuGet dependencies
 3. In Debug mode, copies `mb_remote.dll`, `mbrc_core.dll` and `mbrc-helper.exe`
-   to MusicBee's Plugins folder
+   to MusicBee's Plugins folder for a live test install; Release only stages them
+   under `build\bin\plugin\`
 
-Note that `build-msbuild.ps1` builds only the C# solution. Use `.\build.ps1` for
-a full build of both halves.
+`build-msbuild.ps1` is the C#-solution entry point, but it is not Rust-free: the
+plugin project has an MSBuild target that invokes `build.ps1 -Rust`, so the core
+and helper are built either way. That target is also why `dotnet build` and
+Visual Studio produce a complete set of binaries.
 
 ## Testing
 
@@ -236,10 +264,16 @@ The version is centralized in `Directory.Build.props`:
 ```
 
 Every shipped component inherits this version automatically: the C# assemblies
-through MSBuild, and `mbrc-helper.exe` through its `build.rs`, which reads the
-same `<VersionPrefix>` at compile time. Bumping it here is the only edit needed.
-CI may override the helper's stamp via the `MBRC_VERSION` environment variable so
-nightlies carry their full suffixed version.
+through MSBuild, and `mbrc_core.dll` + `mbrc-helper.exe` through `mbrc-buildinfo`,
+which reads the same `<VersionPrefix>` at compile time. Bumping it here is the
+only edit needed. CI overrides the Rust stamp via the `MBRC_VERSION` environment
+variable, so a build from a tag carries the tag's full version rather than the
+bare prefix.
+
+The version the plugin reports to the updater is the *informational* version, not
+`AssemblyVersion` - MSBuild strips prerelease suffixes from the latter, which
+would make `1.5.0-beta.1` indistinguishable from `1.5.0` and leave a prerelease
+unable to update itself.
 
 ### Creating a Release
 
@@ -263,7 +297,27 @@ The CI pipeline will automatically:
 - Create the ZIP archive (`musicbee_remote_1.5.0.zip`)
 - Generate SHA512 checksums
 - Create build provenance attestations
+- Emit and sign `manifest.json`, which is what the in-plugin updater verifies
 - Publish a GitHub Release with all artifacts
+
+### Prereleases
+
+A tag with a prerelease suffix routes itself - no separate workflow and no extra
+flags:
+
+```bash
+git tag v1.5.0-beta.1
+git push origin v1.5.0-beta.1
+```
+
+It is packaged, attested and signed exactly like a stable release; only two
+things differ. The manifest records `channel: testing` instead of `stable`, and
+the GitHub release is marked as a pre-release, which keeps it out of
+`releases/latest` - the endpoint the stable update channel follows. Users on the
+`testing` channel find it because that channel lists releases instead.
+
+See [`docs/updates.md`](docs/updates.md) for the channels, how to switch between
+them, and what the updater verifies before it installs anything.
 
 ### Development Builds
 

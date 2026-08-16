@@ -9,8 +9,11 @@ Usually this is: C:\Program Files (x86)\MusicBee\Plugins\
 
 mb_remote.dll and mbrc_core.dll are both required: the plugin loads the native
 core at startup, and they must sit side by side in the same folder.
-The mbrc-helper.exe is optional and is used to add the Windows Firewall rule for
-the listening port.
+
+mbrc-helper.exe is optional but recommended. It is the elevated helper, used for
+two things: adding the Windows Firewall rule for the listening port, and
+installing updates the plugin downloads. Without it, "Install and restart" in the
+plugin's settings has nothing to run and updates have to be installed by hand.
 
 For Microsoft Store version of MusicBee:
 Go to MusicBee -> Edit -> Preferences -> Plugins and use the "Add Plugin" button
@@ -20,10 +23,17 @@ to install directly from the zip file.
 UNINSTALLATION
 --------------
 
-Delete mb_remote.dll from the Plugins folder.
+Close MusicBee, then delete all three files from the Plugins folder:
+
+    mb_remote.dll
+    mbrc_core.dll
+    mbrc-helper.exe
+
+Deleting only mb_remote.dll leaves the native core behind.
 
 The plugin stores its data under %APPDATA%\MusicBee\mb_remote\
-This folder can be safely deleted after uninstallation.
+This folder can be safely deleted after uninstallation. It holds the settings,
+the log, the library and cover caches, and any downloaded update.
 
 
 REQUIREMENTS
