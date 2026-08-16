@@ -2,6 +2,51 @@ Change Log
 ---------
 # Versions
 
+## 1.5.0 - unreleased
+
+The plugin's core has been rewritten in Rust. It ships as `mbrc_core.dll`
+alongside the existing `mb_remote.dll`, plus a small `mbrc-helper.exe`; the C#
+side is now a thin shim over MusicBee's API. **Nothing on the wire changed**:
+the V4 protocol is byte-identical to 1.4.1, field order included, so every
+shipped Android and iOS client keeps working untouched.
+
+### Added
+- In-plugin updates. The plugin can check for a new release, verify it against a
+  signed manifest, download it, and install it on restart. Checking is opt-in and
+  off by default - a check is an unprompted request to github.com - but the
+  Configure panel's "Check now" always works.
+- A `testing` update channel that follows pre-releases, for trying a build before
+  it ships.
+- mDNS / DNS-SD advertisement (`_mbrc._tcp`), alongside the existing custom
+  discovery, so standard tooling and the platform browsers (`NsdManager`,
+  `NWBrowser`) can find a MusicBee host.
+- A rebuilt Configure dialog: the addresses clients can reach the plugin on, cache
+  status with per-cache rebuild buttons, recently blocked connections, a log-level
+  selector, and the update controls.
+- `mbrc-helper.exe`, an elevated helper that adds the Windows firewall rule and
+  installs updates. It replaces the old firewall utility.
+
+### Changed
+- Library browsing is served from an on-disk cache and paged, instead of
+  materialising the whole library per request. Large libraries page in constant
+  memory, and the cache survives restarts when the library has not changed.
+- Album covers are cached, resized and served by the core, and refresh when tags,
+  artwork or files change rather than only on a manual invalidation.
+- Settings moved to `core_settings.json`, owned by the core. The Configure panel
+  edits them; there is no second copy.
+- Logging goes to `mbrc-core.log` with size-based rotation, and redacts what
+  should not be in a log file while keeping it readable.
+
+### Fixed
+- Library sync could intermittently fail to finish on both clients. The connection
+  layer's keepalive and reaping now match what the clients expect: broadcast
+  subscribers are pinged, handshaked sockets are never idle-reaped, and OS-level
+  TCP keepalive detects dead half-open connections.
+- Playback status no longer reports as stopped in situations where the plugin had
+  already recovered.
+- A MusicBee too old for the plugin now says so, in the plugin list and in a log
+  file, instead of loading and silently doing nothing.
+
 ## 1.4.1 - 2021/06/12
 ### Changed
 - Introduces state persistence for the cover caching mechanism to improve performance.
