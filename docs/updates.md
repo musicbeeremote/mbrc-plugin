@@ -101,6 +101,15 @@ merge over what is on disk and the panel's DTO has no `update_channel` property,
 so any setting the panel does not know keeps its value - which is what makes it
 safe for a setting to live only in the file.
 
+**Switching channels never downgrades**, in either direction, because the version
+comparison is the only thing that decides. Going stable → testing offers the
+newest release of either kind if it is newer than what is installed, and nothing
+otherwise. Going testing → stable while running a pre-release offers nothing until
+the final release overtakes it: `1.7.0-rc.2` is above `1.6.0`, so a stable channel
+with `1.6.0` as its latest has nothing newer to give. Someone who wants off a
+pre-release and back onto stable *now* reinstalls; the updater will not do it,
+and `NotAnUpgrade` refuses it even if the bundle is staged by hand.
+
 A `testing` release is cut the same way a stable one is - packaged with build
 provenance attested, its manifest signed by the release job, published with
 `--prerelease`. The signature is not optional: the updater refuses a manifest it
