@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
@@ -329,6 +330,11 @@ namespace MusicBeePlugin
         ///     are edited and persisted in the settings dialog, so there is nothing to
         ///     apply here.
         /// </summary>
+        [SuppressMessage(
+            "Performance",
+            "CA1822:Mark members as static",
+            Justification =
+                "MusicBee calls this on the plugin instance through its plugin contract; making it static breaks the entry point.")]
         public void SaveSettings()
         {
         }

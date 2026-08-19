@@ -615,7 +615,9 @@ namespace MusicBeePlugin.Ffi
 
         private static byte[] CopyParams(IntPtr buf, uint len)
         {
-            if (buf == IntPtr.Zero || len == 0) return new byte[0];
+            // Array.Empty is a shared singleton: safe here because callers only
+            // hand the result to MessagePack, which reads it and never writes.
+            if (buf == IntPtr.Zero || len == 0) return Array.Empty<byte>();
             var bytes = new byte[len];
             Marshal.Copy(buf, bytes, 0, (int)len);
             return bytes;
