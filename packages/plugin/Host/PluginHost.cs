@@ -167,9 +167,13 @@ namespace MusicBeePlugin.Host
         ///     does only the work each change needs: debug logging live, the
         ///     firewall rule host-side, and a listener reload only when the port or
         ///     address filter changed. Returns false if the core rejected them.
+        ///     <paramref name="reloaded" /> reports whether the listener was rebound,
+        ///     so the caller knows the rows describing it (reachable addresses, the
+        ///     connection test) now describe a different socket.
         /// </summary>
-        public bool ApplySettings(CoreSettings updated)
+        public bool ApplySettings(CoreSettings updated, out bool reloaded)
         {
+            reloaded = false;
             if (updated == null) return false;
 
             var current = _bridge.ReadSettings() ?? new CoreSettings();
@@ -189,7 +193,10 @@ namespace MusicBeePlugin.Host
 
             // Only a port or address-filter change needs the listener rebound.
             if (NeedsRestart(current, updated))
+            {
                 _bridge.Reload();
+                reloaded = true;
+            }
 
             return true;
         }

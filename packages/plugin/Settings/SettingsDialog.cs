@@ -658,10 +658,20 @@ namespace MusicBeePlugin.Settings
         /// <summary>Persist the edited settings to the core.</summary>
         private void Apply()
         {
-            var ok = _host.ApplySettings(Collect());
+            var ok = _host.ApplySettings(Collect(), out var reloaded);
             SetStatus(
                 ok ? "Settings saved." : "Settings were rejected - check the port and range values.",
                 ok);
+
+            // A save that rebound the listener (a new port, a changed filter) makes
+            // the two rows describing it stale: both were rendered from the socket
+            // that no longer exists. The reload finishes inside ApplySettings, so by
+            // here the core reports the new port and is already listening on it.
+            if (ok && reloaded)
+            {
+                LoadListeningAddresses();
+                RunConnectionTest();
+            }
         }
 
         private void LoadFromCore()
@@ -685,7 +695,9 @@ namespace MusicBeePlugin.Settings
         ///     Render the addresses a client can reach this server on (each
         ///     interface IPv4 + the bound port), read from the core. Shown so the
         ///     user knows what to enter in the phone app. The list reflects the
-        ///     running server, so it does not change while the dialog is open.
+        ///     running server, so it is re-read on load and after a save that
+        ///     rebinds the listener - nothing else changes it while the dialog is
+        ///     open.
         /// </summary>
         private void LoadListeningAddresses()
         {
