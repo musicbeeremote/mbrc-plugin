@@ -7,6 +7,7 @@
 
 pub mod config;
 pub mod cover;
+pub mod diagnostics;
 pub mod discovery;
 pub mod ffi;
 pub mod logging;
@@ -95,7 +96,17 @@ pub unsafe extern "C" fn mbrc_initialize(
         let config = config::Config::load(&storage_path);
         let providers: Arc<dyn Providers> =
             Arc::new(FfiProviders::new(SafeCallbacks::new(callbacks)));
-        state::initialize(providers, config) as c_int
+        let result = state::initialize(providers, config);
+        if result == MbrcResult::Ok {
+            // A capture MusicBee restarted through carries on: the log file is
+            // appended rather than truncated, so the window it recorded is still
+            // there, and a bug that only happens at startup is exactly the one
+            // worth capturing.
+            if let Some(core) = state::core_handle() {
+                diagnostics::capture::resume_after_restart(&core);
+            }
+        }
+        result as c_int
     })
 }
 

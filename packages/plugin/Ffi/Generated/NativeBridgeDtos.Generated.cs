@@ -299,4 +299,25 @@ namespace MusicBeePlugin.Ffi
         public List<string> addresses { get; set; }
     }
 
+    public class CaptureStatus
+    {
+        public string state { get; set; }
+        public long started_unix_ms { get; set; }
+        public int seconds_remaining { get; set; }
+        public string bundle_path { get; set; }
+        public string message { get; set; }
+    }
+
+    public class CaptureRequest
+    {
+        public string destination_dir { get; set; }
+        public List<CaptureEnvEntry> host_environment { get; set; }
+    }
+
+    public class CaptureEnvEntry
+    {
+        public string key { get; set; }
+        public string value { get; set; }
+    }
+
 }

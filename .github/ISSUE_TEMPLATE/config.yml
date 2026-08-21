@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setup help
+    url: https://discordapp.com/invite/rceTb57
+    about: Not sure whether it is a bug? Ask on Discord - it is usually faster than an issue.
+  - name: Help pages
+    url: https://mbrc.kelsos.net/help/
+    about: Installing the plugin, connecting a phone, and what the settings do.
+  - name: MusicBee forum thread
+    url: http://getmusicbee.com/forum/index.php?topic=7221.new;topicseen#new
+    about: The long-running thread on the MusicBee forum.

@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest something the plugin should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tracker is for the **MusicBee plugin** (the Windows half). Requests for
+        the Android or iOS apps belong on their own repositories.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: |
+        The problem rather than the solution. Knowing what you are actually trying to
+        achieve often turns up a better answer than the one being asked for.
+      placeholder: |
+        I keep two libraries and switch between them, and I have to reconnect the
+        phone by hand every time.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you have tried already?
+      description: Workarounds you use today, or other approaches you considered.

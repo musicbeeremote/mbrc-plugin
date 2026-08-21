@@ -18,9 +18,9 @@
         ·
         <a href="http://getmusicbee.com/forum/index.php?topic=7221.new;topicseen#new">MusicBee Forum</a>
         ·
-        <a href="https://github.com/musicbeeremote/mbrc-plugin/issues">Report Bug</a>
+        <a href="https://github.com/musicbeeremote/mbrc-plugin/issues/new?template=bug.yml">Report Bug</a>
         ·
-        <a href="https://github.com/musicbeeremote/mbrc-plugin/issues">Request Feature</a>
+        <a href="https://github.com/musicbeeremote/mbrc-plugin/issues/new?template=feature.yml">Request Feature</a>
     </p>
 </p>
 
@@ -30,6 +30,7 @@
   * [Built With](#built-with)
   * [Project Structure](#project-structure)
   * [Documentation](#documentation)
+* [Reporting a Problem](#reporting-a-problem)
 * [Installation](#installation)
 * [Getting Started](#getting-started)
   * [Prerequisites](#prerequisites)
@@ -101,6 +102,18 @@ side-by-side with it.
   and both discovery mechanisms (custom UDP multicast and mDNS / DNS-SD)
 * [`docs/updates.md`](docs/updates.md) - the update mechanism end to end: the
   signed manifest, the channels, staging, and the elevated helper
+* [`docs/troubleshooting.md`](docs/troubleshooting.md) - where the logs live, how
+  to capture a problem, and what the diagnostics file contains
+
+## Reporting a problem
+
+Open the Configure window, press **Start capture** in the Diagnostics group,
+reproduce the problem, then press **Stop and save**. Attach the zip that lands on
+your Desktop to a
+[bug report](https://github.com/musicbeeremote/mbrc-plugin/issues/new?template=bug.yml).
+It carries the versions, settings and detailed log a report needs, so nobody has
+to ask you for them. [`docs/troubleshooting.md`](docs/troubleshooting.md) lists
+exactly what is in it and what is redacted.
 
 ## Installation
 

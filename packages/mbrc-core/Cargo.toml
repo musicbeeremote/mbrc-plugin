@@ -38,6 +38,12 @@ tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so
 # i686-msvc cross-compiles with no C/zlib toolchain.
 flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"] }
+# Writing the diagnostics bundle. Same version and features mbrc-release already
+# pins for reading update zips, so this adds no crate to the graph: mbrc-core
+# takes mbrc-release with `client`, which already compiles zip in. `deflate-flate2`
+# rides on the pure-Rust miniz_oxide above, so i686-msvc stays free of a C
+# toolchain.
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),

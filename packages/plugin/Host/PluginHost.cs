@@ -151,6 +151,27 @@ namespace MusicBeePlugin.Host
         public IntPtr MusicBeeWindow => _api.MB_GetWindowHandle();
 
         /// <summary>
+        ///     MusicBee's plugin-API revision, for the diagnostics report. The
+        ///     core cannot see it - it only ever talks to this shim.
+        /// </summary>
+        public short ApiRevision => _api.ApiRevision;
+
+        /// <summary>Where the diagnostics capture stands, for the panel.</summary>
+        public CaptureStatus ReadCaptureStatus() => _bridge.ReadCaptureStatus();
+
+        /// <summary>
+        ///     Begin a diagnostics capture. <paramref name="environment" /> is the
+        ///     host-only half of the report (MusicBee build, Windows, CLR).
+        /// </summary>
+        public bool StartCapture(List<CaptureEnvEntry> environment) => _bridge.StartCapture(environment);
+
+        /// <summary>End the capture and write the bundle into <paramref name="destinationDir" />.</summary>
+        public bool StopCapture(string destinationDir) => _bridge.StopCapture(destinationDir);
+
+        /// <summary>Abandon the capture without writing a bundle.</summary>
+        public bool CancelCapture() => _bridge.CancelCapture();
+
+        /// <summary>
         ///     Core -> host push events (raised on a background thread). The
         ///     settings panel subscribes to refresh its cache line when a rebuild
         ///     starts/finishes. Forwarded from the native bridge.

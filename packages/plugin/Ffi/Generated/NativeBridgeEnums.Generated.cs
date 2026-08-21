@@ -120,6 +120,7 @@ namespace MusicBeePlugin.Ffi.Generated
         RecentBlocked = 2,
         ListeningAddresses = 3,
         UpdateStatus = 4,
+        CaptureStatus = 5,
     }
 
     public enum HostCommandType
@@ -130,12 +131,16 @@ namespace MusicBeePlugin.Ffi.Generated
         CheckForUpdate = 4,
         DownloadUpdate = 5,
         SkipUpdate = 6,
+        StartCapture = 7,
+        StopCapture = 8,
+        CancelCapture = 9,
     }
 
     public enum HostEventType
     {
         CacheStatusChanged = 1,
         UpdateStatusChanged = 2,
+        CaptureStatusChanged = 3,
     }
 
 }

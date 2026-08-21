@@ -201,3 +201,56 @@ pub struct ListeningInfo {
     /// dropped. Empty when the host has no reachable non-loopback interface.
     pub addresses: Vec<String>,
 }
+
+/// Where the diagnostics capture stands, surfaced to the settings panel's
+/// Diagnostics group (result of the `CaptureStatus` host query). A Rust -> C#
+/// *result*. The state machine that produces it, and the `CAPTURE_*` spellings
+/// `state` carries, live in [`crate::diagnostics::capture`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptureStatus {
+    /// One of the `CAPTURE_*` constants: `idle`, `capturing`, `writing`,
+    /// `done`, `error`.
+    pub state: String,
+    /// When the running capture began, Unix epoch milliseconds (UTC), or 0 when
+    /// none is running. C# renders it in local time.
+    pub started_unix_ms: i64,
+    /// Seconds left before the safety auto-stop ends a running capture; 0 when
+    /// none is running. The panel counts the user down rather than letting a
+    /// forgotten capture sit at debug level.
+    pub seconds_remaining: i32,
+    /// The last bundle written (full path), so the panel can name the file it
+    /// just produced. Empty until one has been.
+    pub bundle_path: String,
+    /// Why the capture failed. Empty otherwise - a status line that only ever
+    /// carries errors is one the panel can render without interpreting it.
+    pub message: String,
+}
+
+/// What the host passes with a capture command (`StartCapture` / `StopCapture`).
+/// A C# -> Rust *params* payload; both fields are optional in the sense that the
+/// command that does not need one sends it empty.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CaptureRequest {
+    /// Where `StopCapture` writes the zip. The host resolves it (the CLR's
+    /// known-folder lookup handles a redirected Desktop; `%USERPROFILE%\Desktop`
+    /// does not), and the core writes straight to a file there rather than
+    /// handing a multi-megabyte buffer back across the FFI boundary in a 32-bit
+    /// process.
+    #[serde(default)]
+    pub destination_dir: String,
+    /// What only the host can see, recorded verbatim in the report: MusicBee's
+    /// build number, the Windows version, and the CLR version. Free-form
+    /// key/value pairs so adding one never needs an ABI change.
+    #[serde(default)]
+    pub host_environment: Vec<CaptureEnvEntry>,
+}
+
+/// One host-supplied environment fact for the report (see
+/// [`CaptureRequest::host_environment`]).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CaptureEnvEntry {
+    /// The fact's name, e.g. `musicbee_build`.
+    pub key: String,
+    /// Its value, already rendered as text by the host.
+    pub value: String,
+}

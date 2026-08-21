@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Ffi.Generated;
 using MusicBeePlugin.Host;
 
@@ -49,11 +50,13 @@ namespace MusicBeePlugin.Settings
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
 
         // The dialog's fixed width, and the height it wants when the screen has
-        // room. Six groups plus the footer do not fit a 720p screen (or a 1080p
+        // room. Seven groups plus the footer do not fit a 720p screen (or a 1080p
         // one at 150% scaling, which is the same thing in logical pixels), so the
-        // height is what actually gets clamped - see PreferredDialogHeight.
+        // height is what actually gets clamped - see PreferredDialogHeight. The
+        // full-height value is what a 1080p screen can give once the taskbar and
+        // chrome are taken off; anything shorter scrolls.
         private const int DialogWidth = 560;
-        private const int DialogHeight = 780;
+        private const int DialogHeight = 860;
 
         // Usable width of a group's value column: the dialog's client width less
         // the 140px label column and the layout's padding. Wrapping labels are
@@ -97,6 +100,12 @@ namespace MusicBeePlugin.Settings
         private Button _updateSkip;
         private LinkLabel _releaseNotes;
         private CheckBox _autoCheck;
+        private Label _captureStatus;
+        private Button _captureStart;
+        private Button _captureStop;
+        private Button _captureCancel;
+        private string _captureState = CaptureStates.Idle;
+        private string _bundlePath = string.Empty;
         private string _updateState = UpdateStates.Unknown;
         private string _notesUrl = string.Empty;
 
@@ -126,6 +135,7 @@ namespace MusicBeePlugin.Settings
             LoadCacheStatus();
             LoadBlockedCount();
             LoadUpdateStatus();
+            LoadCaptureStatus();
             RunConnectionTest();
 
             // The core pushes CacheStatusChanged when a rebuild starts or
@@ -133,11 +143,17 @@ namespace MusicBeePlugin.Settings
             // refresh those lines live while this dialog is open.
             _host.CoreEvent += OnCoreEvent;
 
-            // The blocked-connections log has no push event (it is polled), so keep
-            // the count button current while this panel is open: a device blocked
-            // during troubleshooting bumps the number without reopening.
+            // Two things need polling rather than an event. The blocked-connections
+            // log has no push event at all, so a device blocked during
+            // troubleshooting bumps the count without reopening the panel. And a
+            // running capture's countdown ticks on its own - the core only raises
+            // an event when the capture *changes* state, not once a second.
             _blockedTimer = new System.Windows.Forms.Timer { Interval = 3000 };
-            _blockedTimer.Tick += (s, e) => LoadBlockedCount();
+            _blockedTimer.Tick += (s, e) =>
+            {
+                LoadBlockedCount();
+                if (_captureState == CaptureStates.Capturing) LoadCaptureStatus();
+            };
             _blockedTimer.Start();
         }
 
@@ -203,6 +219,7 @@ namespace MusicBeePlugin.Settings
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // advanced
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // cache
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // updates
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // diagnostics
 
             // No title label: the window title bar already reads "MusicBee Remote";
             // the version sits bottom-left in the button row instead.
@@ -212,6 +229,7 @@ namespace MusicBeePlugin.Settings
             root.Controls.Add(BuildAdvancedGroup());
             root.Controls.Add(BuildCacheGroup());
             root.Controls.Add(BuildUpdatesGroup());
+            root.Controls.Add(BuildDiagnosticsGroup());
             // No trailing spacer row: a Percent-100 row would absorb every
             // overflow and the scroller below would never see one.
 
@@ -515,6 +533,64 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Updates", layout);
         }
 
+        // The Diagnostics group: Start capture -> reproduce the problem -> Stop
+        // capture, which leaves one zip on the Desktop to attach to an issue.
+        // Structurally the Cache group with a countdown: a wrapping grey status
+        // line over a row of buttons.
+        private Control BuildDiagnosticsGroup()
+        {
+            _captureStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 6, 0, 0),
+                ForeColor = SystemColors.GrayText,
+                MaximumSize = new Size(StatusWidth, 0),
+            };
+            _captureStart = new Button
+            {
+                Text = "Start capture",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 8, 0),
+            };
+            _captureStart.Click += (s, e) => StartCapture();
+            _captureStop = new Button
+            {
+                Text = "Stop and save",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 8, 0),
+            };
+            _captureStop.Click += (s, e) => StopCapture();
+            _captureCancel = new Button
+            {
+                Text = "Cancel",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0),
+            };
+            _captureCancel.Click += (s, e) => CancelCapture();
+
+            var buttons = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0),
+            };
+            buttons.Controls.Add(_captureStart);
+            buttons.Controls.Add(_captureStop);
+            buttons.Controls.Add(_captureCancel);
+
+            var layout = GroupLayout();
+            AddRow(layout, "Status", _captureStatus);
+            AddRow(layout, string.Empty, buttons);
+            return WrapGroup("Diagnostics", layout);
+        }
+
         private Control BuildButtonRow()
         {
             // Bottom-left: the version (the title bar already names the plugin), a
@@ -624,6 +700,204 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>Open the log folder (mbrc-core.log + bootstrap) in Explorer.</summary>
+        // Render whatever the core says the capture is doing. The single source
+        // of truth is the core's status - this method never infers state from
+        // which button was pressed, so a capture started before this dialog was
+        // opened (or resumed across a MusicBee restart) renders correctly.
+        private void LoadCaptureStatus()
+        {
+            var status = _host.ReadCaptureStatus();
+            var previous = _captureState;
+            _captureState = status?.state ?? CaptureStates.Idle;
+            _bundlePath = status?.bundle_path ?? string.Empty;
+
+            var capturing = _captureState == CaptureStates.Capturing;
+            var writing = _captureState == CaptureStates.Writing;
+            _captureStart.Enabled = !capturing && !writing;
+            _captureStop.Enabled = capturing;
+            _captureCancel.Enabled = capturing;
+            _captureStatus.Text = DescribeCapture(status);
+            _captureStatus.ForeColor = _captureState == CaptureStates.Error
+                ? Color.Firebrick
+                : SystemColors.GrayText;
+
+            // Only on the Writing -> Done transition, which is a bundle that
+            // finished while this dialog was watching. Testing "was not Done"
+            // instead would fire on the first read of every dialog opened later
+            // in the session: the core's state stays Done, but a fresh dialog's
+            // field starts at Idle, so reopening Configure would pop an Explorer
+            // window at the old bundle every time.
+            if (previous == CaptureStates.Writing && _captureState == CaptureStates.Done) RevealBundle();
+        }
+
+        private string DescribeCapture(CaptureStatus status)
+        {
+            if (status == null)
+                return "Diagnostics are unavailable - the core is not running.";
+
+            switch (status.state)
+            {
+                case CaptureStates.Capturing:
+                    var minutes = Math.Max(1, status.seconds_remaining / 60);
+                    return "Capturing since " + FormatUnixMs(status.started_unix_ms)
+                        + ". Reproduce the problem, then press Stop and save. Stops on its own in "
+                        + minutes.ToString(CultureInfo.InvariantCulture) + " min.";
+                case CaptureStates.Writing:
+                    return "Writing the diagnostics file...";
+                case CaptureStates.Done:
+                    // Named from the path the core actually wrote, not from where
+                    // it was asked to: StopCapture falls back to the log folder
+                    // when there is no Desktop to resolve, and pointing the user
+                    // at the wrong folder is worse than naming a longer one.
+                    return "Saved " + Path.GetFileName(status.bundle_path)
+                        + " to " + DescribeFolder(status.bundle_path)
+                        + ". Attach it to a bug report.";
+                case CaptureStates.Expired:
+                case CaptureStates.Error:
+                    return status.message;
+                default:
+                    return "Start a capture, reproduce the problem, then stop it: the plugin saves one "
+                        + "file to your Desktop with the detail a bug report needs.";
+            }
+        }
+
+        // "your Desktop" when that is where it went, otherwise the folder name.
+        private static string DescribeFolder(string bundlePath)
+        {
+            try
+            {
+                var folder = Path.GetDirectoryName(bundlePath);
+                if (string.IsNullOrEmpty(folder)) return "your Desktop";
+                var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                return string.Equals(folder.TrimEnd('\\'), (desktop ?? string.Empty).TrimEnd('\\'),
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "your Desktop"
+                    : folder;
+            }
+            catch (ArgumentException)
+            {
+                return "your Desktop";
+            }
+        }
+
+        // Local time; the core records UTC epoch milliseconds.
+        private static string FormatUnixMs(long unixMs)
+        {
+            if (unixMs <= 0) return "an unknown time";
+            try
+            {
+                return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                    .AddMilliseconds(unixMs)
+                    .ToLocalTime()
+                    .ToString("t", CultureInfo.CurrentCulture);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return "an unknown time";
+            }
+        }
+
+        // The consent point. A capture raises the log level and the file it
+        // produces carries the user's folder paths and LAN addresses, so say so
+        // before either happens rather than in a doc they will not read.
+        private void StartCapture()
+        {
+            var confirm = MessageBox.Show(
+                this,
+                "While a capture runs the plugin logs in more detail, then saves one file to your "
+                + "Desktop when you stop it.\r\n\r\nThat file contains your settings, your music "
+                + "folder paths and this PC's local network addresses - not your password for "
+                + "anything. Look inside it before sending it anywhere.\r\n\r\n"
+                + "The capture stops on its own after 30 minutes.",
+                "MusicBee Remote",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Information);
+            if (confirm != DialogResult.OK) return;
+
+            if (!_host.StartCapture(HostEnvironment()))
+            {
+                // The command channel only reports pass/fail, so "already
+                // running" has to be read back rather than assumed - the same
+                // false covers a core that is not running at all, and telling
+                // someone a capture is in progress while they are trying to
+                // report that the plugin will not start is the wrong answer.
+                var running = _host.ReadCaptureStatus()?.state == CaptureStates.Capturing;
+                SetStatus(running
+                    ? "A capture is already running."
+                    : "Could not start a capture - see mbrc-core.log.", false);
+                LoadCaptureStatus();
+                return;
+            }
+            LoadCaptureStatus();
+        }
+
+        // The bundle lands on the Desktop. Resolved here rather than in the core
+        // because a OneDrive-redirected Desktop is something only the CLR's
+        // known-folder lookup gets right; %USERPROFILE%\Desktop does not.
+        private void StopCapture()
+        {
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (string.IsNullOrEmpty(desktop))
+            {
+                // No Desktop to write to (a locked-down or redirected profile);
+                // the log folder is somewhere we know exists.
+                desktop = _host.LogDirectory;
+            }
+            if (!_host.StopCapture(desktop))
+            {
+                SetStatus("There was no capture to stop.", false);
+            }
+            LoadCaptureStatus();
+        }
+
+        private void CancelCapture()
+        {
+            _host.CancelCapture();
+            LoadCaptureStatus();
+        }
+
+        // What the core cannot see for itself: it only ever talks to this shim,
+        // so MusicBee's own version, Windows and the CLR have to be handed over.
+        private List<CaptureEnvEntry> HostEnvironment()
+        {
+            var entries = new List<CaptureEnvEntry>();
+            Action<string, string> add = (key, value) =>
+                entries.Add(new CaptureEnvEntry { key = key, value = value ?? string.Empty });
+
+            add("plugin_version", _version);
+            add("musicbee_build", MusicBeeBuild().ToString(CultureInfo.InvariantCulture));
+            add("musicbee_api_revision", _host.ApiRevision.ToString(CultureInfo.InvariantCulture));
+            try
+            {
+                add("os", Environment.OSVersion.VersionString);
+                add("os_64bit", Environment.Is64BitOperatingSystem.ToString());
+                add("clr", Environment.Version.ToString());
+            }
+            catch (Exception)
+            {
+                // A report missing a line is still a report worth having.
+            }
+            return entries;
+        }
+
+        // Show the finished bundle rather than just naming it: the user's next
+        // move is to attach it to something, and they have to find it first.
+        private void RevealBundle()
+        {
+            if (string.IsNullOrEmpty(_bundlePath) || !File.Exists(_bundlePath)) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + _bundlePath + "\"")
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception)
+            {
+                // Explorer refused; the status line still names the file.
+            }
+        }
+
         private void OpenLogFolder()
         {
             try
@@ -1144,6 +1418,9 @@ namespace MusicBeePlugin.Settings
                     break;
                 case HostEventType.UpdateStatusChanged:
                     refresh = LoadUpdateStatus;
+                    break;
+                case HostEventType.CaptureStatusChanged:
+                    refresh = LoadCaptureStatus;
                     break;
                 default:
                     return;

@@ -25,6 +25,13 @@ shipped Android and iOS client keeps working untouched.
   selector, and the update controls.
 - `mbrc-helper.exe`, an elevated helper that adds the Windows firewall rule and
   installs updates. It replaces the old firewall utility.
+- A diagnostics capture in the Configure panel. Start it, reproduce a problem,
+  stop it, and the plugin saves one zip to the Desktop with a detailed log of
+  just that window plus the versions, settings and cache health a bug report
+  needs. It raises the log level only for the duration, stops itself after 30
+  minutes, and survives a MusicBee restart so a startup problem can be caught.
+  Proxy credentials are masked and the allowed-address list is left out; nothing
+  is uploaded anywhere. See `docs/troubleshooting.md`.
 
 ### Changed
 - Library browsing is served from an on-disk cache and paged, instead of

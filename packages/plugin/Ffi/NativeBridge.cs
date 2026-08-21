@@ -445,6 +445,46 @@ namespace MusicBeePlugin.Ffi
         public bool SkipUpdate() => Command(HostCommandType.SkipUpdate);
 
         /// <summary>
+        ///     Where the diagnostics capture stands, for the settings panel's
+        ///     Diagnostics group. Answers even before the core is initialized (the
+        ///     capture state is the core's own, not the running core's), so the
+        ///     panel always has something to render.
+        /// </summary>
+        public CaptureStatus ReadCaptureStatus() => Query<CaptureStatus>(HostQueryType.CaptureStatus);
+
+        /// <summary>
+        ///     Begin a diagnostics capture: the core raises its log level for the
+        ///     session only and starts the window the bundle will be sliced to.
+        ///     <paramref name="environment" /> carries what the core cannot see
+        ///     for itself (MusicBee build, Windows version, CLR version). False if
+        ///     a capture is already running.
+        /// </summary>
+        public bool StartCapture(List<CaptureEnvEntry> environment) =>
+            Command(HostCommandType.StartCapture, Msgpack.Serialize(new CaptureRequest
+            {
+                destination_dir = string.Empty,
+                host_environment = environment ?? new List<CaptureEnvEntry>()
+            }));
+
+        /// <summary>
+        ///     End the capture and write the bundle into
+        ///     <paramref name="destinationDir" />. The host resolves the folder
+        ///     because a redirected Desktop is something only the CLR's known-folder
+        ///     lookup gets right. The write happens in the background; the result
+        ///     arrives as an <see cref="HostEventType.CaptureStatusChanged" /> event
+        ///     with the path in <see cref="CaptureStatus.bundle_path" />.
+        /// </summary>
+        public bool StopCapture(string destinationDir) =>
+            Command(HostCommandType.StopCapture, Msgpack.Serialize(new CaptureRequest
+            {
+                destination_dir = destinationDir ?? string.Empty,
+                host_environment = new List<CaptureEnvEntry>()
+            }));
+
+        /// <summary>Abandon the capture: restore the log level and write nothing.</summary>
+        public bool CancelCapture() => Command(HostCommandType.CancelCapture);
+
+        /// <summary>
         ///     Apply the log level to the core's filter live (no restart needed).
         ///     <paramref name="logLevel"/> is the settings value (<c>info</c> /
         ///     <c>debug</c> / <c>trace</c>), mapped to a tracing filter directive.

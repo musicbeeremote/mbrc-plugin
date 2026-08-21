@@ -106,7 +106,7 @@ impl RotatingWriter {
         if let Some(mut f) = inner.file.take() {
             let _ = f.flush();
         }
-        let gz = |n: u32| self.path.with_file_name(format!("mbrc-core.{n}.log.gz"));
+        let gz = |n: u32| self.path.with_file_name(rolled_log_name(n));
         let _ = std::fs::remove_file(gz(KEEP_GENERATIONS));
         for n in (1..KEEP_GENERATIONS).rev() {
             let _ = std::fs::rename(gz(n), gz(n + 1));
@@ -129,6 +129,37 @@ impl RotatingWriter {
             .ok();
         inner.written = 0;
     }
+}
+
+/// Filename of rolled generation `n`. Shared by the rotation itself and by the
+/// diagnostics bundle, so the two can never disagree about what to look for.
+pub(crate) fn rolled_log_name(n: u32) -> String {
+    format!("mbrc-core.{n}.log.gz")
+}
+
+/// Path of the active core log inside `storage`.
+pub(crate) fn active_log_path(storage: &str) -> PathBuf {
+    Path::new(storage).join(LOG_FILE)
+}
+
+/// Every core log file present in `storage`, newest first: the active file, then
+/// the gzipped generations that still exist. What the diagnostics bundle
+/// collects; missing files are simply absent rather than an error, since a fresh
+/// install has rolled nothing yet.
+pub(crate) fn log_files(storage: &str) -> Vec<PathBuf> {
+    let dir = Path::new(storage);
+    let mut files = Vec::new();
+    let active = dir.join(LOG_FILE);
+    if active.is_file() {
+        files.push(active);
+    }
+    for n in 1..=KEEP_GENERATIONS {
+        let rolled = dir.join(rolled_log_name(n));
+        if rolled.is_file() {
+            files.push(rolled);
+        }
+    }
+    files
 }
 
 /// gzip `src` into `dst` (streamed, so a large rolled file never loads fully).

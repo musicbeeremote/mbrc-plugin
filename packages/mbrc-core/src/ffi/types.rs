@@ -233,6 +233,10 @@ pub enum HostQueryType {
     /// Updates group. Returns a MessagePack `UpdateStatus`. Always answers, even
     /// before a check has ever run.
     UpdateStatus = 4,
+    /// Where the diagnostics capture stands (idle / capturing / writing / done /
+    /// error), for the panel's Diagnostics group. Returns a MessagePack
+    /// `CaptureStatus`. Always answers, even when nothing has ever been captured.
+    CaptureStatus = 5,
 }
 
 impl HostQueryType {
@@ -242,6 +246,7 @@ impl HostQueryType {
             2 => Some(Self::RecentBlocked),
             3 => Some(Self::ListeningAddresses),
             4 => Some(Self::UpdateStatus),
+            5 => Some(Self::CaptureStatus),
             _ => None,
         }
     }
@@ -275,6 +280,20 @@ pub enum HostCommandType {
     /// Record that the user does not want to be offered the currently available
     /// version again.
     SkipUpdate = 6,
+    /// Begin a diagnostics capture: raise the log level to debug for the
+    /// session only and start a window the bundle will slice out of the log.
+    /// The params are a MessagePack [`crate::ffi::dtos::CaptureRequest`] whose
+    /// `host_environment` carries what the core cannot see (MusicBee build, OS,
+    /// CLR). Rejected while a capture is already running.
+    StartCapture = 7,
+    /// End the capture and write the bundle. The params are a MessagePack
+    /// [`crate::ffi::dtos::CaptureRequest`] whose `destination_dir` says where
+    /// the zip goes - the host resolves it, since a redirected Desktop is
+    /// something only the CLR's known-folder lookup gets right. The resulting
+    /// path lands in [`HostQueryType::CaptureStatus`].
+    StopCapture = 8,
+    /// Abandon the capture: restore the log level and write nothing.
+    CancelCapture = 9,
 }
 
 impl HostCommandType {
@@ -286,6 +305,9 @@ impl HostCommandType {
             4 => Some(Self::CheckForUpdate),
             5 => Some(Self::DownloadUpdate),
             6 => Some(Self::SkipUpdate),
+            7 => Some(Self::StartCapture),
+            8 => Some(Self::StopCapture),
+            9 => Some(Self::CancelCapture),
             _ => None,
         }
     }
@@ -308,6 +330,10 @@ pub enum HostEventType {
     /// panel should re-query [`HostQueryType::UpdateStatus`]. Raised from the
     /// background job's own thread, so the host marshals before touching UI.
     UpdateStatusChanged = 2,
+    /// A diagnostics capture started, finished, failed, or hit its safety
+    /// auto-stop; the panel should re-query [`HostQueryType::CaptureStatus`].
+    /// The auto-stop fires from a timer thread, so the host marshals first.
+    CaptureStatusChanged = 3,
 }
 
 /// Callback table handed from C# to Rust at `mbrc_initialize`.
@@ -406,8 +432,12 @@ mod tests {
             HostQueryType::from_i32(4),
             Some(HostQueryType::UpdateStatus)
         );
+        assert_eq!(
+            HostQueryType::from_i32(5),
+            Some(HostQueryType::CaptureStatus)
+        );
         assert_eq!(HostQueryType::from_i32(0), None);
-        assert_eq!(HostQueryType::from_i32(5), None);
+        assert_eq!(HostQueryType::from_i32(6), None);
         assert_eq!(
             HostCommandType::from_i32(1),
             Some(HostCommandType::RebuildMetadata)
@@ -432,10 +462,23 @@ mod tests {
             HostCommandType::from_i32(6),
             Some(HostCommandType::SkipUpdate)
         );
-        assert_eq!(HostCommandType::from_i32(7), None);
+        assert_eq!(
+            HostCommandType::from_i32(7),
+            Some(HostCommandType::StartCapture)
+        );
+        assert_eq!(
+            HostCommandType::from_i32(8),
+            Some(HostCommandType::StopCapture)
+        );
+        assert_eq!(
+            HostCommandType::from_i32(9),
+            Some(HostCommandType::CancelCapture)
+        );
+        assert_eq!(HostCommandType::from_i32(10), None);
         // HostEventType is core -> host (no from_i32), but its contract value is
         // still pinned so the C# enum stays in sync.
         assert_eq!(HostEventType::CacheStatusChanged as i32, 1);
         assert_eq!(HostEventType::UpdateStatusChanged as i32, 2);
+        assert_eq!(HostEventType::CaptureStatusChanged as i32, 3);
     }
 }

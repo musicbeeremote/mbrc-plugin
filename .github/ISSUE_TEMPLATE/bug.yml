@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in the MusicBee plugin does not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Before you start, please capture the problem.** In MusicBee, open
+        `Preferences > Plugins > MusicBee Remote > Configure`, find the
+        **Diagnostics** group and press **Start capture**. Reproduce the problem,
+        then press **Stop and save**. A `mbrc-diagnostics-*.zip` appears on your
+        Desktop and Explorer opens with it selected.
+
+        That file carries your plugin and MusicBee versions, your settings, cache
+        health and a detailed log of exactly what went wrong, so nobody has to ask
+        you for any of it. It does **not** contain passwords. It does contain your
+        music folder paths and this PC's local network addresses - open it and look
+        before you attach it. See
+        [docs/troubleshooting.md](https://github.com/musicbeeremote/mbrc-plugin/blob/main/docs/troubleshooting.md)
+        for exactly what is in it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+      placeholder: |
+        The Android app finds my PC, but the library sync stops at about 300 tracks
+        and never finishes. I expected it to sync all 12,000.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, in order. If it only happens sometimes, say how often.
+      placeholder: |
+        1. Open the Android app with the plugin already running
+        2. Pull to refresh the library
+        3. Watch the progress bar stop around 300 tracks
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: |
+        Attach the zip by dragging it into the "What happened?" box above. Without
+        it, the first reply is almost always going to be a request for one.
+      options:
+        - label: I have attached a diagnostics zip (Configure > Diagnostics > Start capture)
+        - label: I could not produce one, and I have said why below
+
+  - type: input
+    id: client
+    attributes:
+      label: Which app, and which version?
+      description: The Android or iOS app version, from its own settings screen.
+      placeholder: Android 1.6.1
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: |
+        Shown at the bottom-left of the Configure window. Skip this if you attached a
+        diagnostics zip - it is already in there.
+      placeholder: 1.5.0-beta.2
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else?
+      description: Screenshots, when it started, anything that changed on your PC around then.

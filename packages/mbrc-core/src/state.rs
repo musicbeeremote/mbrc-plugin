@@ -209,6 +209,16 @@ pub fn apply_staged_update() -> Option<crate::ffi::types::UpdateLaunch> {
     Some(crate::updates::elevate::launch(&storage, &current))
 }
 
+/// The initialized core, or `None` before init / after shutdown.
+///
+/// For background work that outlives the call that started it and needs the core
+/// itself rather than just a yes/no - the capture watchdog restoring the log
+/// level, for instance. Cloning the `Arc` out under the lock keeps the caller
+/// from holding the global mutex while it works.
+pub fn core_handle() -> Option<Arc<Core>> {
+    lock().as_ref().map(|state| state.core.clone())
+}
+
 /// Whether a core is currently initialized.
 ///
 /// For background work that outlives the call that started it: the C# callback
@@ -275,12 +285,15 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
         HostQueryType::RecentBlocked => recent_blocked_bytes(),
         HostQueryType::ListeningAddresses => listening_info_bytes(),
         HostQueryType::UpdateStatus => update_status_bytes(),
+        // Answers without the core, so a panel opened before init still renders
+        // a Diagnostics group instead of a blank one.
+        HostQueryType::CaptureStatus => crate::diagnostics::capture::status_bytes(),
     }
 }
 
 /// Dispatch a host -> core command (fire-and-forget). The generic entry point
 /// for the C# host's app-level actions; add a [`HostCommandType`] variant + arm.
-pub fn host_command(kind: HostCommandType, _params: &[u8]) -> MbrcResult {
+pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
     match kind {
         HostCommandType::RebuildMetadata => rebuild(RebuildScope::Metadata),
         HostCommandType::RebuildCovers => rebuild(RebuildScope::Covers),
@@ -294,7 +307,33 @@ pub fn host_command(kind: HostCommandType, _params: &[u8]) -> MbrcResult {
         HostCommandType::SkipUpdate => {
             with_core(|core| crate::updates::service::skip_available(&core))
         }
+        HostCommandType::StartCapture => match capture_request(params) {
+            Ok(request) => with_core(|core| crate::diagnostics::capture::start(&core, request)),
+            Err(error) => {
+                tracing::warn!(error = %error, "ignoring a malformed capture request");
+                MbrcResult::InvalidArgument
+            }
+        },
+        HostCommandType::StopCapture => match capture_request(params) {
+            Ok(request) => with_core(|core| crate::diagnostics::capture::stop(core, &request)),
+            Err(error) => {
+                tracing::warn!(error = %error, "ignoring a malformed capture request");
+                MbrcResult::InvalidArgument
+            }
+        },
+        HostCommandType::CancelCapture => {
+            with_core(|core| crate::diagnostics::capture::cancel(&core))
+        }
     }
+}
+
+/// Decode a capture command's params. An empty payload is a valid request with
+/// nothing in it (`CancelCapture` sends one), so it is not an error.
+fn capture_request(params: &[u8]) -> Result<crate::ffi::dtos::CaptureRequest, String> {
+    if params.is_empty() {
+        return Ok(crate::ffi::dtos::CaptureRequest::default());
+    }
+    rmp_serde::from_slice(params).map_err(|e| e.to_string())
 }
 
 /// Run `action` against the initialized core, or report `NotInitialized`. The
