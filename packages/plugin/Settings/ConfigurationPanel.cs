@@ -11,6 +11,9 @@ namespace MusicBeePlugin.Settings
     ///     plugin's) that opens the separate <see cref="SettingsDialog"/> - also
     ///     reachable from the Tools menu. Keeping the panel to a single button
     ///     avoids MusicBee's Save/Apply owning our form.
+    ///
+    ///     The window itself is opened through <see cref="SettingsWindow"/>, which
+    ///     owns the single modeless instance shared with the Tools menu entry.
     /// </summary>
     internal sealed class ConfigurationPanel
     {
@@ -37,21 +40,20 @@ namespace MusicBeePlugin.Settings
                 Location = new Point(0, 2),
                 Margin = new Padding(0),
             };
-            configure.Click += (s, e) => OpenDialog(parent);
+            configure.Click += (s, e) => OpenDialog();
             parent.Controls.Add(configure);
         }
 
-        /// <summary>Open the settings dialog modally, parented to the panel's window.</summary>
-        private void OpenDialog(Control parent)
+        /// <summary>
+        ///     Open the settings window, or raise the one already open.
+        ///
+        ///     Modeless, through the same single-instance owner the Tools menu
+        ///     entry uses: opening settings must not freeze MusicBee behind it,
+        ///     and clicking Configure twice must not stack two windows.
+        /// </summary>
+        private void OpenDialog()
         {
-            using (var dialog = new SettingsDialog(_host, _version))
-            {
-                var owner = parent.FindForm();
-                if (owner != null)
-                    dialog.ShowDialog(owner);
-                else
-                    dialog.ShowDialog();
-            }
+            SettingsWindow.Open(_host, _version);
         }
     }
 }

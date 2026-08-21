@@ -122,7 +122,10 @@ namespace MusicBeePlugin.Settings
 
             Text = "MusicBee Remote";
             FormBorderStyle = FormBorderStyle.FixedDialog;
-            StartPosition = FormStartPosition.CenterParent;
+            // CenterScreen, not CenterParent: the latter only positions a window
+            // shown with ShowDialog, and this one is modeless. CenterParent here
+            // would silently degrade to "wherever Windows feels like".
+            StartPosition = FormStartPosition.CenterScreen;
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
@@ -630,7 +633,12 @@ namespace MusicBeePlugin.Settings
             var save = new Button { Text = "Save", Width = 90, Margin = new Padding(6, 0, 0, 0) };
             save.Click += (s, e) => Apply();
 
-            var close = new Button { Text = "Close", Width = 90, Margin = new Padding(6, 0, 0, 0), DialogResult = DialogResult.Cancel };
+            // Closed explicitly rather than through DialogResult: this window is
+            // shown modeless (so MusicBee stays usable behind it), and assigning
+            // DialogResult only closes a form that was shown with ShowDialog.
+            // CancelButton still routes Esc here, so both paths end up in Close().
+            var close = new Button { Text = "Close", Width = 90, Margin = new Padding(6, 0, 0, 0) };
+            close.Click += (s, e) => Close();
             CancelButton = close;
 
             // RightToLeft + no wrapping keeps Save/Close side by side (Save leftmost,

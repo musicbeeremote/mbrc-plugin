@@ -147,7 +147,7 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        ///     Open the settings dialog (shared by the Configure button and the
+        ///     Open the settings window (shared by the Configure button and the
         ///     Tools menu entry). No-op if the host failed to start.
         /// </summary>
         private void OpenSettingsDialog()
@@ -156,16 +156,16 @@ namespace MusicBeePlugin
                 return;
 
             // Invoked by MusicBee (Tools-menu callback) and by the Configure
-            // button; guard so a dialog-construction failure never escapes to the
-            // host.
+            // button; guard so a window-construction failure never escapes to the
+            // host. SettingsWindow owns the single instance and shows it modeless,
+            // so MusicBee stays usable while it is open.
             try
             {
-                using (var dialog = new SettingsDialog(_host, _version))
-                    dialog.ShowDialog();
+                SettingsWindow.Open(_host, _version);
             }
             catch (Exception ex)
             {
-                LogToFallback("Settings dialog failed", ex);
+                LogToFallback("Settings window failed", ex);
             }
         }
 
@@ -293,6 +293,9 @@ namespace MusicBeePlugin
             // crash dialog on exit, after the user has already asked to leave.
             try
             {
+                // Before the host goes: the window polls the core on a timer, so
+                // it must not outlive what it reads through.
+                SettingsWindow.CloseIfOpen();
                 _host?.Dispose();
             }
             catch (Exception ex)
