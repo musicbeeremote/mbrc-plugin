@@ -1,0 +1,42 @@
+#!/bin/sh
+# Formatting only, and deliberately nothing else.
+#
+# A pre-commit hook runs on every commit, so it has one job: stay fast enough
+# that nobody reaches for --no-verify. Once that habit forms the hook is worse
+# than useless, because it is still there looking like a safety net. Clippy and
+# the test suites live in pre-push, which runs far less often.
+#
+# Set MBRC_SKIP_HOOKS=1 to skip. That is the escape hatch on purpose: an explicit
+# opt-out beats teaching everyone to bypass hooks wholesale.
+
+set -e
+
+if [ -n "$MBRC_SKIP_HOOKS" ]; then
+    echo "pre-commit: skipped (MBRC_SKIP_HOOKS)"
+    exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+echo "pre-commit: cargo fmt --check"
+if ! cargo fmt --all --check; then
+    echo
+    echo "  Formatting issues. Run: cargo fmt --all" >&2
+    exit 1
+fi
+
+# `tools/api-debugger/src-tauri` is its OWN cargo workspace: the root
+# `--all` above does not reach it, but CI checks it. That gap has broken a
+# build before, which is the only reason this second call exists.
+if [ -d tools/api-debugger/src-tauri ]; then
+    echo "pre-commit: cargo fmt --check (api-debugger)"
+    if ! (cd tools/api-debugger/src-tauri && cargo fmt --all --check); then
+        echo
+        echo "  Formatting issues in the api-debugger workspace." >&2
+        echo "  Run: cd tools/api-debugger/src-tauri && cargo fmt --all" >&2
+        exit 1
+    fi
+fi
+
+echo "pre-commit: ok"

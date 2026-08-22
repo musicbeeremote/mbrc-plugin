@@ -14,7 +14,8 @@ param(
     [ValidateSet("Debug", "Release")] [string]$Configuration = "Release",
     [switch]$Rust,
     [switch]$Plugin,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$SetupHooks
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,6 +27,20 @@ $buildRust = $Rust -or (-not $Rust -and -not $Plugin)
 $buildPlugin = $Plugin -or (-not $Rust -and -not $Plugin)
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
+
+# Hooks live in tools\hooks so they are versioned and reviewable; .git\hooks is
+# per-clone and invisible. Pointing core.hooksPath at them is the one manual step
+# that cannot be committed, so it gets a switch rather than a paragraph in the
+# README that everyone skips.
+if ($SetupHooks) {
+    Write-Step "Pointing git at tools\hooks"
+    git -C $root config core.hooksPath tools/hooks
+    if ($LASTEXITCODE -ne 0) { throw "could not set core.hooksPath" }
+    Write-Host "core.hooksPath = $(git -C $root config --get core.hooksPath)"
+    Write-Host "pre-commit: formatting. pre-push: clippy, tests, bindings drift, dotnet format."
+    Write-Host "Skip either with MBRC_SKIP_HOOKS=1. See tools\hooks\README.md."
+    exit 0
+}
 
 if ($Clean -and (Test-Path "$root\build")) {
     Write-Step "Cleaning build output"
