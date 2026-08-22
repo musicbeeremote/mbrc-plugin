@@ -96,6 +96,52 @@ pub fn stage_update(
     Ok(staged)
 }
 
+/// Removes a staged bundle that has already been applied.
+///
+/// The helper cannot do this for itself. It runs from inside
+/// `<storage>/updates/<version>/mbrc-helper.exe`, and Windows will not unlink a
+/// running image, so the `remove_dir_all` in its own `clear_staged` fails on
+/// *every* successful update - silently, because the helper is launched with no
+/// console and the failure only reaches `eprintln!`. It does manage to delete
+/// `pending.json`, which lives one directory up, so the marker goes and the
+/// bundle stays.
+///
+/// By the time the core is running again the helper has exited and the directory
+/// is nothing but residue, so this is the right place to sweep it. The whole
+/// `updates/` root goes, not just one version: `stage` only clears the directory
+/// for the version it is about to write, so earlier versions accumulate too.
+///
+/// A pending marker means a bundle is staged and waiting to be applied - that is
+/// live state, and it is left alone.
+pub fn sweep_applied_staging(storage_path: &str) {
+    if storage_path.is_empty() {
+        return;
+    }
+    match stage::read_pending(storage_path) {
+        // Still waiting to be applied: not ours to remove.
+        Ok(Some(pending)) => {
+            tracing::debug!(version = %pending.version, "leaving a staged update in place");
+            return;
+        }
+        Ok(None) => {}
+        Err(e) => {
+            // An unreadable marker is not licence to delete what it describes.
+            tracing::warn!(error = %e, "not sweeping staged updates: the marker is unreadable");
+            return;
+        }
+    }
+
+    let root = std::path::Path::new(storage_path).join(stage::STAGING_DIR);
+    if !root.exists() {
+        return;
+    }
+    match stage::clear_staged(storage_path) {
+        Ok(()) => tracing::info!("removed an applied update's staging directory"),
+        // Not worth failing anything over: it costs disk, not correctness.
+        Err(e) => tracing::warn!(error = %e, "could not remove the staging directory"),
+    }
+}
+
 /// Records that the user does not want to be offered `version` again.
 pub fn skip_version(config: &Config, version: &str) -> Result<()> {
     let mut state = load_state(&config.storage_path);
@@ -154,6 +200,63 @@ mod tests {
         assert_eq!(options.repo, check::DEFAULT_REPO);
         // The compiled-in release keys, not an empty or test trust list.
         assert!(!options.keys.is_empty());
+    }
+
+    /// A storage dir with a staged bundle in it, optionally with the pending
+    /// marker that says it is still waiting to be applied.
+    fn staged_fixture(case: &str, pending: bool) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("mbrc-sweep-{case}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let version_dir = dir.join("updates").join("1.5.0-beta.2");
+        std::fs::create_dir_all(&version_dir).expect("create staging dir");
+        // The file the helper cannot delete, because it is running from it.
+        std::fs::write(version_dir.join("mbrc-helper.exe"), b"stand-in").expect("seed helper");
+        std::fs::write(version_dir.join("mb_remote.dll"), b"stand-in").expect("seed dll");
+        if pending {
+            std::fs::write(
+                dir.join("updates").join("pending.json"),
+                br#"{"schema":1,"version":"1.5.0-beta.2","staged_at":"2026-08-22T11:34:26Z"}"#,
+            )
+            .expect("seed marker");
+        }
+        dir
+    }
+
+    #[test]
+    fn an_applied_bundle_is_swept() {
+        // No marker: the helper applied it and cleared the marker but could not
+        // remove its own directory. This is the leak.
+        let dir = staged_fixture("applied", false);
+        sweep_applied_staging(dir.to_str().expect("utf8 dir"));
+        assert!(
+            !dir.join("updates").exists(),
+            "the applied bundle should have been removed"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bundle_still_waiting_is_left_alone() {
+        // A marker means it is staged for the next restart - live state, not
+        // residue. Sweeping it would silently cancel the user's update.
+        let dir = staged_fixture("pending", true);
+        sweep_applied_staging(dir.to_str().expect("utf8 dir"));
+        assert!(
+            dir.join("updates").join("1.5.0-beta.2").exists(),
+            "a pending update must survive the sweep"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sweeping_nothing_is_not_an_error() {
+        // A fresh install that has never staged anything, and the no-storage case.
+        let dir = std::env::temp_dir().join("mbrc-sweep-empty");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        sweep_applied_staging(dir.to_str().expect("utf8 dir"));
+        sweep_applied_staging("");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

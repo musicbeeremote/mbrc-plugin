@@ -175,6 +175,17 @@ fn run_thread(
         let cache_core = core.clone();
         tokio::task::spawn_blocking(move || reconcile_library(&cache_core));
 
+        // Sweep the staging directory of an update that has already been applied.
+        // The helper cannot remove it (it runs from inside it), so it falls to the
+        // next start - which this is. Not gated on the update preference: the
+        // residue exists whether or not the user wants checks, and it is a few
+        // megabytes per release if nobody clears it. Blocking, so off the async
+        // workers.
+        let sweep_storage = core.config.storage_path.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::updates::sweep_applied_staging(&sweep_storage);
+        });
+
         // One update check per session, and only if the user asked for them.
         // Delayed so it does not compete with the library reconcile and cover
         // build above, which are what MusicBee was actually opened for; the
