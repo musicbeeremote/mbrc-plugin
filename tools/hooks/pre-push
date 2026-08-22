@@ -12,6 +12,9 @@
 #                     there
 #   dotnet format   - a new .cs file with the wrong encoding fails CI on CHARSET,
 #                     which is invisible locally until you look
+#   tree vs range   - these checks test the working tree; if a pushed file also
+#                     has uncommitted changes they describe something other than
+#                     what is being pushed (see below)
 #
 # What this CANNOT catch: platform-specific breakage. These hooks run on Windows,
 # and CI also runs ubuntu - a path literal or a cfg that behaves differently there
@@ -28,6 +31,58 @@ fi
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+
+# --- what is tested vs what is pushed --------------------------------------
+# Everything below runs against the WORKING TREE, not against the commits being
+# pushed. Usually the two agree. When they do not, a green hook can wave through
+# a commit that does not even compile - which has happened here: a fix sat
+# uncommitted in the tree while the commit that needed it was amended and
+# pushed, and the hook happily tested the fixed tree.
+#
+# Failing on any dirty file would be too blunt, since unrelated work in progress
+# is normal. The rule is narrow instead: refuse only when a file with
+# uncommitted changes is ALSO touched by the commits being pushed. That is
+# exactly the case where the tree and the range differ in a way these checks
+# cannot see. Anything else is only worth a warning.
+refs=$(cat)
+
+pushed_files() {
+    printf '%s\n' "$refs" | while read -r _local_ref local_sha _remote_ref remote_sha; do
+        [ -z "$local_sha" ] && continue
+        # An all-zero local sha is a branch deletion: nothing is being pushed.
+        case "$local_sha" in *[!0]*) : ;; *) continue ;; esac
+        case "$remote_sha" in
+            # A new branch (all-zero remote sha) has no remote side to diff
+            # against, so compare with the upstream default branch instead.
+            *[!0]*) base="$remote_sha" ;;
+            *) base=$(git merge-base "$local_sha" origin/HEAD 2>/dev/null) || base= ;;
+        esac
+        if [ -n "$base" ]; then
+            git diff --name-only "$base" "$local_sha" 2>/dev/null
+        else
+            git show --pretty=format: --name-only "$local_sha" 2>/dev/null
+        fi
+    done
+}
+
+dirty=$(git diff --name-only HEAD --)
+if [ -n "$dirty" ]; then
+    tmp_pushed=$(mktemp)
+    trap 'rm -f "$tmp_pushed"' EXIT
+    pushed_files | sort -u > "$tmp_pushed"
+    overlap=$(printf '%s\n' "$dirty" | sort -u | grep -Fxf "$tmp_pushed" || true)
+    if [ -n "$overlap" ]; then
+        echo >&2
+        echo "  Uncommitted changes to files this push touches:" >&2
+        printf '    %s\n' $overlap >&2
+        echo >&2
+        echo "  The checks below test your working tree, so they would describe" >&2
+        echo "  code that is not what you are pushing. Commit (or stash) these" >&2
+        echo "  first, or re-run with MBRC_SKIP_HOOKS=1." >&2
+        exit 1
+    fi
+    echo "pre-push: note - working tree is dirty, but not in the pushed files"
+fi
 
 target="i686-pc-windows-msvc"
 fail() { echo; echo "  $1" >&2; exit 1; }
