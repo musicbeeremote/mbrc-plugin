@@ -53,6 +53,12 @@ shipped Android and iOS client keeps working untouched.
   already recovered.
 - A MusicBee too old for the plugin now says so, in the plugin list and in a log
   file, instead of loading and silently doing nothing.
+- Single-file albums split by a `.cue` sheet showed in the now-playing list as a
+  row of "Unknown Artist" per track. Every such track reports the same container
+  file, so reading tags by file returned nothing for all of them; the list now
+  reads by list position and shows the real per-track titles. Browsing the
+  library still shows one entry per cue album rather than its tracks - MusicBee's
+  plugin interface offers no way to read them (#87).
 
 ## 1.4.1 - 2021/06/12
 ### Changed
