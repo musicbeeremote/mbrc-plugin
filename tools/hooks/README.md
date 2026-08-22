@@ -13,7 +13,7 @@ One command per clone. Until it is run, no hooks fire.
 | --- | --- | --- |
 | `commit-msg` | Conventional Commits, matching `@commitlint/config-conventional` | instant |
 | `pre-commit` | `cargo fmt --check`, root workspace **and** `tools/api-debugger/src-tauri` | ~2s |
-| `pre-push` | clippy (`-D warnings`), the test suites, generated-FFI-bindings drift, `dotnet format --verify-no-changes` | ~2-4 min |
+| `pre-push` | working tree vs pushed range, clippy (`-D warnings`), the test suites, generated-FFI-bindings drift, `dotnet format --verify-no-changes` | ~2-4 min |
 
 The split is the point. A pre-commit hook that takes a minute gets bypassed, and
 a bypassed hook is worse than none because it still looks like a safety net. So
@@ -67,3 +67,13 @@ They run on **your** platform. CI also builds on ubuntu, and a path literal or a
 `cfg` that behaves differently there will pass here and fail in CI - that has
 already happened once. These hooks shorten the loop on the failures that are
 reproducible locally; they are not a reason to stop reading CI.
+
+They also test your **working tree**, not the commits being pushed. Normally the
+two are identical; when they are not, a green hook can wave through a commit that
+does not compile - a fix left uncommitted in the tree while the commit that
+needed it was amended and pushed, and the hook dutifully tested the fixed tree.
+
+`pre-push` therefore refuses when a file with uncommitted changes is **also**
+touched by the commits being pushed, and only then: unrelated work in progress is
+normal and gets a one-line note instead. Commit or stash the overlap, or use
+`MBRC_SKIP_HOOKS=1`.
