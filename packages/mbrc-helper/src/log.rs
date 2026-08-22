@@ -147,8 +147,12 @@ mod tests {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    fn scratch_root(case: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("mbrc-helper-log-{case}"))
+    }
+
     fn scratch(case: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-helper-log-{case}"));
+        let dir = scratch_root(case);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create scratch dir");
         dir
@@ -180,15 +184,24 @@ mod tests {
         // than the real temp directory, so the suite never writes into the log a
         // user is actually asked to read.
         let fallback = scratch("fallback");
-        let staged = Path::new(r"Z:\no-such-volume\mb_remote\updates\1.5.0");
+        // Absolute, so it is a real staging path on either platform, but pointing
+        // into a directory that does not exist - a Windows-shaped literal like
+        // `Z:\...` is one component with no parent on Linux and would take the
+        // "never a path" branch instead, testing nothing.
+        let staged = scratch("unreachable")
+            .join("no-such-directory")
+            .join("mb_remote")
+            .join("updates")
+            .join("1.5.0");
 
         assert_eq!(
-            choose_sink(staged, &fallback),
+            choose_sink(&staged, &fallback),
             Some(fallback.join(LOG_FILE)),
             "an unreachable storage directory must not silence the log"
         );
 
         let _ = std::fs::remove_dir_all(&fallback);
+        let _ = std::fs::remove_dir_all(scratch_root("unreachable"));
     }
 
     #[test]
