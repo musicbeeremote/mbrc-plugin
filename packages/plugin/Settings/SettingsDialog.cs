@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Ffi.Generated;
 using MusicBeePlugin.Host;
+using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin.Settings
 {
@@ -895,7 +896,11 @@ namespace MusicBeePlugin.Settings
             if (string.IsNullOrEmpty(_bundlePath) || !File.Exists(_bundlePath)) return;
             try
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + _bundlePath + "\"")
+                // Usually the Desktop, which MSIX does not redirect - but the
+                // capture falls back to the log folder when no Desktop resolves,
+                // and that one is redirected on the Store build.
+                var shown = PackagePaths.ForExternalProcess(_bundlePath);
+                Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + shown + "\"")
                 {
                     UseShellExecute = true
                 });
@@ -916,7 +921,15 @@ namespace MusicBeePlugin.Settings
                     SetStatus("Log folder not found.", false);
                     return;
                 }
-                Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+                // Explorer runs outside our process. On the Store build that
+                // matters: MSIX redirects %APPDATA%, so the path we just confirmed
+                // exists is one Explorer cannot resolve, and it reports "Location
+                // is not available". The Directory.Exists above cannot catch that -
+                // from in here the path really does exist.
+                Process.Start(new ProcessStartInfo(PackagePaths.ForExternalProcess(dir))
+                {
+                    UseShellExecute = true
+                });
             }
             catch (Exception ex)
             {
