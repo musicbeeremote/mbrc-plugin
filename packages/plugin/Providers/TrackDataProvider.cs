@@ -224,7 +224,13 @@ namespace MusicBeePlugin.Providers
 
                 if (position > offset)
                 {
-                    var success = _api.Library_GetFileTags(trackPath, NowPlayingFields, out var results);
+                    // Read by INDEX, not by URL. Every virtual track of a
+                    // single-file .cue album reports the same container URL, so a
+                    // URL-keyed read returns the container's (empty) file-level
+                    // tags for all of them - which is what made such albums show
+                    // N rows of "Unknown Artist" (#87). The index-keyed call
+                    // returns the per-subsong tags MusicBee already has.
+                    var success = _api.NowPlayingList_GetFileTags(itemIndex, NowPlayingFields, out var results);
                     // Raw values; the empty title -> file name fallback lives in the
                     // Rust V4 wire codec now. position is the actual list index.
                     yield return new NowPlayingListTrack
@@ -248,34 +254,41 @@ namespace MusicBeePlugin.Providers
             if (!_api.NowPlayingList_QueryFiles(null))
                 yield break;
 
-            // Advance the list cursor sequentially, but read tags ONLY inside the
-            // window [offset, offset+limit). Skipped items still pull the (cheap)
-            // path string to move the cursor; the expensive tag read is bounded to
-            // the page. Ordering is sequential (Android variant).
+            // Walk the list by INDEX rather than with the query cursor, so the
+            // path and the tags for a row come from the same index and can never
+            // be attributed to different tracks. That matters because the tags are
+            // now read by index too: every virtual track of a single-file .cue
+            // album reports the same container URL, so the old URL-keyed read
+            // returned the container's (empty) file-level tags for all of them -
+            // N rows of "Unknown Artist" (#87).
+            //
+            // Skipped items cost nothing now: the window can be entered directly
+            // instead of pulling a path per item to advance a cursor. Ordering is
+            // sequential (Android variant), unchanged - `GetListFileUrl` walks the
+            // list in the same storage order the cursor did.
             var windowEnd = limit > 0 ? (long)offset + limit : long.MaxValue;
-            var position = 1;
+            var index = offset > 0 ? offset : 0;
+            var position = index + 1;
             while (position <= windowEnd)
             {
-                var trackPath = _api.NowPlayingList_QueryGetNextFile();
+                var trackPath = _api.NowPlayingList_GetListFileUrl(index);
                 if (string.IsNullOrEmpty(trackPath))
                     break;
 
-                if (position > offset)
+                var success = _api.NowPlayingList_GetFileTags(index, NowPlayingFields, out var results);
+                // Raw values; the V4 empty-artist -> "Unknown Artist" and empty
+                // title -> file name fallbacks live in the Rust V4 wire codec.
+                yield return new NowPlayingListTrack
                 {
-                    var success = _api.Library_GetFileTags(trackPath, NowPlayingFields, out var results);
-                    // Raw values; the V4 empty-artist -> "Unknown Artist" and empty
-                    // title -> file name fallbacks live in the Rust V4 wire codec.
-                    yield return new NowPlayingListTrack
-                    {
-                        artist = SafeGetResult(success, results, 0),
-                        album = SafeGetResult(success, results, 1),
-                        album_artist = SafeGetResult(success, results, 2),
-                        title = SafeGetResult(success, results, 3),
-                        position = position,
-                        path = trackPath
-                    };
-                }
+                    artist = SafeGetResult(success, results, 0),
+                    album = SafeGetResult(success, results, 1),
+                    album_artist = SafeGetResult(success, results, 2),
+                    title = SafeGetResult(success, results, 3),
+                    position = position,
+                    path = trackPath
+                };
 
+                index++;
                 position++;
             }
         }
