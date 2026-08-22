@@ -211,7 +211,13 @@ running as administrator, so the boundaries are part of the design:
 ## Applying
 
 `mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>`,
-run elevated. In order: re-verify, wait, back up, swap, roll back if needed.
+plus `--relaunch-aumid <aumid>` when MusicBee is a packaged (Store) install. In
+order: re-verify, wait, back up, swap, roll back if needed.
+
+Everything it prints also goes to `mbrc-helper.log` beside the plugin's other
+logs, falling back to `%TEMP%` when that directory cannot be written. The helper
+is launched with no console, so before that log existed every failure in it was
+silent - including two that stopped the Store build updating at all.
 
 **Re-verification comes first and is not a formality.** The staged bundle sits
 where any user process can write, so nothing in it is trusted because the core
@@ -264,6 +270,13 @@ MusicBee is relaunched **through Explorer**, not as a child of the helper. A chi
 would inherit elevation and run MusicBee as administrator for the rest of the
 session, writing its settings and cache as the wrong user.
 
+A **packaged (Store) MusicBee cannot be relaunched by path**: Windows denies
+executing the image under `WindowsApps` directly, and handing Explorer that path
+activates nothing while reporting success. The core therefore derives its
+Application User Model ID and passes `--relaunch-aumid`, and the helper starts
+`shell:AppsFolder\<AUMID>` instead. The AUMID is derived, never accepted from the
+host, for the same reason nothing else here is.
+
 ### Getting there: `mbrc_apply_staged_update()`
 
 The panel calls one FFI export that takes **no arguments**. The storage directory
@@ -280,7 +293,7 @@ runs elevated out of a user-writable directory, so checking it before *execution
 - earlier than the check it then performs on the DLLs - is the boundary.
 
 The file is opened **denying write and delete sharing**, verified through that
-handle, and the handle is held open across `ShellExecuteExW`. Verifying by path
+handle, and the handle is held open across the launch. Verifying by path
 and then launching by path would leave a window in which any process running as
 the user could replace the file after it verified and have its own binary run as
 administrator, on the prompt the user was expecting. Execution still works:
@@ -292,9 +305,16 @@ proves a bundle is ours, not that it is the right one to install - without this,
 anyone able to write to the staging directory could roll the plugin back to an
 older release, signature and all, and undo whatever the newer one fixed.
 
-Elevation is requested with `ShellExecuteExW` and the `runas` verb, chosen by
-probing whether the plugins directory is writable (by writing, not by reading an
-ACL). The prompt therefore appears while the user is still looking at the button
+The helper is started as an **ordinary child process** when the plugins directory
+is already writable, and through `ShellExecuteExW` with the `runas` verb when it
+is not - chosen by probing (by writing, not by reading an ACL).
+
+That distinction matters beyond the prompt. `ShellExecuteExW` hands the launch to
+Explorer, and a process Explorer starts is *outside* MusicBee's package
+container - so on a Store install the virtualized paths in the helper's argv
+resolved to nothing and it refused to act, correctly, on arguments it could not
+make sense of. A direct child inherits the container and sees what the core sees.
+`CreateProcess` cannot elevate, which is why the other path stays. The prompt therefore appears while the user is still looking at the button
 they pressed. Declining it comes back as `ERROR_CANCELLED` and is reported as a
 normal outcome with the staged download intact - the concrete gain over letting
 the helper self-elevate, where the prompt would arrive after MusicBee had already

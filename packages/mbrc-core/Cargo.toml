@@ -79,6 +79,10 @@ windows-sys = { version = "=0.61.2", features = [
     "Win32_System_Registry",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
+    # GetCurrentApplicationUserModelId, to tell a packaged (Store) MusicBee from
+    # an ordinary one. A packaged app cannot be started by path, so the update
+    # helper has to be told the identity to activate instead.
+    "Win32_Storage_Packaging_Appx",
 ] }
 
 [build-dependencies]

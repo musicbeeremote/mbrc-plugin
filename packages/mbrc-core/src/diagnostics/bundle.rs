@@ -130,7 +130,9 @@ fn extra_logs(storage: &str, started_unix_ms: i64) -> Vec<PathBuf> {
         // The active log is already in the bundle as capture.log.
         .filter(|path| path != &active)
         .collect();
-    for name in ["mbrc-bootstrap.log", "mbrc.log"] {
+    // `mbrc-helper.log` is the elevated helper's only voice - it runs with no
+    // console, so without this a failed update is invisible in a bundle.
+    for name in ["mbrc-bootstrap.log", "mbrc.log", "mbrc-helper.log"] {
         let path = Path::new(storage).join(name);
         if path.is_file() {
             paths.push(path);

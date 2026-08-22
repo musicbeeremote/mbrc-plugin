@@ -47,6 +47,9 @@ pub struct Request<'a> {
     pub staged: &'a str,
     pub target: &'a str,
     pub relaunch: &'a str,
+    /// The Application User Model ID, when MusicBee is a packaged (Store)
+    /// install. `None` for an ordinary install, relaunched by path.
+    pub relaunch_aumid: Option<&'a str>,
 }
 
 /// A request whose paths have been checked and resolved.
@@ -55,7 +58,35 @@ pub struct Plan {
     pub pid: u32,
     pub staged: PathBuf,
     pub target: PathBuf,
-    pub relaunch: PathBuf,
+    pub relaunch: RelaunchTarget,
+}
+
+/// What to start once the update is in place.
+///
+/// A packaged install cannot be started by path: Windows denies executing the
+/// image under `WindowsApps` directly, and the package has to be activated
+/// through its Application User Model ID instead. That is why this is a choice
+/// rather than a path - handing Explorer the executable of a packaged MusicBee
+/// activates nothing while reporting success, which is exactly how an update on
+/// the Store build used to end with MusicBee closed and never reopened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelaunchTarget {
+    /// An ordinary install: the MusicBee executable.
+    Exe(PathBuf),
+    /// A packaged install, named by its AUMID (`<family>!<application>`).
+    Packaged(String),
+}
+
+impl RelaunchTarget {
+    /// What Explorer is handed. It accepts either a path or a
+    /// `shell:AppsFolder\<AUMID>` moniker, which is what lets one code path
+    /// serve both kinds of install.
+    pub fn shell_argument(&self) -> String {
+        match self {
+            Self::Exe(path) => path.display().to_string(),
+            Self::Packaged(aumid) => format!(r"shell:AppsFolder\{aumid}"),
+        }
+    }
 }
 
 /// What an apply did, for the log line.
@@ -119,7 +150,13 @@ type Result<T> = std::result::Result<T, Error>;
 pub fn plan(request: &Request<'_>) -> Result<Plan> {
     let staged = checked_dir(request.staged, "--staged")?;
     let target = checked_dir(request.target, "--target")?;
-    let relaunch = checked_file(request.relaunch, "--relaunch")?;
+    // A packaged install wins when one is named. Its executable exists and would
+    // pass `checked_file`, so validating the path would prove nothing useful -
+    // launching it is what fails.
+    let relaunch = match request.relaunch_aumid {
+        Some(aumid) => RelaunchTarget::Packaged(checked_aumid(aumid)?),
+        None => RelaunchTarget::Exe(checked_file(request.relaunch, "--relaunch")?),
+    };
 
     if staged == target {
         return Err(Error::Rejected(
@@ -201,10 +238,10 @@ fn verify_staged(staged: &Path, keys: &'static [TrustedKey]) -> Result<Bundle> {
 
     let (manifest, key_name) =
         verify_manifest_with(&manifest_bytes, &signature, keys).map_err(Error::Verify)?;
-    println!(
-        "mbrc-helper: manifest for {} signed by {key_name}",
+    crate::log::line(&format!(
+        "manifest for {} signed by {key_name}",
         manifest.version
-    );
+    ));
 
     let mut files = Vec::with_capacity(manifest.files.len());
     for entry in &manifest.files {
@@ -270,11 +307,11 @@ fn back_up(plan: &Plan, bundle: &Bundle) -> Result<Backup> {
     if files.is_empty() {
         return Ok(Backup { dir: None, files });
     }
-    println!(
-        "mbrc-helper: backed up {} file(s) to {}",
+    crate::log::line(&format!(
+        "backed up {} file(s) to {}",
         files.len(),
         root.display()
-    );
+    ));
     Ok(Backup {
         dir: Some(root),
         files,
@@ -291,7 +328,7 @@ fn write_all(plan: &Plan, bundle: &Bundle) -> std::result::Result<(), String> {
             refuse_reparse_point(&path).map_err(|e| e.to_string())?;
         }
         std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-        println!("mbrc-helper: wrote {}", path.display());
+        crate::log::line(&format!("wrote {}", path.display()));
     }
     Ok(())
 }
@@ -363,7 +400,7 @@ fn prune_backups(plan: &Plan, keep: &str) {
         let path = entry.path();
         if path.is_dir() {
             if let Err(e) = std::fs::remove_dir_all(&path) {
-                eprintln!("mbrc-helper: could not remove {}: {e}", path.display());
+                crate::log::line(&format!("could not remove {}: {e}", path.display()));
             }
         }
     }
@@ -377,16 +414,13 @@ pub fn clear_staged(plan: &Plan) {
     // `<storage>/updates/<version>` -> remove the version directory and the
     // marker beside it, which is what tells the core something is pending.
     if let Err(e) = std::fs::remove_dir_all(&plan.staged) {
-        eprintln!(
-            "mbrc-helper: could not remove {}: {e}",
-            plan.staged.display()
-        );
+        crate::log::line(&format!("could not remove {}: {e}", plan.staged.display()));
     }
     if let Some(updates) = plan.staged.parent() {
         let marker = updates.join("pending.json");
         if marker.exists() {
             if let Err(e) = std::fs::remove_file(&marker) {
-                eprintln!("mbrc-helper: could not remove {}: {e}", marker.display());
+                crate::log::line(&format!("could not remove {}: {e}", marker.display()));
             }
         }
     }
@@ -503,21 +537,70 @@ fn wait_for_exit(_pid: u32, _timeout: Duration) -> bool {
 
 /// Starts MusicBee again after a successful update.
 ///
-/// Launched **through Explorer**, not directly. This process is elevated, and a
-/// child inherits that: starting MusicBee from here would leave it running as
+/// Launched **through Explorer**, not directly. This process may be elevated, and
+/// a child inherits that: starting MusicBee from here would leave it running as
 /// administrator for the rest of the session, writing its settings and cache as
 /// a different user. Explorer runs at the user's own integrity level, so handing
-/// it the path gets MusicBee back at the level it had before.
-pub fn relaunch(exe: &Path) {
-    #[cfg(windows)]
-    {
-        match std::process::Command::new("explorer.exe").arg(exe).spawn() {
-            Ok(_) => println!("mbrc-helper: relaunched {}", exe.display()),
-            Err(e) => eprintln!("mbrc-helper: could not relaunch {}: {e}", exe.display()),
-        }
+/// it the target gets MusicBee back at the level it had before.
+pub fn relaunch(target: &RelaunchTarget) {
+    relaunch_with(target, spawn_via_explorer);
+}
+
+/// The launcher is a parameter so a test can assert what would be started
+/// without starting it - the same seam [`apply_with`] uses for the process wait.
+fn relaunch_with(target: &RelaunchTarget, launch: fn(&str) -> std::io::Result<()>) {
+    let argument = target.shell_argument();
+    match launch(&argument) {
+        Ok(()) => crate::log::line(&format!("relaunched {argument}")),
+        // Recorded but not fatal: the update is installed either way, and the
+        // user can start MusicBee themselves. Note Explorer reports success even
+        // when it activates nothing, so this only catches a failure to start
+        // Explorer at all.
+        Err(e) => crate::log::line(&format!("could not relaunch {argument}: {e}")),
     }
-    #[cfg(not(windows))]
-    let _ = exe;
+}
+
+#[cfg(windows)]
+fn spawn_via_explorer(argument: &str) -> std::io::Result<()> {
+    std::process::Command::new("explorer.exe")
+        .arg(argument)
+        .spawn()
+        .map(|_| ())
+}
+
+#[cfg(not(windows))]
+fn spawn_via_explorer(_argument: &str) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Checks an Application User Model ID before it is handed to Explorer.
+///
+/// The shape is `<package family>!<application>`. Nothing here reaches a shell -
+/// `Command::arg` passes it as a single argument - so this is not about
+/// injection. It is that an elevated process should not act on an argument whose
+/// shape it cannot vouch for, and a value carrying a path separator is not an
+/// AUMID at all.
+fn checked_aumid(raw: &str) -> Result<String> {
+    let aumid = raw.trim();
+    if aumid.is_empty() {
+        return Err(Error::Rejected("--relaunch-aumid is empty".into()));
+    }
+    if aumid.contains(['\\', '/', '"', '\n', '\r']) {
+        return Err(Error::Rejected(format!(
+            "--relaunch-aumid {raw:?} contains a path separator or a quote"
+        )));
+    }
+    let mut parts = aumid.split('!');
+    let (family, app) = (
+        parts.next().unwrap_or_default(),
+        parts.next().unwrap_or_default(),
+    );
+    if family.is_empty() || app.is_empty() || parts.next().is_some() {
+        return Err(Error::Rejected(format!(
+            "--relaunch-aumid {raw:?} is not <family>!<application>"
+        )));
+    }
+    Ok(aumid.to_owned())
 }
 
 #[cfg(test)]
@@ -593,7 +676,7 @@ mod tests {
                 pid: 0,
                 staged: self.staged.clone(),
                 target: self.target.clone(),
-                relaunch: self.root.join("MusicBee.exe"),
+                relaunch: RelaunchTarget::Exe(self.root.join("MusicBee.exe")),
             }
         }
 
@@ -815,6 +898,7 @@ mod tests {
                 staged: &staged,
                 target: bad,
                 relaunch: &relaunch,
+                relaunch_aumid: None,
             };
             assert!(
                 matches!(plan(&request), Err(Error::Rejected(_))),
@@ -829,6 +913,7 @@ mod tests {
             staged: &staged,
             target: &target,
             relaunch: &relaunch,
+            relaunch_aumid: None,
         };
         assert!(plan(&request).is_ok());
     }
@@ -846,8 +931,121 @@ mod tests {
             staged: &fixture.staged.to_string_lossy(),
             target: &inner.to_string_lossy(),
             relaunch: &exe.to_string_lossy(),
+            relaunch_aumid: None,
         };
         assert!(matches!(plan(&request), Err(Error::Rejected(_))));
+    }
+
+    // Captures what would have been launched instead of launching it. A `fn`
+    // pointer rather than a closure so it matches the seam's signature, which is
+    // why the captured value goes through a thread-local.
+    thread_local! {
+        static LAUNCHED: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    fn record(argument: &str) -> std::io::Result<()> {
+        LAUNCHED.with(|l| l.borrow_mut().push(argument.to_owned()));
+        Ok(())
+    }
+
+    fn refuse(_argument: &str) -> std::io::Result<()> {
+        Err(std::io::Error::other("explorer is not available"))
+    }
+
+    #[test]
+    fn a_packaged_install_is_relaunched_through_its_aumid() {
+        // The whole point of the AUMID: handing Explorer the executable of a
+        // packaged MusicBee activates nothing.
+        LAUNCHED.with(|l| l.borrow_mut().clear());
+        let target =
+            RelaunchTarget::Packaged("50072StevenMayall.MusicBee_kcr266et74avj!App".into());
+
+        relaunch_with(&target, record);
+
+        LAUNCHED.with(|l| {
+            assert_eq!(
+                l.borrow().as_slice(),
+                [r"shell:AppsFolder\50072StevenMayall.MusicBee_kcr266et74avj!App"]
+            );
+        });
+    }
+
+    #[test]
+    fn an_ordinary_install_is_still_relaunched_by_path() {
+        LAUNCHED.with(|l| l.borrow_mut().clear());
+        let target = RelaunchTarget::Exe(PathBuf::from(r"C:\Program Files\MusicBee\MusicBee.exe"));
+
+        relaunch_with(&target, record);
+
+        LAUNCHED.with(|l| {
+            assert_eq!(
+                l.borrow().as_slice(),
+                [r"C:\Program Files\MusicBee\MusicBee.exe"]
+            );
+        });
+    }
+
+    #[test]
+    fn a_relaunch_that_cannot_start_is_survivable() {
+        // The update is already installed by this point; failing to start
+        // MusicBee is worth recording, not worth panicking over.
+        relaunch_with(&RelaunchTarget::Exe(PathBuf::from(r"C:\nope.exe")), refuse);
+    }
+
+    #[test]
+    fn an_aumid_that_is_not_one_is_refused() {
+        // An elevated process should not act on an argument whose shape it
+        // cannot vouch for. A path separator is the giveaway.
+        for bad in [
+            "",
+            "   ",
+            "no-bang",
+            "!missing-family",
+            "missing-app!",
+            "two!bangs!here",
+            r"family\..\..\evil!App",
+            "family/App!App",
+            "family\"quote!App",
+        ] {
+            assert!(
+                matches!(checked_aumid(bad), Err(Error::Rejected(_))),
+                "{bad:?} was accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn a_real_aumid_is_accepted_and_trimmed() {
+        let aumid = checked_aumid("  50072StevenMayall.MusicBee_kcr266et74avj!MusicBeePackage  ")
+            .expect("a well-formed AUMID");
+        assert_eq!(
+            aumid,
+            "50072StevenMayall.MusicBee_kcr266et74avj!MusicBeePackage"
+        );
+    }
+
+    #[test]
+    fn an_aumid_takes_precedence_over_the_executable() {
+        // Both are passed - the executable exists and would validate - and the
+        // packaged form has to win, because the path is the one that cannot work.
+        let fixture = Fixture::new("aumid-wins");
+        let exe = fixture.root.join("MusicBee.exe");
+        std::fs::write(&exe, b"stub").unwrap();
+        let target = fixture.root.join("plugins");
+        std::fs::create_dir_all(&target).unwrap();
+
+        let request = Request {
+            pid: 1,
+            staged: &fixture.staged.to_string_lossy(),
+            target: &target.to_string_lossy(),
+            relaunch: &exe.to_string_lossy(),
+            relaunch_aumid: Some("Family_abc!App"),
+        };
+        let plan = plan(&request).expect("plan");
+        assert_eq!(
+            plan.relaunch,
+            RelaunchTarget::Packaged("Family_abc!App".into())
+        );
     }
 
     #[test]

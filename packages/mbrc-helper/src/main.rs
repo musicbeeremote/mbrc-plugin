@@ -11,6 +11,7 @@
 //! ```text
 //! mbrc-helper firewall --port <n>
 //! mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
+//!                    [--relaunch-aumid <aumid>]
 //! ```
 //!
 //! Exit codes are part of the contract with the caller, which reports them to
@@ -24,6 +25,7 @@
 // exercises it on both runners.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod firewall;
+mod log;
 mod update;
 
 use std::collections::BTreeMap;
@@ -68,6 +70,7 @@ mbrc-helper - elevated helper for MusicBee Remote
 USAGE:
     mbrc-helper firewall --port <n>
     mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
+                       [--relaunch-aumid <aumid>]
     mbrc-helper --version
 
 COMMANDS:
@@ -89,7 +92,7 @@ fn main() -> ExitCode {
     match run(&args) {
         Ok(code) => ExitCode::from(code),
         Err(message) => {
-            eprintln!("mbrc-helper: {message}");
+            log::line(&message);
             ExitCode::from(EXIT_USAGE)
         }
     }
@@ -123,7 +126,13 @@ fn run(args: &[String]) -> Result<u8, String> {
             Ok(run_firewall(port))
         }
         "update" => {
-            let flags = parse_flags(&args[1..], &["pid", "staged", "target", "relaunch"])?;
+            // `relaunch-aumid` is accepted but not required: only a packaged
+            // (Store) MusicBee has one, and an ordinary install is relaunched by
+            // path exactly as before.
+            let flags = parse_flags(
+                &args[1..],
+                &["pid", "staged", "target", "relaunch", "relaunch-aumid"],
+            )?;
             for name in ["pid", "staged", "target", "relaunch"] {
                 require(&flags, name)?;
             }
@@ -137,6 +146,7 @@ fn run(args: &[String]) -> Result<u8, String> {
                 staged: require(&flags, "staged")?,
                 target: require(&flags, "target")?,
                 relaunch: require(&flags, "relaunch")?,
+                relaunch_aumid: flags.get("relaunch-aumid").map(String::as_str),
             }))
         }
         other => Err(format!("unknown command {other:?}\n\n{USAGE}")),
@@ -150,21 +160,30 @@ fn run(args: &[String]) -> Result<u8, String> {
 /// [`EXIT_ROLLED_BACK`] means the install is intact but the update did not
 /// happen, and [`EXIT_ROLLBACK_FAILED`] is the one that needs the user told.
 fn run_update(request: &update::Request<'_>) -> u8 {
+    // Before `plan()`, so that plan()'s own refusals are recorded - one of them
+    // ("--staged cannot be resolved") is how a packaged install fails, and it
+    // used to vanish into a console that does not exist.
+    log::direct_to_storage(std::path::Path::new(request.staged));
+    log::line(&format!(
+        "update requested: pid={} staged={} target={}",
+        request.pid, request.staged, request.target
+    ));
+
     let plan = match update::plan(request) {
         Ok(plan) => plan,
         Err(e) => {
-            eprintln!("mbrc-helper: {e}");
+            log::line(&e.to_string());
             return EXIT_USAGE;
         }
     };
 
     match update::apply(&plan) {
         Ok(applied) => {
-            println!(
-                "mbrc-helper: applied {} ({} file(s))",
+            log::line(&format!(
+                "applied {} ({} file(s))",
                 applied.version,
                 applied.files.len()
-            );
+            ));
             // Only after the swap succeeded: a staged bundle that is still there
             // is one the user can retry with.
             update::clear_staged(&plan);
@@ -172,7 +191,7 @@ fn run_update(request: &update::Request<'_>) -> u8 {
             EXIT_OK
         }
         Err(e) => {
-            eprintln!("mbrc-helper: {e}");
+            log::line(&e.to_string());
             match e {
                 update::Error::Rejected(_) => EXIT_USAGE,
                 update::Error::Verify(_) => EXIT_VERIFY_FAILED,

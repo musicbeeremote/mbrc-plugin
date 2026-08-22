@@ -139,8 +139,9 @@ fn is_upgrade(staged: &str, installed: &str) -> bool {
 /// A staged helper that has verified, with the handle that keeps it that way.
 ///
 /// Holding `_handle` open is what makes the verification mean anything at launch
-/// time: it denies write and delete sharing, so between the hash check and
-/// `ShellExecuteExW` the file cannot be rewritten, renamed or replaced.
+/// time: it denies write and delete sharing, so between the hash check and the
+/// launch the file cannot be rewritten, renamed or replaced. That holds for both
+/// launch mechanisms - the shell ends up in `CreateProcess` too.
 struct VerifiedHelper {
     path: PathBuf,
     version: String,
@@ -208,7 +209,7 @@ fn log_verified(manifest: &Manifest, key: &str) {
 
 /// `update --pid <us> --staged <dir> --target <dir> --relaunch <exe>`.
 fn arguments(staged: &Path, target: &Path, relaunch: &Path) -> Vec<String> {
-    vec![
+    let mut args = vec![
         "update".into(),
         "--pid".into(),
         std::process::id().to_string(),
@@ -218,7 +219,55 @@ fn arguments(staged: &Path, target: &Path, relaunch: &Path) -> Vec<String> {
         target.display().to_string(),
         "--relaunch".into(),
         relaunch.display().to_string(),
-    ]
+    ];
+    // Only a packaged (Store) MusicBee has one, and only a packaged MusicBee
+    // needs it: Windows refuses to execute the image under `WindowsApps`
+    // directly, so the path above cannot start it and the package has to be
+    // activated by identity instead.
+    //
+    // Derived here rather than accepted from the host, which is the rule this
+    // whole module is built on: nothing is taken from the caller, so there is
+    // nothing to tamper with. The core runs inside MusicBee, so it is entitled to
+    // ask Windows who it is.
+    if let Some(aumid) = current_aumid() {
+        args.push("--relaunch-aumid".into());
+        args.push(aumid);
+    }
+    args
+}
+
+/// This process's Application User Model ID, or `None` when it has no package
+/// identity - which is the ordinary desktop install and by far the common case.
+#[cfg(windows)]
+fn current_aumid() -> Option<String> {
+    use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentApplicationUserModelId;
+
+    let mut length: u32 = 0;
+    // SAFETY: a null buffer with a zero length is the documented way to ask for
+    // the required size; nothing is written through the pointer.
+    let probe = unsafe { GetCurrentApplicationUserModelId(&mut length, std::ptr::null_mut()) };
+    // APPMODEL_ERROR_NO_PACKAGE lands here for an unpackaged process. It is the
+    // normal answer, not a failure, so it is not logged as one.
+    if probe != ERROR_INSUFFICIENT_BUFFER || length == 0 {
+        return None;
+    }
+
+    let mut buffer = vec![0u16; length as usize];
+    // SAFETY: `buffer` has `length` units, which is what the probe asked for.
+    let result = unsafe { GetCurrentApplicationUserModelId(&mut length, buffer.as_mut_ptr()) };
+    if result != ERROR_SUCCESS {
+        tracing::warn!(result, "could not read this process's application id");
+        return None;
+    }
+    // The length includes the terminating null.
+    let end = (length as usize).saturating_sub(1).min(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..end]))
+}
+
+#[cfg(not(windows))]
+fn current_aumid() -> Option<String> {
+    None
 }
 
 /// Whether this process can write to `dir`, tested by writing rather than by
@@ -282,16 +331,74 @@ fn plugins_dir() -> Option<PathBuf> {
 
 /// Starts the helper, with an elevation prompt when `elevate` is set.
 ///
+/// Two different mechanisms, because they want different things: an ordinary
+/// child process when no elevation is needed (see [`spawn_direct`]), and the
+/// shell's `runas` verb when it is - `CreateProcess` cannot elevate.
+///
 /// `runas` is what produces the UAC prompt. A declined prompt comes back as
 /// `ERROR_CANCELLED`, which is a distinct outcome rather than a failure: the
-/// staged download is untouched and the user can press the button again.
+/// staged download is untouched and the user can press the button again. That
+/// outcome is unreachable on the direct path, correctly - there is no prompt to
+/// decline.
 #[cfg(windows)]
 fn spawn(exe: &Path, arguments: &[String], elevate: bool) -> UpdateLaunch {
+    if !elevate {
+        return spawn_direct(exe, arguments);
+    }
+    spawn_elevated(exe, arguments)
+}
+
+/// Starts the helper as an ordinary child process.
+///
+/// `CreateProcess` rather than the shell, and that distinction is the whole fix
+/// for the Store build. `ShellExecuteExW` hands the launch to Explorer, and a
+/// process Explorer starts is **outside** MusicBee's package container - so the
+/// paths in its argv, which MSIX virtualizes, resolve to nothing and the helper
+/// correctly refuses to act on them. A direct child inherits the container and
+/// sees exactly what the core sees.
+///
+/// It also removes a step that was never wanted here: the shell was only ever
+/// being used for its `runas` verb, which this path does not need.
+///
+/// The verified-helper handle the caller is holding stays meaningful. It denies
+/// write and delete sharing while permitting read, and Windows counts the image
+/// loader's `FILE_EXECUTE` as read - so the file can be executed but not swapped
+/// between the hash check and this call. Rust opens files non-inheritable, so the
+/// handle is not passed to the child either.
+///
+/// # Unverified, and one known risk
+///
+/// A packaged MusicBee runs inside a **job object** (confirmed with
+/// `IsProcessInJob`), and a `CreateProcess` child joins its parent's job. If that
+/// job terminates its processes when the app exits, this helper dies at exactly
+/// the moment it stops waiting and starts work - which would make this change
+/// worse than what it replaces, not better. `CREATE_BREAKAWAY_FROM_JOB` is the
+/// escape hatch, but only if the job permits breakaway.
+///
+/// Neither the container inheritance this relies on nor the job behaviour above
+/// has been observed on a real Store install: the helper that runs is always the
+/// *staged* one, so only a release built from this code can exercise it. The
+/// first hop that can is beta.3 -> beta.4. If it turns out wrong, the fallback is
+/// to keep the shell launch and have the core resolve the real container paths
+/// (`GetFinalPathNameByHandleW`) before passing them, which depends on neither.
+#[cfg(windows)]
+fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
+    match std::process::Command::new(exe).args(arguments).spawn() {
+        Ok(_) => UpdateLaunch::Launched,
+        Err(e) => {
+            tracing::error!(error = %e, "could not start the update helper");
+            UpdateLaunch::Failed
+        }
+    }
+}
+
+#[cfg(windows)]
+fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     use windows_sys::Win32::Foundation::{GetLastError, ERROR_CANCELLED};
     use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    let verb = wide(if elevate { "runas" } else { "open" });
+    let verb = wide("runas");
     let file = wide(&exe.display().to_string());
     let parameters = wide(&quote(arguments));
 
@@ -409,8 +516,18 @@ mod tests {
         assert_eq!(args[0], "update");
         assert_eq!(args[2], std::process::id().to_string());
         // The helper parses `--flag value` pairs and rejects anything else, so
-        // the shape matters as much as the values.
-        assert_eq!(args.len(), 9);
+        // the shape matters as much as the values. Nine, or eleven when this
+        // process is a packaged app and `--relaunch-aumid` is appended - which a
+        // test runner never is, but the assertion should say why it is nine.
+        assert!(
+            args.len() == 9 || args.len() == 11,
+            "unexpected argv shape: {args:?}"
+        );
+        assert_eq!(
+            args.len() == 11,
+            args.iter().any(|a| a == "--relaunch-aumid"),
+            "the extra pair is the AUMID or nothing"
+        );
         for flag in ["--pid", "--staged", "--target", "--relaunch"] {
             assert!(args.iter().any(|a| a == flag), "{flag} is missing");
         }
