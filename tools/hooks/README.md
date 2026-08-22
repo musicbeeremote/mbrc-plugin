@@ -11,6 +11,7 @@ One command per clone. Until it is run, no hooks fire.
 
 | Hook | Runs | Cost |
 | --- | --- | --- |
+| `commit-msg` | Conventional Commits, matching `@commitlint/config-conventional` | instant |
 | `pre-commit` | `cargo fmt --check`, root workspace **and** `tools/api-debugger/src-tauri` | ~2s |
 | `pre-push` | clippy (`-D warnings`), the test suites, generated-FFI-bindings drift, `dotnet format --verify-no-changes` | ~2-4 min |
 
@@ -21,14 +22,44 @@ the per-commit one only does formatting, and everything slow waits for a push.
 `tools/api-debugger/src-tauri` is checked separately because it is its own cargo
 workspace - the root `cargo fmt --all` does not reach it, while CI does.
 
+## Commit messages
+
+`commit-msg` implements `@commitlint/config-conventional` in shell rather than
+pulling in Node. Errors fail the commit; warnings only print:
+
+| | rules |
+| --- | --- |
+| error | `type-enum`, `type-case`, `type-empty`, `scope-case`, `subject-empty`, `subject-full-stop`, `subject-case`, `header-max-length` (100), `header-trim`, `body-max-line-length` (100) |
+| warning | `body-leading-blank` |
+
+Two deliberate differences from upstream: `scope-enum` is left open (as
+config-conventional also leaves it, and this repo already uses fifteen-odd
+scopes), and `subject-case` is implemented as the same equality test commitlint
+uses rather than by parsing English.
+
+That equality test has one inherited sharp edge worth knowing: a capitalised
+opening token followed by all-lowercase text counts as sentence-case. So
+`fix: V4 frames must stay byte-identical` is rejected, while
+`fix: MusicBee closes without reopening` and
+`feat(update): WinHTTP client for the update check` are not. commitlint agrees;
+write `v4 frames ...` or reword.
+
+The same file runs in CI over every commit in a pull request
+([`commits.yml`](../../.github/workflows/commits.yml)), because merges here are
+`--ff-only` and a locally skipped hook would otherwise put a malformed subject
+into permanent history. Checked against the last 60 commits: 59 pass, and the
+one rejection is a genuine 275-character body line.
+
 ## Skipping
 
 ```powershell
 $env:MBRC_SKIP_HOOKS = 1
 ```
 
-Preferred over `--no-verify`: it is explicit, it covers both hooks, and it does
-not build the habit of passing a flag that disables every hook forever.
+Preferred over `--no-verify`: it is explicit, it covers all three hooks, and it
+does not build the habit of passing a flag that disables every hook forever.
+Note CI does not honour it, so a skipped `commit-msg` is still caught in the
+pull request.
 
 ## What these do not catch
 

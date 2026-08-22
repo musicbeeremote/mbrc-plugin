@@ -1,0 +1,186 @@
+#!/bin/sh
+# Conventional Commits, matching @commitlint/config-conventional.
+#
+# Also run by CI (.github/workflows/commits.yml) over every commit in a pull
+# request - the same file, not a copy of the rule, so the local check and the
+# remote one cannot drift and a rule change is one edit.
+#
+# Shell rather than commitlint because this repo needs neither Node nor pnpm to
+# build: the plugin is C# and the core is Rust, and the only JavaScript lives in
+# tools/api-debugger with its own package.json. A root package.json plus
+# node_modules, and Node becoming a prerequisite for committing, is a lot of
+# surface for one rule that fits in a shell script.
+#
+# The ruleset below mirrors @commitlint/config-conventional. Errors fail the
+# commit; warnings are printed and do not:
+#
+#   error    type-enum, type-case, type-empty, scope-case,
+#            subject-empty, subject-full-stop, subject-case,
+#            header-max-length (100), header-trim,
+#            body-max-line-length (100), footer-max-line-length (100)
+#   warning  body-leading-blank, footer-leading-blank
+#
+# Two deliberate differences, both documented where they apply below:
+#
+#   scope-enum is left open. config-conventional leaves it open too, and this
+#   repo already uses fifteen-odd scopes; an allowlist would only get in the way
+#   the first time someone touches a new area.
+#
+#   subject-case is approximated. commitlint classifies the whole subject's case
+#   style; this rejects a subject that starts with an uppercase letter or is
+#   entirely uppercase, which is what sentence-case, start-case, pascal-case and
+#   upper-case all look like in practice.
+#
+# Usage: commit-msg <file-containing-the-message>
+# Set MBRC_SKIP_HOOKS=1 to skip locally. CI does not set it, so a local bypass is
+# still caught before the commit can reach main.
+
+set -e
+
+if [ -n "$MBRC_SKIP_HOOKS" ]; then
+    echo "commit-msg: skipped (MBRC_SKIP_HOOKS)"
+    exit 0
+fi
+
+msg_file=$1
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+    echo "commit-msg: no message file given" >&2
+    exit 1
+fi
+
+types='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+max_length=100
+errors=""
+note() { errors="$errors  - $1
+"; }
+
+# Everything git will actually keep: comments go, and `git commit -v` appends a
+# diff below a scissors line that is not part of the message.
+message=$(sed '/^# ------------------------ >8 ------------------------$/,$d' "$msg_file" | grep -v '^#')
+
+# The header is the first non-blank line. Read before trimming, so header-trim
+# has something to complain about.
+header=$(printf '%s\n' "$message" | grep -v '^[[:space:]]*$' | head -n 1)
+
+if [ -z "$header" ]; then
+    echo "commit-msg: the commit message is empty" >&2
+    exit 1
+fi
+
+# Machine-generated messages nobody chose the wording of. config-conventional's
+# parser exempts these too.
+case "$header" in
+    "Merge "*|"Revert \""*|"fixup!"*|"squash!"*|"amend!"*)
+        exit 0
+        ;;
+esac
+
+# --- header ----------------------------------------------------------------
+
+trimmed=$(printf '%s' "$header" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+[ "$trimmed" = "$header" ] || note "header-trim: the subject line has leading or trailing whitespace"
+
+header_length=$(printf '%s' "$trimmed" | wc -c)
+if [ "$header_length" -gt "$max_length" ]; then
+    note "header-max-length: the subject is $header_length characters, the limit is $max_length"
+fi
+
+if printf '%s' "$trimmed" | grep -qE "^($types)(\([a-z0-9._-]+\))?!?: .+"; then
+    subject=$(printf '%s' "$trimmed" | sed -E "s/^($types)(\([a-z0-9._-]+\))?!?: //")
+
+    # subject-full-stop: a subject is a title, not a sentence.
+    case "$subject" in
+        *.) note "subject-full-stop: the subject ends with a full stop" ;;
+    esac
+
+    # subject-case: reject sentence-case, start-case and upper-case, the way
+    # commitlint does - by asking whether the subject *equals* its own
+    # conversion into that case, not merely whether it starts with a capital.
+    #
+    # The distinction matters here. "WinHTTP client for the update check" starts
+    # with a capital but is not sentence-case (that would be "Winhttp client
+    # ..."), and commitlint accepts it. A naive starts-with-a-capital test
+    # rejects it, and with it every subject opening on an acronym or a proper
+    # noun - MusicBee, FFI, mDNS - which this project's commits are full of.
+    #
+    # One sharp edge, inherited rather than invented: a capitalised opening token
+    # followed by all-lowercase text *is* sentence-case by this definition, so
+    # "V4 frames must stay byte-identical" is rejected while "MusicBee closes
+    # without reopening" is not. commitlint behaves the same way. Write "v4
+    # frames ..." or reword.
+    first=$(printf '%s' "$subject" | cut -c1)
+    rest=$(printf '%s' "$subject" | cut -c2-)
+    sentence="$(printf '%s' "$first" | tr '[:lower:]' '[:upper:]')$(printf '%s' "$rest" | tr '[:upper:]' '[:lower:]')"
+    [ "$subject" != "$sentence" ] || note "subject-case: the subject is sentence-case"
+
+    lowered=$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')
+    uppered=$(printf '%s' "$subject" | tr '[:lower:]' '[:upper:]')
+    if [ "$subject" = "$uppered" ] && [ "$subject" != "$lowered" ]; then
+        note "subject-case: the subject is upper-case"
+    fi
+
+    # start-case: every word capitalised ("Stop The Staging Directory Leaking").
+    if printf '%s' "$subject" | grep -qE '^[A-Z][^[:space:]]*([[:space:]]+[A-Z][^[:space:]]*)+$'; then
+        note "subject-case: the subject is start-case"
+    fi
+else
+    # Say which part is wrong rather than restating the whole grammar.
+    if printf '%s' "$trimmed" | grep -qE "^[A-Za-z]+(\(.*\))?!?:"; then
+        given=$(printf '%s' "$trimmed" | sed -E 's/^([A-Za-z]+).*/\1/')
+        if printf '%s' "$given" | grep -qE '[A-Z]'; then
+            note "type-case: the type must be lower-case, got '$given'"
+        else
+            note "type-enum: '$given' is not a known type"
+        fi
+        if printf '%s' "$trimmed" | grep -qE "^[A-Za-z]+\([^)]*[A-Z][^)]*\)"; then
+            note "scope-case: the scope must be lower-case"
+        fi
+        printf '%s' "$trimmed" | grep -qE ": .+" || note "subject-empty: there is no subject after the type"
+    else
+        note "the subject line is not a conventional commit"
+    fi
+fi
+
+# --- body and footer -------------------------------------------------------
+
+body=$(printf '%s\n' "$message" | tail -n +2)
+
+if [ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+    # body-leading-blank / footer-leading-blank, both warnings upstream.
+    second=$(printf '%s\n' "$message" | sed -n '2p')
+    [ -z "$(printf '%s' "$second" | tr -d '[:space:]')" ] || \
+        echo "commit-msg: note - body-leading-blank: leave a blank line after the subject"
+
+    long=$(printf '%s\n' "$body" | awk -v n="$max_length" 'length($0) > n { c++ } END { print c+0 }')
+    if [ "$long" -gt 0 ]; then
+        note "body-max-line-length: $long line(s) exceed $max_length characters"
+    fi
+fi
+
+# --- verdict ---------------------------------------------------------------
+
+if [ -z "$errors" ]; then
+    exit 0
+fi
+
+cat >&2 <<EOF
+commit-msg: this message does not follow Conventional Commits.
+
+  got: $header
+
+$errors
+  expected: <type>[(scope)][!]: <subject>
+  types:    $(printf '%s' "$types" | tr '|' ' ')
+
+  examples:
+    fix(update): stop the staging directory leaking after an apply
+    feat(diagnostics): capture a problem into one attachable file
+    chore!: drop support for the pre-V4 protocol
+
+  The scope is optional and free-form (lowercase). Merge, revert and
+  fixup!/squash! messages are exempt.
+
+  To bypass once: MBRC_SKIP_HOOKS=1 git commit ...
+  CI checks this too, so a bypass here is caught before it reaches main.
+EOF
+exit 1

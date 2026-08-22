@@ -202,9 +202,11 @@ The contribution guide should follow soon.
 
 One command per clone. Points `core.hooksPath` at [`tools/hooks`](tools/hooks),
 so the hooks are versioned and reviewable rather than living unseen in
-`.git/hooks`. `pre-commit` checks formatting (~2s); `pre-push` runs clippy, the
+`.git/hooks`. `commit-msg` enforces Conventional Commits (matching
+`@commitlint/config-conventional`, and re-checked in CI over every commit in a
+pull request); `pre-commit` checks formatting (~2s); `pre-push` runs clippy, the
 test suites, the generated-FFI-bindings drift check and `dotnet format`
-(~2-4 min). Skip either with `MBRC_SKIP_HOOKS=1`. They run on your platform only,
+(~2-4 min). Skip with `MBRC_SKIP_HOOKS=1`. They run on your platform only,
 so CI still has the last word - see [`tools/hooks/README.md`](tools/hooks/README.md).
 
 ## Building

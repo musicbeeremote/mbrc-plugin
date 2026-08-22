@@ -1,0 +1,56 @@
+name: commits
+
+# The local `commit-msg` hook can be skipped, and merges here are `--ff-only`,
+# so a pull request's commits land on main verbatim. Without this job one
+# MBRC_SKIP_HOOKS=1 would put a malformed subject in the permanent history.
+#
+# It runs `tools/hooks/commit-msg` - the same file the hook is - rather than a
+# copy of the rule, so the two cannot disagree.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    name: conventional commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Both endpoints of the range have to be present to list the commits
+          # between them; the default shallow fetch has neither.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: check every commit in this pull request
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          failed=0
+          message=$(mktemp)
+
+          # No commits is not a failure - an empty PR is GitHub's problem, not
+          # this job's.
+          for sha in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
+            git log -1 --format=%B "$sha" > "$message"
+            subject=$(git log -1 --format=%s "$sha")
+            if sh tools/hooks/commit-msg "$message"; then
+              echo "  ok   ${sha:0:8}  $subject"
+            else
+              echo "  FAIL ${sha:0:8}  $subject"
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo
+            echo "One or more commits are not conventional commits." >&2
+            echo "Reword them with an interactive rebase, then force-push." >&2
+            exit 1
+          fi
+          echo
+          echo "All commits in this pull request are conventional."
