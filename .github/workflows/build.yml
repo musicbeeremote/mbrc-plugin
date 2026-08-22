@@ -105,6 +105,13 @@ jobs:
             }
           }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          # Also into the job environment, so EVERY later step builds the same
+          # version - not just the one step that passes /p:Version. `dotnet test`
+          # rebuilds the plugin project it references, and without this it
+          # re-stamped mb_remote.dll with the bare VersionPrefix and the dist copy
+          # shipped that (see Directory.Build.props). Read by the managed build via
+          # Directory.Build.props and by the Rust core via mbrc-buildinfo.
+          echo "MBRC_VERSION=$version" >> $env:GITHUB_ENV
           echo "Building version: $version"
 
       - name: check code formatting
@@ -123,14 +130,11 @@ jobs:
       - name: build with strict analysis
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
-          # The Rust core and helper stamp themselves from this; without it
-          # mbrc-buildinfo falls back to VersionPrefix in Directory.Build.props,
-          # so every prerelease build would call itself the final version - in
-          # its log lines, in the mDNS TXT record, and in the update check's
-          # fallback when the host cannot report its own version. MSBuild drives
-          # the Rust build through the csproj target, so the environment reaches
-          # it from here.
-          MBRC_VERSION: ${{ steps.version.outputs.VERSION }}
+          # MBRC_VERSION is exported to the whole job by the resolve step above,
+          # so it reaches this build, the test step's implicit rebuild, and the
+          # Rust core (mbrc-buildinfo) alike. Without it a prerelease build calls
+          # itself the final version - in its log lines, in the mDNS TXT record,
+          # and in the update check.
         run: |
           echo "🔍 Building with strict static analysis (warnings as errors)..."
           msbuild MBRC.sln /p:Configuration="Release" /p:MSBuildCI="true" /p:Version=$env:VERSION /m /v:M /fl /nr:false
@@ -149,6 +153,27 @@ jobs:
           flags: csharp
           fail_ci_if_error: false
           verbose: true
+
+      # The stamp is what the updater compares, and it being wrong is invisible in
+      # a green build: beta.1 and beta.2 both shipped mis-stamped and nothing
+      # noticed until a tester was never offered an update. Checked after every
+      # step that could have rebuilt the assembly, and immediately before the
+      # bytes are copied for shipping.
+      - name: verify the stamped version
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          $dll = "build/bin/plugin/Release/net48/mb_remote.dll"
+          $stamped = (Get-Item $dll).VersionInfo.ProductVersion
+          # InformationalVersion carries "+<sha>" build metadata; the part before
+          # it is the version the update check actually compares.
+          $core = $stamped.Split('+')[0]
+          echo "stamped: $stamped"
+          if ($core -ne $env:VERSION) {
+            Write-Error "mb_remote.dll is stamped '$core' but this build is '$env:VERSION'. A later step rebuilt it without the version - shipping this would tell every client the wrong version."
+            exit 1
+          }
+          echo "✅ stamped version matches $env:VERSION"
 
       - name: copy to dist
         run: |

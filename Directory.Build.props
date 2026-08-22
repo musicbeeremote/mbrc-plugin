@@ -9,6 +9,25 @@
     <!-- VersionSuffix is set by CI for nightlies (e.g., -nightly.123) -->
     <!-- For releases, CI sets the full Version from the tag -->
 
+    <!--
+      The release version, taken from the environment rather than a command-line
+      property, so that EVERY MSBuild invocation in a CI job agrees on it - not
+      just the one that was passed /p:Version.
+
+      This is not belt-and-braces; it fixes a bug that shipped in 1.5.0-beta.1 and
+      -beta.2. `dotnet test` rebuilds the plugin project it references, without the
+      /p:Version the explicit build was given, so it silently overwrote the
+      correctly-stamped mb_remote.dll with one that fell back to VersionPrefix.
+      The dist copy ran afterwards, so both betas shipped stamped "1.5.0" while
+      their manifests said "1.5.0-beta.N" - and since semver ranks a prerelease
+      below its release, every update check answered "up to date" and no beta user
+      could ever be offered anything, including 1.5.0 final.
+
+      MBRC_VERSION already existed for the Rust core (mbrc-buildinfo reads it);
+      this makes the managed side honour the same single source.
+    -->
+    <Version Condition="'$(MBRC_VERSION)' != ''">$(MBRC_VERSION)</Version>
+
     <!-- Shared assembly information -->
     <Company>Kelsos</Company>
     <Authors>Konstantinos Paparas</Authors>
