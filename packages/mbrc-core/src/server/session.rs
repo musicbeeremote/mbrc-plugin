@@ -60,23 +60,23 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn nothing() -> Self {
+    pub(crate) fn nothing() -> Self {
         Self::default()
     }
-    fn reply(frame: String) -> Self {
+    pub(crate) fn reply(frame: String) -> Self {
         Self {
             replies: vec![frame],
             close: false,
         }
     }
-    fn reply_and_close(frame: String) -> Self {
+    pub(crate) fn reply_and_close(frame: String) -> Self {
         Self {
             replies: vec![frame],
             close: true,
         }
     }
     /// Close the connection without sending a frame.
-    fn close() -> Self {
+    pub(crate) fn close() -> Self {
         Self {
             replies: Vec::new(),
             close: true,
@@ -259,6 +259,18 @@ impl Session {
                 Outcome::nothing()
             }
         }
+    }
+
+    /// Registration metadata once the handshake completes (`None` before). A
+    /// legacy main is any handshaked connection that did not opt out of broadcasts.
+    pub fn reg_meta(&self) -> Option<super::RegMeta> {
+        let protocol = self.protocol_version?;
+        Some(super::RegMeta {
+            client_id: self.client_id.clone(),
+            is_main: !self.no_broadcast,
+            platform: self.platform.clone(),
+            protocol,
+        })
     }
 
     fn handle_protocol(&mut self, data: &Value) -> Outcome {

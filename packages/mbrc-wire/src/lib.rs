@@ -8,6 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod v6;
+
 /// Line terminator for the legacy CRLF-JSON protocol.
 pub const TERMINATOR: &str = "\r\n";
 
@@ -184,9 +186,14 @@ impl ClientHandshake {
 /// peer that streams bytes without ever sending a terminator (issue #138).
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 
-/// Splits a byte stream into CRLF-delimited frames, matching the legacy client's
-/// strict `\r\n` framing. Bytes are appended with [`push_bytes`](Self::push_bytes)
-/// and complete frames drained with [`next_frame`](Self::next_frame).
+/// Splits a byte stream into newline-delimited frames. It breaks on `\n` and
+/// trims a single trailing `\r`, so it handles **both** the legacy CRLF (`\r\n`)
+/// framing and V6's bare-LF (`\n`) framing identically. That matters because a
+/// connection is routed to V4/V5 vs V6 only *after* its first frame is read, so
+/// one accumulator must decode the socket before the protocol is known. For a
+/// well-formed CRLF stream this yields byte-identical frames to the old `\r\n`
+/// split. Bytes are appended with [`push_bytes`](Self::push_bytes) and complete
+/// frames drained with [`next_frame`](Self::next_frame).
 ///
 /// Buffering is bounded by a max-frame cap (default [`DEFAULT_MAX_FRAME_BYTES`]):
 /// bytes accumulated past the cap with no terminator are dropped and
@@ -221,14 +228,18 @@ impl FrameAccumulator {
     }
 
     /// Pop the next complete frame (terminator stripped), or `None` if no full
-    /// frame has arrived yet. When the buffer grows past the cap with no
-    /// terminator, the accumulated bytes are dropped and
-    /// [`overflowed`](Self::overflowed) latches true so the caller can close the
-    /// connection.
+    /// frame has arrived yet. Splits on `\n`; a trailing `\r` (the CR of a legacy
+    /// `\r\n`) is stripped, since a JSON frame body never ends in `\r`. When the
+    /// buffer grows past the cap with no terminator, the accumulated bytes are
+    /// dropped and [`overflowed`](Self::overflowed) latches true so the caller can
+    /// close the connection.
     pub fn next_frame(&mut self) -> Option<String> {
-        if let Some(idx) = self.acc.find(TERMINATOR) {
-            let line = self.acc[..idx].to_string();
-            self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
+        if let Some(idx) = self.acc.find('\n') {
+            let mut line = self.acc[..idx].to_string();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+            self.acc = self.acc[idx + 1..].to_string();
             return Some(line);
         }
         // No complete frame. A buffer past the cap with no terminator in sight is

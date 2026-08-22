@@ -1,0 +1,6 @@
+{"name":"player_status","request":"{\"id\":1,\"kind\":\"request\",\"op\":\"player_status\",\"data\":{}}","response":"{\"id\":1,\"kind\":\"response\",\"data\":{\"play_state\":\"playing\",\"volume\":75,\"muted\":false,\"shuffle\":\"off\",\"repeat\":\"none\",\"scrobbling\":true}}"}
+{"name":"player_output","request":"{\"id\":2,\"kind\":\"request\",\"op\":\"player_output\",\"data\":{}}","response":"{\"id\":2,\"kind\":\"response\",\"data\":{\"active\":\"Speakers\",\"devices\":[\"Speakers\",\"Headphones\"]}}"}
+{"name":"player_set_volume","request":"{\"id\":3,\"kind\":\"request\",\"op\":\"player_set_volume\",\"data\":{\"volume\":50}}","response":"{\"id\":3,\"kind\":\"response\",\"data\":{\"volume\":75}}"}
+{"name":"player_set_mute","request":"{\"id\":4,\"kind\":\"request\",\"op\":\"player_set_mute\",\"data\":{\"muted\":true}}","response":"{\"id\":4,\"kind\":\"response\",\"data\":{\"muted\":false}}"}
+{"name":"player_set_shuffle","request":"{\"id\":5,\"kind\":\"request\",\"op\":\"player_set_shuffle\",\"data\":{\"mode\":\"shuffle\"}}","response":"{\"id\":5,\"kind\":\"response\",\"data\":{\"mode\":\"off\"}}"}
+{"name":"player_set_repeat","request":"{\"id\":6,\"kind\":\"request\",\"op\":\"player_set_repeat\",\"data\":{\"mode\":\"all\"}}","response":"{\"id\":6,\"kind\":\"response\",\"data\":{\"mode\":\"none\"}}"}

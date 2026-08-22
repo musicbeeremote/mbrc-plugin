@@ -53,17 +53,17 @@ export function emptyNowPlaying(): NowPlaying {
   };
 }
 
-function str(v: unknown): string {
+export function str(v: unknown): string {
   return v == null ? "" : String(v);
 }
 
-function clampVolume(v: unknown): number {
+export function clampVolume(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-function parseState(v: unknown): PlayState {
+export function parseState(v: unknown): PlayState {
   const s = str(v).toLowerCase();
   if (s === "playing") return "Playing";
   if (s === "paused") return "Paused";
@@ -71,7 +71,7 @@ function parseState(v: unknown): PlayState {
   return "Unknown";
 }
 
-function parseShuffle(v: unknown): ShuffleMode {
+export function parseShuffle(v: unknown): ShuffleMode {
   if (typeof v === "boolean") return v ? "shuffle" : "off";
   const s = str(v).toLowerCase();
   if (s === "off") return "off";
@@ -80,7 +80,7 @@ function parseShuffle(v: unknown): ShuffleMode {
   return "unknown";
 }
 
-function parseRepeat(v: unknown): RepeatMode {
+export function parseRepeat(v: unknown): RepeatMode {
   const s = str(v).toLowerCase();
   if (s === "none") return "None";
   if (s === "all") return "All";
@@ -88,7 +88,7 @@ function parseRepeat(v: unknown): RepeatMode {
   return "Undefined";
 }
 
-function parseLfm(v: unknown): LfmStatus {
+export function parseLfm(v: unknown): LfmStatus {
   const s = str(v).toLowerCase();
   if (s === "love") return "Love";
   if (s === "ban") return "Ban";
@@ -97,7 +97,7 @@ function parseLfm(v: unknown): LfmStatus {
 }
 
 /** Sniff the image type from a base64 payload's leading bytes. */
-function imageMime(base64: string): string {
+export function imageMime(base64: string): string {
   if (base64.startsWith("/9j/")) return "image/jpeg";
   if (base64.startsWith("iVBOR")) return "image/png";
   if (base64.startsWith("R0lGOD")) return "image/gif";
@@ -106,7 +106,7 @@ function imageMime(base64: string): string {
 }
 
 /** True for a non-empty, plausibly-base64 string (not a status token). */
-function looksBase64(v: string): boolean {
+export function looksBase64(v: string): boolean {
   return v.length > 16 && /^[A-Za-z0-9+/]+={0,2}$/.test(v);
 }
 

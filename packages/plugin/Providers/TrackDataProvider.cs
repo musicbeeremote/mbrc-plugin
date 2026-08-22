@@ -169,6 +169,26 @@ namespace MusicBeePlugin.Providers
             return _api.ApiRevision >= 17 ? _api.NowPlaying_GetDownloadedLyrics() : string.Empty;
         }
 
+        public string GetSyncedLyrics()
+        {
+            // Prefer real synchronized (LRC) lyrics for the current file, then
+            // unsynchronised, before the paramless now-playing lyrics - a track can
+            // have synced LRC the paramless call does not return (#113).
+            var url = _api.NowPlaying_GetFileUrl();
+            if (!string.IsNullOrEmpty(url) && _api.Library_GetLyrics != null)
+            {
+                var synced = _api.Library_GetLyrics(url, Plugin.LyricsType.Synchronised);
+                if (!string.IsNullOrEmpty(synced))
+                    return synced;
+
+                var unsynced = _api.Library_GetLyrics(url, Plugin.LyricsType.UnSynchronised);
+                if (!string.IsNullOrEmpty(unsynced))
+                    return unsynced;
+            }
+
+            return GetNowPlayingLyrics();
+        }
+
         #endregion
 
         #region Now Playing List Operations
