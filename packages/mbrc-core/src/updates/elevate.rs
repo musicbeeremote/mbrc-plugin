@@ -366,23 +366,36 @@ fn spawn(exe: &Path, arguments: &[String], elevate: bool) -> UpdateLaunch {
 /// between the hash check and this call. Rust opens files non-inheritable, so the
 /// handle is not passed to the child either.
 ///
-/// # Unverified, and one known risk
+/// # Why a packaged parent needs more than `Command::spawn`
 ///
-/// A packaged MusicBee runs inside a **job object** (confirmed with
-/// `IsProcessInJob`), and a `CreateProcess` child joins its parent's job. If that
-/// job terminates its processes when the app exits, this helper dies at exactly
-/// the moment it stops waiting and starts work - which would make this change
-/// worse than what it replaces, not better. `CREATE_BREAKAWAY_FROM_JOB` is the
-/// escape hatch, but only if the job permits breakaway.
+/// A `CreateProcess` child of a packaged (MSIX) app does **not** inherit the
+/// package container by default, and that is documented behaviour rather than an
+/// anomaly: `PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY` defaults to
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`, which puts
+/// children *outside* the desktop app runtime environment. The helper then sees
+/// the un-redirected `%APPDATA%`, where nothing we staged exists, and correctly
+/// refuses to act on paths it cannot resolve.
 ///
-/// Neither the container inheritance this relies on nor the job behaviour above
-/// has been observed on a real Store install: the helper that runs is always the
-/// *staged* one, so only a release built from this code can exercise it. The
-/// first hop that can is beta.3 -> beta.4. If it turns out wrong, the fallback is
-/// to keep the shell launch and have the core resolve the real container paths
-/// (`GetFinalPathNameByHandleW`) before passing them, which depends on neither.
+/// Observed twice on a real Store install, both times as
+/// `--staged "..." cannot be resolved: The system cannot find the path
+/// specified. (os error 3)`. The job object a packaged app runs in was
+/// suspected first and is ruled out: the helper ran, logged, and exited of its
+/// own accord.
+///
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE` reverses that for the
+/// child being created (not its descendants, which is all we need). The child
+/// then sees exactly what the core sees, so the existing argv needs no path
+/// translation - which is the reason this is preferable to resolving container
+/// paths with `GetFinalPathNameByHandleW` before passing them: that returns
+/// `\?\`-prefixed paths, and the helper's `checked_path` rejects a leading
+/// double backslash as a network path.
 #[cfg(windows)]
 fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
+    // Only a packaged parent has the problem, and the attribute is only
+    // meaningful there. An ordinary install keeps the plain, well-trodden path.
+    if current_aumid().is_some() {
+        return spawn_in_container(exe, arguments);
+    }
     match std::process::Command::new(exe).args(arguments).spawn() {
         Ok(_) => UpdateLaunch::Launched,
         Err(e) => {
@@ -390,6 +403,122 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
             UpdateLaunch::Failed
         }
     }
+}
+
+/// Starts the helper as a child that stays *inside* this packaged app's
+/// container.
+///
+/// `std::process::Command` cannot set proc-thread attributes, so this is raw
+/// `CreateProcessW` with an attribute list. The dance is fiddly in three places
+/// and each one is load-bearing:
+///
+/// - the attribute list is sized by a first, deliberately-failing
+///   `InitializeProcThreadAttributeList` call, then allocated and initialized;
+/// - `policy` must outlive the attribute list, because `UpdateProcThreadAttribute`
+///   stores the pointer rather than copying the value - a temporary here would
+///   be a dangling read at `CreateProcessW`;
+/// - `lpCommandLine` must be a writable buffer: `CreateProcessW` may modify it
+///   in place.
+#[cfg(windows)]
+fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
+        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
+    };
+    use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE;
+
+    let mut command_line = wide(&format!("\"{}\" {}", exe.display(), quote(arguments)));
+
+    // First call fails with ERROR_INSUFFICIENT_BUFFER by design and reports the
+    // size; one attribute is all this ever sets.
+    let mut size: usize = 0;
+    // SAFETY: the documented probe - a null list with the size out-parameter.
+    unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut size) };
+    if size == 0 {
+        tracing::error!("could not size the process attribute list");
+        return UpdateLaunch::Failed;
+    }
+    let mut buffer = vec![0u8; size];
+    let list = buffer.as_mut_ptr() as LPPROC_THREAD_ATTRIBUTE_LIST;
+    // SAFETY: `buffer` is `size` bytes, which is what the probe asked for.
+    if unsafe { InitializeProcThreadAttributeList(list, 1, 0, &mut size) } == 0 {
+        tracing::error!(
+            code = unsafe { GetLastError() },
+            "could not initialize the process attribute list"
+        );
+        return UpdateLaunch::Failed;
+    }
+
+    // Must outlive `list`: the attribute stores this pointer, it does not copy.
+    let policy: u32 = PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE;
+    // SAFETY: `list` is initialized above, and `policy` is a DWORD living until
+    // after `DeleteProcThreadAttributeList` below.
+    let updated = unsafe {
+        UpdateProcThreadAttribute(
+            list,
+            0,
+            PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY as usize,
+            &policy as *const u32 as *const std::ffi::c_void,
+            size_of::<u32>(),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+        )
+    };
+    if updated == 0 {
+        let code = unsafe { GetLastError() };
+        // SAFETY: `list` was initialized.
+        unsafe { DeleteProcThreadAttributeList(list) };
+        tracing::error!(code, "could not set the desktop-app breakaway policy");
+        return UpdateLaunch::Failed;
+    }
+
+    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
+    startup.lpAttributeList = list;
+    let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+
+    // SAFETY: `command_line` is a writable null-terminated wide buffer that
+    // outlives the call, and the startup info carries its real size plus the
+    // attribute list initialized above.
+    let started = unsafe {
+        CreateProcessW(
+            std::ptr::null(),
+            command_line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            EXTENDED_STARTUPINFO_PRESENT,
+            std::ptr::null(),
+            std::ptr::null(),
+            &startup.StartupInfo,
+            &mut process,
+        )
+    };
+    let code = unsafe { GetLastError() };
+    // SAFETY: `list` was initialized and is no longer referenced by anything.
+    unsafe { DeleteProcThreadAttributeList(list) };
+
+    if started == 0 {
+        tracing::error!(
+            code,
+            "could not start the update helper inside the container"
+        );
+        return UpdateLaunch::Failed;
+    }
+    // Nothing waits on the helper - it outlives us deliberately - so both
+    // handles are closed straight away rather than leaked until process exit.
+    // SAFETY: both handles come from a successful CreateProcessW.
+    unsafe {
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+    }
+    tracing::info!(
+        pid = process.dwProcessId,
+        "started the update helper inside the package container"
+    );
+    UpdateLaunch::Launched
 }
 
 #[cfg(windows)]

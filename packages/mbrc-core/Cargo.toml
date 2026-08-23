@@ -83,6 +83,14 @@ windows-sys = { version = "=0.61.2", features = [
     # an ordinary one. A packaged app cannot be started by path, so the update
     # helper has to be told the identity to activate instead.
     "Win32_Storage_Packaging_Appx",
+    # CreateProcessW with a proc-thread attribute list: a packaged app's children
+    # leave the package container by default, so the update helper has to be
+    # started with PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE to see the
+    # same redirected paths the core does.
+    "Win32_System_Threading",
+    # PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE lives here, not beside the
+    # attribute constant it is a value for.
+    "Win32_System_WindowsProgramming",
 ] }
 
 [build-dependencies]
