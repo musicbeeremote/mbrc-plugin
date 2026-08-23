@@ -404,7 +404,14 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
                     tracing::error!(%status, "the update helper exited immediately");
                     UpdateLaunch::Failed
                 }
-                _ => UpdateLaunch::Launched,
+                Ok(None) => UpdateLaunch::Launched,
+                // Not knowing is not the same as knowing it is fine, but the
+                // helper was started and the alternative is refusing an update
+                // that is probably running. Say so and go on.
+                Err(e) => {
+                    tracing::warn!(error = %e, "could not confirm the update helper is still running");
+                    UpdateLaunch::Launched
+                }
             }
         }
         Err(e) => {
@@ -423,6 +430,7 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
 /// bundle that does not verify - happens in milliseconds, while a healthy helper
 /// then sits waiting for MusicBee for two minutes. A short pause separates the
 /// two cleanly, and it costs a keypress that was about to close the app anyway.
+#[cfg(windows)]
 const SETTLE: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// Starts the helper as a child that stays *inside* this packaged app's
@@ -441,12 +449,11 @@ const SETTLE: std::time::Duration = std::time::Duration::from_millis(750);
 ///   in place.
 #[cfg(windows)]
 fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, WAIT_OBJECT_0};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
     use windows_sys::Win32::System::Threading::{
-        CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
-        InitializeProcThreadAttributeList, UpdateProcThreadAttribute, WaitForSingleObject,
-        EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
-        PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
+        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
+        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
     };
     use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE;
 
@@ -532,15 +539,7 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     // helper outlives us deliberately, so the handles are closed rather than
     // held until process exit.
     // SAFETY: both handles come from a successful CreateProcessW.
-    let exited = unsafe { WaitForSingleObject(process.hProcess, SETTLE.as_millis() as u32) };
-    let mut status: u32 = 0;
-    let status = if exited == WAIT_OBJECT_0 {
-        // SAFETY: the handle is live until CloseHandle below.
-        unsafe { GetExitCodeProcess(process.hProcess, &mut status) };
-        Some(status)
-    } else {
-        None
-    };
+    let status = settled_exit_code(process.hProcess);
     // SAFETY: both handles come from a successful CreateProcessW.
     unsafe {
         CloseHandle(process.hThread);
@@ -561,10 +560,37 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     UpdateLaunch::Launched
 }
 
+/// Watches a just-started helper for [`SETTLE`] and reports its exit code if it
+/// has already finished.
+///
+/// `None` means "still running, or could not be determined". Only an observed
+/// exit is a reason to refuse: `WAIT_FAILED` and a `GetExitCodeProcess` that
+/// does not succeed leave us not knowing, and turning not-knowing into a refusal
+/// would strand an update that is very likely applying.
+#[cfg(windows)]
+fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> Option<u32> {
+    use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+
+    // SAFETY: `process` is a live process handle owned by the caller.
+    if unsafe { WaitForSingleObject(process, SETTLE.as_millis() as u32) } != WAIT_OBJECT_0 {
+        return None;
+    }
+    let mut status: u32 = 0;
+    // SAFETY: same handle, still live; `status` is a plain out-parameter.
+    if unsafe { GetExitCodeProcess(process, &mut status) } == 0 {
+        tracing::warn!("the update helper exited but its status could not be read");
+        return None;
+    }
+    Some(status)
+}
+
 #[cfg(windows)]
 fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{GetLastError, ERROR_CANCELLED};
-    use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
+    use windows_sys::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     let verb = wide("runas");
@@ -575,7 +601,9 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
     // NOASYNC because this process is about to be asked to exit: the shell must
     // finish launching before we can go away.
-    info.fMask = SEE_MASK_NOASYNC;
+    // NOCLOSEPROCESS so `hProcess` comes back and the launch can be confirmed
+    // the same way the direct paths confirm theirs; the handle is ours to close.
+    info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
     info.lpVerb = verb.as_ptr();
     info.lpFile = file.as_ptr();
     info.lpParameters = parameters.as_ptr();
@@ -585,6 +613,24 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     // outlives the call, and `cbSize` is the struct's real size.
     let ok = unsafe { ShellExecuteExW(&mut info) };
     if ok != 0 {
+        // `SEE_MASK_NOASYNC` waits for the shell to *start* the helper, not for
+        // it to survive - so without this an instant refusal still closes
+        // MusicBee into silence, which is the whole failure `SETTLE` exists to
+        // stop. The handle can still be null if the shell reused an existing
+        // process; nothing to watch then, and nothing to close.
+        if !info.hProcess.is_null() {
+            let status = settled_exit_code(info.hProcess);
+            // SAFETY: the handle came from a successful ShellExecuteExW with
+            // NOCLOSEPROCESS, so closing it is this function's job.
+            unsafe { CloseHandle(info.hProcess) };
+            if let Some(status) = status {
+                tracing::error!(
+                    status,
+                    "the elevated update helper exited immediately; see mbrc-helper.log"
+                );
+                return UpdateLaunch::Failed;
+            }
+        }
         return UpdateLaunch::Launched;
     }
 

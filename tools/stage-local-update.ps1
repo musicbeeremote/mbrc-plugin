@@ -57,22 +57,39 @@ if (-not (Test-Path $sec)) {
     New-Item -ItemType Directory -Force -Path $KeyDir | Out-Null
     # -W: passwordless, so signing never blocks on a prompt.
     rsign generate -W -p $pub -s $sec -c "mbrc local test key" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "rsign generate failed ($LASTEXITCODE)" }
 }
 
+# Copied UNCONDITIONALLY, not just when it is missing. $KeyDir defaults under
+# $env:TEMP, which Storage Sense wipes, while keys\dev.pub survives - so
+# "generate a new keypair, keep trusting the old public half" is a state this
+# reaches on its own. It signs with a key the build does not trust and the apply
+# refuses with a bare VerifyFailed that names nothing.
 $trusted = Join-Path $keysDir "dev.pub"
-if (-not (Test-Path $trusted)) {
-    Step "Trusting the dev key for local builds (untracked)"
-    Copy-Item $pub $trusted -Force
-    Write-Host "  copied to packages\mbrc-release\keys\dev.pub (gitignored)" -ForegroundColor Yellow
-    Write-Host "  every build that compiles it in says so; never ship one" -ForegroundColor Yellow
-}
+Step "Trusting the dev key for local builds"
+Copy-Item $pub $trusted -Force
+Write-Host "  packages\mbrc-release\keys\dev.pub (gitignored)" -ForegroundColor Yellow
+Write-Host "  every build that compiles it in says so; never ship one" -ForegroundColor Yellow
 
 # --- build -----------------------------------------------------------------
 
 if (-not $SkipBuild) {
     Step "Building stamped $Version"
-    $env:MBRC_VERSION = $Version
-    & (Join-Path $root "build.ps1") -Configuration Release | Out-Null
+    # $env: assignments are process-wide, not script-scoped: without restoring
+    # it, every later build in this shell is stamped with the test version, and
+    # such a build refuses real updates because is_upgrade compares against it.
+    $previousVersion = $env:MBRC_VERSION
+    try {
+        $env:MBRC_VERSION = $Version
+        & (Join-Path $root "build.ps1") -Configuration Release | Out-Null
+        # Out-Null hides the failure and stale artifacts satisfy the Test-Path
+        # check below, so without this a broken build stages the PREVIOUS
+        # binaries under the new version and the test run proves nothing.
+        if ($LASTEXITCODE -ne 0) { throw "build.ps1 failed ($LASTEXITCODE)" }
+    }
+    finally {
+        $env:MBRC_VERSION = $previousVersion
+    }
 }
 
 $out = Join-Path $root "build\bin\plugin\Release\net48"
@@ -121,6 +138,7 @@ $manifestPath = Join-Path $staged "manifest.json"
 
 rsign sign -W -s $sec -x (Join-Path $staged "manifest.json.minisig") `
     -t "MusicBee Remote $Version (local test)" $manifestPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "rsign sign failed ($LASTEXITCODE)" }
 
 # --- stage -----------------------------------------------------------------
 
