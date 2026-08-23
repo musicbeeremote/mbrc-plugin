@@ -10,6 +10,7 @@ pub mod cover;
 pub mod diagnostics;
 pub mod discovery;
 pub mod ffi;
+pub mod legacy;
 pub mod logging;
 pub mod mdns;
 pub mod metadata_cache;
@@ -94,6 +95,9 @@ pub unsafe extern "C" fn mbrc_initialize(
         // it to core_settings.json before loading (one-time, best-effort).
         config::migrate_legacy_settings(&storage_path);
         let config = config::Config::load(&storage_path);
+        // After the migration and the load, so `settings.xml` is only removed
+        // once its contents are safely in `core_settings.json`.
+        legacy::sweep(&storage_path, updates::elevate::plugins_dir().as_deref());
         let providers: Arc<dyn Providers> =
             Arc::new(FfiProviders::new(SafeCallbacks::new(callbacks)));
         let result = state::initialize(providers, config);

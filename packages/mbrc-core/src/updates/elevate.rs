@@ -288,7 +288,7 @@ fn is_writable(dir: &Path) -> bool {
 /// directory. Asked of the loader rather than assembled from a MusicBee path:
 /// this is the one answer that is true by construction.
 #[cfg(windows)]
-fn plugins_dir() -> Option<PathBuf> {
+pub(crate) fn plugins_dir() -> Option<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::HMODULE;
     use windows_sys::Win32::System::LibraryLoader::{
@@ -323,7 +323,7 @@ fn plugins_dir() -> Option<PathBuf> {
 }
 
 #[cfg(not(windows))]
-fn plugins_dir() -> Option<PathBuf> {
+pub(crate) fn plugins_dir() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf))
