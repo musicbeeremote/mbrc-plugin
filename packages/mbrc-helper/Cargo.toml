@@ -34,6 +34,10 @@ mbrc-buildinfo.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows = { version = "=0.62.2", features = [
     "Win32_System_Threading",
+    # GetCurrentPackageFamilyName: the helper records whether it is running
+    # inside a package container, because a helper that broke out of one logs to
+    # a path that can belong to a different install entirely.
+    "Win32_Storage_Packaging_Appx",
     "Win32_NetworkManagement_WindowsFirewall",
     "Win32_System_Com",
     "Win32_System_Ole",

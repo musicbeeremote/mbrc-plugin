@@ -178,3 +178,11 @@ TestResults/
 
 # Release signing keys: private halves must never be committed.
 mbrc-release-*.key
+
+# Local update-testing keys. `mbrc-release/build.rs` compiles every keys/*.pub
+# into TRUSTED_KEYS, so dropping one here makes a LOCAL build trust a locally
+# signed bundle - which is what lets tools/stage-local-update.ps1 exercise the
+# apply path without cutting a release. It must never reach a release: a build
+# carrying it trusts any bundle writable in the staging directory, and the apply
+# runs elevated. CI builds from a clean checkout, so ignoring it is the boundary.
+packages/mbrc-release/keys/dev*.pub

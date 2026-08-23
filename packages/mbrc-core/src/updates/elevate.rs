@@ -397,13 +397,33 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
         return spawn_in_container(exe, arguments);
     }
     match std::process::Command::new(exe).args(arguments).spawn() {
-        Ok(_) => UpdateLaunch::Launched,
+        Ok(mut child) => {
+            std::thread::sleep(SETTLE);
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    tracing::error!(%status, "the update helper exited immediately");
+                    UpdateLaunch::Failed
+                }
+                _ => UpdateLaunch::Launched,
+            }
+        }
         Err(e) => {
             tracing::error!(error = %e, "could not start the update helper");
             UpdateLaunch::Failed
         }
     }
 }
+
+/// How long to watch a just-started helper before believing it.
+///
+/// `Launched` makes the panel close MusicBee, so reporting it for a helper that
+/// has already refused produces the worst outcome available: MusicBee shuts, the
+/// update does not happen, and there is no window left to say so. Every refusal
+/// the helper can reach before it starts waiting - a path it cannot resolve, a
+/// bundle that does not verify - happens in milliseconds, while a healthy helper
+/// then sits waiting for MusicBee for two minutes. A short pause separates the
+/// two cleanly, and it costs a keypress that was about to close the app anyway.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// Starts the helper as a child that stays *inside* this packaged app's
 /// container.
@@ -421,11 +441,12 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
 ///   in place.
 #[cfg(windows)]
 fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Threading::{
-        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
-        UpdateProcThreadAttribute, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
-        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
+        CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
+        InitializeProcThreadAttributeList, UpdateProcThreadAttribute, WaitForSingleObject,
+        EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+        PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
     };
     use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE;
 
@@ -507,12 +528,31 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
         );
         return UpdateLaunch::Failed;
     }
-    // Nothing waits on the helper - it outlives us deliberately - so both
-    // handles are closed straight away rather than leaked until process exit.
+    // Watch it briefly before believing it (see `SETTLE`), then let it go: the
+    // helper outlives us deliberately, so the handles are closed rather than
+    // held until process exit.
+    // SAFETY: both handles come from a successful CreateProcessW.
+    let exited = unsafe { WaitForSingleObject(process.hProcess, SETTLE.as_millis() as u32) };
+    let mut status: u32 = 0;
+    let status = if exited == WAIT_OBJECT_0 {
+        // SAFETY: the handle is live until CloseHandle below.
+        unsafe { GetExitCodeProcess(process.hProcess, &mut status) };
+        Some(status)
+    } else {
+        None
+    };
     // SAFETY: both handles come from a successful CreateProcessW.
     unsafe {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
+    }
+
+    if let Some(status) = status {
+        tracing::error!(
+            status,
+            "the update helper exited immediately; see mbrc-helper.log"
+        );
+        return UpdateLaunch::Failed;
     }
     tracing::info!(
         pid = process.dwProcessId,

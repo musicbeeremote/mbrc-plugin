@@ -48,6 +48,62 @@ pub fn direct_to_storage(staged: &Path) {
     *sink() = choose_sink(staged, &std::env::temp_dir());
 }
 
+/// Records where this process actually is, which is the question every
+/// Store-install failure has turned on.
+///
+/// It is not answerable from the log otherwise, and the ambiguity is not
+/// theoretical: a helper that ran *outside* a package container resolves
+/// `%APPDATA%` literally, and on a machine that also has an ordinary install
+/// that path exists - so its lines append to the *other* install's
+/// `mbrc-helper.log` with nothing to say they came from somewhere else. Two
+/// installs, one file, no attribution. This line is the attribution.
+pub fn note_environment() {
+    let identity = match package_family_name() {
+        Some(family) => format!("packaged ({family})"),
+        None => "unpackaged".to_owned(),
+    };
+    let sink = match sink().as_ref() {
+        Some(path) => path.display().to_string(),
+        None => "nowhere (no usable storage or temp directory)".to_owned(),
+    };
+    line(&format!("running {identity}; logging to {sink}"));
+}
+
+/// This process's package family name, or `None` when it has no package
+/// identity - the ordinary desktop install, and by far the common case.
+#[cfg(windows)]
+fn package_family_name() -> Option<String> {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
+    use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFamilyName;
+
+    let mut length: u32 = 0;
+    // SAFETY: the documented probe - a null buffer with a zero length asks for
+    // the required size and writes nothing.
+    let probe = unsafe { GetCurrentPackageFamilyName(&mut length, None) };
+    // APPMODEL_ERROR_NO_PACKAGE lands here for an unpackaged process, which is a
+    // normal answer rather than a failure.
+    if probe != ERROR_INSUFFICIENT_BUFFER || length == 0 {
+        return None;
+    }
+
+    let mut buffer = vec![0u16; length as usize];
+    // SAFETY: `buffer` holds `length` units, which is what the probe asked for.
+    let result =
+        unsafe { GetCurrentPackageFamilyName(&mut length, Some(PWSTR(buffer.as_mut_ptr()))) };
+    if result != ERROR_SUCCESS {
+        return None;
+    }
+    // The reported length counts the terminating null.
+    let end = (length as usize).saturating_sub(1).min(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..end]))
+}
+
+#[cfg(not(windows))]
+fn package_family_name() -> Option<String> {
+    None
+}
+
 /// Where a line would go, given a staging directory and a fallback directory.
 ///
 /// Split from [`direct_to_storage`] so it can be tested without the fallback

@@ -164,6 +164,7 @@ fn run_update(request: &update::Request<'_>) -> u8 {
     // ("--staged cannot be resolved") is how a packaged install fails, and it
     // used to vanish into a console that does not exist.
     log::direct_to_storage(std::path::Path::new(request.staged));
+    log::note_environment();
     log::line(&format!(
         "update requested: pid={} staged={} target={}",
         request.pid, request.staged, request.target
