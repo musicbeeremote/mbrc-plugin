@@ -24,9 +24,26 @@
 //!   create it aim a delete somewhere else. So is a file with more than one hard
 //!   link, which `is_file()` alone cannot tell apart from an ordinary one - the
 //!   name would be ours to remove, but the data would not.
+//! - **Absolute directories only.** A relative one would resolve against the
+//!   process working directory, which for us is MusicBee's install folder - so
+//!   an empty or relative storage path would aim these deletes at a directory
+//!   nobody chose. The helper's `checked_path` refuses relative paths for the
+//!   same reason.
+//! - **No descending through a link.** The leaf check above does not cover the
+//!   directory components above it, and `cache/` is the one component this
+//!   walks through. A junction there would redirect the delete wholesale, so it
+//!   has to be a real directory - the same rule the update staging code applies
+//!   to its own directories.
 //! - **Best effort, never fatal.** A file that cannot be removed is logged and
 //!   skipped. This runs during startup and must never be the reason the plugin
 //!   does not start.
+//!
+//! What is deliberately *not* defended against is the window between the check
+//! and the delete. It does not need to be: both platforms unlink the name rather
+//! than following it, so a link swapped in after the check is itself what gets
+//! removed, never its target. And everything here runs unelevated, as the user
+//! who already owns these directories - so there is no privilege to gain by
+//! racing it.
 
 use std::path::Path;
 
@@ -71,6 +88,16 @@ const RETIRED_PLUGIN_FILES: &[&str] = &["firewall-utility.exe"];
 /// decision to make based on it.
 pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
     let storage = Path::new(storage_path);
+    if !storage.is_absolute() {
+        // Relative would resolve against MusicBee's install directory. Nothing
+        // should ever hand us one, which is exactly why it is worth saying so
+        // instead of quietly deleting somewhere else.
+        tracing::warn!(
+            path = %storage.display(),
+            "not sweeping: the storage path is not absolute"
+        );
+        return;
+    }
 
     let mut removed = 0usize;
     let mut freed = 0u64;
@@ -98,9 +125,16 @@ pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
 
     // Renamed rather than deleted when the cover state moved into redb, as a
     // safety net for a migration that has long since shipped.
-    if let Some(size) = remove_file(&storage.join("cache"), "state.json.migrated") {
-        removed += 1;
-        freed += size;
+    //
+    // This is the only directory component the sweep walks through, and the
+    // leaf's reparse-point check says nothing about it: a junction here would
+    // redirect the delete somewhere else entirely.
+    let cache = storage.join("cache");
+    if is_real_directory(&cache) {
+        if let Some(size) = remove_file(&cache, "state.json.migrated") {
+            removed += 1;
+            freed += size;
+        }
     }
 
     // The plugins directory is not writable on a standard installation, and does
@@ -169,6 +203,26 @@ fn remove_file(dir: &Path, name: &str) -> Option<u64> {
             tracing::debug!(path = %path.display(), error = %e, "could not remove a file from an earlier version");
             None
         }
+    }
+}
+
+/// Whether `path` is a directory in its own right, rather than a link to one.
+///
+/// Absent is not an error - there is simply nothing to sweep - and neither is a
+/// junction: it just means the sweep stops rather than following it.
+fn is_real_directory(path: &Path) -> bool {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_dir() => true,
+        Ok(meta) => {
+            if meta.file_type().is_symlink() {
+                tracing::warn!(
+                    path = %path.display(),
+                    "not sweeping through a link that stands where a directory should"
+                );
+            }
+            false
+        }
+        Err(_) => false,
     }
 }
 
@@ -331,6 +385,53 @@ mod tests {
         );
         assert!(dir.join("somebody-elses-file").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_relative_storage_path_sweeps_nothing() {
+        // Would otherwise resolve against MusicBee's install directory.
+        let dir = scratch("relative");
+        write(&dir, "mbrc.log", "must survive");
+        let previous = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&dir).expect("chdir");
+
+        sweep(".", None);
+
+        std::env::set_current_dir(previous).expect("restore cwd");
+        assert!(
+            dir.join("mbrc.log").exists(),
+            "a relative path must be refused, not resolved"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_sweep_does_not_follow_a_link_standing_in_for_the_cache_directory() {
+        let dir = scratch("cache-link");
+        // Somewhere else entirely, holding a file with the name we delete.
+        let elsewhere = scratch("cache-link-target");
+        write(&elsewhere, "state.json.migrated", "not ours to delete");
+
+        std::fs::remove_dir_all(dir.join("cache")).expect("clear the real cache dir");
+        #[cfg(windows)]
+        let linked = std::os::windows::fs::symlink_dir(&elsewhere, dir.join("cache")).is_ok();
+        #[cfg(not(windows))]
+        let linked = std::os::unix::fs::symlink(&elsewhere, dir.join("cache")).is_ok();
+        if !linked {
+            // Creating one needs a privilege we may not have; nothing to prove.
+            let _ = std::fs::remove_dir_all(&dir);
+            let _ = std::fs::remove_dir_all(&elsewhere);
+            return;
+        }
+
+        sweep(dir.to_str().unwrap(), None);
+
+        assert!(
+            elsewhere.join("state.json.migrated").exists(),
+            "a junction in place of cache/ must stop the sweep, not redirect it"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&elsewhere);
     }
 
     #[test]
