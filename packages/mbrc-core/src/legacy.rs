@@ -116,7 +116,14 @@ pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
     // runs whenever `core_settings.json` is absent, so leaving the XML in place
     // means deleting the JSON to reset the settings silently restores the old
     // ones instead. Reset should mean reset.
-    if storage.join("core_settings.json").is_file() {
+    //
+    // Non-empty, not merely present: `migrate_legacy_settings` writes the JSON
+    // with create-truncate-write, so a second MusicBee starting at that exact
+    // moment would otherwise see a zero-length file, call the migration done and
+    // delete the only copy of the settings. Two instances sharing one %APPDATA%
+    // is ordinary - a Program Files and a portable install do - and this is the
+    // one file here whose loss costs the user something.
+    if migrated_settings_are_present(storage) {
         if let Some(size) = remove_file(storage, "settings.xml") {
             removed += 1;
             freed += size;
@@ -204,6 +211,13 @@ fn remove_file(dir: &Path, name: &str) -> Option<u64> {
             None
         }
     }
+}
+
+/// Whether `core_settings.json` is there *and* has something in it.
+fn migrated_settings_are_present(storage: &Path) -> bool {
+    std::fs::metadata(storage.join("core_settings.json"))
+        .map(|meta| meta.is_file() && meta.len() > 0)
+        .unwrap_or(false)
 }
 
 /// Whether `path` is a directory in its own right, rather than a link to one.
@@ -329,6 +343,23 @@ mod tests {
             !dir.join("settings.xml").exists(),
             "migrated, so the XML must go - otherwise deleting core_settings.json \
              to reset the settings silently restores the old ones instead"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_empty_settings_file_does_not_count_as_migrated() {
+        // What a second MusicBee sees if it starts while the first is between
+        // the create and the write of core_settings.json.
+        let dir = scratch("half-written");
+        write(&dir, "settings.xml", "<settings/>");
+        write(&dir, "core_settings.json", "");
+
+        sweep(dir.to_str().unwrap(), None);
+
+        assert!(
+            dir.join("settings.xml").exists(),
+            "a zero-length settings file must not be taken as a completed migration"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
