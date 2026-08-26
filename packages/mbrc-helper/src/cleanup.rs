@@ -22,11 +22,20 @@ use crate::update::{checked_dir, wait_for_exit, Error, Result};
 
 /// How long to wait for MusicBee to exit before giving up.
 ///
-/// Longer than the update path's two minutes: nothing is pending and nobody is
-/// watching. The user removed the plugin and may well keep MusicBee open for the
-/// rest of the evening, and a cleanup that gives up after two minutes would be
-/// wrong far more often than it was right.
-const EXIT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// Longer than the update path's two minutes, because nothing is pending and the
+/// user may well finish the album they are listening to first. Not much longer:
+/// a copy of an executable sitting in the temp directory waiting on a process is
+/// indistinguishable from something malicious, and the first time this ran on a
+/// real machine it was killed on sight - correctly. Fifteen minutes covers
+/// "removed the plugin and closed MusicBee", which is the case worth covering,
+/// and the cost of missing the rest is two files a reinstall overwrites anyway.
+const EXIT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+
+/// How often to say we are still here while waiting.
+///
+/// The log is the only thing this process can use to account for itself, and
+/// "started, then silence for a quarter of an hour" is what made it look stuck.
+const HEARTBEAT: Duration = Duration::from_secs(3 * 60);
 
 /// What the plugin leaves behind, in the order they are removed.
 ///
@@ -101,9 +110,15 @@ pub fn run(plan: &Plan) -> Outcome {
 /// The seam the tests drive: the wait is injected so the removal can be
 /// exercised without a process to wait for.
 pub fn run_with(plan: &Plan, wait: fn(u32, Duration) -> bool) -> Outcome {
-    if !wait(plan.pid, EXIT_TIMEOUT) {
+    crate::log::line(&format!(
+        "waiting up to {} minutes for MusicBee (pid {}) to exit; nothing can be removed until it does",
+        EXIT_TIMEOUT.as_secs() / 60,
+        plan.pid
+    ));
+    if !wait_for_musicbee(plan.pid, wait) {
         return Outcome::StillRunning;
     }
+    crate::log::line("MusicBee exited; removing what the uninstall left behind");
 
     // Re-checked after the wait, not before: the window between the user
     // removing the plugin and MusicBee exiting is exactly when they might add it
@@ -131,6 +146,27 @@ pub fn run_with(plan: &Plan, wait: fn(u32, Duration) -> bool) -> Outcome {
         (_, false) => Outcome::Partial { removed, failed },
         (false, true) => Outcome::Removed(removed),
     }
+}
+
+/// Waits for MusicBee, saying so as it goes.
+///
+/// Split into heartbeat-sized slices rather than one long wait purely so the log
+/// shows the process is alive and why. `true` means MusicBee is gone.
+fn wait_for_musicbee(pid: u32, wait: fn(u32, Duration) -> bool) -> bool {
+    let mut waited = Duration::ZERO;
+    while waited < EXIT_TIMEOUT {
+        let slice = HEARTBEAT.min(EXIT_TIMEOUT - waited);
+        if wait(pid, slice) {
+            return true;
+        }
+        waited += slice;
+        crate::log::line(&format!(
+            "still waiting for MusicBee (pid {pid}); {} of {} minutes elapsed",
+            waited.as_secs() / 60,
+            EXIT_TIMEOUT.as_secs() / 60
+        ));
+    }
+    false
 }
 
 /// Whether this process is running from `dir`, which decides whether it can
