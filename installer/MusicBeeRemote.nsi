@@ -118,14 +118,18 @@ Function un.onInit
 FunctionEnd
 
 Section Uninstall
-	; Plugin files live under $INSTDIR\Plugins (see SetOutPath above).
-	Delete "$INSTDIR\Plugins\mb_remote.dll"
-	Delete "$INSTDIR\Plugins\mbrc_core.dll"
-	Delete "$INSTDIR\Plugins\mbrc-helper.exe"
+	; $INSTDIR is NOT what it was during install. The uninstaller was written to
+	; $INSTDIR\Plugins, and an uninstaller initialises $INSTDIR to the directory it
+	; lives in, so here $INSTDIR is the plugins directory itself. Prefixing these
+	; with Plugins\ again pointed every delete at a directory that does not exist,
+	; and the uninstall removed nothing while still reporting success.
+	Delete "$INSTDIR\mb_remote.dll"
+	Delete "$INSTDIR\mbrc_core.dll"
+	Delete "$INSTDIR\mbrc-helper.exe"
 	; Also clear the pre-1.5.0 C# utility, in case this uninstall follows an
 	; upgrade from an install that had it.
-	Delete "$INSTDIR\Plugins\firewall-utility.exe"
-	Delete "$INSTDIR\Plugins\mbremoteuninstall.exe"
+	Delete "$INSTDIR\firewall-utility.exe"
+	Delete "$INSTDIR\mbremoteuninstall.exe"
 	RmDir /r "$APPDATA\MusicBee\mb_remote"
 
 	; Remove Start Menu items
