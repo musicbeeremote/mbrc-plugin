@@ -413,7 +413,15 @@ fn prune_backups(plan: &Plan, keep: &str) {
 pub fn clear_staged(plan: &Plan) {
     // `<storage>/updates/<version>` -> remove the version directory and the
     // marker beside it, which is what tells the core something is pending.
-    if let Err(e) = std::fs::remove_dir_all(&plan.staged) {
+    if running_from(&plan.staged) {
+        // Windows will not unlink a running image, so this delete cannot succeed
+        // from here and used to log an access-denied error on every successful
+        // apply - a failure line in a log people only open when something broke.
+        // The core sweeps the directory on the next start instead.
+        crate::log::line(
+            "left the staged bundle for the core to sweep: the helper is running from it",
+        );
+    } else if let Err(e) = std::fs::remove_dir_all(&plan.staged) {
         crate::log::line(&format!("could not remove {}: {e}", plan.staged.display()));
     }
     if let Some(updates) = plan.staged.parent() {
@@ -423,6 +431,28 @@ pub fn clear_staged(plan: &Plan) {
                 crate::log::line(&format!("could not remove {}: {e}", marker.display()));
             }
         }
+    }
+}
+
+/// Whether this process's own image lives inside `dir`.
+///
+/// True for every ordinary apply: the core launches
+/// `<storage>/updates/<version>/mbrc-helper.exe` deliberately, because the
+/// installed helper is one of the files being replaced. Falls back to false when
+/// the executable path cannot be resolved - then the delete is attempted and any
+/// failure is reported, which is the honest answer when we cannot tell.
+fn running_from(dir: &Path) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(parent) = exe.parent() else {
+        return false;
+    };
+    // Compared canonicalized: `dir` arrives verbatim-prefixed (`\\?\...`) and
+    // `current_exe` does not, so the raw paths never match.
+    match (std::fs::canonicalize(parent), std::fs::canonicalize(dir)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => parent == dir,
     }
 }
 
@@ -1046,6 +1076,20 @@ mod tests {
             plan.relaunch,
             RelaunchTarget::Packaged("Family_abc!App".into())
         );
+    }
+
+    #[test]
+    fn the_staged_bundle_is_left_alone_when_the_helper_runs_from_it() {
+        // The real apply always looks like this, so the delete is skipped rather
+        // than attempted and reported as a failure.
+        let exe = std::env::current_exe().expect("the test binary's own path");
+        assert!(running_from(exe.parent().unwrap()));
+    }
+
+    #[test]
+    fn a_staged_bundle_somewhere_else_is_still_removed() {
+        let fixture = Fixture::new("running-from-elsewhere");
+        assert!(!running_from(&fixture.staged));
     }
 
     #[test]
