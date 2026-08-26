@@ -64,6 +64,18 @@ namespace MusicBeePlugin.Ffi
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool FreeLibrary(IntPtr hModule);
 
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        /// <summary>The native core, as the loader knows it.</summary>
+        private const string NativeLibraryFileName = "mbrc_core.dll";
+
+        /// <summary>
+        ///     Enough to unwind any plausible reference count, and a bound rather
+        ///     than a `while (true)` because this runs inside MusicBee.
+        /// </summary>
+        private const int MaxUnloadAttempts = 64;
+
         #endregion
 
         private readonly QueryHandlers _queries;
@@ -664,6 +676,41 @@ namespace MusicBeePlugin.Ffi
         }
 
         #endregion
+
+        /// <summary>
+        ///     Unmap mbrc_core.dll from this process so the file can be deleted.
+        ///     Windows will not unlink a loaded image, and the plugin cannot outlive
+        ///     MusicBee to do it later, so an uninstall that wants to remove the core
+        ///     has to unload it first.
+        ///     Freed in a loop rather than once: this class holds one reference from
+        ///     its own preload, and the CLR holds another from resolving the DllImports
+        ///     - which it never releases, since a P/Invoke module stays for the life of
+        ///     the process. Dropping ours alone leaves the file mapped.
+        ///     After this returns 0 modules loaded, **every** NativeMethods call is an
+        ///     access violation waiting to happen: the IL stubs hold cached addresses
+        ///     into an image that is no longer there. Only call it from
+        ///     <see cref="Plugin.Uninstall" />, after the host is disposed and
+        ///     <see cref="FfiLogger.MarkUnavailable" /> has stopped log forwarding.
+        /// </summary>
+        /// <returns>true if the module is no longer loaded.</returns>
+        public static bool UnloadNativeLibrary()
+        {
+            try
+            {
+                for (var attempt = 0; attempt < MaxUnloadAttempts; attempt++)
+                {
+                    var module = GetModuleHandle(NativeLibraryFileName);
+                    if (module == IntPtr.Zero) return true;
+                    if (!FreeLibrary(module)) return false;
+                }
+
+                return GetModuleHandle(NativeLibraryFileName) == IntPtr.Zero;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         /// <summary>Pre-load mbrc_core.dll from the plugin's own directory. Never throws.</summary>
         private void PreloadNativeLibrary()

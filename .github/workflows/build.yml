@@ -184,8 +184,13 @@ jobs:
           cp target/i686-pc-windows-msvc/plugin/mbrc_core.dll build/dist
           # Elevated helper, built alongside the core by build.ps1 -Rust.
           cp target/i686-pc-windows-msvc/plugin/mbrc-helper.exe build/dist
-          cp LICENSE build/dist
-          cp installer/README.txt build/dist
+          # Prefixed, and not because it is tidier: the zip is extracted straight
+          # into MusicBee's Plugins folder, where a `README.txt` lands on top of
+          # MusicBee's own `readme.txt` - same file, Windows being
+          # case-insensitive. These names collide with nothing and are obviously
+          # ours, so an uninstall can remove them.
+          cp LICENSE build/dist/MBRC_LICENSE.txt
+          cp installer/README.txt build/dist/MBRC_README.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

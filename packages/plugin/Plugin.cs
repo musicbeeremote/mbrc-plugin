@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
+using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Host;
 using MusicBeePlugin.Settings;
 using FfiGen = MusicBeePlugin.Ffi.Generated;
@@ -309,10 +310,40 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        ///     Cleans up any persisted files during the plugin uninstall.
+        ///     Cleans up after the plugin when the user removes it from MusicBee's
+        ///     Preferences: the two files MusicBee will not remove, and the stored
+        ///     settings, caches and logs.
         /// </summary>
+        /// <remarks>
+        ///     MusicBee deletes mb_remote.dll - the assembly it loaded - and does so at
+        ///     its next start, not now. It has never heard of mbrc_core.dll or
+        ///     mbrc-helper.exe beside it, so removing those is ours to do, and the core
+        ///     cannot be deleted while it is mapped into this process. Hence the order:
+        ///     stop the core, stop logging through it, unmap it, then delete.
+        /// </remarks>
         public void Uninstall()
         {
+            try
+            {
+                SettingsWindow.CloseIfOpen();
+                _host?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Plugin Uninstall: host teardown failed", ex);
+            }
+            finally
+            {
+                _host = null;
+            }
+
+            // Every log line through FfiLogger is a call into the core, so this has
+            // to come before the unload and stay off afterwards.
+            FfiLogger.MarkUnavailable();
+            RemoveInstalledFiles();
+
+            // Last, so that anything the steps above recorded is still removed with
+            // it: LogToFallback writes into this directory.
             try
             {
                 var settingsFolder = Path.Combine(
@@ -324,6 +355,63 @@ namespace MusicBeePlugin
             catch
             {
                 // Best-effort cleanup; never throw out of Uninstall.
+            }
+        }
+
+        /// <summary>
+        ///     Everything the plugin put in MusicBee's Plugins folder except
+        ///     mb_remote.dll, which MusicBee deletes itself. Named so that each one
+        ///     is unmistakably ours: nothing here can be a MusicBee file or another
+        ///     plugin's.
+        /// </summary>
+        private static readonly string[] InstalledFiles =
+        {
+            "mbrc-helper.exe", "MBRC_LICENSE.txt", "MBRC_README.txt",
+        };
+
+        /// <summary>
+        ///     Removes the files that ship beside the plugin assembly. The helper and
+        ///     the text files are not held by anything, so they go unconditionally.
+        ///     The core is deleted only once it is actually unmapped - Windows will
+        ///     not unlink a loaded image, and a failed unload must not turn into a
+        ///     silent failed delete.
+        /// </summary>
+        private void RemoveInstalledFiles()
+        {
+            string directory;
+            try
+            {
+                directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Plugin Uninstall: could not locate the plugin directory", ex);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(directory)) return;
+
+            foreach (var name in InstalledFiles)
+                TryDelete(Path.Combine(directory, name));
+
+            if (NativeBridge.UnloadNativeLibrary())
+                TryDelete(Path.Combine(directory, "mbrc_core.dll"));
+            else
+                LogToFallback(
+                    "Plugin Uninstall: the core is still loaded",
+                    "mbrc_core.dll was left in place because it could not be unmapped");
+        }
+
+        /// <summary>Deletes a file if it is there. Never throws.</summary>
+        private void TryDelete(string path)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Plugin Uninstall: could not remove " + path, ex);
             }
         }
 

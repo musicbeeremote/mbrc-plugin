@@ -129,6 +129,10 @@ Section Uninstall
 	; Also clear the pre-1.5.0 C# utility, in case this uninstall follows an
 	; upgrade from an install that had it.
 	Delete "$INSTDIR\firewall-utility.exe"
+	; A zip install into the same folder leaves these; the installer never
+	; writes them, and nothing else is named this way.
+	Delete "$INSTDIR\MBRC_LICENSE.txt"
+	Delete "$INSTDIR\MBRC_README.txt"
 	Delete "$INSTDIR\mbremoteuninstall.exe"
 	RmDir /r "$APPDATA\MusicBee\mb_remote"
 

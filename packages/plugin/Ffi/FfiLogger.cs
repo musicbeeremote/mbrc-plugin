@@ -51,6 +51,14 @@ namespace MusicBeePlugin.Ffi
         /// <summary>Enable forwarding once the core has been initialized.</summary>
         public static void MarkReady() => _ready = true;
 
+        /// <summary>
+        ///     Stop forwarding, because the core is going away. Called before the
+        ///     native library is unloaded during an uninstall: a log line after that
+        ///     point would call into an unmapped image and take MusicBee with it.
+        ///     Lines fall back to the bootstrap file, exactly as they do before init.
+        /// </summary>
+        public static void MarkUnavailable() => _ready = false;
+
         public void Debug(string message) => Emit(LevelDebug, message);
         public void Debug(string messageTemplate, params object[] args) => Emit(LevelDebug, Format(messageTemplate, args));
         public void Info(string message) => Emit(LevelInfo, message);
