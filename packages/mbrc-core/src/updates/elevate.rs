@@ -114,6 +114,67 @@ pub fn launch(storage_path: &str, current_version: &str) -> UpdateLaunch {
     outcome
 }
 
+/// Asks the helper to remove what a plugin uninstall cannot remove itself.
+///
+/// MusicBee removes `mb_remote.dll` when the user removes the plugin, and knows
+/// nothing about `mbrc_core.dll` or `mbrc-helper.exe` beside it. This DLL cannot
+/// remove itself either - it is mapped into the process making the call - so the
+/// helper is copied to a temp directory and the copy is started there. It waits
+/// for MusicBee to exit and then removes the originals, itself included.
+///
+/// Deliberately never elevates. A plugins directory that needs administrator
+/// rights belongs to an install that came from the installer, and its own
+/// uninstaller removes these files; prompting for UAC in the middle of a plugin
+/// removal would be a surprise the user did not ask for. So a non-writable
+/// directory is a quiet no, recorded in the log.
+///
+/// Returns whether a cleanup was started. Nothing depends on the answer beyond
+/// the log line: by the time it matters this process is gone.
+pub fn request_plugin_cleanup() -> bool {
+    let Some(target) = plugins_dir() else {
+        tracing::warn!("cannot clean up: the plugins directory is unknown");
+        return false;
+    };
+    let helper = target.join(HELPER_EXE);
+    if !helper.is_file() {
+        tracing::info!(
+            target = %target.display(),
+            "no helper to clean up with; leaving the plugin files in place"
+        );
+        return false;
+    }
+    if !is_writable(&target) {
+        tracing::info!(
+            target = %target.display(),
+            "the plugins directory needs elevation; leaving these files to the uninstaller"
+        );
+        return false;
+    }
+
+    // Named for this process so two MusicBees uninstalling at once do not fight
+    // over one file. Left behind in temp on purpose: a running image cannot
+    // unlink itself, and temp is where a stray copy belongs.
+    let copy = std::env::temp_dir().join(format!("mbrc-cleanup-{}.exe", std::process::id()));
+    if let Err(e) = std::fs::copy(&helper, &copy) {
+        tracing::warn!(error = %e, copy = %copy.display(), "could not stage the cleanup helper");
+        return false;
+    }
+
+    let arguments = vec![
+        "cleanup".to_owned(),
+        "--pid".to_owned(),
+        std::process::id().to_string(),
+        "--target".to_owned(),
+        target.display().to_string(),
+    ];
+    tracing::info!(
+        helper = %copy.display(),
+        target = %target.display(),
+        "starting the plugin cleanup helper"
+    );
+    matches!(spawn(&copy, &arguments, false), UpdateLaunch::Launched)
+}
+
 /// Whether `staged` is newer than what is installed.
 ///
 /// Unparseable on either side is not an upgrade: a version that cannot be

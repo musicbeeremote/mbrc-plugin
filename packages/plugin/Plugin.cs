@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
+using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Host;
 using MusicBeePlugin.Settings;
 using FfiGen = MusicBeePlugin.Ffi.Generated;
@@ -309,7 +310,14 @@ namespace MusicBeePlugin
         }
 
         /// <summary>
-        ///     Cleans up any persisted files during the plugin uninstall.
+        ///     Cleans up after the plugin when it is removed from MusicBee's
+        ///     Preferences: the stored settings, caches and logs, and then the two
+        ///     files MusicBee itself will not remove.
+        ///     MusicBee deletes mb_remote.dll, the assembly it loaded, and has never
+        ///     heard of mbrc_core.dll or mbrc-helper.exe beside it. The core cannot
+        ///     delete itself either - it is mapped into this process - so it starts a
+        ///     copy of the helper that waits for MusicBee to exit and removes them
+        ///     then, and only if the plugin is still gone at that point.
         /// </summary>
         public void Uninstall()
         {
@@ -325,6 +333,10 @@ namespace MusicBeePlugin
             {
                 // Best-effort cleanup; never throw out of Uninstall.
             }
+
+            // Deliberately after the storage delete: the helper only removes files,
+            // and losing it costs two stray files rather than a settings folder.
+            NativeBridge.RequestPluginCleanup();
         }
 
         /// <summary>

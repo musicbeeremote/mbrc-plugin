@@ -48,6 +48,18 @@ pub fn direct_to_storage(staged: &Path) {
     *sink() = choose_sink(staged, &std::env::temp_dir());
 }
 
+/// Point the log at the temp directory.
+///
+/// For `cleanup`, which has no storage directory to sit beside: the plugin
+/// deletes its storage as part of the same uninstall, so the only place left
+/// that is certain to be writable is temp. The file is the same
+/// `mbrc-helper.log`, so a cleanup that went wrong is still readable next to a
+/// pasted log rather than nowhere at all.
+pub fn direct_to_temp() {
+    let path = std::env::temp_dir().join(LOG_FILE);
+    *sink() = writable(&path).then_some(path);
+}
+
 /// Records where this process actually is, which is the question every
 /// Store-install failure has turned on.
 ///

@@ -665,6 +665,47 @@ namespace MusicBeePlugin.Ffi
 
         #endregion
 
+        /// <summary>
+        ///     Ask the core to remove what a plugin removal inside MusicBee leaves
+        ///     behind. MusicBee deletes mb_remote.dll and knows nothing about
+        ///     mbrc_core.dll or mbrc-helper.exe beside it; the core cannot delete
+        ///     itself while it is loaded, so it starts a copy of the helper that
+        ///     waits for MusicBee to exit and removes them then.
+        ///     Static and independent of <see cref="Initialize" />: MusicBee can call
+        ///     Uninstall after the host has been disposed, and the core needs no
+        ///     state to answer this - only to be loaded.
+        /// </summary>
+        /// <returns>true if a cleanup was started.</returns>
+        public static bool RequestPluginCleanup()
+        {
+            try
+            {
+                EnsureNativeLibraryLoaded();
+                return NativeMethods.mbrc_request_plugin_cleanup() != 0;
+            }
+            catch
+            {
+                // Nowhere to report to: this runs while the plugin is being torn
+                // down, and the logger writes through the very core we may have
+                // just failed to load.
+                return false;
+            }
+        }
+
+        /// <summary>
+        ///     Loads mbrc_core.dll from the plugin's own directory unless it is
+        ///     already loaded, in which case LoadLibrary only bumps a refcount.
+        ///     The static counterpart to <see cref="PreloadNativeLibrary" />, for
+        ///     the calls that can arrive without a live bridge.
+        /// </summary>
+        private static void EnsureNativeLibraryLoaded()
+        {
+            var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (dir == null) return;
+            var dllPath = Path.Combine(dir, "mbrc_core.dll");
+            if (File.Exists(dllPath)) LoadLibrary(dllPath);
+        }
+
         /// <summary>Pre-load mbrc_core.dll from the plugin's own directory. Never throws.</summary>
         private void PreloadNativeLibrary()
         {

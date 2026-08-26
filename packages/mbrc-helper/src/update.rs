@@ -141,7 +141,7 @@ impl fmt::Display for Error {
     }
 }
 
-type Result<T> = std::result::Result<T, Error>;
+pub(crate) type Result<T> = std::result::Result<T, Error>;
 
 /// Checks and resolves the paths in a request.
 ///
@@ -441,7 +441,7 @@ pub fn clear_staged(plan: &Plan) {
 /// installed helper is one of the files being replaced. Falls back to false when
 /// the executable path cannot be resolved - then the delete is attempted and any
 /// failure is reported, which is the honest answer when we cannot tell.
-fn running_from(dir: &Path) -> bool {
+pub(crate) fn running_from(dir: &Path) -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;
     };
@@ -473,7 +473,7 @@ fn backup_root(staged: &Path) -> Result<PathBuf> {
 
 /// Resolves a directory argument, refusing everything an elevated process should
 /// not follow.
-fn checked_dir(raw: &str, flag: &str) -> Result<PathBuf> {
+pub(crate) fn checked_dir(raw: &str, flag: &str) -> Result<PathBuf> {
     let path = checked_path(raw, flag)?;
     if !path.is_dir() {
         return Err(Error::Rejected(format!(
@@ -539,7 +539,7 @@ fn failed(path: &Path, e: std::io::Error) -> Error {
 /// exited before we looked or is not ours to wait on, and both mean waiting will
 /// never tell us anything.
 #[cfg(windows)]
-fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
+pub(crate) fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{
         OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
@@ -559,7 +559,7 @@ fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
 }
 
 #[cfg(not(windows))]
-fn wait_for_exit(_pid: u32, _timeout: Duration) -> bool {
+pub(crate) fn wait_for_exit(_pid: u32, _timeout: Duration) -> bool {
     // Nothing to wait for off Windows; the apply path is exercised by tests that
     // inject their own wait.
     true

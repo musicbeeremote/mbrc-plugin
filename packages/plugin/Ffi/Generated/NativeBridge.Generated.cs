@@ -157,6 +157,28 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_apply_staged_update();
 
         /// <summary>
+        ///  Remove the plugin files a MusicBee-side uninstall leaves behind.
+        ///
+        ///  MusicBee deletes `mb_remote.dll` when the user removes the plugin from
+        ///  Preferences and knows nothing about `mbrc_core.dll` and `mbrc-helper.exe`
+        ///  beside it. This core cannot delete itself while it is loaded, so it starts a
+        ///  copy of the helper that waits for MusicBee to exit and removes them then -
+        ///  and only if the plugin is still gone at that point, so adding it back in the
+        ///  same session is safe.
+        ///
+        ///  Takes nothing, for the same reason as `mbrc_apply_staged_update`: the
+        ///  directory is where this DLL was loaded from and the pid is our own, so there
+        ///  is nothing for a caller to name and nothing to tamper with.
+        ///
+        ///  Returns 1 if a cleanup was started, 0 otherwise - including the ordinary case
+        ///  of a plugins directory that needs elevation, where the installer's uninstaller
+        ///  is the route that removes these files. Never fails: a plugin being removed is
+        ///  not a moment to raise an error the user cannot act on.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "mbrc_request_plugin_cleanup", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int mbrc_request_plugin_cleanup();
+
+        /// <summary>
         ///  Free a string previously returned to C# by the core. Null-safe. This is the
         ///  only Rust-owned allocation the C# side frees through us.
         ///

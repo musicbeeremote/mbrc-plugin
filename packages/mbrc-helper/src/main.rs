@@ -12,7 +12,11 @@
 //! mbrc-helper firewall --port <n>
 //! mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
 //!                    [--relaunch-aumid <aumid>]
+//! mbrc-helper cleanup --pid <n> --target <dir>
 //! ```
+//!
+//! `cleanup` is the exception to "elevated": it runs as the user, and removes
+//! the files a plugin uninstall inside MusicBee cannot remove itself.
 //!
 //! Exit codes are part of the contract with the caller, which reports them to
 //! the user. The old utility printed to a console nobody saw and always exited
@@ -24,6 +28,7 @@
 // which is the point: the create-or-update logic is platform-independent and CI
 // exercises it on both runners.
 #[cfg_attr(not(windows), allow(dead_code))]
+mod cleanup;
 mod firewall;
 mod log;
 mod update;
@@ -71,13 +76,18 @@ USAGE:
     mbrc-helper firewall --port <n>
     mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
                        [--relaunch-aumid <aumid>]
+    mbrc-helper cleanup --pid <n> --target <dir>
     mbrc-helper --version
 
 COMMANDS:
     firewall    Add or update the inbound firewall rule for the listening port.
     update      Re-verify and apply a staged update, then relaunch MusicBee.
+    cleanup     After MusicBee exits, remove the plugin files left behind by an
+                uninstall done inside MusicBee.
 
-Both commands require administrative rights.
+firewall and update require administrative rights; cleanup deliberately does
+not - it runs as the user, and a plugins directory that needs elevation belongs
+to an install whose own uninstaller removes these files.
 
 EXIT CODES:
     0  success                    5  the staged update did not verify
@@ -149,6 +159,18 @@ fn run(args: &[String]) -> Result<u8, String> {
                 relaunch_aumid: flags.get("relaunch-aumid").map(String::as_str),
             }))
         }
+        "cleanup" => {
+            let flags = parse_flags(&args[1..], &["pid", "target"])?;
+            let pid = require(&flags, "pid")?;
+            let pid: u32 = pid
+                .parse()
+                .map_err(|_| format!("--pid must be a process id, got {pid:?}"))?;
+
+            Ok(run_cleanup(&cleanup::Request {
+                pid,
+                target: require(&flags, "target")?,
+            }))
+        }
         other => Err(format!("unknown command {other:?}\n\n{USAGE}")),
     }
 }
@@ -201,6 +223,62 @@ fn run_update(request: &update::Request<'_>) -> u8 {
                 update::Error::RolledBack { .. } => EXIT_ROLLED_BACK,
                 update::Error::RollbackFailed { .. } => EXIT_ROLLBACK_FAILED,
             }
+        }
+    }
+}
+
+/// Removes what a plugin uninstall left behind, once MusicBee has exited.
+///
+/// Every outcome except a MusicBee that outlived the wait is a success: a
+/// directory with nothing left in it and a plugin that was added back again are
+/// both correct answers to "remove what is left", and neither is worth an error
+/// the caller cannot act on - by the time this runs, the caller is gone.
+fn run_cleanup(request: &cleanup::Request<'_>) -> u8 {
+    // No storage directory to log beside: the plugin deleted it on its way out.
+    log::direct_to_temp();
+    log::note_environment();
+    log::line(&format!(
+        "cleanup requested: pid={} target={}",
+        request.pid, request.target
+    ));
+
+    let plan = match cleanup::plan(request) {
+        Ok(plan) => plan,
+        Err(e) => {
+            log::line(&e.to_string());
+            return EXIT_USAGE;
+        }
+    };
+    if cleanup::running_from(&plan.target) {
+        // The caller is expected to run a copy from somewhere else, because a
+        // running image cannot be unlinked. Said here so the failure below reads
+        // as the consequence it is rather than a mystery.
+        log::line("running from the directory being cleaned; this build cannot remove itself");
+    }
+
+    match cleanup::run(&plan) {
+        cleanup::Outcome::Removed(files) => {
+            log::line(&format!("removed {}", files.join(", ")));
+            EXIT_OK
+        }
+        cleanup::Outcome::NothingToRemove => {
+            log::line("nothing left to remove");
+            EXIT_OK
+        }
+        cleanup::Outcome::StillInstalled => {
+            log::line("the plugin is installed again; left everything in place");
+            EXIT_OK
+        }
+        cleanup::Outcome::StillRunning => {
+            log::line("MusicBee did not exit in time; left everything in place");
+            EXIT_STILL_RUNNING
+        }
+        cleanup::Outcome::Partial { removed, failed } => {
+            if !removed.is_empty() {
+                log::line(&format!("removed {}", removed.join(", ")));
+            }
+            log::line(&format!("could not remove {}", failed.join("; ")));
+            EXIT_FAILED
         }
     }
 }

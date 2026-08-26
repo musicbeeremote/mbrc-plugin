@@ -148,6 +148,20 @@ Use this method for the Microsoft Store version of MusicBee or if you prefer man
 
 After installation, the plugin should appear in MusicBee under `Edit > Preferences > Plugins`.
 
+### Uninstalling
+
+If you installed with the installer, use `Uninstall MusicBee Remote` from the Start
+Menu (or `mbremoteuninstall.exe` in MusicBee's `Plugins` folder). It removes all
+three files and the plugin's stored settings, caches and logs.
+
+If you installed from the zip, remove the plugin in MusicBee under
+`Edit > Preferences > Plugins`. MusicBee deletes `mb_remote.dll` - the only file it
+knows about - so the plugin also asks `mbrc-helper.exe` to remove `mbrc_core.dll`
+and itself once MusicBee exits; the core is loaded into MusicBee and cannot be
+deleted before then. That cleanup runs as you, without an elevation prompt, so on
+an install in a directory that needs administrator rights it does nothing and the
+installer's uninstaller is the route to use.
+
 ## Getting Started
 
 As a developer there are a few steps you need to follow to get started:
