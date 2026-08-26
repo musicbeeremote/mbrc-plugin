@@ -93,9 +93,22 @@ impl Core {
     }
 
     /// Tell the long-running background work to stop at its next checkpoint.
-    /// One-way: a core that is stopping is on its way out.
+    ///
+    /// Set by both teardown paths, because the host uses both: `PluginHost` calls
+    /// `mbrc_stop_networking` and only then `mbrc_shutdown`, so setting this in
+    /// the latter alone means it is set after the wait it exists to prevent.
     pub fn begin_stopping(&self) {
         self.stopping.store(true, Ordering::Release);
+    }
+
+    /// Clear it again, because stopping networking is not always leaving.
+    ///
+    /// Saving a new port stops and restarts networking on the same core, and a
+    /// flag left set there would silently disable the cover build for the rest
+    /// of the session. Cleared as networking starts, which is also what kicks
+    /// the reconcile that reads it.
+    pub fn clear_stopping(&self) {
+        self.stopping.store(false, Ordering::Release);
     }
 
     /// Whether teardown has started. Checked between items by work that would
@@ -528,6 +541,9 @@ pub fn start_networking() -> MbrcResult {
     if runtime.net.is_some() {
         return MbrcResult::AlreadyRunning;
     }
+    // A previous stop (a port change, say) left this set; the work it gates is
+    // started by the call below.
+    runtime.core.clear_stopping();
     match server::start(runtime.core.clone()) {
         Ok(net) => {
             runtime.net = Some(net);
@@ -548,6 +564,9 @@ pub fn stop_networking() -> MbrcResult {
     };
     match runtime.net.take() {
         Some(net) => {
+            // Before the join inside `stop`: this is the call the host makes
+            // first, so it is the one that has to release the long blocking work.
+            runtime.core.begin_stopping();
             net.stop();
             MbrcResult::Ok
         }
