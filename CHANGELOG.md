@@ -2,7 +2,7 @@ Change Log
 ---------
 # Versions
 
-## 1.5.0 - unreleased
+## 1.5.0 - 2026/08/26
 
 The plugin's core has been rewritten in Rust. It ships as `mbrc_core.dll`
 alongside the existing `mb_remote.dll`, plus a small `mbrc-helper.exe`; the C#
@@ -59,6 +59,13 @@ shipped Android and iOS client keeps working untouched.
   reads by list position and shows the real per-track titles. Browsing the
   library still shows one entry per cue album rather than its tracks - MusicBee's
   plugin interface offers no way to read them (#87).
+
+### Upgrading from a 1.5.0 beta
+`1.5.0-beta.1` and `1.5.0-beta.2` report themselves as plain `1.5.0` because of a
+version-stamping bug in how they were built. They will never be offered an update,
+this release included, since nothing looks newer than what they claim to be. If you
+are on one of those two, install this release by hand once; updates work normally
+afterwards. `beta.3` and `beta.4` are unaffected.
 
 ## 1.4.1 - 2021/06/12
 ### Changed
