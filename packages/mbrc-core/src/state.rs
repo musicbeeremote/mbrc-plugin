@@ -51,6 +51,15 @@ pub struct Core {
     /// change notification (`FileAddedToLibrary`) is a debounced nudge on this,
     /// not a full cache clear (see `server::scanner`).
     pub scanner_nudge: Arc<Notify>,
+    /// Set when the core is being torn down, and read by the long blocking work
+    /// so it can stop between items.
+    ///
+    /// Without it, teardown waits for whatever is running: the cover build is a
+    /// `spawn_blocking` task, and dropping a Tokio runtime waits for blocking
+    /// tasks to finish. A first-run build of a large library is minutes of that,
+    /// and MusicBee's own exit is what waits - closing MusicBee shortly after a
+    /// fresh install would hang until every cover was cached.
+    stopping: Arc<AtomicBool>,
 }
 
 impl Core {
@@ -79,7 +88,20 @@ impl Core {
             blocked: BlockedLog::default(),
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
+            stopping: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Tell the long-running background work to stop at its next checkpoint.
+    /// One-way: a core that is stopping is on its way out.
+    pub fn begin_stopping(&self) {
+        self.stopping.store(true, Ordering::Release);
+    }
+
+    /// Whether teardown has started. Checked between items by work that would
+    /// otherwise hold MusicBee's shutdown - see [`Core::stopping`].
+    pub fn is_stopping(&self) -> bool {
+        self.stopping.load(Ordering::Acquire)
     }
 
     /// A fresh per-connection id (used as the broadcast-registry key).
@@ -484,6 +506,10 @@ pub fn shutdown() -> MbrcResult {
     let mut guard = lock();
     match guard.take() {
         Some(runtime) => {
+            // Before the join below: the blocking work checks this between
+            // items, and everything it is told to stop doing is time MusicBee
+            // would otherwise spend waiting to exit.
+            runtime.core.begin_stopping();
             if let Some(net) = runtime.net {
                 net.stop();
             }

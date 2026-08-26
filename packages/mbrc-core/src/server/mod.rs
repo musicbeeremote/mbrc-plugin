@@ -365,6 +365,14 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                 );
             }
 
+            // Between the two halves: the metadata pass is done and persisted,
+            // and the cover build is the expensive half nobody is waiting for
+            // once MusicBee is on its way out.
+            if core.is_stopping() {
+                tracing::info!("core is stopping; skipping the cover cache build");
+                return;
+            }
+
             if scope.does_covers() {
                 core.cover_store.warm_up(&identities);
                 let prep_ms = started.elapsed().as_millis();
@@ -376,7 +384,7 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
 
                 let build_started = std::time::Instant::now();
                 let providers = core.providers.clone();
-                let stats = core.cover_store.build(
+                let stats = core.cover_store.build_until(
                     |path| {
                         let b64 = providers.artwork_raw(path).ok()?;
                         if b64.is_empty() {
@@ -385,6 +393,10 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                         from_base64(&b64)
                     },
                     core.config.log_level.is_trace(),
+                    // A first build of a large library is minutes of blocking
+                    // work, and teardown waits for it. Stopping between albums
+                    // is what keeps MusicBee's exit from waiting on covers.
+                    &|| core.is_stopping(),
                 );
                 tracing::info!(
                     albums = album_count,
@@ -397,6 +409,7 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                     store_ms = stats.store_ms,
                     slowest_ms = stats.slowest_ms,
                     slowest_path = %stats.slowest_path,
+                    stopped = stats.stopped,
                     build_ms = build_started.elapsed().as_millis(),
                     total_ms = started.elapsed().as_millis(),
                     "cover cache build complete"
@@ -466,7 +479,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
     let dropped = before.saturating_sub(kept);
 
     let providers = core.providers.clone();
-    let stats = core.cover_store.build(
+    let stats = core.cover_store.build_until(
         |path| {
             let b64 = providers.artwork_raw(path).ok()?;
             if b64.is_empty() {
@@ -475,6 +488,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
             from_base64(&b64)
         },
         core.config.log_level.is_trace(),
+        &|| core.is_stopping(),
     );
 
     let changed = dropped > 0 || stats.stored > 0;

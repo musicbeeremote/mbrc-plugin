@@ -63,6 +63,9 @@ pub struct BuildStats {
     pub slowest_ms: u128,
     /// The slowest single cover's track path.
     pub slowest_path: String,
+    /// The build stopped early because it was asked to - the core is shutting
+    /// down. Not a failure: what was built is kept and the next build resumes.
+    pub stopped: bool,
 }
 
 pub struct CoverStore {
@@ -208,15 +211,29 @@ impl CoverStore {
     where
         F: Fn(&str) -> Option<Vec<u8>>,
     {
+        self.build_until(fetch_raw, verbose, &|| false)
+    }
+
+    /// As [`Self::build`], but stops early when `stop` says so.
+    ///
+    /// Checked between albums, which is the only place it can be: a fetch is one
+    /// blocking call into MusicBee and a store is one image. What has been built
+    /// is still pruned and persisted, and the next build picks up the rest -
+    /// "missing" is recomputed from what is actually on disk every time, so a
+    /// half-finished build is a resumable one rather than a broken cache.
+    pub fn build_until<F>(&self, fetch_raw: F, verbose: bool, stop: &dyn Fn() -> bool) -> BuildStats
+    where
+        F: Fn(&str) -> Option<Vec<u8>>,
+    {
         if self.building.swap(true, Ordering::AcqRel) {
             return BuildStats::default(); // a build is already running
         }
-        let stats = self.build_inner(fetch_raw, verbose);
+        let stats = self.build_inner(fetch_raw, verbose, stop);
         self.building.store(false, Ordering::Release);
         stats
     }
 
-    fn build_inner<F>(&self, fetch_raw: F, verbose: bool) -> BuildStats
+    fn build_inner<F>(&self, fetch_raw: F, verbose: bool, stop: &dyn Fn() -> bool) -> BuildStats
     where
         F: Fn(&str) -> Option<Vec<u8>>,
     {
@@ -315,6 +332,10 @@ impl CoverStore {
             // thread) and feed the queue. `send` blocks when the bound is hit,
             // giving back-pressure so memory stays bounded.
             for (key, path) in missing {
+                if stop() {
+                    stats.stopped = true;
+                    break;
+                }
                 let fetch_start = Instant::now();
                 let raw = fetch_raw(&path);
                 let fetch_ms = fetch_start.elapsed().as_millis();
@@ -449,6 +470,8 @@ fn now_unix_secs() -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+
     use super::*;
     use crate::cover::test_jpeg_bytes as jpeg_bytes;
 
@@ -575,6 +598,52 @@ mod tests {
             modified: last_check + 1000,
         }]);
         assert_eq!(store2.hash_for("alb1"), None);
+    }
+
+    #[test]
+    fn build_stops_when_asked_and_keeps_what_it_built() {
+        // Teardown waits for this build, so it has to be able to give up between
+        // albums - and what it managed has to survive, because the next build
+        // recomputes what is missing rather than starting over.
+        let (db, dir) = temp_storage("build-stops");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&[
+            AlbumIdentity {
+                key: "alb1".into(),
+                path: "/a.mp3".into(),
+                modified: 0,
+            },
+            AlbumIdentity {
+                key: "alb2".into(),
+                path: "/b.mp3".into(),
+                modified: 0,
+            },
+            AlbumIdentity {
+                key: "alb3".into(),
+                path: "/c.mp3".into(),
+                modified: 0,
+            },
+        ]);
+
+        let art = jpeg_bytes(300, 300);
+        let fetched = AtomicUsize::new(0);
+        let stats = store.build_until(
+            |_| {
+                fetched.fetch_add(1, Ordering::AcqRel);
+                Some(art.clone())
+            },
+            false,
+            // Stop once the first album has been fetched.
+            &|| fetched.load(Ordering::Acquire) >= 1,
+        );
+
+        assert!(
+            stats.stopped,
+            "the build should report that it gave up early"
+        );
+        assert_eq!(fetched.load(Ordering::Acquire), 1);
+        assert_eq!(stats.stored, 1);
+        assert_eq!(store.cached_count(), 1, "the one it built is kept");
     }
 
     #[test]
