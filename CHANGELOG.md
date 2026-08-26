@@ -53,6 +53,12 @@ shipped Android and iOS client keeps working untouched.
   already recovered.
 - A MusicBee too old for the plugin now says so, in the plugin list and in a log
   file, instead of loading and silently doing nothing.
+- The installer's uninstaller removed nothing. It looked for the plugin files one
+  directory deeper than they are, so every delete missed, and it still reported
+  that the plugin had been removed. Removing the plugin inside MusicBee instead
+  leaves `mbrc_core.dll` and `mbrc-helper.exe` behind, since MusicBee only knows
+  about the file it loaded - delete those two by hand, or use the uninstaller
+  (#192).
 - Single-file albums split by a `.cue` sheet showed in the now-playing list as a
   row of "Unknown Artist" per track. Every such track reports the same container
   file, so reading tags by file returned nothing for all of them; the list now
