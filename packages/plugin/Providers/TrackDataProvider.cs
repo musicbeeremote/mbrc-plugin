@@ -105,7 +105,7 @@ namespace MusicBeePlugin.Providers
                 encoder = string.Empty,
             };
 
-            if (metadataSuccess && metadataResults.Length >= metadataFields.Length)
+            if (metadataSuccess && metadataResults != null && metadataResults.Length >= metadataFields.Length)
             {
                 details.albumArtist = metadataResults[0].Cleanup();
                 details.genre = metadataResults[1].Cleanup();
@@ -365,13 +365,15 @@ namespace MusicBeePlugin.Providers
 
         public LastfmStatus GetNowPlayingLastfmStatus()
         {
+            // Compared literal-first: the tag read is null whenever nothing is loaded,
+            // which is the ordinary state at startup.
             var apiReply = _api.NowPlaying_GetFileTag(Plugin.MetaDataType.RatingLove);
-            if (apiReply.Equals("L", StringComparison.Ordinal) ||
-                apiReply.Equals("lfm", StringComparison.Ordinal) ||
-                apiReply.Equals("Llfm", StringComparison.Ordinal))
+            if ("L".Equals(apiReply, StringComparison.Ordinal) ||
+                "lfm".Equals(apiReply, StringComparison.Ordinal) ||
+                "Llfm".Equals(apiReply, StringComparison.Ordinal))
                 return LastfmStatus.Love;
-            if (apiReply.Equals("B", StringComparison.Ordinal) ||
-                apiReply.Equals("Blfm", StringComparison.Ordinal))
+            if ("B".Equals(apiReply, StringComparison.Ordinal) ||
+                "Blfm".Equals(apiReply, StringComparison.Ordinal))
                 return LastfmStatus.Ban;
             return LastfmStatus.Normal;
         }

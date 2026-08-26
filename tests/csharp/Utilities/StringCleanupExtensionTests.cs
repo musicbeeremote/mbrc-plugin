@@ -202,6 +202,20 @@ namespace MusicBeeRemote.Core.Tests.Utilities
         }
 
         [Fact]
+        public void Cleanup_HandlesNull()
+        {
+            // MusicBee's now-playing reads return null with nothing loaded, and
+            // the providers call this straight on them (#187).
+            string input = null;
+
+            // Act
+            var result = input.Cleanup();
+
+            // Assert
+            result.Should().BeEmpty();
+        }
+
+        [Fact]
         public void Cleanup_HandlesWhitespaceOnlyString()
         {
             // Arrange
