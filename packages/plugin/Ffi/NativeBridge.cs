@@ -675,13 +675,24 @@ namespace MusicBeePlugin.Ffi
         ///     Uninstall after the host has been disposed, and the core needs no
         ///     state to answer this - only to be loaded.
         /// </summary>
+        /// <param name="storagePath">
+        ///     The storage directory the uninstall just deleted. The helper only
+        ///     reads whether it exists: MusicBee defers deleting mb_remote.dll to
+        ///     its next start, so the plugin file is no signal, while a storage
+        ///     directory that is back means the plugin loaded again and nothing is
+        ///     to be removed.
+        /// </param>
         /// <returns>true if a cleanup was started.</returns>
-        public static bool RequestPluginCleanup()
+        public static unsafe bool RequestPluginCleanup(string storagePath)
         {
             try
             {
                 EnsureNativeLibraryLoaded();
-                return NativeMethods.mbrc_request_plugin_cleanup() != 0;
+                var pathBytes = Encoding.UTF8.GetBytes((storagePath ?? string.Empty) + "\0");
+                fixed (byte* pathPtr = pathBytes)
+                {
+                    return NativeMethods.mbrc_request_plugin_cleanup(pathPtr) != 0;
+                }
             }
             catch
             {

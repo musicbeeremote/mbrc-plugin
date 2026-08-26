@@ -321,11 +321,11 @@ namespace MusicBeePlugin
         /// </summary>
         public void Uninstall()
         {
+            var settingsFolder = Path.Combine(
+                _api.Setting_GetPersistentStoragePath(),
+                "mb_remote");
             try
             {
-                var settingsFolder = Path.Combine(
-                    _api.Setting_GetPersistentStoragePath(),
-                    "mb_remote");
                 if (Directory.Exists(settingsFolder))
                     Directory.Delete(settingsFolder, true);
             }
@@ -334,9 +334,10 @@ namespace MusicBeePlugin
                 // Best-effort cleanup; never throw out of Uninstall.
             }
 
-            // Deliberately after the storage delete: the helper only removes files,
-            // and losing it costs two stray files rather than a settings folder.
-            NativeBridge.RequestPluginCleanup();
+            // Deliberately after the storage delete: the helper reads that folder's
+            // absence as "the plugin really is gone", and losing this call costs a
+            // few stray files rather than a settings folder.
+            NativeBridge.RequestPluginCleanup(settingsFolder);
         }
 
         /// <summary>

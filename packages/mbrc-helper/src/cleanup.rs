@@ -7,8 +7,12 @@
 //! itself either: it is mapped into MusicBee for as long as MusicBee is running,
 //! and Windows will not unlink a loaded image.
 //!
+//! MusicBee also defers deleting `mb_remote.dll` to its *next* start, so at the
+//! moment this runs the plugin file is still there whatever the user did.
+//!
 //! So the core copies this helper to a temp directory and starts the copy, which
-//! waits for MusicBee to exit and then removes what is left. Unelevated, as the
+//! waits for MusicBee to exit and then removes what is left, `mb_remote.dll`
+//! included - MusicBee deleting a file that is already gone is not a problem. Unelevated, as the
 //! user: if the plugins directory needs administrator rights, the install came
 //! from the installer and its uninstaller is the route that removes these files.
 //! There is no privilege boundary here and so nothing to verify - unlike the
@@ -39,9 +43,12 @@ const HEARTBEAT: Duration = Duration::from_secs(3 * 60);
 
 /// What the plugin leaves behind, in the order they are removed.
 ///
-/// `mb_remote.dll` is deliberately absent: it is MusicBee's to delete, and its
-/// presence is what tells us the removal did not stick (see [`run`]).
+/// `mb_remote.dll` is in the list even though MusicBee deletes it too: MusicBee
+/// only does so at its next start, which may be days away or never, and until
+/// then a plugins directory with a plugin DLL in it is one MusicBee will try to
+/// load a core for that is no longer there.
 const LEFTOVERS: &[&str] = &[
+    "mb_remote.dll",
     "mbrc_core.dll",
     // The pre-1.5.0 C# utility this helper replaced. Only present on an install
     // that was upgraded rather than installed fresh.
@@ -51,18 +58,19 @@ const LEFTOVERS: &[&str] = &[
     "mbrc-helper.exe",
 ];
 
-/// The file whose absence means the plugin really was removed.
-const PLUGIN_DLL: &str = "mb_remote.dll";
-
 pub struct Request<'a> {
     pub pid: u32,
     pub target: &'a str,
+    pub storage: &'a str,
 }
 
 #[derive(Debug)]
 pub struct Plan {
     pub pid: u32,
     pub target: PathBuf,
+    /// The plugin's storage directory, which the uninstall deleted on its way
+    /// out. Read only for whether it exists - see [`run_with`].
+    pub storage: PathBuf,
 }
 
 /// What happened, for the log and the exit code.
@@ -89,8 +97,7 @@ pub fn plan(request: &Request<'_>) -> Result<Plan> {
     let target = checked_dir(request.target, "--target")?;
     // A directory with no plugin of ours in it is a caller bug, and this process
     // deletes files: it does not act on a directory it cannot recognise.
-    if !LEFTOVERS.iter().any(|name| target.join(name).exists()) && !target.join(PLUGIN_DLL).exists()
-    {
+    if !LEFTOVERS.iter().any(|name| target.join(name).exists()) {
         return Err(Error::Rejected(format!(
             "{} holds no MusicBee Remote files",
             target.display()
@@ -99,7 +106,30 @@ pub fn plan(request: &Request<'_>) -> Result<Plan> {
     Ok(Plan {
         pid: request.pid,
         target,
+        storage: checked_storage(request.storage)?,
     })
+}
+
+/// The storage directory argument, which unlike the others is expected *not* to
+/// exist: the uninstall deleted it moments before this process started. So the
+/// path is checked by its shape rather than by resolving it, and it is never
+/// written to or deleted - only tested for existence.
+fn checked_storage(raw: &str) -> Result<PathBuf> {
+    if raw.trim().is_empty() {
+        return Err(Error::Rejected("--storage is empty".into()));
+    }
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err(Error::Rejected(format!(
+            "--storage {raw:?} is not absolute"
+        )));
+    }
+    if raw.starts_with("\\\\") || raw.starts_with("//") {
+        return Err(Error::Rejected(format!(
+            "--storage {raw:?} is a network path"
+        )));
+    }
+    Ok(path.to_path_buf())
 }
 
 /// Waits for MusicBee to exit, then removes what the uninstall left behind.
@@ -118,15 +148,22 @@ pub fn run_with(plan: &Plan, wait: fn(u32, Duration) -> bool) -> Outcome {
     if !wait_for_musicbee(plan.pid, wait) {
         return Outcome::StillRunning;
     }
-    crate::log::line("MusicBee exited; removing what the uninstall left behind");
+    crate::log::line("MusicBee exited");
 
-    // Re-checked after the wait, not before: the window between the user
-    // removing the plugin and MusicBee exiting is exactly when they might add it
-    // back, and deleting the core out from under a reinstalled plugin would
-    // break an install that was working a moment ago.
-    if plan.target.join(PLUGIN_DLL).exists() {
+    // The re-add check, and it is the storage directory rather than the plugin
+    // DLL because only one of the two is a signal. MusicBee defers deleting
+    // `mb_remote.dll` to its next start, so that file is still there whatever
+    // the user did; the storage directory was deleted by the uninstall and only
+    // a plugin that loaded again would have recreated it.
+    //
+    // Checked after the wait, not before: the window between removing the plugin
+    // and MusicBee exiting is exactly when someone might add it back, and
+    // deleting the core out from under a working install is the one outcome
+    // worth this much care.
+    if plan.storage.exists() {
         return Outcome::StillInstalled;
     }
+    crate::log::line("removing what the uninstall left behind");
 
     let mut removed = Vec::new();
     let mut failed = Vec::new();
@@ -183,24 +220,39 @@ mod tests {
 
     struct Fixture {
         root: PathBuf,
+        /// The plugins directory, and beside it the storage directory the
+        /// uninstall would have deleted.
+        plugins: PathBuf,
+        storage: PathBuf,
     }
 
     impl Fixture {
         fn new(name: &str) -> Self {
             let root = std::env::temp_dir().join(format!("mbrc-cleanup-{name}"));
             let _ = std::fs::remove_dir_all(&root);
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
+            let plugins = root.join("Plugins");
+            std::fs::create_dir_all(&plugins).unwrap();
+            Self {
+                storage: root.join("mb_remote"),
+                plugins,
+                root,
+            }
         }
 
         fn write(&self, name: &str) {
-            std::fs::write(self.root.join(name), b"stand-in").unwrap();
+            std::fs::write(self.plugins.join(name), b"stand-in").unwrap();
+        }
+
+        /// The plugin loaded again and recreated its storage.
+        fn reinstalled(&self) {
+            std::fs::create_dir_all(&self.storage).unwrap();
         }
 
         fn plan(&self) -> Plan {
             Plan {
                 pid: 1,
-                target: std::fs::canonicalize(&self.root).unwrap(),
+                target: std::fs::canonicalize(&self.plugins).unwrap(),
+                storage: self.storage.clone(),
             }
         }
     }
@@ -222,6 +274,9 @@ mod tests {
     #[test]
     fn removes_what_musicbee_leaves_behind() {
         let fixture = Fixture::new("removes");
+        // MusicBee defers deleting its own file to the next start, so this is
+        // exactly what the directory looks like when the helper wakes up.
+        fixture.write("mb_remote.dll");
         fixture.write("mbrc_core.dll");
         fixture.write("mbrc-helper.exe");
 
@@ -229,10 +284,16 @@ mod tests {
 
         assert_eq!(
             outcome,
-            Outcome::Removed(vec!["mbrc_core.dll".into(), "mbrc-helper.exe".into()])
+            Outcome::Removed(vec![
+                "mb_remote.dll".into(),
+                "mbrc_core.dll".into(),
+                "mbrc-helper.exe".into()
+            ])
         );
-        assert!(!fixture.root.join("mbrc_core.dll").exists());
-        assert!(!fixture.root.join("mbrc-helper.exe").exists());
+        assert!(std::fs::read_dir(&fixture.plugins)
+            .unwrap()
+            .next()
+            .is_none());
     }
 
     #[test]
@@ -252,13 +313,30 @@ mod tests {
     #[test]
     fn a_reinstalled_plugin_is_left_alone() {
         let fixture = Fixture::new("reinstalled");
+        fixture.write("mb_remote.dll");
         fixture.write("mbrc_core.dll");
         fixture.write("mbrc-helper.exe");
-        // Added back between the removal and MusicBee exiting.
-        fixture.write("mb_remote.dll");
+        // Added back between the removal and MusicBee exiting: the plugin loaded
+        // again and recreated the storage the uninstall had deleted.
+        fixture.reinstalled();
 
         assert_eq!(run_with(&fixture.plan(), gone), Outcome::StillInstalled);
-        assert!(fixture.root.join("mbrc_core.dll").exists());
+        assert!(fixture.plugins.join("mbrc_core.dll").exists());
+    }
+
+    #[test]
+    fn the_plugin_dll_alone_is_not_read_as_a_reinstall() {
+        // The case that made the first design wrong: MusicBee had not yet
+        // deleted its own file, and taking that as "installed again" meant the
+        // cleanup could never run at all.
+        let fixture = Fixture::new("deferred-delete");
+        fixture.write("mb_remote.dll");
+        fixture.write("mbrc_core.dll");
+
+        assert!(matches!(
+            run_with(&fixture.plan(), gone),
+            Outcome::Removed(_)
+        ));
     }
 
     #[test]
@@ -270,7 +348,7 @@ mod tests {
             run_with(&fixture.plan(), still_running),
             Outcome::StillRunning
         );
-        assert!(fixture.root.join("mbrc_core.dll").exists());
+        assert!(fixture.plugins.join("mbrc_core.dll").exists());
     }
 
     #[test]
@@ -284,10 +362,12 @@ mod tests {
         let fixture = Fixture::new("not-ours");
         fixture.write("mb_TheaterModePlugin.dll");
 
-        let target = fixture.root.to_string_lossy().to_string();
+        let target = fixture.plugins.to_string_lossy().to_string();
+        let storage = fixture.storage.to_string_lossy().to_string();
         let error = plan(&Request {
             pid: 1,
             target: &target,
+            storage: &storage,
         })
         .unwrap_err();
 
@@ -296,15 +376,17 @@ mod tests {
 
     #[test]
     fn a_directory_holding_only_the_plugin_is_accepted() {
-        // The plugin is still there when the core asks for the cleanup - MusicBee
-        // removes it as part of the same teardown - so this has to be allowed.
+        // The plugin file is always still there when the cleanup is asked for:
+        // MusicBee deletes it at its next start, not now.
         let fixture = Fixture::new("plugin-only");
         fixture.write("mb_remote.dll");
 
-        let target = fixture.root.to_string_lossy().to_string();
+        let target = fixture.plugins.to_string_lossy().to_string();
+        let storage = fixture.storage.to_string_lossy().to_string();
         assert!(plan(&Request {
             pid: 1,
             target: &target,
+            storage: &storage,
         })
         .is_ok());
     }

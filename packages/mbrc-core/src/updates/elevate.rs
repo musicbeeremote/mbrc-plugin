@@ -128,9 +128,18 @@ pub fn launch(storage_path: &str, current_version: &str) -> UpdateLaunch {
 /// removal would be a surprise the user did not ask for. So a non-writable
 /// directory is a quiet no, recorded in the log.
 ///
+/// `storage_path` is the directory the uninstall just deleted - the signal the
+/// helper uses to tell "removed" from "removed and added straight back", since
+/// MusicBee defers deleting `mb_remote.dll` to its next start and that file is
+/// therefore no signal at all.
+///
 /// Returns whether a cleanup was started. Nothing depends on the answer beyond
 /// the log line: by the time it matters this process is gone.
-pub fn request_plugin_cleanup() -> bool {
+pub fn request_plugin_cleanup(storage_path: &str) -> bool {
+    if storage_path.is_empty() {
+        tracing::warn!("cannot clean up: the storage directory is unknown");
+        return false;
+    }
     let Some(target) = plugins_dir() else {
         tracing::warn!("cannot clean up: the plugins directory is unknown");
         return false;
@@ -166,6 +175,13 @@ pub fn request_plugin_cleanup() -> bool {
         std::process::id().to_string(),
         "--target".to_owned(),
         target.display().to_string(),
+        // Read only for whether it exists. The uninstall deleted it, so a
+        // storage directory that is back means the plugin loaded again and
+        // nothing is to be removed. Taken from the caller because MusicBee is
+        // the authority on where it is - and unlike the target, the worst a
+        // wrong value can do is call the removal off.
+        "--storage".to_owned(),
+        storage_path.to_owned(),
     ];
     tracing::info!(
         helper = %copy.display(),

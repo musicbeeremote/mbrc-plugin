@@ -12,7 +12,7 @@
 //! mbrc-helper firewall --port <n>
 //! mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
 //!                    [--relaunch-aumid <aumid>]
-//! mbrc-helper cleanup --pid <n> --target <dir>
+//! mbrc-helper cleanup --pid <n> --target <dir> --storage <dir>
 //! ```
 //!
 //! `cleanup` is the exception to "elevated": it runs as the user, and removes
@@ -76,7 +76,7 @@ USAGE:
     mbrc-helper firewall --port <n>
     mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
                        [--relaunch-aumid <aumid>]
-    mbrc-helper cleanup --pid <n> --target <dir>
+    mbrc-helper cleanup --pid <n> --target <dir> --storage <dir>
     mbrc-helper --version
 
 COMMANDS:
@@ -160,7 +160,7 @@ fn run(args: &[String]) -> Result<u8, String> {
             }))
         }
         "cleanup" => {
-            let flags = parse_flags(&args[1..], &["pid", "target"])?;
+            let flags = parse_flags(&args[1..], &["pid", "target", "storage"])?;
             let pid = require(&flags, "pid")?;
             let pid: u32 = pid
                 .parse()
@@ -169,6 +169,7 @@ fn run(args: &[String]) -> Result<u8, String> {
             Ok(run_cleanup(&cleanup::Request {
                 pid,
                 target: require(&flags, "target")?,
+                storage: require(&flags, "storage")?,
             }))
         }
         other => Err(format!("unknown command {other:?}\n\n{USAGE}")),
@@ -238,8 +239,8 @@ fn run_cleanup(request: &cleanup::Request<'_>) -> u8 {
     log::direct_to_temp();
     log::note_environment();
     log::line(&format!(
-        "cleanup requested: pid={} target={}",
-        request.pid, request.target
+        "cleanup requested: pid={} target={} storage={}",
+        request.pid, request.target, request.storage
     ));
 
     let plan = match cleanup::plan(request) {

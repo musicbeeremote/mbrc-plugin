@@ -166,9 +166,15 @@ namespace MusicBeePlugin.Ffi.Generated
         ///  and only if the plugin is still gone at that point, so adding it back in the
         ///  same session is safe.
         ///
-        ///  Takes nothing, for the same reason as `mbrc_apply_staged_update`: the
-        ///  directory is where this DLL was loaded from and the pid is our own, so there
-        ///  is nothing for a caller to name and nothing to tamper with.
+        ///  The directory to remove files from is where this DLL was loaded from and the
+        ///  pid is our own, so neither is a parameter - there is nothing for a caller to
+        ///  name and nothing to tamper with. `storage_path` is: it is only read for
+        ///  whether it exists, which is how the helper tells "removed" from "removed and
+        ///  added straight back", and the worst a wrong value can do is call the removal
+        ///  off.
+        ///
+        ///  # Safety
+        ///  `storage_path` must be null or a valid NUL-terminated C string.
         ///
         ///  Returns 1 if a cleanup was started, 0 otherwise - including the ordinary case
         ///  of a plugins directory that needs elevation, where the installer's uninstaller
@@ -176,7 +182,7 @@ namespace MusicBeePlugin.Ffi.Generated
         ///  not a moment to raise an error the user cannot act on.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_request_plugin_cleanup", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern int mbrc_request_plugin_cleanup();
+        internal static extern int mbrc_request_plugin_cleanup(byte* storage_path);
 
         /// <summary>
         ///  Free a string previously returned to C# by the core. Null-safe. This is the
