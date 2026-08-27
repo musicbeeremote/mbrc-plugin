@@ -32,6 +32,14 @@ namespace MusicBeePlugin
         /// <summary>The preferences panel, built lazily in <see cref="Configure" />.</summary>
         private ConfigurationPanel _configPanel;
 
+        /// <summary>
+        ///     The Tools menu entry, kept so an uninstall can take it back out.
+        ///     MusicBee hands the item back when it is added and never removes it
+        ///     itself, so without this the entry stays in the menu - pointing at a
+        ///     plugin that is gone - until MusicBee is restarted.
+        /// </summary>
+        private ToolStripItem _menuItem;
+
         /// <summary>Plugin version string, shown in the preferences panel.</summary>
         private string _version;
 
@@ -134,7 +142,7 @@ namespace MusicBeePlugin
 
                 // A Tools menu entry opens the same settings dialog as the Configure
                 // button, matching the classic plugin's layout.
-                _api.MB_AddMenuItem(
+                _menuItem = _api.MB_AddMenuItem(
                     "mnuTools/MusicBee Remote",
                     "MusicBee Remote: open settings",
                     (sender, args) => OpenSettingsDialog());
@@ -323,6 +331,11 @@ namespace MusicBeePlugin
         /// </remarks>
         public void Uninstall()
         {
+            // First, and on the UI thread this is called on: the entry is the one
+            // visible trace of the plugin, and leaving it until after the teardown
+            // means it points at nothing for as long as that takes.
+            RemoveMenuItem();
+
             try
             {
                 SettingsWindow.CloseIfOpen();
@@ -368,6 +381,48 @@ namespace MusicBeePlugin
         {
             "mbrc-helper.exe", "MBRC_LICENSE.txt", "MBRC_README.txt",
         };
+
+        /// <summary>
+        ///     Takes the Tools entry back out of the menu it was added to.
+        ///     MusicBee returns the item when it is added and offers no way to remove
+        ///     one, so this goes through the item's own owner. Never throws: an
+        ///     uninstall that fails here has still uninstalled everything else.
+        /// </summary>
+        private void RemoveMenuItem()
+        {
+            var item = _menuItem;
+            _menuItem = null;
+            if (item == null) return;
+
+            try
+            {
+                var owner = item.Owner ?? item.GetCurrentParent();
+                if (owner == null)
+                {
+                    item.Dispose();
+                    return;
+                }
+
+                // Called from the Preferences dialog, so this is already the UI
+                // thread - but the menu belongs to MusicBee's main form, and
+                // touching another thread's controls is how a plugin takes the host
+                // down with it.
+                if (owner.InvokeRequired)
+                    owner.Invoke(new Action(() => DetachMenuItem(owner, item)));
+                else
+                    DetachMenuItem(owner, item);
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Plugin Uninstall: could not remove the menu entry", ex);
+            }
+        }
+
+        private static void DetachMenuItem(ToolStrip owner, ToolStripItem item)
+        {
+            owner.Items.Remove(item);
+            item.Dispose();
+        }
 
         /// <summary>
         ///     Removes the files that ship beside the plugin assembly. The helper and
