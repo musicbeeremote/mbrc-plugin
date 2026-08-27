@@ -51,6 +51,21 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_stop_networking();
 
         /// <summary>
+        ///  Tell the long-running background work to wind down. Stops nothing by itself.
+        ///
+        ///  Notice, not an order to shut down: the cover build is minutes of blocking
+        ///  work on a first run, and teardown waits for it. A host that knows it is about
+        ///  to tear down - an uninstall, say, which first closes a window and removes a
+        ///  menu entry - can call this and hand those milliseconds to the build as a head
+        ///  start, so the wait in `mbrc_stop_networking` is usually already over.
+        ///
+        ///  Cleared by the next `mbrc_start_networking`, so a stop/start (a port change)
+        ///  is unaffected. Idempotent.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "mbrc_begin_stopping", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int mbrc_begin_stopping();
+
+        /// <summary>
         ///  Read the core's current settings as a MessagePack buffer for the settings
         ///  panel. Writes the byte length to `out_len` and returns a Rust-owned pointer
         ///  that C# must release via [`mbrc_free_bytes`]. Returns null (and leaves

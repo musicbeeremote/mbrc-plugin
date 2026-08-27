@@ -331,9 +331,15 @@ namespace MusicBeePlugin
         /// </remarks>
         public void Uninstall()
         {
-            // First, and on the UI thread this is called on: the entry is the one
-            // visible trace of the plugin, and leaving it until after the teardown
-            // means it points at nothing for as long as that takes.
+            // Before anything else, because it costs nothing and buys time: the
+            // core's cover build is minutes of blocking work on a first run, and
+            // disposing the host below waits for it. Everything between here and
+            // there is time the build spends stopping instead.
+            _host?.BeginStopping();
+
+            // The entry is the one visible trace of the plugin, so it goes early:
+            // leaving it until after the teardown means it points at nothing for
+            // as long as that takes.
             RemoveMenuItem();
 
             try

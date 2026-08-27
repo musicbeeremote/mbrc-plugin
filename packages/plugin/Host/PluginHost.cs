@@ -222,6 +222,18 @@ namespace MusicBeePlugin.Host
             return true;
         }
 
+        /// <summary>
+        ///     Tell the core to wind its background work down, without stopping
+        ///     anything yet. For a caller that knows it is about to
+        ///     <see cref="Dispose" /> but has its own work to do first - the cover
+        ///     build gets that time as notice, and <see cref="Dispose" /> is what
+        ///     would otherwise wait for it.
+        /// </summary>
+        public void BeginStopping()
+        {
+            _bridge.BeginStopping();
+        }
+
         public void Dispose()
         {
             if (_disposed) return;

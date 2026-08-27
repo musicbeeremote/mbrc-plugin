@@ -204,6 +204,27 @@ namespace MusicBeePlugin.Ffi
             }
         }
 
+        /// <summary>
+        ///     Tell the core's background work to wind down. Stops nothing by
+        ///     itself and returns immediately.
+        ///     Notice, given ahead of a teardown the caller knows is coming: the
+        ///     cover build is minutes of blocking work on a first run and
+        ///     <see cref="StopNetworking" /> waits for it, so anything the caller
+        ///     still has to do first is time the build can spend stopping.
+        /// </summary>
+        public void BeginStopping()
+        {
+            if (!_initialized) return;
+            try
+            {
+                _ = NativeMethods.mbrc_begin_stopping();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to signal the core to stop");
+            }
+        }
+
         public void StopNetworking()
         {
             if (!_initialized) return;

@@ -514,6 +514,23 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
     MbrcResult::Ok
 }
 
+/// Tell the background work to wind down, without stopping anything yet.
+///
+/// For a host that knows it is about to tear down but has its own work to do
+/// first - an uninstall closes a window and takes a menu entry out before it
+/// disposes anything. Those are milliseconds, and this hands them to the cover
+/// build as notice, so by the time the join comes it has usually already
+/// stopped. Idempotent, and safe to call when nothing is running.
+pub fn begin_stopping() -> MbrcResult {
+    match lock().as_ref() {
+        Some(runtime) => {
+            runtime.core.begin_stopping();
+            MbrcResult::Ok
+        }
+        None => MbrcResult::NotInitialized,
+    }
+}
+
 /// Stop networking (if running) and drop the core, allowing a later re-init.
 pub fn shutdown() -> MbrcResult {
     let mut guard = lock();
@@ -690,6 +707,23 @@ mod tests {
         assert_eq!(merged.port, 7000);
         assert_eq!(merged.allowed_addresses, vec!["10.0.0.2"]); // lists replace
         assert_eq!(merged.tcp_keepalive_secs, 99); // absent key untouched
+    }
+
+    #[test]
+    fn stopping_is_set_for_teardown_and_cleared_for_a_restart() {
+        let core = Core::new(Arc::new(NullProviders), Config::default());
+        assert!(!core.is_stopping());
+
+        core.begin_stopping();
+        assert!(core.is_stopping());
+        core.begin_stopping(); // idempotent: the host may say so more than once
+        assert!(core.is_stopping());
+
+        // Saving a new port stops and restarts networking on the same core. If
+        // the flag survived that, the cover build would never run again for the
+        // rest of the session and nothing would say why.
+        core.clear_stopping();
+        assert!(!core.is_stopping());
     }
 
     #[test]
