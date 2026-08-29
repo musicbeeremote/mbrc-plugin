@@ -23,17 +23,24 @@ to install directly from the zip file.
 UNINSTALLATION
 --------------
 
-Close MusicBee, then delete all three files from the Plugins folder:
+Go to MusicBee -> Edit -> Preferences -> Plugins and use "Remove" on MusicBee
+Remote. The plugin removes its own files - mbrc_core.dll, mbrc-helper.exe and
+these two text files - along with everything it stored: the settings, the log,
+the library and cover caches, and any downloaded update.
+
+MusicBee deletes mb_remote.dll itself the next time it starts, so the Plugins
+folder is only fully clear after a restart. Nothing else is left behind.
+
+If you would rather do it by hand, close MusicBee and delete these from the
+Plugins folder:
 
     mb_remote.dll
     mbrc_core.dll
     mbrc-helper.exe
+    MBRC_LICENSE.txt
+    MBRC_README.txt
 
-Deleting only mb_remote.dll leaves the native core behind.
-
-The plugin stores its data under %APPDATA%\MusicBee\mb_remote\
-This folder can be safely deleted after uninstallation. It holds the settings,
-the log, the library and cover caches, and any downloaded update.
+then delete the data folder at %APPDATA%\MusicBee\mb_remote\
 
 
 REQUIREMENTS

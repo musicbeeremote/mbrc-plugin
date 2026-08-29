@@ -155,12 +155,10 @@ Menu (or `mbremoteuninstall.exe` in MusicBee's `Plugins` folder). It removes all
 three files and the plugin's stored settings, caches and logs.
 
 If you installed from the zip, remove the plugin in MusicBee under
-`Edit > Preferences > Plugins`. That deletes the plugin's stored data straight away,
-and MusicBee deletes `mb_remote.dll` itself the next time it starts. `mbrc_core.dll`
-and `mbrc-helper.exe` are left behind - MusicBee only knows about the assembly it
-loaded - so delete those two from the `Plugins` folder yourself ([#192][issue-192]).
-
-[issue-192]: https://github.com/musicbeeremote/mbrc-plugin/issues/192
+`Edit > Preferences > Plugins`. It takes its own files with it: `mbrc_core.dll`,
+`mbrc-helper.exe` and the two text files, plus the stored settings, caches and
+logs, all while MusicBee is still running. MusicBee deletes `mb_remote.dll` itself
+the next time it starts, so the folder is only fully clear after a restart.
 
 ## Getting Started
 

@@ -55,10 +55,18 @@ shipped Android and iOS client keeps working untouched.
   file, instead of loading and silently doing nothing.
 - The installer's uninstaller removed nothing. It looked for the plugin files one
   directory deeper than they are, so every delete missed, and it still reported
-  that the plugin had been removed. Removing the plugin inside MusicBee instead
-  leaves `mbrc_core.dll` and `mbrc-helper.exe` behind, since MusicBee only knows
-  about the file it loaded - delete those two by hand, or use the uninstaller
-  (#192).
+  that the plugin had been removed.
+- Removing the plugin inside MusicBee used to leave `mbrc_core.dll` and
+  `mbrc-helper.exe` in the Plugins folder, because MusicBee only knows about the
+  assembly it loaded. The plugin now unloads the native core and deletes it, the
+  helper and its own text files itself, takes its entry out of the Tools menu,
+  and clears its stored data - all without closing MusicBee (#192).
+- Removing the plugin while the cover cache was building froze MusicBee until the
+  build finished. Teardown now tells the build to stop first and it gives up
+  between albums, keeping what it had already built for next time.
+- The archive's `LICENSE` and `README.txt` overwrote MusicBee's own `readme.txt`
+  in the Plugins folder, and earlier versions left both behind on every update.
+  They ship as `MBRC_LICENSE.txt` and `MBRC_README.txt` now.
 - Single-file albums split by a `.cue` sheet showed in the now-playing list as a
   row of "Unknown Artist" per track. Every such track reports the same container
   file, so reading tags by file returned nothing for all of them; the list now
