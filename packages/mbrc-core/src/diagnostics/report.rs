@@ -96,14 +96,16 @@ fn listening(core: &Core) -> Value {
 fn connections(core: &Core) -> Value {
     let stats = core.registry.stats();
     json!({
-        "total": stats.total,
+        "handshaked": stats.handshaked,
         "subscribers": stats.subscribers,
-        "by_ip": stats
-            .by_ip
+        "unhandshaked": stats.unhandshaked,
+        "slots_by_ip": stats
+            .slots_by_ip
             .iter()
             .map(|(ip, count)| json!({ "ip": ip, "count": count }))
             .collect::<Vec<_>>(),
-        "oldest_idle_secs": stats.oldest_idle_secs,
+        "oldest_aux_idle_secs": stats.oldest_aux_idle_secs,
+        "subscriber_idle_secs": stats.subscriber_idle_secs,
         "evicted_total": stats.evicted_total,
         "rejected_per_ip_total": stats.rejected_per_ip_total,
     })

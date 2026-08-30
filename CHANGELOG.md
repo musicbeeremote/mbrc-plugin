@@ -71,6 +71,11 @@ shipped Android and iOS client keeps working untouched.
   every later tap was discarded with nothing to show for it. The plugin now
   closes the oldest abandoned connection to let the new one through, and clears
   out ones that have been unused for a long time.
+- A diagnostics capture could not tell which connection a frame belonged to, for
+  any connection that was already open when the capture started - usually
+  including the one carrying events. Those frames are now labelled like the
+  rest, and the connection summary in the report no longer counts an idle event
+  channel as a stalled connection.
 - Debug logs and diagnostics captures showed nothing the plugin pushed on its
   own. Events sent to connected clients and the keepalive pings never reached
   the log, so a capture of a push problem looked identical to a capture of

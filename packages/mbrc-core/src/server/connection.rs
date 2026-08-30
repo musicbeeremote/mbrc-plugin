@@ -26,6 +26,29 @@ use crate::state::Core;
 /// fails fast on a half-open socket (the send errors, closing the connection).
 const PING_FRAME: &str = r#"{"context":"ping","data":""}"#;
 
+/// Tag every frame/decision emitted while handling one socket with its
+/// `conn_id`, so the interleaved wire log (many overlapping iOS sockets) can be
+/// attributed to a single connection. `peer` stays on the open/close lines.
+///
+/// Deliberately INFO, not DEBUG. A span caches whether it is enabled **when it
+/// is constructed** and never re-evaluates it, and the reload layer cannot
+/// revive one that was born as `Span::none()`. A diagnostics capture raises the
+/// level only after the fact, so a DEBUG span left every connection that already
+/// existed permanently unattributable - including the long-lived broadcast
+/// socket, the one a push-path investigation is actually about. Measured on
+/// 2026-08-30: the subscriber contributed zero attributed lines across sixteen
+/// minutes, while a connection opened after the raise carried its `conn_id`
+/// throughout.
+///
+/// INFO is the floor of every filter the plugin installs (both `logging::init`
+/// fallbacks and all three levels in `capture.rs` / `NativeBridge.SetLogLevel`),
+/// so the span is always live. The span emits nothing itself; its level only
+/// decides whether it exists, which costs one span per connection and nothing
+/// per frame.
+fn conn_span(conn_id: u64) -> tracing::Span {
+    tracing::info_span!("conn", conn_id)
+}
+
 /// Log a keepalive ping on the same `mbrc::wire` target as every other frame.
 /// Pings are pushed, not replies, so nothing else in the wire log would show
 /// them; without this a capture can't tell a quiet client from a dead one.
@@ -62,10 +85,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let writer_task = tokio::spawn(writer_loop(writer, out_rx));
 
     let conn_id = core.next_conn_id();
-    // Tag every frame/decision emitted while handling this socket with its
-    // conn_id, so the interleaved wire log (many overlapping iOS sockets) can be
-    // attributed to a single connection. peer stays on the open/close lines.
-    let conn_span = tracing::debug_span!("conn", conn_id);
+    let conn_span = conn_span(conn_id);
     let mut session = Session::default();
     let mut accumulator = FrameAccumulator::default();
     let mut buf = [0u8; 4096];
@@ -290,6 +310,28 @@ async fn writer_loop(mut writer: OwnedWriteHalf, mut out_rx: UnboundedReceiver<S
 mod tests {
     use super::*;
     use crate::logging::test_support::capture_wire_lines;
+
+    /// The regression guard for attribution across a level change. A span caches
+    /// whether it is enabled at construction and can never be revived, so a span
+    /// born while the filter sat at INFO - which is where it sits until a
+    /// capture raises it - has to be live at INFO or every connection that
+    /// predates the capture loses its `conn_id` for good. A `debug_span!` here
+    /// fails this.
+    #[test]
+    fn the_conn_span_survives_being_created_before_a_capture() {
+        let at_info = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(std::io::sink)
+            .finish();
+
+        tracing::subscriber::with_default(at_info, || {
+            assert!(
+                !conn_span(1).is_disabled(),
+                "the conn span must be live at INFO, or a capture cannot attribute \
+                 frames on any connection that already existed when it started"
+            );
+        });
+    }
 
     /// The ping is the one pushed frame that belongs to a single connection, so
     /// its line has to carry the conn_id that broadcast lines don't.

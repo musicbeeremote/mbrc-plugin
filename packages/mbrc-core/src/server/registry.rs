@@ -52,16 +52,38 @@ pub enum IpAdmit {
 }
 
 /// What the registry can say about itself for a diagnostics report.
+///
+/// The counts here deliberately measure different populations, and the field
+/// names say which: `handshaked` includes loopback and excludes sockets that
+/// never negotiated, while `slots_by_ip` is the opposite on both counts. They
+/// were previously named as though they were two views of one number, which held
+/// up only because no capture had yet been taken with a loopback client
+/// connected.
 pub struct RegistryStats {
-    /// Handshaked connections currently held.
-    pub total: usize,
+    /// Handshaked connections currently held, loopback included.
+    pub handshaked: usize,
     /// How many of those are broadcast subscribers.
     pub subscribers: usize,
-    /// Reserved per-IP slots (includes sockets that never handshaked), busiest
-    /// first.
-    pub by_ip: Vec<(String, usize)>,
-    /// How long the most neglected connection has been silent.
-    pub oldest_idle_secs: u64,
+    /// Sockets holding a per-IP slot that have not completed a handshake. They
+    /// count against the cap like any other, so they belong in a report about
+    /// the cap.
+    pub unhandshaked: usize,
+    /// Reserved per-IP slots, busiest first. Loopback is exempt from the cap and
+    /// so never appears here, and un-handshaked sockets do.
+    pub slots_by_ip: Vec<(String, usize)>,
+    /// How long the most neglected *non-subscriber* has been silent. This is the
+    /// actionable one: aux sockets are what the reaper and the per-IP eviction
+    /// act on, so a large value means abandoned sockets are piling up.
+    pub oldest_aux_idle_secs: u64,
+    /// How long the quietest subscriber has been silent inbound.
+    ///
+    /// **Not a liveness signal.** iOS never answers a ping (zero pongs against
+    /// 105 pings in a 30-minute session on 2026-08-30), so this climbs without
+    /// bound on a perfectly healthy event socket and a large value here is
+    /// normal. A subscriber's health is the ping *send* succeeding plus TCP
+    /// keepalive, not this. Reported apart from the aux figure precisely so it
+    /// stops making a working connection look stale.
+    pub subscriber_idle_secs: u64,
     pub evicted_total: u64,
     pub rejected_per_ip_total: u64,
 }
@@ -325,23 +347,32 @@ impl ConnectionRegistry {
     pub fn stats(&self) -> RegistryStats {
         let now = self.now_ms();
         let inner = self.lock();
-        let mut by_ip: Vec<(String, usize)> = inner
+        let mut slots_by_ip: Vec<(String, usize)> = inner
             .by_ip
             .iter()
             .map(|(ip, count)| (ip.to_string(), *count))
             .collect();
         // Busiest first: the runaway client is the one worth seeing.
-        by_ip.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        slots_by_ip.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        let idle_secs = |m: &ConnMeta| now.saturating_sub(m.last_active_ms) / 1000;
+        // Split the idle figures by role. Lumping them together let a subscriber
+        // - silent by design, since iOS never pongs - stand in as "the oldest
+        // idle connection" and make a healthy plugin look stalled.
+        let (subs, aux): (Vec<&ConnMeta>, Vec<&ConnMeta>) =
+            inner.conns.values().partition(|m| m.is_main);
+        // Slots are only reserved for non-loopback peers, so the handshaked
+        // connections that can account for one are the non-loopback ones.
+        let slots_reserved: usize = inner.by_ip.values().sum();
+        let handshaked_remote = inner.conns.values().filter(|m| !m.ip.is_loopback()).count();
+
         RegistryStats {
-            total: inner.conns.len(),
-            subscribers: inner.conns.values().filter(|m| m.is_main).count(),
-            by_ip,
-            oldest_idle_secs: inner
-                .conns
-                .values()
-                .map(|m| now.saturating_sub(m.last_active_ms) / 1000)
-                .max()
-                .unwrap_or(0),
+            handshaked: inner.conns.len(),
+            subscribers: subs.len(),
+            unhandshaked: slots_reserved.saturating_sub(handshaked_remote),
+            slots_by_ip,
+            oldest_aux_idle_secs: aux.iter().copied().map(idle_secs).max().unwrap_or(0),
+            subscriber_idle_secs: subs.iter().copied().map(idle_secs).max().unwrap_or(0),
             evicted_total: self.evicted_total.load(Ordering::Relaxed),
             rejected_per_ip_total: self.rejected_per_ip_total.load(Ordering::Relaxed),
         }
@@ -515,14 +546,73 @@ mod tests {
         r.touch(3);
 
         let stats = r.stats();
-        assert_eq!(stats.total, 3);
+        assert_eq!(stats.handshaked, 3);
         assert_eq!(stats.subscribers, 1);
+        assert_eq!(stats.unhandshaked, 0);
         assert_eq!(
-            stats.by_ip[0],
+            stats.slots_by_ip[0],
             ("192.168.1.5".to_string(), 2),
             "busiest first"
         );
-        assert_eq!(stats.oldest_idle_secs, 30);
+        assert_eq!(stats.oldest_aux_idle_secs, 30);
+    }
+
+    /// iOS never answers a ping, so a subscriber's inbound activity never
+    /// advances. Counting it as "the oldest idle connection" made a healthy
+    /// plugin look stalled - a live capture reported 644s while everything was
+    /// working normally.
+    #[test]
+    fn a_silent_subscriber_does_not_masquerade_as_a_stale_connection() {
+        let r = ConnectionRegistry::new(20, 40);
+        let peer = ip("192.168.1.5");
+        r.admit_ip(peer);
+        r.admit_ip(peer);
+        r.register(1, peer, None, true, false, notify()); // subscriber, never speaks
+        r.register(2, peer, None, false, false, notify());
+        r.advance(600_000);
+        r.touch(2); // the aux socket is active
+
+        let stats = r.stats();
+        assert_eq!(stats.oldest_aux_idle_secs, 0, "the aux socket just spoke");
+        assert_eq!(
+            stats.subscriber_idle_secs, 600,
+            "the subscriber's silence is still reported, but on its own field"
+        );
+    }
+
+    /// Loopback is exempt from the cap, so it reserves no slot while still being
+    /// a handshaked connection. The two counts measure different populations and
+    /// `unhandshaked` must not underflow between them.
+    #[test]
+    fn loopback_counts_as_handshaked_but_reserves_no_slot() {
+        let r = ConnectionRegistry::new(20, 40);
+        let lo = ip("127.0.0.1");
+        r.admit_ip(lo);
+        r.admit_ip(lo);
+        r.register(1, lo, None, false, true, notify());
+        r.register(2, lo, None, false, true, notify());
+
+        let stats = r.stats();
+        assert_eq!(stats.handshaked, 2);
+        assert!(stats.slots_by_ip.is_empty(), "loopback is never capped");
+        assert_eq!(stats.unhandshaked, 0, "must not underflow");
+    }
+
+    /// A socket holding a slot but never negotiating still counts against the
+    /// cap, so a report about the cap has to show it.
+    #[test]
+    fn stats_count_slots_held_by_sockets_that_never_handshaked() {
+        let r = ConnectionRegistry::new(20, 40);
+        let peer = ip("192.168.1.5");
+        r.admit_ip(peer); // handshakes below
+        r.admit_ip(peer); // never handshakes
+        r.admit_ip(peer); // never handshakes
+        r.register(1, peer, None, false, false, notify());
+
+        let stats = r.stats();
+        assert_eq!(stats.handshaked, 1);
+        assert_eq!(stats.unhandshaked, 2);
+        assert_eq!(stats.slots_by_ip[0].1, 3);
     }
 
     #[test]
