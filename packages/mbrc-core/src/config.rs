@@ -91,6 +91,10 @@ fn default_max_conns_per_ip() -> usize {
     40
 }
 
+fn default_aux_idle_timeout_secs() -> u64 {
+    300
+}
+
 fn default_tcp_keepalive_secs() -> u64 {
     45
 }
@@ -169,11 +173,21 @@ pub struct Config {
     /// the cap is rejected. A leak backstop for grouped clients (Android v4).
     #[serde(default = "default_max_conns_per_client")]
     pub max_conns_per_client: usize,
-    /// Max concurrent connections from a single source IP (loopback exempt); the
-    /// newest over the cap is rejected. Bounds ungrouped clients (iOS, old
-    /// Android) and, on a LAN, is effectively a per-device leak bound.
+    /// Max concurrent connections from a single source IP (loopback exempt). At
+    /// the cap the least recently active non-subscriber from that IP is evicted
+    /// to admit the newcomer, and only a peer with nothing evictable is refused.
+    /// Bounds ungrouped clients (iOS, old Android) and, on a LAN, is effectively
+    /// a per-device leak bound.
     #[serde(default = "default_max_conns_per_ip")]
     pub max_conns_per_ip: usize,
+    /// How long a handshaked non-subscriber (`no_broadcast`) socket may sit idle
+    /// before it is closed; `0` disables the reap. Broadcast subscribers are
+    /// never reaped at any value. Shipped iOS clients open one of these per user
+    /// action and never close it, so this drains the leak on a long session.
+    /// Generous by design: a short window here is the regime that broke library
+    /// syncs, and the per-IP eviction path is what actually bounds the leak.
+    #[serde(default = "default_aux_idle_timeout_secs")]
+    pub aux_idle_timeout_secs: u64,
     /// OS-level TCP keepalive idle time (seconds) set on each accepted socket so
     /// the kernel detects and drops dead half-open connections.
     #[serde(default = "default_tcp_keepalive_secs")]
@@ -244,6 +258,7 @@ impl Default for Config {
             unhandshaked_timeout_secs: default_unhandshaked_timeout_secs(),
             max_conns_per_client: default_max_conns_per_client(),
             max_conns_per_ip: default_max_conns_per_ip(),
+            aux_idle_timeout_secs: default_aux_idle_timeout_secs(),
             tcp_keepalive_secs: default_tcp_keepalive_secs(),
             mdns_enabled: default_mdns_enabled(),
             update_check_enabled: default_update_check_enabled(),

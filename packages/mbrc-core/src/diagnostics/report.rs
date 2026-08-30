@@ -29,6 +29,7 @@ pub fn build(core: &Core, host_env: &[CaptureEnvEntry], started_unix_ms: i64) ->
         "settings": settings(core),
         "listening": listening(core),
         "caches": caches(core),
+        "connections": connections(core),
         "blocked_connections": core.blocked.recent(),
         "update": update(core),
         "process": {
@@ -86,6 +87,25 @@ fn listening(core: &Core) -> Value {
         "bind_address": core.config.bind_address,
         "addresses": addresses,
         "mdns_enabled": core.config.mdns_enabled,
+    })
+}
+
+/// What is connected right now. The blocked list below records refusals, but a
+/// refusal is a symptom: without the live counts a maintainer cannot see the
+/// accumulation that caused it, and a bug reporter has no way to produce it.
+fn connections(core: &Core) -> Value {
+    let stats = core.registry.stats();
+    json!({
+        "total": stats.total,
+        "subscribers": stats.subscribers,
+        "by_ip": stats
+            .by_ip
+            .iter()
+            .map(|(ip, count)| json!({ "ip": ip, "count": count }))
+            .collect::<Vec<_>>(),
+        "oldest_idle_secs": stats.oldest_idle_secs,
+        "evicted_total": stats.evicted_total,
+        "rejected_per_ip_total": stats.rejected_per_ip_total,
     })
 }
 

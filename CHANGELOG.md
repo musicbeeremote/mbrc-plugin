@@ -64,6 +64,13 @@ shipped Android and iOS client keeps working untouched.
 - Removing the plugin while the cover cache was building froze MusicBee until the
   build finished. Teardown now tells the build to stop first and it gives up
   between albums, keeping what it had already built for next time.
+- The iOS app could stop responding after a couple of minutes of browsing,
+  sitting on a loading spinner while playback controls still worked. It opens a
+  new connection for each thing you do and does not close them, and this version
+  had started refusing new connections once 40 were open from one device, so
+  every later tap was discarded with nothing to show for it. The plugin now
+  closes the oldest abandoned connection to let the new one through, and clears
+  out ones that have been unused for a long time.
 - Debug logs and diagnostics captures showed nothing the plugin pushed on its
   own. Events sent to connected clients and the keepalive pings never reached
   the log, so a capture of a push problem looked identical to a capture of

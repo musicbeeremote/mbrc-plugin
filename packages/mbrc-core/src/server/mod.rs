@@ -544,12 +544,28 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                 }
                 // Per-IP connection cap (loopback exempt). Reserve the slot here
                 // so it pairs with the release after the connection ends.
-                if !core.registry.try_admit_ip(peer.ip()) {
-                    tracing::debug!(%peer, "rejecting client: per-IP connection cap reached");
-                    core.blocked
-                        .record(peer.ip(), peer.port(), blocked::BlockReason::PerIpCap);
-                    tokio::spawn(reject_client(stream));
-                    continue;
+                match core.registry.admit_ip(peer.ip()) {
+                    registry::IpAdmit::Admitted => {}
+                    registry::IpAdmit::Evicted(victim) => {
+                        tracing::debug!(
+                            %peer,
+                            victim,
+                            "per-IP cap reached; evicted an idle connection to admit this one"
+                        );
+                    }
+                    // WARN, not DEBUG: this is the point where the user's app
+                    // stops working, and at the default INFO level a DEBUG line
+                    // meant their log said nothing at all about it.
+                    registry::IpAdmit::Rejected => {
+                        tracing::warn!(
+                            %peer,
+                            "rejecting client: per-IP connection cap reached, nothing idle to evict"
+                        );
+                        core.blocked
+                            .record(peer.ip(), peer.port(), blocked::BlockReason::PerIpCap);
+                        tokio::spawn(reject_client(stream));
+                        continue;
+                    }
                 }
                 tokio::spawn(async move {
                     // Release the reserved per-IP slot on drop, so it is returned

@@ -226,11 +226,15 @@ fn broadcast_subscriber_is_not_reaped_while_silent() {
 #[test]
 fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
     // An auxiliary request/response socket (no_broadcast=true) must NOT be pinged
-    // (matching C#: only broadcast subscribers are pushed to), AND must not be
-    // idle-reaped once handshaked - a real client (iOS especially) keeps its
-    // command sockets open for reuse. Reaping them mid-idle is what left the app
-    // non-responsive. Only un-handshaked sockets are reaped; dead ones are caught
-    // by TCP keepalive.
+    // (matching C#: only broadcast subscribers are pushed to), and must survive
+    // the *un-handshaked* window - a real client (iOS especially) keeps its
+    // command sockets open for reuse, and reaping them mid-idle is what left the
+    // app non-responsive.
+    //
+    // An aux socket is not immortal: `aux_idle_timeout_secs` closes one that has
+    // been abandoned (see `reaps_idle_auxiliary_connection_after_the_handshake`).
+    // This test leaves that setting at its default 300s, so the window here is
+    // far too short to reach it and the reuse guarantee is what is under test.
     let port = free_port();
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
@@ -394,4 +398,124 @@ fn broadcast_reaches_a_handshaked_client() {
     );
 
     net.stop();
+}
+
+/// The iOS lockout's other half: shipped clients open a `no_broadcast` command
+/// socket per user action and never close it. Those must drain on their own, or
+/// they pile up until the per-IP cap starts refusing new ones.
+#[test]
+fn reaps_idle_auxiliary_connection_after_the_handshake() {
+    let port = free_port();
+    let core = Arc::new(Core::new(
+        Arc::new(NullProviders),
+        Config {
+            ping_interval_secs: 1,
+            aux_idle_timeout_secs: 2,
+            ..Config::for_test(port)
+        },
+    ));
+    let net = server::start(core).expect("server should bind and start");
+
+    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    let reader_stream = writer.try_clone().unwrap();
+    reader_stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .unwrap();
+    let mut reader = BufReader::new(reader_stream);
+
+    // Handshake as a command socket (no_broadcast), then fall silent - exactly
+    // what the iOS client does after its one command.
+    writer
+        .write_all(
+            concat!(
+                r#"{"context":"player","data":"iOS"}"#,
+                "\r\n",
+                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":true}}"#,
+                "\r\n",
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    for _ in 0..2 {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("handshake reply");
+    }
+
+    let mut line = String::new();
+    let n = reader
+        .read_line(&mut line)
+        .expect("read should end in EOF, not error");
+    net.stop();
+
+    assert_eq!(
+        n, 0,
+        "an abandoned no_broadcast socket should be closed once idle past \
+         aux_idle_timeout_secs, got {line:?}"
+    );
+}
+
+/// The reaper must not touch the event channel. Closing a subscriber silently
+/// stops every push to that client, which is the failure the never-idle-reap
+/// rule exists to prevent.
+#[test]
+fn aux_reaper_leaves_a_broadcast_subscriber_alone() {
+    let port = free_port();
+    let core = Arc::new(Core::new(
+        Arc::new(NullProviders),
+        Config {
+            ping_interval_secs: 1,
+            aux_idle_timeout_secs: 1,
+            ..Config::for_test(port)
+        },
+    ));
+    let net = server::start(core.clone()).expect("server should bind and start");
+
+    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    let reader_stream = writer.try_clone().unwrap();
+    reader_stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .unwrap();
+    let mut reader = BufReader::new(reader_stream);
+
+    writer
+        .write_all(
+            concat!(
+                r#"{"context":"player","data":"Android"}"#,
+                "\r\n",
+                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":false}}"#,
+                "\r\n",
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    for _ in 0..2 {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("handshake reply");
+    }
+
+    // Stay silent well past the aux window, then prove the socket still works by
+    // pushing to it. Server pings arrive on the way; skip them.
+    std::thread::sleep(Duration::from_secs(4));
+    core.broadcaster
+        .broadcast(&[r#"{"context":"playermute","data":true}"#.to_string()]);
+
+    let deadline = Instant::now() + Duration::from_secs(6);
+    let mut got_broadcast = false;
+    while Instant::now() < deadline {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => panic!("the subscriber was reaped; broadcasts to it are now silently lost"),
+            Ok(_) => {
+                let v: Value = serde_json::from_str(line.trim()).expect("frame is JSON");
+                if v["context"] == "playermute" {
+                    got_broadcast = true;
+                    break;
+                }
+            }
+            Err(e) => panic!("subscriber read failed: {e}"),
+        }
+    }
+
+    net.stop();
+    assert!(got_broadcast, "subscriber should still receive broadcasts");
 }

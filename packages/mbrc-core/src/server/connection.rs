@@ -81,6 +81,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     // so dropping it when the ping tick fires loses no bytes.
     let ping_interval = Duration::from_secs(core.config.ping_interval_secs);
     let unhandshaked_timeout = Duration::from_secs(core.config.unhandshaked_timeout_secs);
+    let aux_idle_timeout = Duration::from_secs(core.config.aux_idle_timeout_secs);
     let mut ping_tick = tokio::time::interval(ping_interval);
     ping_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     ping_tick.tick().await; // consume the immediate first tick
@@ -104,15 +105,17 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 break;
             }
             _ = ping_tick.tick() => {
-                // Only sockets that connected but never completed the handshake are
-                // idle-reaped (they negotiated nothing). Handshaked sockets - both
-                // broadcast subscribers AND auxiliary request/response channels -
-                // are NEVER idle-reaped, matching the shipped C# plugin: a real
-                // client (iOS especially) keeps its command/event sockets open for
-                // reuse and closes them itself, so reaping them mid-idle is exactly
-                // what breaks its sync / leaves the app non-responsive. Dead sockets
-                // are caught by OS TCP keepalive or the ping send failing; leaks are
-                // bounded by the per-client / per-IP caps.
+                // A socket that connected but never completed the handshake is
+                // reaped quickly (it negotiated nothing). A broadcast subscriber is
+                // never idle-reaped at all, matching the shipped C# plugin: a real
+                // client keeps its event socket open and closes it itself, so
+                // reaping it mid-idle is exactly what breaks sync / leaves the app
+                // non-responsive. Auxiliary channels sit between the two - kept
+                // open for reuse, but closed once abandoned past
+                // `aux_idle_timeout_secs`, which defaults high enough that reuse
+                // still works. Dead sockets are also caught by OS TCP keepalive or
+                // the ping send failing; leaks are bounded by the per-client /
+                // per-IP caps.
                 if session.protocol_version.is_none() {
                     let idle = last_inbound.elapsed();
                     if idle >= unhandshaked_timeout {
@@ -125,10 +128,27 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                         break;
                     }
                 }
-                // Ping ONLY broadcast subscribers; auxiliary request/response
-                // sockets are never pushed to - matching the shipped C# plugin. A
-                // failed send means a dead socket -> close.
+                // Auxiliary (no_broadcast) sockets get a long idle window of
+                // their own. Shipped iOS clients open one of these per user
+                // action and never close it, so without a drain they accumulate
+                // until the per-IP cap starts refusing. Subscribers are exempt -
+                // reaping those is what broke library syncs - and the window is
+                // deliberately generous, because iOS does reuse some aux sockets.
+                // The per-IP eviction path is what actually guarantees a client
+                // can't lock itself out; this is slow hygiene for long sessions.
                 let subscribes = registered && !session.no_broadcast;
+                if registered && !subscribes && aux_idle_timeout > Duration::ZERO {
+                    let idle = last_inbound.elapsed();
+                    if idle >= aux_idle_timeout {
+                        tracing::debug!(
+                            %peer,
+                            conn_id,
+                            idle_ms = idle.as_millis() as u64,
+                            "closing idle auxiliary connection"
+                        );
+                        break;
+                    }
+                }
                 if subscribes {
                     if out_tx.send(PING_FRAME.to_string()).is_err() {
                         break;
@@ -139,6 +159,9 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
             }
         };
         last_inbound = tokio::time::Instant::now();
+        // Keep the registry's idea of activity current, so the per-IP cap evicts
+        // sockets the client has abandoned rather than ones it is still using.
+        core.registry.touch(conn_id);
         accumulator.push_bytes(&buf[..n]);
 
         while let Some(line) = accumulator.next_frame() {
@@ -167,6 +190,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 let is_main = !session.no_broadcast;
                 match core.registry.register(
                     conn_id,
+                    peer.ip(),
                     session.client_id.as_deref(),
                     is_main,
                     peer.ip().is_loopback(),
@@ -184,8 +208,10 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                             core.broadcaster.register(conn_id, out_tx.clone());
                         }
                     }
+                    // WARN for the same reason as the per-IP refusal: the client
+                    // is about to stop working and INFO would say nothing.
                     Admit::RejectedCap => {
-                        tracing::debug!(
+                        tracing::warn!(
                             %peer,
                             conn_id,
                             client_id = session.client_id.as_deref().unwrap_or("none"),
@@ -209,9 +235,9 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
 
         // A frame that blew past the accumulator's cap with no terminator is an
         // unbounded-buffer attack or a badly broken peer. The accumulator has
-        // already dropped the buffered bytes; close the socket (issue #138). A
-        // handshaked socket is never idle-reaped, so this is the only bound on a
-        // handshaked peer that streams a terminator-less flood.
+        // already dropped the buffered bytes; close the socket (issue #138). Such
+        // a peer is never idle by the reaper's reckoning - it is sending
+        // constantly - so this is the only bound on it.
         if accumulator.overflowed() {
             tracing::warn!(
                 %peer,
