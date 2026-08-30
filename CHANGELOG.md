@@ -64,6 +64,11 @@ shipped Android and iOS client keeps working untouched.
 - Removing the plugin while the cover cache was building froze MusicBee until the
   build finished. Teardown now tells the build to stop first and it gives up
   between albums, keeping what it had already built for next time.
+- Debug logs and diagnostics captures showed nothing the plugin pushed on its
+  own. Events sent to connected clients and the keepalive pings never reached
+  the log, so a capture of a push problem looked identical to a capture of
+  nothing happening. Both are logged now, with the number of clients each event
+  reached (#188).
 - The archive's `LICENSE` and `README.txt` overwrote MusicBee's own `readme.txt`
   in the Plugins folder, and earlier versions left both behind on every update.
   They ship as `MBRC_LICENSE.txt` and `MBRC_README.txt` now.

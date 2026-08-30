@@ -254,6 +254,34 @@ pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
     }
 }
 
+/// Pull the `context` value out of an already-serialized wire frame without
+/// re-parsing the whole thing. Broadcast and ping frames reach the log as
+/// strings, and a full `serde_json` parse just to name the event would double
+/// the work on every push. Returns `""` when the frame has no readable
+/// `context` (malformed input, or a value that isn't a plain string).
+///
+/// Frames are produced by [`mbrc_wire`]'s `frame`, so the value never contains
+/// an escape sequence; a frame carrying one is treated as unreadable rather
+/// than unescaped here.
+pub fn frame_context(frame: &str) -> &str {
+    context_of(frame).unwrap_or("")
+}
+
+fn context_of(frame: &str) -> Option<&str> {
+    let key = frame.find("\"context\"")?;
+    let rest = &frame[key + "\"context\"".len()..];
+    let after = rest.trim_start().strip_prefix(':')?.trim_start();
+    let body = after.strip_prefix('"')?;
+    let end = body.find('"')?;
+    let value = &body[..end];
+    // An escape would need unescaping to be truthful; frames built by
+    // `mbrc_wire::frame` never carry one, so treat it as unreadable instead.
+    if value.contains('\\') {
+        return None;
+    }
+    Some(value)
+}
+
 /// Field names whose values are always opaque blobs (base64 cover art, image
 /// data, lyrics). Their values are elided regardless of length; every other
 /// field is left readable so wire logs stay useful.
@@ -351,6 +379,99 @@ pub fn set_level(directive: &str) -> Result<(), String> {
     }
 }
 
+/// A capturing subscriber for tests that assert on emitted wire lines.
+///
+/// `tracing-subscriber` is a normal dependency of this crate, so a tiny layer
+/// gives a real end-to-end assertion (the macro really fired, with these
+/// fields) without pulling in a test-only tracing crate.
+#[cfg(test)]
+pub mod test_support {
+    use std::fmt::Debug;
+    use std::sync::{Arc, Mutex};
+
+    use tracing::field::{Field, Visit};
+    use tracing::Subscriber;
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::Registry;
+
+    /// The subset of a `mbrc::wire` event that the broadcast/ping tests assert on.
+    #[derive(Debug, Default, Clone)]
+    pub struct WireLine {
+        pub dir: String,
+        pub kind: String,
+        pub context: String,
+        pub subscribers: Option<u64>,
+        pub conn_id: Option<u64>,
+        pub seq_present: bool,
+        pub message: String,
+    }
+
+    impl Visit for WireLine {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            match field.name() {
+                "dir" => self.dir = value.to_string(),
+                "kind" => self.kind = value.to_string(),
+                "context" => self.context = value.to_string(),
+                _ => {}
+            }
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            match field.name() {
+                "subscribers" => self.subscribers = Some(value),
+                "conn_id" => self.conn_id = Some(value),
+                "seq" => self.seq_present = true,
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+            let rendered = format!("{value:?}");
+            // `&str` fields arrive through record_str; everything else lands
+            // here, including the formatted message.
+            match field.name() {
+                "message" => self.message = rendered,
+                "dir" | "kind" | "context" => {
+                    self.record_str(field, rendered.trim_matches('"'));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct CaptureLayer {
+        lines: Arc<Mutex<Vec<WireLine>>>,
+    }
+
+    impl<S: Subscriber> Layer<S> for CaptureLayer {
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+            if event.metadata().target() != "mbrc::wire" {
+                return;
+            }
+            let mut line = WireLine::default();
+            event.record(&mut line);
+            self.lines.lock().unwrap().push(line);
+        }
+    }
+
+    /// Run `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
+    /// and above, and return what it captured.
+    pub fn capture_wire_lines(f: impl FnOnce()) -> Vec<WireLine> {
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let layer = CaptureLayer {
+            lines: Arc::clone(&lines),
+        };
+        let subscriber = Registry::default().with(layer.with_filter(
+            tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG),
+        ));
+        tracing::subscriber::with_default(subscriber, f);
+        let captured = lines.lock().unwrap();
+        captured.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +553,35 @@ mod tests {
         assert!(set_level("mbrc_core=debug,info").is_ok());
         // A target with an unparseable level is rejected.
         assert!(set_level("mbrc_core=notalevel").is_err());
+    }
+
+    #[test]
+    fn frame_context_reads_real_frames() {
+        assert_eq!(
+            frame_context(r#"{"context":"playermute","data":true}"#),
+            "playermute"
+        );
+        // Whitespace around the separator, and a context that isn't first.
+        assert_eq!(
+            frame_context(r#"{"data":1, "context" : "nowplayingposition"}"#),
+            "nowplayingposition"
+        );
+        assert_eq!(frame_context(r#"{"context":"","data":""}"#), "");
+    }
+
+    #[test]
+    fn frame_context_returns_empty_for_unreadable_input() {
+        // Nothing that looks like a frame at all.
+        assert_eq!(frame_context(""), "");
+        assert_eq!(frame_context("not json"), "");
+        assert_eq!(frame_context("{\"ctx\":\"playermute\"}"), "");
+        // Truncated mid-frame: key present, value never closed.
+        assert_eq!(frame_context("{\"context\":\"playerm"), "");
+        assert_eq!(frame_context("{\"context\""), "");
+        // A non-string value is not a context name.
+        assert_eq!(frame_context(r#"{"context":42}"#), "");
+        assert_eq!(frame_context(r#"{"context":null}"#), "");
+        // Escapes would need unescaping to be truthful, so they read as unknown.
+        assert_eq!(frame_context(r#"{"context":"a\"b","data":1}"#), "");
     }
 }

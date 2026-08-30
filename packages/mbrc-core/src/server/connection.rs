@@ -26,6 +26,25 @@ use crate::state::Core;
 /// fails fast on a half-open socket (the send errors, closing the connection).
 const PING_FRAME: &str = r#"{"context":"ping","data":""}"#;
 
+/// Log a keepalive ping on the same `mbrc::wire` target as every other frame.
+/// Pings are pushed, not replies, so nothing else in the wire log would show
+/// them; without this a capture can't tell a quiet client from a dead one.
+/// Logged here rather than in the broadcaster because a ping belongs to one
+/// connection - hence the `conn_id`, which broadcast lines deliberately lack.
+/// DEBUG, not TRACE: a diagnostics capture only raises the level to DEBUG, and
+/// at 4 pings/min per subscriber the volume is nothing next to a real capture.
+fn log_ping(conn_id: u64) {
+    tracing::debug!(
+        target: "mbrc::wire",
+        dir = "s2c",
+        kind = "ping",
+        conn_id,
+        context = crate::logging::frame_context(PING_FRAME),
+        bytes = PING_FRAME.len(),
+        "{PING_FRAME}"
+    );
+}
+
 /// Drive one client connection to completion (EOF, close request, or IO error).
 pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::io::Result<()> {
     stream.set_nodelay(true).ok();
@@ -110,8 +129,11 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 // sockets are never pushed to - matching the shipped C# plugin. A
                 // failed send means a dead socket -> close.
                 let subscribes = registered && !session.no_broadcast;
-                if subscribes && out_tx.send(PING_FRAME.to_string()).is_err() {
-                    break;
+                if subscribes {
+                    if out_tx.send(PING_FRAME.to_string()).is_err() {
+                        break;
+                    }
+                    log_ping(conn_id);
                 }
                 continue;
             }
@@ -236,4 +258,23 @@ async fn writer_loop(mut writer: OwnedWriteHalf, mut out_rx: UnboundedReceiver<S
         }
     }
     writer.shutdown().await.ok();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logging::test_support::capture_wire_lines;
+
+    /// The ping is the one pushed frame that belongs to a single connection, so
+    /// its line has to carry the conn_id that broadcast lines don't.
+    #[test]
+    fn ping_is_logged_with_conn_id() {
+        let lines = capture_wire_lines(|| log_ping(7));
+
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(lines[0].kind, "ping");
+        assert_eq!(lines[0].dir, "s2c");
+        assert_eq!(lines[0].context, "ping");
+        assert_eq!(lines[0].conn_id, Some(7));
+    }
 }
