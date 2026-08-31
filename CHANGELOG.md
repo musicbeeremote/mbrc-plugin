@@ -2,7 +2,7 @@ Change Log
 ---------
 # Versions
 
-## 1.5.0 - 2026/08/26
+## 1.5.0 - 2026/08/31
 
 The plugin's core has been rewritten in Rust. It ships as `mbrc_core.dll`
 alongside the existing `mb_remote.dll`, plus a small `mbrc-helper.exe`; the C#
