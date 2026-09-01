@@ -5,6 +5,7 @@
 //! around the returned value.
 
 pub mod library;
+pub mod nowplaying;
 pub mod player;
 pub mod playlist;
 pub mod system;
@@ -47,6 +48,7 @@ pub fn capabilities() -> Value {
         .chain(track::OPS)
         .chain(library::OPS)
         .chain(playlist::OPS)
+        .chain(nowplaying::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
@@ -87,6 +89,7 @@ pub fn dispatch(
         .or_else(|| track::dispatch(op, data, providers, cover_store))
         .or_else(|| library::dispatch(op, data, providers, cover_store, metadata_cache))
         .or_else(|| playlist::dispatch(op, data, providers))
+        .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
 }
 
 /// The shared V6 pagination envelope: `{ total, offset, items }` (#118 §8). `total`
@@ -108,6 +111,14 @@ pub(crate) fn page_args(data: &Value) -> Result<(i64, i64), V6Error> {
         .unwrap_or(0)
         .clamp(0, i32::MAX as i64);
     Ok((offset, limit))
+}
+
+/// Narrow a client-supplied `i64` index/position to `i32` (the FFI/provider width)
+/// without wrapping: an out-of-range value saturates to the `i32` bound, where the
+/// MusicBee API treats it as a harmless out-of-range no-op rather than a wrapped
+/// (possibly negative) index.
+pub(crate) fn i32_saturating(v: i64) -> i32 {
+    v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
 // ── shared field extractors (typed, with the right error code) ──────────────
@@ -213,6 +224,13 @@ mod tests {
         assert_eq!(offset, i32::MAX as i64);
         assert_eq!(limit, 0); // negative limit clamps to 0 ("to the end")
         assert_eq!(offset as i32, i32::MAX); // no wrap
+    }
+
+    #[test]
+    fn i32_saturating_does_not_wrap() {
+        assert_eq!(i32_saturating(2_147_483_648), i32::MAX);
+        assert_eq!(i32_saturating(-2_147_483_649), i32::MIN);
+        assert_eq!(i32_saturating(42), 42);
     }
 
     #[test]

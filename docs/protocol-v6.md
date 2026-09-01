@@ -157,6 +157,22 @@ and return:
 | `track_get` | `{"src":"<path>"}` | the [canonical track](#canonical-track) |
 | `cover_get` | `{"hash":"<sha1>","client_hash?":"<sha1>"}` | `{"hash":..,"image":"<base64>"}`, or `{"hash":..,"not_modified":true}` when `client_hash` matches, or `not_found` |
 
+### Now Playing
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `now_playing_state` | `{}` | `{"track":<canonical\|null>,"position_ms":..,"duration_ms":..,"lfm_status":".."}` |
+| `now_playing_details` | `{}` | extended tags (publisher/composer/counts/format/bitrate/...) |
+| `now_playing_position` | `{}` | `{"position_ms":..,"duration_ms":..}` |
+| `now_playing_lyrics` | `{}` | `{"type":"synced"\|"plain"\|"none","lines":[{"text":..,"at_ms?":..}]}` |
+| `now_playing_seek` | `{"position_ms":N}` | `{"position_ms":..,"duration_ms":..}` (read back after the seek) |
+| `now_playing_set_rating` | `{"rating":0-5\|null}` | `{"rating":<new>}` |
+| `now_playing_set_lfm` | `{"status":"normal"\|"love"\|"ban"}` | `{"lfm_status":<new>}` |
+| `now_playing_set_tag` | `{"tag":"<name>","value":"<v>"}` | `{}` |
+
+`now_playing_lyrics` returns structured lyrics; synced lines carry `at_ms`, plain lines do not,
+and `type:"none"` yields an empty `lines`.
+
 ### Library
 
 | Op | Request `data` | Response |
