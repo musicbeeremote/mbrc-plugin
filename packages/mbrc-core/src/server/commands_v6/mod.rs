@@ -4,6 +4,9 @@
 //! spellings). The [`V6Session`](super::session_v6::V6Session) frames the envelope
 //! around the returned value.
 
+pub mod player;
+pub mod system;
+
 use serde_json::{json, Value};
 
 use mbrc_wire::v6::ErrorCode;
@@ -34,7 +37,12 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
 /// accepts and the events it may emit. Added additively (#118 §9 Q5) - clients
 /// tolerate its absence. Each new domain appends its `OPS` here.
 pub fn capabilities() -> Value {
-    let ops: Vec<&str> = SPINE_OPS.iter().copied().collect();
+    let ops: Vec<&str> = SPINE_OPS
+        .iter()
+        .chain(player::OPS)
+        .chain(system::OPS)
+        .copied()
+        .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
 }
 
@@ -65,16 +73,63 @@ pub fn dispatch(
     data: &Value,
     providers: &dyn Providers,
     now_playing: Option<&NowPlayingCache>,
-    cover_store: Option<&CoverStore>,
-    metadata_cache: Option<&MetadataCache>,
+    _cover_store: Option<&CoverStore>,
+    _metadata_cache: Option<&MetadataCache>,
 ) -> Option<OpResult> {
-    let _ = (
-        op,
-        data,
-        providers,
-        now_playing,
-        cover_store,
-        metadata_cache,
-    );
-    None
+    player::dispatch(op, data, providers, now_playing)
+        .or_else(|| system::dispatch(op, data, providers))
 }
+
+// ── shared field extractors (typed, with the right error code) ──────────────
+
+/// A required integer field (`missing_field` if absent, `invalid_field` if not an int).
+pub(crate) fn req_i64(data: &Value, field: &str) -> Result<i64, V6Error> {
+    match data.get(field) {
+        None => Err(V6Error::new(
+            ErrorCode::MissingField,
+            format!("missing required field: {field}"),
+        )),
+        Some(v) => v.as_i64().ok_or_else(|| {
+            V6Error::new(
+                ErrorCode::InvalidField,
+                format!("{field} must be an integer"),
+            )
+        }),
+    }
+}
+
+/// A required boolean field.
+pub(crate) fn req_bool(data: &Value, field: &str) -> Result<bool, V6Error> {
+    match data.get(field) {
+        None => Err(V6Error::new(
+            ErrorCode::MissingField,
+            format!("missing required field: {field}"),
+        )),
+        Some(v) => v.as_bool().ok_or_else(|| {
+            V6Error::new(
+                ErrorCode::InvalidField,
+                format!("{field} must be a boolean"),
+            )
+        }),
+    }
+}
+
+/// A required string field.
+pub(crate) fn req_str<'a>(data: &'a Value, field: &str) -> Result<&'a str, V6Error> {
+    match data.get(field) {
+        None => Err(V6Error::new(
+            ErrorCode::MissingField,
+            format!("missing required field: {field}"),
+        )),
+        Some(v) => v.as_str().ok_or_else(|| {
+            V6Error::new(ErrorCode::InvalidField, format!("{field} must be a string"))
+        }),
+    }
+}
+
+/// Map a provider/FFI failure string to an internal-error V6 failure.
+pub(crate) fn internal(e: String) -> V6Error {
+    V6Error::new(ErrorCode::Internal, e)
+}
+
+// ── optional field extractors (absent -> None; present-but-wrong-type -> error) ──

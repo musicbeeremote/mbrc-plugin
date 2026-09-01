@@ -123,3 +123,29 @@ and return:
 ```
 
 `total` is the full count; `items.length` conveys the served window.
+
+## Op catalog
+
+### System
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `system_info` | `{}` | `{"plugin_version":"<real build version>","protocol_version":6}` (unlike V4's pinned `pluginversion`, this is the actual plugin build) |
+
+### Player
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `player_play` / `player_pause` / `player_play_pause` / `player_stop` | `{}` | `{}` |
+| `player_next` / `player_previous` | `{}` | `{}` |
+| `player_status` | `{}` | `{"play_state":"playing","volume":75,"muted":false,"shuffle":"off","repeat":"none","scrobbling":true}` |
+| `player_set_volume` | `{"volume":0-100}` | `{"volume":<new>}` |
+| `player_set_mute` | `{"muted":bool}` | `{"muted":<new>}` |
+| `player_set_shuffle` | `{"mode":"off"\|"shuffle"\|"autodj"}` | `{"mode":<new>}` |
+| `player_set_repeat` | `{"mode":"none"\|"all"\|"one"}` | `{"mode":<new>}` |
+| `player_set_scrobbling` | `{"enabled":bool}` | `{"enabled":<new>}` (`unavailable` if enabling without a last.fm account) |
+| `player_output` | `{}` | `{"active":"Speakers","devices":["Speakers","Headphones"]}` |
+| `player_set_output` | `{"device":"<name>"}` | `{"active":<new>,"devices":[...]}` |
+
+> Setters echo the new canonical value in their response. `shuffle`/`repeat` have **no**
+> dedicated broadcast event, so the reply is the only state signal for those.

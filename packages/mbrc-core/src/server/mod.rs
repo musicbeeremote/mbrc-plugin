@@ -11,6 +11,7 @@ pub mod commands_v6;
 pub mod connection;
 pub mod monitor;
 pub mod notifications;
+pub mod notifications_v6;
 pub mod registry;
 pub mod route;
 pub mod scanner;

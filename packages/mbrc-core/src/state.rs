@@ -493,6 +493,15 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
         }
     };
 
+    dispatch_notification(&core, ntype);
+    MbrcResult::Ok
+}
+
+/// Dispatches one notification against a specific `core`.
+///
+/// Split out of [`handle_notification`] so the cache maintenance and the V4/V6
+/// fan-out are testable without the global runtime.
+pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
     match ntype {
         NotificationType::LibrarySwitched => {
             // Gate reads off + clear immediately so nothing stale is served in
@@ -500,7 +509,7 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
             core.metadata_cache.invalidate();
             let reconcile_core = core.clone();
             std::thread::spawn(move || server::reconcile_library(&reconcile_core));
-            return MbrcResult::Ok;
+            return;
         }
         NotificationType::FileAddedToLibrary => {
             // A nudge, not a clear: the Scanner debounces these, so a big import
@@ -510,9 +519,9 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
         _ => {}
     }
 
-    let frames = notifications::on_notification(&core, ntype);
-    core.broadcaster.broadcast(&frames);
-    MbrcResult::Ok
+    let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
+    core.broadcaster.broadcast(&v4_frames);
+    core.v6_broadcaster.broadcast(&v6_frames);
 }
 
 /// Tells the background work to wind down, without stopping anything yet.

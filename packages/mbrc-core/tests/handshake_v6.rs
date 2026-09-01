@@ -1,8 +1,10 @@
-//! Integration test: start the real TCP server and drive the V6 spine over a
-//! socket - the handshake + a `ping` round-trip, a rejected handshake, and V4/V6
-//! coexistence on the same port (the #118 §10 acceptance proof).
+//! Integration test: start the real TCP server and drive V6 over a socket - the
+//! handshake plus a `ping` round-trip, a rejected handshake, the reply framing,
+//! and V4/V6 coexistence on one port (the #118 §10 acceptance proof).
 
-use std::io::{BufRead, BufReader, Write};
+#![allow(clippy::unwrap_used)]
+
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,7 +40,7 @@ fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
 const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"install-42","client_type":"android"}}"#;
 
 #[test]
-fn handshake_advertises_capabilities() {
+fn handshake_advertises_capabilities_and_system_info_round_trips() {
     let port = free_port();
     let net = start(port);
 
@@ -59,13 +61,25 @@ fn handshake_advertises_capabilities() {
         .as_array()
         .expect("ops list");
     let ops: Vec<&str> = ops.iter().filter_map(|v| v.as_str()).collect();
-    assert!(ops.contains(&"handshake"), "capabilities: {hs}");
-    assert!(ops.contains(&"ping"), "capabilities: {hs}");
-    assert!(hs["data"]["capabilities"]["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|e| e == "volume_changed"));
+    assert!(ops.contains(&"player_status"), "capabilities: {hs}");
+    assert!(ops.contains(&"system_info"), "capabilities: {hs}");
+    assert!(
+        hs["data"]["capabilities"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e == "volume_changed")
+    );
+
+    // system_info returns the real plugin version + protocol version.
+    writer
+        .write_all(b"{\"id\":1,\"kind\":\"request\",\"op\":\"system_info\",\"data\":{}}\n")
+        .unwrap();
+    let info = read_frame(&mut reader);
+    assert_eq!(info["id"], 1);
+    assert_eq!(info["kind"], "response");
+    assert_eq!(info["data"]["protocol_version"], 6);
+    assert!(info["data"].get("plugin_version").is_some(), "info: {info}");
 
     net.stop();
 }
@@ -167,6 +181,35 @@ fn v6_op_before_handshake_is_unauthorized_and_closes() {
     let mut rest = String::new();
     let n = reader.read_line(&mut rest).unwrap_or(0);
     assert_eq!(n, 0, "an op before the handshake closes the connection");
+
+    net.stop();
+}
+
+/// The writer's terminator is fixed by routing, and a V6 client parses on `\n`
+/// alone: a stray CR would land inside the next frame it reads.
+#[test]
+fn v6_replies_are_terminated_with_a_bare_lf() {
+    let port = free_port();
+    let net = start(port);
+
+    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    let mut reader_stream = writer.try_clone().unwrap();
+    reader_stream
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    writer
+        .write_all(format!("{HANDSHAKE}\n").as_bytes())
+        .unwrap();
+
+    let mut buf = [0u8; 4096];
+    let n = reader_stream.read(&mut buf).expect("read handshake reply");
+    let raw = &buf[..n];
+    assert_eq!(raw.last(), Some(&b'\n'), "V6 frame must end with LF");
+    assert_ne!(
+        raw.get(n.wrapping_sub(2)),
+        Some(&b'\r'),
+        "a V6 frame must not carry the legacy CR"
+    );
 
     net.stop();
 }

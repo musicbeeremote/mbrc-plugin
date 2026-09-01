@@ -113,8 +113,9 @@ fn replay(core: Arc<Core>, port: u16, client_type: &str, commands: &[String]) ->
         NotificationType::FileAddedToLibrary,
         NotificationType::LibrarySwitched,
     ] {
-        let frames = server::notifications::on_notification(&core, ntype);
-        core.broadcaster.broadcast(&frames);
+        // This golden trace is the V4 wire; take the V4 frame set (`.0`).
+        let (v4_frames, _v6_frames) = server::notifications::on_notification(&core, ntype);
+        core.broadcaster.broadcast(&v4_frames);
     }
 
     // Drain everything else until the read times out.

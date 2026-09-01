@@ -22,8 +22,11 @@ use crate::state::Core;
 use crate::wire::WireCodec;
 
 /// Refreshes the cache for `ntype`, then builds the broadcast frames from the
-/// refreshed snapshot. The single entry point used by `state::handle_notification`.
-pub fn on_notification(core: &Core, ntype: NotificationType) -> Vec<String> {
+/// refreshed snapshot, returning `(v4_frames, v6_frames)`.
+///
+/// One refresh and one snapshot feed both protocols' fan-out. The single entry
+/// point used by `state::handle_notification`.
+pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Vec<String>) {
     // Write side: refresh only the slice this notification touches. Position is
     // never cached, so it has no refresh here.
     match ntype {
@@ -52,7 +55,9 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> Vec<String> {
     };
 
     let snapshot = core.now_playing.snapshot();
-    build(ntype, &snapshot, position)
+    let v4 = build(ntype, &snapshot, position);
+    let v6 = super::notifications_v6::build(ntype, &snapshot);
+    (v4, v6)
 }
 
 /// Builds the raw broadcast frames from a cache snapshot (empty = nothing to
