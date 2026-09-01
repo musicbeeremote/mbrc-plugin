@@ -300,28 +300,35 @@ pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
 /// Pulls the `context` value out of an already-serialized wire frame without
 /// re-parsing the whole thing.
 ///
-/// Broadcast and ping frames reach the log as strings, and parsing the whole
-/// thing just to name the event would double the work on every push. Returns
-/// `""` when there is no readable `context`, which includes a value carrying an
-/// escape sequence: [`mbrc_wire`]'s `frame` never emits one, so such a frame is
-/// treated as unreadable rather than unescaped here.
+/// Parsing a frame just to name its event would double the work on every push.
+/// A V6 event frame keeps its name under `event` rather than `context`, so that
+/// key is the fallback; without it a capture could not be filtered by V6 event
+/// name. Returns `""` when neither key is readable, which includes a value
+/// carrying an escape sequence: [`mbrc_wire`]'s `frame` never emits one.
 pub fn frame_context(frame: &str) -> &str {
-    context_of(frame).unwrap_or("")
+    string_value(frame, "\"context\"")
+        .or_else(|| string_value(frame, "\"event\""))
+        .unwrap_or("")
 }
 
-fn context_of(frame: &str) -> Option<&str> {
-    let key = frame.find("\"context\"")?;
-    let rest = &frame[key + "\"context\"".len()..];
-    let after = rest.trim_start().strip_prefix(':')?.trim_start();
-    let body = after.strip_prefix('"')?;
-    let end = body.find('"')?;
-    let value = &body[..end];
-    // An escape would need unescaping to be truthful; frames built by
-    // `mbrc_wire::frame` never carry one, so treat it as unreadable instead.
-    if value.contains('\\') {
-        return None;
-    }
-    Some(value)
+/// The string value of `key` in an already-serialized frame. Every occurrence is
+/// tried, because the name can also appear as a *value* first - a V6 event frame
+/// opens `{"kind":"event","event":"volume_changed"` - and only the one followed by
+/// a `:` is the key.
+fn string_value<'a>(frame: &'a str, key: &str) -> Option<&'a str> {
+    frame.match_indices(key).find_map(|(at, _)| {
+        let rest = &frame[at + key.len()..];
+        let after = rest.trim_start().strip_prefix(':')?.trim_start();
+        let body = after.strip_prefix('"')?;
+        let end = body.find('"')?;
+        let value = &body[..end];
+        // An escape would need unescaping to be truthful; frames built by
+        // `mbrc_wire::frame` never carry one, so treat it as unreadable instead.
+        if value.contains('\\') {
+            return None;
+        }
+        Some(value)
+    })
 }
 
 /// Field names whose values are always opaque blobs (base64 cover art, image
@@ -664,6 +671,21 @@ mod tests {
             "nowplayingposition"
         );
         assert_eq!(frame_context(r#"{"context":"","data":""}"#), "");
+    }
+
+    #[test]
+    fn frame_context_names_a_v6_event_by_its_event_key() {
+        // A V6 broadcast has no `context`; without the fallback every V6 event
+        // line reads `context=""` and a capture can't be filtered by name.
+        assert_eq!(
+            frame_context(r#"{"kind":"event","event":"volume_changed","data":{"volume":42}}"#),
+            "volume_changed"
+        );
+        // A V4 frame still wins on `context`, even when `event` appears in data.
+        assert_eq!(
+            frame_context(r#"{"context":"playermute","data":{"event":"nope"}}"#),
+            "playermute"
+        );
     }
 
     #[test]

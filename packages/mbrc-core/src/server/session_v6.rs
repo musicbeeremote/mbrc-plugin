@@ -1,9 +1,8 @@
-//! The V6 per-connection protocol state machine, kept pure (no IO) like the legacy
-//! [`Session`](super::session::Session) so it is unit-testable without sockets:
-//! feed it a wire line, get back the frames to send and whether to close.
+//! The V6 per-connection protocol state machine.
 //!
-//! Step 1 is the **spine only** (#118): the strict envelope, the handshake, and one
-//! trivial op (`ping`) to prove round-trips. There is no command surface yet.
+//! Pure (no IO) like the legacy [`Session`](super::session::Session), so it is
+//! unit-testable without sockets: feed it a wire line, get back the frames to
+//! send and whether to close.
 //!
 //! Contract highlights (all from #118 §2-§5):
 //! - First frame must be `op:"handshake"` (`id:0`); it carries `protocol_version`,
@@ -13,7 +12,7 @@
 //!   `kind`/`op`); *ignore* unknown additive keys inside `data`.
 //! - Success `{id, kind:"response", data}` XOR failure `{id, kind:"response", error}`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
 
@@ -40,6 +39,65 @@ pub struct V6Session {
     frames_in: u64,
 }
 
+/// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
+/// TRACE keeps the full body. Only one fires (TRACE implies DEBUG), so a busy list
+/// frame is never logged twice. This mirrors the legacy session's wire logging on
+/// purpose: a diagnostics capture raises `mbrc::wire` to DEBUG, so logging V6 at
+/// TRACE would make every V6 request and response invisible in a user's capture
+/// while V4 traffic showed up (#188).
+fn log_c2s(seq: u64, op: &str, line: &str) {
+    if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
+        tracing::trace!(
+            target: "mbrc::wire",
+            dir = "c2s",
+            proto = "v6",
+            seq,
+            op,
+            bytes = line.len(),
+            "{}",
+            crate::logging::redact_frame(line, None)
+        );
+    } else {
+        tracing::debug!(
+            target: "mbrc::wire",
+            dir = "c2s",
+            proto = "v6",
+            seq,
+            op,
+            bytes = line.len(),
+            "{}",
+            crate::logging::redact_frame(line, Some(crate::logging::WIRE_LIST_SAMPLE))
+        );
+    }
+}
+
+/// Log an outbound V6 frame, correlated to the request that produced it. Same
+/// DEBUG/TRACE split as [`log_c2s`] - the list-heavy browse responses are exactly
+/// the bodies DEBUG must sample.
+fn log_s2c(reply_to: u64, frame: &str) {
+    if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
+        tracing::trace!(
+            target: "mbrc::wire",
+            dir = "s2c",
+            proto = "v6",
+            reply_to,
+            bytes = frame.len(),
+            "{}",
+            crate::logging::redact_frame(frame, None)
+        );
+    } else {
+        tracing::debug!(
+            target: "mbrc::wire",
+            dir = "s2c",
+            proto = "v6",
+            reply_to,
+            bytes = frame.len(),
+            "{}",
+            crate::logging::redact_frame(frame, Some(crate::logging::WIRE_LIST_SAMPLE))
+        );
+    }
+}
+
 impl V6Session {
     /// Process one inbound V6 wire line. `providers`/`now_playing` are the same
     /// read/write context the legacy `Session` gets; op handlers use them.
@@ -54,22 +112,36 @@ impl V6Session {
     ) -> Outcome {
         let seq = self.frames_in;
         self.frames_in += 1;
-        tracing::trace!(
-            target: "mbrc::wire",
-            dir = "c2s",
-            proto = "v6",
-            seq,
-            bytes = line.len(),
-            "{}",
-            line
-        );
 
-        match v6::parse_request(line) {
+        let outcome = match v6::parse_request(line) {
             Ok(req) => {
+                log_c2s(seq, &req.op, line);
                 self.handle_request(req, providers, now_playing, cover_store, metadata_cache)
             }
-            Err(err) => self.reject(err),
+            Err(err) => {
+                // No op to name on an unparseable frame; unlike V4, which drops
+                // it silently, the reply below carries a typed error.
+                tracing::debug!(
+                    target: "mbrc::wire",
+                    dir = "c2s",
+                    proto = "v6",
+                    seq,
+                    bytes = line.len(),
+                    parseable = false,
+                    handshaken = self.handshaked,
+                    "rejecting unparseable frame: {}",
+                    crate::logging::redact_frame(line, None)
+                );
+                self.reject(err)
+            }
+        };
+
+        // One choke point for the response side: every reply this session produces
+        // (op responses, typed errors, the handshake reply) passes through here.
+        for f in &outcome.replies {
+            log_s2c(seq, f);
         }
+        outcome
     }
 
     /// Whether the handshake has completed (cheap; no allocation).
@@ -82,19 +154,17 @@ impl V6Session {
         self.frames_in
     }
 
-    /// Registration metadata once handshaked (`None` before). `is_main` is `false`
-    /// in step 1: V6 has no event surface yet, and a V6 socket must never receive
-    /// V4-shaped broadcasts. The connection still registers for per-client/per-IP
-    /// caps via its required `client_id`.
+    /// Registration metadata once handshaked, `None` before.
+    ///
+    /// A main connection unless the client opted out, so it subscribes to the V6
+    /// broadcaster; either way it registers for the per-client and per-IP caps
+    /// via its required `client_id`.
     pub fn reg_meta(&self) -> Option<super::RegMeta> {
         if !self.handshaked {
             return None;
         }
         Some(super::RegMeta {
             client_id: Some(self.client_id.clone()),
-            // A main (event-subscribing) connection unless it opted out. Unlike the
-            // spine, V6 now has an event surface (the player domain), so a main V6
-            // connection subscribes to the V6 broadcaster.
             is_main: !self.no_broadcast,
             platform: self.client_type.map(|c| c.as_str().to_string()),
             protocol: v6::PROTOCOL_VERSION as u8,
@@ -129,9 +199,8 @@ impl V6Session {
     ) -> Outcome {
         if req.op == v6::OP_HANDSHAKE {
             if self.handshaked {
-                // A repeat handshake is a protocol-state error (op not permitted in
-                // the current state); the connection is not re-negotiated but stays
-                // open. `not_allowed` per #118 / docs/protocol-v6.md.
+                // A repeat handshake is a protocol-state error: the connection
+                // stays open but is not re-negotiated (#118 `not_allowed`).
                 return Outcome::reply(v6::response_error(
                     req.id,
                     ErrorCode::NotAllowed,
@@ -188,29 +257,30 @@ impl V6Session {
         }
     }
 
+    /// Validates the three required handshake fields - `protocol_version` exactly
+    /// the version we speak, a non-empty `client_id`, a known `client_type` - and
+    /// records the negotiated session, or rejects and closes.
     fn handle_handshake(&mut self, req: v6::IncomingRequest) -> Outcome {
         let data = &req.data;
 
-        // protocol_version: present, numeric, and exactly the version we speak.
         match data.get("protocol_version") {
             None => return self.reject_handshake(ErrorCode::MissingField, "protocol_version"),
             Some(v) => match v.as_u64() {
                 Some(n) if n == v6::PROTOCOL_VERSION => {}
                 Some(_) => {
-                    return self.reject_handshake(ErrorCode::UnsupportedVersion, "protocol_version")
+                    return self
+                        .reject_handshake(ErrorCode::UnsupportedVersion, "protocol_version");
                 }
                 None => return self.reject_handshake(ErrorCode::InvalidField, "protocol_version"),
             },
         }
 
-        // client_id: required, a non-empty string.
         let client_id = match data.get("client_id") {
             None => return self.reject_handshake(ErrorCode::MissingField, "client_id"),
             Some(Value::String(s)) if !s.is_empty() => s.clone(),
             Some(_) => return self.reject_handshake(ErrorCode::InvalidField, "client_id"),
         };
 
-        // client_type: required, a known enum value.
         let client_type = match data.get("client_type") {
             None => return self.reject_handshake(ErrorCode::MissingField, "client_type"),
             Some(Value::String(s)) => match ClientType::parse(s) {
@@ -220,8 +290,8 @@ impl V6Session {
             Some(_) => return self.reject_handshake(ErrorCode::InvalidField, "client_type"),
         };
 
-        // Optional event opt-out (default false = a main connection). Absent or
-        // wrong-typed -> false, per the ignore-unknown-additive-fields policy.
+        // Absent or wrong-typed is false - a main connection - per the
+        // ignore-unknown-additive-fields policy.
         let no_broadcast = data
             .get("no_broadcast")
             .and_then(Value::as_bool)
@@ -275,8 +345,10 @@ mod tests {
         serde_json::from_str(frame).expect("reply is JSON")
     }
 
-    /// Drive one frame through the session with a no-op provider context (the spine
-    /// ops here don't touch providers; op-handler behavior is tested in `commands_v6`).
+    /// Drives one frame through the session against a no-op provider context.
+    ///
+    /// The envelope and handshake never reach a provider; the op handlers have
+    /// their own tests in `commands_v6`.
     fn feed(s: &mut V6Session, line: &str) -> Outcome {
         s.handle_frame(line, &NullProviders, None, None, None)
     }
@@ -427,5 +499,47 @@ mod tests {
         let out = feed(&mut s, "not json");
         assert!(out.close);
         assert_eq!(parse(&out.replies[0])["error"]["code"], "malformed_frame");
+    }
+
+    /// The regression guard for capture visibility. A diagnostics capture raises
+    /// `mbrc::wire` to DEBUG, never to TRACE, so V6 frames logged at TRACE would be
+    /// missing from every capture while the V4 frames beside them showed up. Both
+    /// directions must be on the DEBUG line.
+    #[test]
+    fn v6_frames_are_logged_at_debug_in_both_directions() {
+        let lines = crate::logging::test_support::capture_wire_lines(|| {
+            let mut s = V6Session::default();
+            feed(&mut s, GOOD_HANDSHAKE);
+        });
+
+        let dirs: Vec<&str> = lines.iter().map(|l| l.dir.as_str()).collect();
+        assert!(
+            dirs.contains(&"c2s"),
+            "the request must reach a capture: {lines:?}"
+        );
+        assert!(
+            dirs.contains(&"s2c"),
+            "the response must reach a capture: {lines:?}"
+        );
+    }
+
+    /// DEBUG must not spill a full list body: the sampled render is what a capture
+    /// carries, and a browse response can be megabytes.
+    #[test]
+    fn debug_samples_a_long_list_body() {
+        let items: Vec<String> = (0..50).map(|i| format!(r#"{{"n":{i}}}"#)).collect();
+        let frame = format!(
+            r#"{{"id":1,"kind":"response","data":{{"total":50,"offset":0,"items":[{}]}}}}"#,
+            items.join(",")
+        );
+        let lines = crate::logging::test_support::capture_wire_lines(|| log_s2c(1, &frame));
+
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        let msg = &lines[0].message;
+        assert!(msg.contains("more items"), "body was not sampled: {msg}");
+        assert!(
+            msg.len() < frame.len(),
+            "the DEBUG render must be shorter than the frame: {msg}"
+        );
     }
 }
