@@ -4,11 +4,16 @@
 //! Exercises the shared `mbrc-wire` codec end-to-end: framing, the
 //! `player`/`protocol`/`ping` handshake automation, and `context` parsing.
 //!
+//! With `--protocol 6` it drives V6 instead: the `op:"handshake"` request, then
+//! one op (default `ping`) once the handshake is acked, printing the typed
+//! `kind:"response"` replies.
+//!
 //! Usage:
 //!
 //! ```text
 //! mbrc send [--host H] [--port P] [--client-type T] [--protocol V]
 //!           [--no-broadcast] [--json '<command>'] [--wait-ms N]
+//! mbrc send --protocol 6 [--client-id UUID] [--op NAME] [--json '<data>']
 //! ```
 
 use std::process::ExitCode;
@@ -66,6 +71,35 @@ pub fn run(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    if protocol == mbrc_wire::v6::PROTOCOL_VERSION as u8 {
+        // A fixed dev client_id unless overridden: the CLI is a test driver, not
+        // a persisted install.
+        let client_id =
+            flag_value(args, "--client-id").unwrap_or_else(|| "mbrc-cli-dev".to_string());
+        let op = flag_value(args, "--op").unwrap_or_else(|| "ping".to_string());
+        let data = match command.as_deref() {
+            None => serde_json::json!({}),
+            Some(raw) => match serde_json::from_str(raw) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("--json is not valid JSON: {e}");
+                    return ExitCode::from(2);
+                }
+            },
+        };
+        return rt.block_on(run_async_v6(
+            host,
+            port,
+            client_id,
+            client_type,
+            no_broadcast,
+            op,
+            data,
+            Duration::from_millis(wait_ms),
+        ));
+    }
+
     rt.block_on(run_async(
         host,
         port,
@@ -143,6 +177,96 @@ async fn run_async(
                     let _ = wr.write_all(frame_line(&cmd).as_bytes()).await;
                     let _ = wr.flush().await;
                     println!("> {cmd}");
+                }
+            }
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// Drives a V6 connection: handshake, one op once it is acked, then the typed
+/// responses for the rest of the window. Newline-framed via `mbrc-wire::v6`.
+#[allow(clippy::too_many_arguments)]
+async fn run_async_v6(
+    host: String,
+    port: u16,
+    client_id: String,
+    client_type: String,
+    no_broadcast: bool,
+    op: String,
+    data: serde_json::Value,
+    window: Duration,
+) -> ExitCode {
+    use mbrc_wire::v6;
+
+    let stream = match TcpStream::connect((host.as_str(), port)).await {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("connect {host}:{port} failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    stream.set_nodelay(true).ok();
+    let (mut rd, mut wr) = stream.into_split();
+
+    // client_type maps to the V6 enum (snake_case); default to `cli` for anything
+    // unrecognized (the legacy default is "Android").
+    let ct = v6::ClientType::parse(&client_type.to_lowercase()).unwrap_or(v6::ClientType::Cli);
+    let handshake = v6::handshake_request(&client_id, ct, no_broadcast);
+    if wr
+        .write_all(v6::frame_line(&handshake).as_bytes())
+        .await
+        .is_err()
+    {
+        eprintln!("write failed");
+        return ExitCode::FAILURE;
+    }
+    let _ = wr.flush().await;
+    println!("> {handshake}");
+
+    let mut acc = FrameAccumulator::default();
+    let mut buf = vec![0u8; 8192];
+    let mut op_sent = false;
+    let deadline = Instant::now() + window;
+
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let n = match tokio::time::timeout(remaining, rd.read(&mut buf)).await {
+            Err(_) => break,    // window elapsed
+            Ok(Ok(0)) => break, // peer closed
+            Ok(Ok(n)) => n,
+            Ok(Err(e)) => {
+                eprintln!("read failed: {e}");
+                break;
+            }
+        };
+        acc.push_bytes(&buf[..n]);
+        while let Some(line) = acc.next_frame() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            println!("< {line}");
+            let Some(resp) = v6::parse_response(&line) else {
+                continue; // not a response (e.g. an event); just echo above
+            };
+            // The handshake response carries id 0. On success, fire the op; on
+            // failure, report and stop.
+            if resp.id == 0 && !op_sent {
+                match &resp.result {
+                    Ok(_) => {
+                        op_sent = true;
+                        let req = v6::request(1, &op, data.clone());
+                        let _ = wr.write_all(v6::frame_line(&req).as_bytes()).await;
+                        let _ = wr.flush().await;
+                        println!("> {req}");
+                    }
+                    Err(e) => {
+                        eprintln!("handshake rejected: {} - {}", e.code, e.message);
+                        return ExitCode::FAILURE;
+                    }
                 }
             }
         }

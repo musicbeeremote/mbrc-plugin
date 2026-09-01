@@ -65,6 +65,19 @@ than assume an op exists. A validation failure replies with a typed error (echoi
 closes the connection. A second handshake on an established connection is a protocol error
 (`not_allowed`); any non-handshake op *before* the handshake is `unauthorized` + close.
 
+### `client_id` is an identifier, not a credential
+
+Nothing authenticates a `client_id`. Any peer that can reach the port can present one and the
+registry will treat it as that installation, including superseding its main connection. On a
+LAN that is the trust model V4 had too, but two consequences are worth stating plainly:
+
+- **Anything permission-bearing must not trust `client_id` alone.** If persistent per-install
+  state is ever hung off it (Party Mode, a known-clients list), that needs a real credential.
+- **A cloned id is a live hazard, not a theoretical one.** A device backup restored onto a
+  second device carries the same persisted UUID, and the two installs then supersede each
+  other's main connection in a loop. A client seeing repeated unexplained supersession should
+  regenerate its id.
+
 ## Error codes
 
 Errors are `{"code":"<code>","message":"<human text>"}`. The `code` is a stable string enum;
@@ -78,8 +91,9 @@ the `message` is informational and may change.
 | `invalid_field` | a field has the wrong type or an unaccepted value |
 | `unknown_op` | no such op |
 | `unauthorized` | op sent before the handshake |
-| `not_allowed` | op not permitted in the current state (e.g. a repeat handshake) |
+| `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
+| `stale_list` | the now-playing list moved since the `version` the request carried |
 | `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account) |
 | `internal_error` | an unexpected host/plugin failure |
 
@@ -104,7 +118,7 @@ are `null` when unknown; `cover_hash` is omitted when the album has no cached co
   "artist": "Artist", "title": "Title", "album": "Album", "album_artist": "AlbumArtist",
   "track_no": 1, "disc_no": 1, "genre": "Rock",
   "year": 2007,            // int | null (4-digit year parsed from the raw tag)
-  "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")
+  "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")*
   "rating": 4.5,           // float | null (0-5)
   "date_added": "2024-01-02T03:04:05Z",  // ISO-8601 UTC | null
   "cover_hash": "<sha1>"   // present only when a cached album cover exists
@@ -113,16 +127,40 @@ are `null` when unknown; `cover_hash` is omitted when the album has no cached co
 
 `cover_hash` is an album-level content hash; fetch the image with `cover_get`.
 
+\* `duration_ms` is parsed from MusicBee's formatted tag, the only per-path source there is,
+so it is second-granular. The **playing** track is the exception: `now_playing_state` serves
+the player's own exact millisecond duration, matching the `duration_ms` beside it.
+
+## Keepalive (normative)
+
+**The client pings; the server listens.** V4 pushed a server ping every
+`ping_interval_secs` to every subscriber; V6 inverts it, because the side that knows whether
+it still cares is the side that should speak, and it halves the idle traffic.
+
+- A V6 client SHOULD send `{"op":"ping"}` every **15 seconds** while it holds a connection it
+  wants kept - an event subscription especially.
+- A V6 connection silent for **three intervals** is closed. Any frame counts, not just a ping:
+  a client issuing requests is self-evidently alive.
+- The ping doubles as a NAT and Wi-Fi power-save keepalive. A phone that stops pinging loses
+  its event socket, which is the intended outcome - reconnect and re-query.
+
+Legacy V4/V5 keeps the opposite arrangement (server-pushed ping, subscribers never reaped),
+because its shipped clients were built against it.
+
 ## Pagination
 
-Browse/list ops take `{offset?, limit?}` (both default sensibly; `limit:0` means "to the end")
-and return:
+Browse/list ops take `{offset?, limit?}` and return:
 
 ```json
 {"total": 1444, "offset": 0, "items": [ ... ]}
 ```
 
-`total` is the full count; `items.length` conveys the served window.
+`total` is the full count; `items.length` conveys the served window. `offset` defaults to 0.
+
+**`limit` defaults to 1000**, so the laziest possible request - `library_tracks {}` - reads a
+page rather than every tag in the library. An explicit **`limit: 0` still means "to the end"**;
+on a large library that is a deliberate choice, and an expensive one. `now_playing_list` also
+returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 
 ## Op catalog
 
@@ -161,7 +199,7 @@ and return:
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `now_playing_state` | `{}` | `{"track":<canonical\|null>,"position_ms":..,"duration_ms":..,"lfm_status":".."}` |
+| `now_playing_state` | `{include_list_order?}` | `{"track":<canonical\|null>,"list_order":<int\|null>,"position_ms":..,"duration_ms":..,"lfm_status":".."}` |
 | `now_playing_details` | `{}` | extended tags (publisher/composer/counts/format/bitrate/...) |
 | `now_playing_position` | `{}` | `{"position_ms":..,"duration_ms":..}` |
 | `now_playing_lyrics` | `{}` | `{"type":"synced"\|"plain"\|"none","lines":[{"text":..,"at_ms?":..}]}` |
@@ -195,12 +233,23 @@ One canonical list (no per-client-type variants). Each item is the
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `now_playing_list` | `{offset?, limit?, up_next?}` | canonical tracks + `order` + `position` + `play_position` |
-| `now_playing_list_play` | `{"index":N}` | `{}` - `index` = an item's `order` |
-| `now_playing_list_remove` | `{"index":N}` | `{}` - `index` = an item's `order` |
-| `now_playing_list_move` | `{"from":N,"to":M}` | `{}` - `from`/`to` = `order` values |
+| `now_playing_list` | `{offset?, limit?, up_next?}` | `{total, offset, version, items}` - canonical tracks + `order` + `position` + `play_position` |
+| `now_playing_list_play` | `{"order":N, "version?":V}` | `{}` |
+| `now_playing_list_remove` | `{"order":N, "version?":V}` | `{}` |
+| `now_playing_list_move` | `{"from":N,"to":M, "version?":V}` | `{}` - `from`/`to` are `order` values |
 | `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
-| `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add-all","play?":"<path>"}` | `{}` |
+| `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add_all","play?":"<path>"}` | `{}` |
+
+**`version` and the mutation guard.** MusicBee addresses the queue by index alone, so an
+`order` only means what you read while the list it came from still holds. Every page carries
+the queue's `version`; pass it back on a mutation and a queue that moved in between is refused
+`stale_list` instead of hitting the wrong slot - re-read the page and retry. The field is
+optional: send none and the mutation is unguarded, as before. Batch versioned removal is
+[#110](https://github.com/musicbeeremote/mbrc-plugin/issues/110).
+
+> `mode` is `snake_case` like every other V6 enum, so the last one is **`add_all`** - V4 spells
+> it `add-all` on its own wire, and V6 rejects that spelling. An unrecognized mode is
+> `invalid_field`, never silently treated as `next`.
 
 > A single view that is *both* shuffle-play-order *and* keeps already-played tracks is impossible -
 > MusicBee's `GetNextIndex` is forward-only, so a played track's play order can't be recovered. The
@@ -223,3 +272,56 @@ One canonical list (no per-client-type variants). Each item is the
 |----|----------------|----------|
 | `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..}` |
 | `playlist_play` | `{"url":"<path>"}` | `{}` |
+
+## Events
+
+Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker
+events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building`) and mean
+"re-query"; the client refetches the relevant op rather than trusting the event payload as state.
+
+| Event | `data` | Fires when |
+|-------|--------|-----------|
+| `play_state_changed` | `{"play_state":".."}` | playback starts/pauses/stops |
+| `volume_changed` | `{"volume":N}` | volume changes |
+| `mute_changed` | `{"muted":bool}` | mute toggles |
+| `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
+| `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
+| `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
+| `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
+| `library_changed` | `{}` | the library changed (add/scan/switch) -> re-browse |
+| `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
+
+**Clients MUST ignore events they do not recognize.** The catalog grows additively, so an
+unknown `event` name is skipped, never treated as an error. Without this rule no event can
+ever be added without breaking a shipped client.
+
+`server_shutdown` is what separates a deliberate stop from a network drop: on receiving it a
+client should stop reconnecting until it discovers the server again, rather than retrying into
+a MusicBee that is closing. It is best-effort like every other event - a crash or a pulled
+cable produces no goodbye, so a dropped connection with no preceding `server_shutdown` still
+means "retry".
+
+> There is intentionally no `shuffle_changed` / `repeat_changed` / `lfm_changed` event yet, so
+> those states only refresh on the next state fetch (or from a setter's reply). Candidate
+> additions, tracked against #118.
+
+## Differences from V4 / V5
+
+| | V4 / V5 | V6 |
+|--|---------|-----|
+| Framing | CRLF | newline |
+| Message | `{context, data}` | envelope `{id, kind, op/event, data/error}` |
+| Enums | magic ints / strings, mixed | lowercase string enums |
+| Numbers | often stringified (`"81"`) | typed (`81`, `4.5`, `null`) |
+| Correlation | positional / implicit | explicit `id`, out-of-order allowed |
+| Dual sockets | required pattern (broadcast + command) | optional (`no_broadcast`); one socket suffices |
+| Discovery of surface | hardcoded per version | handshake `capabilities` |
+| Now-playing list | Android sequential vs iOS ordered variants (1-based, quirks) | one canonical list + `up_next` view; typed `order` (mutation key) / `position` / `play_position` |
+
+## Notes for tooling
+
+- CLI: `mbrc send --protocol 6 --op <op> --json '<data>'` drives one op; it stays a broadcast
+  subscriber during `--wait-ms` so events print. `mbrc conform` validates the surface;
+  `mbrc fuzz --protocol 6` stress-tests robustness (read-only).
+- The committed wire snapshots under `packages/mbrc-core/tests/golden/v6/` are the byte-exact
+  reference for every response shape here (regenerate with `MBRC_BLESS=1`).

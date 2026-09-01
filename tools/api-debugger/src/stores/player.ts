@@ -2,19 +2,9 @@ import { computed, ref } from "vue";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onMessage, onState, sendCommand } from "../lib/api";
-import { emptyNowPlaying, foldResponse, type NowPlaying } from "../lib/player";
-
-/**
- * True when a `nowplayingcover` frame is the bare `{status:1}` readiness marker
- * (art available but not inlined) rather than an actual image payload. The
- * status may arrive as a number or a string.
- */
-function isCoverReadyMarker(data: unknown): boolean {
-  if (!data || typeof data !== "object") return false;
-  const d = data as Record<string, unknown>;
-  const hasImage = typeof d.cover === "string" && d.cover.length > 0;
-  return !hasImage && String(d.status ?? "") === "1";
-}
+import { emptyNowPlaying, type NowPlaying } from "../lib/player";
+import { createPlayerAdapter, type PlayerAdapter } from "../lib/player-protocol";
+import { useDirectStore } from "./direct";
 
 /** Local seek-bar tick (ms). Advances position client-side between syncs. */
 const TICK_MS = 1000;
@@ -25,11 +15,14 @@ const SYNC_EVERY = 15;
  * Player-pane store. Mirrors the Direct panel's PRIMARY connection: it adds its
  * own listeners to the primary channel (Tauri fans events out to every
  * listener, so this doesn't disturb the Direct store) and folds the incoming
- * `nowplaying*` / `player*` responses into one reactive NowPlaying object.
+ * responses/events into one reactive NowPlaying object.
  *
- * On connect it fires the same startup batch the Android app sends (init +
- * position + cover) and, while playing, polls position so the seek bar moves.
- * The transport controls send commands back over the primary channel.
+ * It is protocol-agnostic: a `PlayerAdapter` (chosen from the primary
+ * connection's protocol at connect time) translates every action into wire
+ * frames and folds every inbound frame. The store only merges patches, sends
+ * the adapter's frames, and runs the seek-bar poll - it never mentions a
+ * protocol. On connect it replays the adapter's startup batch once the
+ * handshake is ready and, while playing, polls position so the bar moves.
  */
 export const usePlayerStore = defineStore("player", () => {
   const np = ref<NowPlaying>(emptyNowPlaying());
@@ -38,12 +31,14 @@ export const usePlayerStore = defineStore("player", () => {
 
   const hasTrack = computed(() => np.value.title !== "" || np.value.artist !== "");
 
+  // The active protocol translator, rebuilt each connect (protocol may change
+  // between connections). Null while disconnected.
+  let adapter: PlayerAdapter | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let ticks = 0;
   // The backend reports `connected` as soon as the socket opens, before the
-  // handshake finishes. Commands are only safe after the plugin's `protocol`
-  // reply (the real client sends `init` at exactly that point), so we defer the
-  // startup batch until we see it.
+  // handshake finishes. Commands are only safe once the adapter reports the
+  // handshake ready, so we defer the startup batch until then.
   let awaitingHandshake = false;
 
   function stopPolling() {
@@ -63,65 +58,42 @@ export const usePlayerStore = defineStore("player", () => {
         np.value.positionMs = Math.min(np.value.positionMs + TICK_MS, np.value.durationMs);
       }
       // ...and resync with the plugin every SYNC_EVERY ticks to correct drift.
-      if (++ticks % SYNC_EVERY === 0) void getPosition();
+      if (++ticks % SYNC_EVERY === 0) void poll();
     }, TICK_MS);
   }
 
-  /** Send a command over the primary channel (no-op when disconnected). */
-  async function send(context: string, data: unknown) {
-    if (!connected.value) return;
+  /** Send a pre-built wire frame over the primary channel (no-op if unwired). */
+  async function sendFrame(frame: string | null | undefined) {
+    if (!connected.value || !adapter || !frame) return;
     try {
-      await sendCommand("primary", JSON.stringify({ context, data }));
+      await sendCommand("primary", frame);
     } catch {
       /* surfaced in the Direct log via the backend error emit */
     }
   }
 
-  // ── startup + polling requests ──────────────────────────────────────────────
-  const getPosition = () => send("nowplayingposition", ""); // empty data => query, not seek
+  // ── startup + polling ───────────────────────────────────────────────────────
+  const poll = () => sendFrame(adapter?.positionPoll());
   async function loadState() {
-    await send("init", ""); // track, rating, lfm, playerstatus, cover, lyrics
-    await getPosition();
-    await send("nowplayingcover", ""); // full artwork (init's cover may be status-only)
+    if (!adapter) return;
+    for (const frame of adapter.startup()) await sendFrame(frame);
   }
 
-  // ── transport controls (payloads mirror the Android client) ─────────────────
-  const playPause = () => send("playerplaypause", "");
-  const next = () => send("playernext", true);
-  const previous = () => send("playerprevious", true);
-  const toggleShuffle = () => send("playershuffle", "toggle");
-  const toggleRepeat = () => send("playerrepeat", "toggle");
-  const toggleMute = () => send("playermute", "toggle");
-  const toggleLove = () => send("nowplayinglfmrating", "toggle");
-  const setVolume = (v: number) => send("playervolume", Math.max(0, Math.min(100, Math.round(v))));
-  const seek = (ms: number) => send("nowplayingposition", Math.max(0, Math.round(ms)));
-  const fetchLyrics = () => send("nowplayinglyrics", "");
+  // ── transport controls (delegated to the active adapter) ────────────────────
+  const playPause = () => sendFrame(adapter?.playPause());
+  const next = () => sendFrame(adapter?.next());
+  const previous = () => sendFrame(adapter?.previous());
+  const toggleShuffle = () => sendFrame(adapter?.toggleShuffle(np.value));
+  const toggleRepeat = () => sendFrame(adapter?.toggleRepeat(np.value));
+  const toggleMute = () => sendFrame(adapter?.toggleMute(np.value));
+  const toggleLove = () => sendFrame(adapter?.toggleLove(np.value));
+  const setVolume = (v: number) => sendFrame(adapter?.setVolume(v));
+  const seek = (ms: number) => sendFrame(adapter?.seek(ms));
+  const fetchLyrics = () => sendFrame(adapter?.fetchLyrics());
 
   function toggleLyrics() {
     showLyrics.value = !showLyrics.value;
     if (showLyrics.value && !np.value.lyrics) void fetchLyrics();
-  }
-
-  // ── fold an incoming primary-channel response into state ────────────────────
-  function apply(context: string, raw: string) {
-    let data: unknown;
-    try {
-      data = (JSON.parse(raw) as { data?: unknown }).data;
-    } catch {
-      return; // non-JSON frame
-    }
-    const patch = foldResponse(context, data);
-    if (Object.keys(patch).length > 0) Object.assign(np.value, patch);
-
-    // Cover-ready marker: the plugin broadcasts `nowplayingcover` with
-    // `{status:1}` to say new artwork is available but not inlined (e.g. after
-    // MusicBee finishes downloading art on a track change). Mirror the real
-    // clients and pull the image on a fresh request so it updates without a
-    // manual fetch. An explicit `nowplayingcover` request returns the image with
-    // status 200/404, never 1, so this cannot loop.
-    if (context === "nowplayingcover" && isCoverReadyMarker(data)) {
-      void send("nowplayingcover", "");
-    }
   }
 
   function reset() {
@@ -138,14 +110,17 @@ export const usePlayerStore = defineStore("player", () => {
     subscribed = true;
     unlisten.push(
       await onMessage("primary", (m) => {
-        // Only react to responses from the plugin, never our own echoed sends.
-        if (m.direction !== "received") return;
-        // The plugin's `protocol` reply marks the handshake done → fetch state.
-        if (m.context === "protocol" && awaitingHandshake) {
+        if (!adapter) return;
+        // The handshake-ready frame marks state safe to fetch.
+        if (awaitingHandshake && adapter.isReady(m)) {
           awaitingHandshake = false;
           void loadState();
         }
-        apply(m.context, m.raw);
+        const { patch, followUps, lyricsStale } = adapter.fold(m);
+        if (Object.keys(patch).length > 0) Object.assign(np.value, patch);
+        for (const frame of followUps) void sendFrame(frame);
+        // Refetch lyrics on a track change when the overlay is open.
+        if (lyricsStale && showLyrics.value) void fetchLyrics();
       }),
     );
     unlisten.push(
@@ -153,11 +128,14 @@ export const usePlayerStore = defineStore("player", () => {
         const was = connected.value;
         connected.value = s.connected;
         if (s.connected && !was) {
+          // Snapshot the primary connection's protocol for this session.
+          adapter = createPlayerAdapter(useDirectStore().protocolVersion);
           reset();
           awaitingHandshake = true;
           startPolling();
         } else if (!s.connected && was) {
           awaitingHandshake = false;
+          adapter = null;
           stopPolling();
         }
       }),
