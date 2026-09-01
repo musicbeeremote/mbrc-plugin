@@ -149,3 +149,28 @@ and return:
 
 > Setters echo the new canonical value in their response. `shuffle`/`repeat` have **no**
 > dedicated broadcast event, so the reply is the only state signal for those.
+
+### Track
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `track_get` | `{"src":"<path>"}` | the [canonical track](#canonical-track) |
+| `cover_get` | `{"hash":"<sha1>","client_hash?":"<sha1>"}` | `{"hash":..,"image":"<base64>"}`, or `{"hash":..,"not_modified":true}` when `client_hash` matches, or `not_found` |
+
+### Library
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `library_genres` | `{offset?, limit?}` | page of `{"genre":..,"count":..}` |
+| `library_artists` | `{offset?, limit?, album_artists?, genre?}` | page of `{"artist":..,"count":..}` |
+| `library_albums` | `{offset?, limit?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached) |
+| `library_tracks` | `{offset?, limit?, album?}` | page of [canonical tracks](#canonical-track) |
+| `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
+| `library_play_all` | `{"shuffle?":bool}` | `{}` |
+
+### Playlist
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..}` |
+| `playlist_play` | `{"url":"<path>"}` | `{}` |

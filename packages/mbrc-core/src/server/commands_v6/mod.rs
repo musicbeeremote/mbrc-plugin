@@ -4,8 +4,11 @@
 //! spellings). The [`V6Session`](super::session_v6::V6Session) frames the envelope
 //! around the returned value.
 
+pub mod library;
 pub mod player;
+pub mod playlist;
 pub mod system;
+pub mod track;
 
 use serde_json::{json, Value};
 
@@ -41,6 +44,9 @@ pub fn capabilities() -> Value {
         .iter()
         .chain(player::OPS)
         .chain(system::OPS)
+        .chain(track::OPS)
+        .chain(library::OPS)
+        .chain(playlist::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
@@ -73,11 +79,35 @@ pub fn dispatch(
     data: &Value,
     providers: &dyn Providers,
     now_playing: Option<&NowPlayingCache>,
-    _cover_store: Option<&CoverStore>,
-    _metadata_cache: Option<&MetadataCache>,
+    cover_store: Option<&CoverStore>,
+    metadata_cache: Option<&MetadataCache>,
 ) -> Option<OpResult> {
     player::dispatch(op, data, providers, now_playing)
         .or_else(|| system::dispatch(op, data, providers))
+        .or_else(|| track::dispatch(op, data, providers, cover_store))
+        .or_else(|| library::dispatch(op, data, providers, cover_store, metadata_cache))
+        .or_else(|| playlist::dispatch(op, data, providers))
+}
+
+/// The shared V6 pagination envelope: `{ total, offset, items }` (#118 §8). `total`
+/// is the full count; `items` is the served page (its length conveys the limit).
+pub(crate) fn page_json(total: usize, offset: i64, items: Vec<Value>) -> Value {
+    json!({ "total": total, "offset": offset, "items": items })
+}
+
+/// `(offset, limit)` from a paginated request, each clamped to the non-negative
+/// `i32` range the providers accept (`limit` 0 means "to the end"). Clamping here
+/// means the downstream `as i32` casts can never wrap a huge or negative client
+/// value into a bogus page index (or an FFI-crossing negative), and the `offset`
+/// echoed in the response envelope always matches the one actually used.
+pub(crate) fn page_args(data: &Value) -> Result<(i64, i64), V6Error> {
+    let offset = opt_i64(data, "offset")?
+        .unwrap_or(0)
+        .clamp(0, i32::MAX as i64);
+    let limit = opt_i64(data, "limit")?
+        .unwrap_or(0)
+        .clamp(0, i32::MAX as i64);
+    Ok((offset, limit))
 }
 
 // ── shared field extractors (typed, with the right error code) ──────────────
@@ -133,3 +163,87 @@ pub(crate) fn internal(e: String) -> V6Error {
 }
 
 // ── optional field extractors (absent -> None; present-but-wrong-type -> error) ──
+
+/// An optional integer field (`None` if absent/null, `invalid_field` if not an int).
+pub(crate) fn opt_i64(data: &Value, field: &str) -> Result<Option<i64>, V6Error> {
+    match data.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_i64().map(Some).ok_or_else(|| {
+            V6Error::new(
+                ErrorCode::InvalidField,
+                format!("{field} must be an integer"),
+            )
+        }),
+    }
+}
+
+/// An optional string field.
+pub(crate) fn opt_str<'a>(data: &'a Value, field: &str) -> Result<Option<&'a str>, V6Error> {
+    match data.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_str().map(Some).ok_or_else(|| {
+            V6Error::new(ErrorCode::InvalidField, format!("{field} must be a string"))
+        }),
+    }
+}
+
+/// An optional boolean field.
+pub(crate) fn opt_bool(data: &Value, field: &str) -> Result<Option<bool>, V6Error> {
+    match data.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| {
+            V6Error::new(
+                ErrorCode::InvalidField,
+                format!("{field} must be a boolean"),
+            )
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn page_args_clamp_huge_and_negative_to_i32_range() {
+        // A huge (valid u64) offset must clamp, not wrap on the downstream `as i32`.
+        let (offset, limit) =
+            page_args(&json!({ "offset": 2_147_483_648_i64, "limit": -5 })).unwrap();
+        assert_eq!(offset, i32::MAX as i64);
+        assert_eq!(limit, 0); // negative limit clamps to 0 ("to the end")
+        assert_eq!(offset as i32, i32::MAX); // no wrap
+    }
+
+    #[test]
+    fn capabilities_advertise_spine_and_domain_ops_and_events() {
+        let caps = capabilities();
+        let ops: Vec<&str> = caps["ops"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        for expected in [
+            "handshake",
+            "ping",
+            "player_status",
+            "system_info",
+            "track_get",
+            "library_tracks",
+            "playlist_list",
+        ] {
+            assert!(
+                ops.contains(&expected),
+                "capabilities.ops missing {expected}"
+            );
+        }
+        let events: Vec<&str> = caps["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert!(events.contains(&"volume_changed"));
+    }
+}

@@ -18,13 +18,14 @@ use crate::providers::Providers;
 
 /// Metadata-cache key for the flat genre list.
 ///
-/// Shared by the handler and the eager prewarm so the two cannot drift. Tracks
-/// has no key here: it is the one list large enough to OOM the 32-bit core as a
-/// blob, so it lives in the ordinal index instead.
-const KEY_BROWSE_GENRES: &str = "browse_genres";
+/// Shared by the handler, the eager prewarm and the V6 library domain, so the
+/// three cannot drift or store the same list twice. Tracks has no key here: it
+/// is the one list large enough to OOM the 32-bit core as a blob, so it lives in
+/// the ordinal index instead.
+pub(crate) const KEY_BROWSE_GENRES: &str = "browse_genres";
 /// Metadata-cache key for the flat album list. See [`KEY_BROWSE_GENRES`].
-const KEY_BROWSE_ALBUMS: &str = "browse_albums";
-fn key_browse_artists(album_artists: bool) -> String {
+pub(crate) const KEY_BROWSE_ALBUMS: &str = "browse_albums";
+pub(crate) fn key_browse_artists(album_artists: bool) -> String {
     format!("browse_artists:aa={album_artists}")
 }
 

@@ -507,6 +507,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
             // Gate reads off + clear immediately so nothing stale is served in
             // the gap; the reconcile re-fingerprints, re-prewarms, re-validates.
             core.metadata_cache.invalidate();
+            broadcast_library_changed(core);
             let reconcile_core = core.clone();
             std::thread::spawn(move || server::reconcile_library(&reconcile_core));
             return;
@@ -515,6 +516,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
             // A nudge, not a clear: the Scanner debounces these, so a big import
             // collapses to a scan or two instead of a wipe per file.
             core.scanner_nudge.notify_one();
+            broadcast_library_changed(core);
         }
         _ => {}
     }
@@ -522,6 +524,17 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
     let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
     core.broadcaster.broadcast(&v4_frames);
     core.v6_broadcaster.broadcast(&v6_frames);
+}
+
+/// Fans out the V6 `library_changed` marker; the client re-queries what it needs.
+///
+/// V6-only: V4 has no equivalent broadcast, where a library change is cache
+/// maintenance and nothing more.
+fn broadcast_library_changed(core: &Core) {
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "library_changed",
+        serde_json::json!({}),
+    )]);
 }
 
 /// Tells the background work to wind down, without stopping anything yet.

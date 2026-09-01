@@ -18,16 +18,13 @@ pub mod scanner;
 pub mod session;
 pub mod session_v6;
 
-/// Registration metadata a handshaked connection exposes to the IO layer,
-/// uniform across the legacy ([`session::Session`]) and V6
-/// ([`session_v6::V6Session`]) state machines, so `connection.rs` drives registry
-/// admission + broadcast subscription without forking on protocol.
+/// Registration metadata a handshaked connection exposes to the IO layer.
 ///
-/// `is_main` means "the client's primary broadcast connection": it drives registry
-/// supersession *and* whether the connection subscribes to broadcasts + receives
-/// server pings. Legacy sets it from `!no_broadcast`; V6 leaves it `false` in step 1
-/// (V6 has no event surface yet, and V4-shaped broadcasts must never reach a V6
-/// socket).
+/// Uniform across the legacy ([`session::Session`]) and V6
+/// ([`session_v6::V6Session`]) state machines, so `connection.rs` drives registry
+/// admission and broadcast subscription without forking on protocol. Each main
+/// subscribes to its own protocol's broadcaster, so a V6 socket never receives a
+/// V4-shaped frame.
 #[derive(Debug, Clone)]
 pub struct RegMeta {
     /// Client-provided grouping id (per-client caps + supersession). Always present
@@ -506,6 +503,10 @@ fn notify_reconcile(core: &Core, scope: RebuildScope, building: bool) {
             "librarycovercachebuildstatus",
             serde_json::json!(building),
         )]);
+        core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+            "cover_cache_changed",
+            serde_json::json!({ "building": building }),
+        )]);
     }
 }
 
@@ -568,6 +569,10 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
         core.broadcaster.broadcast(&[notifications::frame(
             "librarycovercachebuildstatus",
             serde_json::json!(false),
+        )]);
+        core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+            "cover_cache_changed",
+            serde_json::json!({ "building": false }),
         )]);
     }
 }
