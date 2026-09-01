@@ -1,12 +1,14 @@
 //! Per-connection IO.
 //!
-//! Inbound frames run through the pure [`Session`] state machine; outbound
-//! frames - both request replies and broadcasts - funnel through one channel to
-//! a dedicated writer task, so the read loop and the broadcast fan-out never
-//! race on the socket.
+//! The first frame's shape routes the connection to either the legacy V4/V5
+//! [`Session`] or the V6 [`V6Session`] state machine, both pure; inbound frames
+//! then run through the chosen one. Outbound frames - both request replies and
+//! broadcasts - funnel through one channel to a dedicated writer task, so the
+//! read loop and the broadcast fan-out never race on the socket. The writer's
+//! line terminator (`\r\n` legacy, `\n` V6) is fixed once the connection routes.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use socket2::{SockRef, TcpKeepalive};
@@ -16,17 +18,26 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::sync::Notify;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use mbrc_wire::{FrameAccumulator, frame_line};
+use mbrc_wire::FrameAccumulator;
 
+use crate::server::RegMeta;
 use crate::server::registry::{Admit, Role};
-use crate::server::session::Session;
+use crate::server::route::{self, Route};
+use crate::server::session::{Outcome, Session};
+use crate::server::session_v6::V6Session;
 use crate::state::Core;
 
 /// Pre-serialized server keepalive frame (raw JSON; the writer adds framing).
-/// Sent every `ping_interval_secs` to broadcast subscribers only. Its real job
-/// is failing fast on a half-open socket: the send errors and the connection
-/// closes, whether or not the client bothers to `pong`.
+/// Sent every `ping_interval_secs` to legacy broadcast subscribers only. Its
+/// real job is failing fast on a half-open socket: the send errors and the
+/// connection closes, whether or not the client bothers to `pong`. V6 has no
+/// keepalive frame of its own and leans on TCP keepalive instead.
 const PING_FRAME: &str = r#"{"context":"ping","data":""}"#;
+
+/// Line terminator until the connection routes, and the legacy one thereafter.
+///
+/// A reply is never produced before routing, so the default is a safety net.
+const DEFAULT_TERMINATOR: &str = "\r\n";
 
 /// Tags every frame and decision from one socket with its `conn_id`, so the
 /// interleaved wire log (many overlapping iOS sockets) can be read per
@@ -57,6 +68,120 @@ fn log_ping(conn_id: u64) {
     );
 }
 
+/// The protocol a connection speaks, chosen from its first frame's shape.
+enum Proto {
+    /// Not yet routed (no complete first frame seen).
+    Pending,
+    /// Legacy V4/V5 (`{"context":...}`).
+    Legacy(Session),
+    /// V6 clean-slate (`{"kind":...}`).
+    V6(V6Session),
+}
+
+impl Proto {
+    /// Registration metadata once the connection's handshake completes.
+    fn reg_meta(&self) -> Option<RegMeta> {
+        match self {
+            Proto::Pending => None,
+            Proto::Legacy(s) => s.reg_meta(),
+            Proto::V6(s) => s.reg_meta(),
+        }
+    }
+
+    /// Whether the handshake has completed (cheap; no allocation).
+    fn handshaked(&self) -> bool {
+        match self {
+            Proto::Pending => false,
+            Proto::Legacy(s) => s.protocol_version.is_some(),
+            Proto::V6(s) => s.is_handshaked(),
+        }
+    }
+
+    /// Whether this connection subscribes to its protocol's broadcaster.
+    fn is_main(&self) -> bool {
+        match self {
+            Proto::Pending => false,
+            Proto::Legacy(s) => !s.no_broadcast,
+            Proto::V6(s) => s.reg_meta().is_some_and(|m| m.is_main),
+        }
+    }
+
+    /// Whether the server keepalive applies, which only the legacy protocol has.
+    fn takes_server_ping(&self) -> bool {
+        matches!(self, Proto::Legacy(s) if !s.no_broadcast)
+    }
+
+    /// Whether the client is the one expected to keep the connection alive.
+    ///
+    /// V6 inverts V4's arrangement: rather than the server pushing a ping every
+    /// interval to every subscriber, a V6 client pings, and silence is what the
+    /// server measures. Half the traffic, and the side that actually knows
+    /// whether it still cares is the side that speaks.
+    fn pings_itself(&self) -> bool {
+        matches!(self, Proto::V6(_))
+    }
+
+    /// Feeds one wire line to the routed state machine.
+    fn handle(&mut self, line: &str, core: &Core) -> Outcome {
+        match self {
+            Proto::Legacy(s) => s.handle_frame(
+                line,
+                core.providers.as_ref(),
+                Some(&core.now_playing),
+                Some(core.cover_store.as_ref()),
+                Some(core.metadata_cache.as_ref()),
+            ),
+            Proto::V6(s) => s.handle_frame(
+                line,
+                core.providers.as_ref(),
+                Some(&core.now_playing),
+                Some(core.cover_store.as_ref()),
+                Some(core.metadata_cache.as_ref()),
+            ),
+            // Never reached: a frame routes Pending to Legacy or V6 before this.
+            Proto::Pending => Outcome::nothing(),
+        }
+    }
+
+    /// How this protocol says "refused" when the connection registry turns a
+    /// handshaked connection away, or `None` if it cannot say it at all.
+    ///
+    /// V4 has no frame for a refusal, so legacy keeps the shipped behaviour: its
+    /// handshake reply goes out and the socket then closes. V6 has `not_allowed`
+    /// (#118 §4), and sends it *instead of* the acceptance - a client that reads
+    /// "accepted" and then finds a dead socket has been told the opposite of
+    /// what happened.
+    fn cap_refusal(&self) -> Option<String> {
+        match self {
+            Proto::V6(_) => Some(mbrc_wire::v6::response_error(
+                0,
+                mbrc_wire::v6::ErrorCode::NotAllowed,
+                "this client already holds the maximum number of connections",
+            )),
+            Proto::Pending | Proto::Legacy(_) => None,
+        }
+    }
+
+    /// The fields the closing post-mortem reports, by protocol.
+    fn post_mortem(&self) -> (Option<String>, bool, u64, u32) {
+        match self {
+            Proto::Pending => (None, false, 0, 0),
+            Proto::Legacy(s) => (
+                s.platform.clone(),
+                s.protocol_version.is_some(),
+                s.frames_in,
+                s.dropped_pre_handshake,
+            ),
+            Proto::V6(s) => (
+                s.reg_meta().and_then(|m| m.platform),
+                s.is_handshaked(),
+                s.frames_in(),
+                0,
+            ),
+        }
+    }
+}
+
 /// Drives one client connection to completion (EOF, close request, or IO error).
 ///
 /// # Idle policy
@@ -71,8 +196,9 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     configure_socket(&stream, peer, core.config.tcp_keepalive_secs);
     let (mut reader, writer) = stream.into_split();
 
+    let terminator: Arc<OnceLock<&'static str>> = Arc::new(OnceLock::new());
     let (out_tx, out_rx) = mpsc::unbounded_channel::<String>();
-    let writer_task = tokio::spawn(writer_loop(writer, out_rx));
+    let writer_task = tokio::spawn(writer_loop(writer, out_rx, terminator.clone()));
 
     let conn_id = core.next_conn_id();
     let timeouts = IdleTimeouts::from(&core.config);
@@ -84,9 +210,10 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         peer,
         conn_id,
         out_tx,
+        terminator,
     };
 
-    let mut session = Session::default();
+    let mut proto = Proto::Pending;
     let mut accumulator = FrameAccumulator::default();
     let mut buf = [0u8; 4096];
     let mut registered = false;
@@ -112,7 +239,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 break;
             }
             _ = ping_tick.tick() => {
-                match conn.on_ping_tick(&session, registered, last_inbound.elapsed(), &timeouts) {
+                match conn.on_ping_tick(&proto, registered, last_inbound.elapsed(), &timeouts) {
                     Tick::Waiting => continue,
                     Tick::Retire => break,
                 }
@@ -121,7 +248,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         last_inbound = tokio::time::Instant::now();
         conn.core.registry.touch(conn_id);
         accumulator.push_bytes(&buf[..n]);
-        closing = conn.drain_frames(&mut session, &mut accumulator, &mut registered);
+        closing = conn.drain_frames(&mut proto, &mut accumulator, &mut registered);
 
         // Such a peer never goes idle, so this is the only bound on it (#138).
         if accumulator.overflowed() {
@@ -135,20 +262,32 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         }
     }
 
+    // A connection is in at most one broadcaster; the other unregister is a no-op.
     conn.core.broadcaster.unregister(conn_id);
-    conn.core
-        .registry
-        .unregister(conn_id, session.client_id.as_deref());
-    conn.log_closed(&session, registered, opened_at);
+    conn.core.v6_broadcaster.unregister(conn_id);
+    conn.core.registry.unregister(
+        conn_id,
+        proto.reg_meta().and_then(|m| m.client_id).as_deref(),
+    );
+    conn.log_closed(&proto, registered, opened_at);
     drop(conn); // drop the last sender so the writer task drains and exits
     let _ = writer_task.await;
     Ok(())
 }
 
-/// The two deadlines an idle socket is measured against.
+/// How many keepalive intervals a V6 connection may pass without a word before
+/// it is treated as gone.
+///
+/// V6 has no server-pushed ping: the client pings, and three missed intervals is
+/// the server's answer to "is anyone still there". Three rather than one so a
+/// single dropped packet or a phone briefly asleep is not fatal.
+const V6_MISSED_PINGS_BEFORE_REAP: u32 = 3;
+
+/// The deadlines an idle socket is measured against.
 struct IdleTimeouts {
     unhandshaked: Duration,
     auxiliary: Duration,
+    v6_silence: Duration,
 }
 
 impl From<&crate::config::Config> for IdleTimeouts {
@@ -156,6 +295,9 @@ impl From<&crate::config::Config> for IdleTimeouts {
         Self {
             unhandshaked: Duration::from_secs(config.unhandshaked_timeout_secs),
             auxiliary: Duration::from_secs(config.aux_idle_timeout_secs),
+            v6_silence: Duration::from_secs(
+                config.ping_interval_secs * u64::from(V6_MISSED_PINGS_BEFORE_REAP),
+            ),
         }
     }
 }
@@ -179,15 +321,18 @@ struct Conn {
     span: tracing::Span,
     shutdown: Arc<Notify>,
     out_tx: UnboundedSender<String>,
+    terminator: Arc<OnceLock<&'static str>>,
 }
 
 impl Conn {
-    /// Applies the idle policy, then pings if the peer is a broadcast subscriber.
+    /// Applies the idle policy, then pings if the peer is a legacy subscriber.
     ///
-    /// The three rules and the reasoning behind them are on [`run`].
+    /// The rules and the reasoning behind them are on [`run`]. A silent V6
+    /// connection is a dead one - its protocol asks the client to ping - while
+    /// legacy keeps the exemption its shipped clients were built against.
     fn on_ping_tick(
         &self,
-        session: &Session,
+        proto: &Proto,
         registered: bool,
         idle: Duration,
         timeouts: &IdleTimeouts,
@@ -195,12 +340,17 @@ impl Conn {
         let (peer, conn_id) = (self.peer, self.conn_id);
         let idle_ms = idle.as_millis() as u64;
 
-        if session.protocol_version.is_none() && idle >= timeouts.unhandshaked {
+        if !proto.handshaked() && idle >= timeouts.unhandshaked {
             tracing::debug!(%peer, conn_id, idle_ms, "closing un-handshaked idle connection");
             return Tick::Retire;
         }
 
-        let subscribes = registered && !session.no_broadcast;
+        if proto.pings_itself() && idle >= timeouts.v6_silence {
+            tracing::debug!(%peer, conn_id, idle_ms, "closing silent V6 connection");
+            return Tick::Retire;
+        }
+
+        let subscribes = registered && proto.is_main();
         let abandoned = registered
             && !subscribes
             && timeouts.auxiliary > Duration::ZERO
@@ -210,7 +360,7 @@ impl Conn {
             return Tick::Retire;
         }
 
-        if subscribes {
+        if subscribes && proto.takes_server_ping() {
             if self.out_tx.send(PING_FRAME.to_string()).is_err() {
                 return Tick::Retire;
             }
@@ -222,61 +372,139 @@ impl Conn {
     /// Runs every whole frame the accumulator is holding.
     ///
     /// Returns whether the connection is finished, which a client can ask for
-    /// outright and a departed writer task forces.
+    /// outright, an unroutable first frame forces, and a departed writer task
+    /// forces too.
     fn drain_frames(
         &self,
-        session: &mut Session,
+        proto: &mut Proto,
         accumulator: &mut FrameAccumulator,
         registered: &mut bool,
     ) -> bool {
         while let Some(line) = accumulator.next_frame() {
             let _guard = self.span.enter();
-            let outcome = session.handle_frame(
-                &line,
-                self.core.providers.as_ref(),
-                Some(&self.core.now_playing),
-                Some(self.core.cover_store.as_ref()),
-                Some(self.core.metadata_cache.as_ref()),
-            );
+            if matches!(proto, Proto::Pending) && !self.route(proto, &line) {
+                return true;
+            }
+            let outcome = proto.handle(&line, &self.core);
+            // Admission is decided before the replies go out; see `cap_refusal`.
+            let mut refused = false;
+            if !*registered && let Some(meta) = proto.reg_meta() {
+                *registered = true;
+                refused = !self.register_and_subscribe(&meta);
+            }
+            if refused && let Some(frame) = proto.cap_refusal() {
+                let _ = self.out_tx.send(frame);
+                return true;
+            }
             for reply in outcome.replies {
                 if self.out_tx.send(reply).is_err() {
                     return true;
                 }
             }
-            if !*registered && session.protocol_version.is_some() {
-                *registered = true;
-                if !register_and_subscribe(
-                    &self.core,
-                    session,
-                    self.conn_id,
-                    self.peer,
-                    &self.shutdown,
-                    &self.out_tx,
-                ) {
-                    return true;
-                }
-            }
-            if outcome.close {
+            if refused || outcome.close {
                 return true;
             }
         }
         false
     }
 
+    /// Routes the connection from its first frame and fixes the writer's line
+    /// terminator, before any reply can be produced. False closes the connection.
+    fn route(&self, proto: &mut Proto, line: &str) -> bool {
+        match route::detect(line) {
+            Route::Legacy => {
+                *proto = Proto::Legacy(Session::default());
+                let _ = self.terminator.set("\r\n");
+                true
+            }
+            Route::V6 => {
+                *proto = Proto::V6(V6Session::default());
+                let _ = self.terminator.set("\n");
+                true
+            }
+            Route::Unknown => {
+                tracing::debug!(
+                    peer = %self.peer,
+                    conn_id = self.conn_id,
+                    "unroutable first frame; closing: {}",
+                    crate::logging::redact_frame(line, None)
+                );
+                false
+            }
+        }
+    }
+
+    /// Registers a freshly handshaked connection and subscribes a main to its own
+    /// protocol's broadcaster, returning false when the per-client cap refuses it.
+    ///
+    /// The two client sets never mix formats: V6 events go to the V6 fan-out,
+    /// V4/V5 frames to the legacy one.
+    fn register_and_subscribe(&self, meta: &RegMeta) -> bool {
+        let (core, peer, conn_id) = (&self.core, self.peer, self.conn_id);
+        let role = if meta.is_main {
+            Role::Subscriber
+        } else {
+            Role::Auxiliary
+        };
+        match core.registry.register(
+            conn_id,
+            peer.ip(),
+            meta.client_id.as_deref(),
+            role,
+            self.shutdown.clone(),
+        ) {
+            Admit::Admitted => {
+                tracing::debug!(
+                    platform = meta.platform.as_deref().unwrap_or("unknown"),
+                    protocol = meta.protocol,
+                    broadcasts = role.is_subscriber(),
+                    client_id = meta.client_id.as_deref().unwrap_or("none"),
+                    "handshake complete; connection registered"
+                );
+                if meta.is_main {
+                    let broadcaster = if meta.protocol >= 6 {
+                        &core.v6_broadcaster
+                    } else {
+                        &core.broadcaster
+                    };
+                    broadcaster.register(conn_id, self.out_tx.clone());
+                }
+                true
+            }
+            // WARN for the same reason the per-IP refusal is: the client is about
+            // to stop working, and at the default level INFO would say nothing.
+            Admit::RejectedCap => {
+                tracing::warn!(
+                    %peer,
+                    conn_id,
+                    client_id = meta.client_id.as_deref().unwrap_or("none"),
+                    "rejecting connection: per-client cap reached"
+                );
+                core.blocked.record(
+                    peer.ip(),
+                    peer.port(),
+                    crate::server::blocked::BlockReason::PerClientCap,
+                );
+                false
+            }
+        }
+    }
+
     /// One-line post-mortem per socket.
     ///
     /// A closed iOS control socket shows `handshaken=false` with a high dropped
     /// count, which is the whole bug on one line.
-    fn log_closed(&self, session: &Session, registered: bool, opened_at: tokio::time::Instant) {
+    fn log_closed(&self, proto: &Proto, registered: bool, opened_at: tokio::time::Instant) {
         let (peer, conn_id) = (self.peer, self.conn_id);
+        let (platform, handshaken, frames_in, dropped) = proto.post_mortem();
         tracing::debug!(
             %peer,
             conn_id,
-            platform = session.platform.as_deref().unwrap_or("none"),
-            handshaken = session.protocol_version.is_some(),
+            platform = platform.as_deref().unwrap_or("none"),
+            handshaken,
             registered,
-            frames_in = session.frames_in,
-            dropped_pre_handshake = session.dropped_pre_handshake,
+            frames_in,
+            dropped_pre_handshake = dropped,
             duration_ms = opened_at.elapsed().as_millis() as u64,
             "connection closed"
         );
@@ -307,66 +535,17 @@ async fn ping_ticker(interval: Duration) -> tokio::time::Interval {
     tick
 }
 
-/// Registers a freshly handshaked connection and subscribes it to broadcasts
-/// unless it opted out, returning false when the per-client cap refuses it.
-///
-/// The refusal logs at WARN for the same reason the per-IP one does: the client
-/// is about to stop working, and at the default level INFO would say nothing.
-fn register_and_subscribe(
-    core: &Arc<Core>,
-    session: &Session,
-    conn_id: u64,
-    peer: SocketAddr,
-    shutdown: &Arc<Notify>,
-    out_tx: &UnboundedSender<String>,
-) -> bool {
-    let role = if session.no_broadcast {
-        Role::Auxiliary
-    } else {
-        Role::Subscriber
-    };
-    match core.registry.register(
-        conn_id,
-        peer.ip(),
-        session.client_id.as_deref(),
-        role,
-        shutdown.clone(),
-    ) {
-        Admit::Admitted => {
-            tracing::debug!(
-                platform = session.platform.as_deref().unwrap_or("unknown"),
-                protocol = session.protocol_version.unwrap_or(0),
-                broadcasts = role.is_subscriber(),
-                client_id = session.client_id.as_deref().unwrap_or("none"),
-                "handshake complete; connection registered"
-            );
-            if role == Role::Subscriber {
-                core.broadcaster.register(conn_id, out_tx.clone());
-            }
-            true
-        }
-        Admit::RejectedCap => {
-            tracing::warn!(
-                %peer,
-                conn_id,
-                client_id = session.client_id.as_deref().unwrap_or("none"),
-                "rejecting connection: per-client cap reached"
-            );
-            core.blocked.record(
-                peer.ip(),
-                peer.port(),
-                crate::server::blocked::BlockReason::PerClientCap,
-            );
-            false
-        }
-    }
-}
-
-/// Drains outbound frames to the socket until every sender is dropped.
-async fn writer_loop(mut writer: OwnedWriteHalf, mut out_rx: UnboundedReceiver<String>) {
+/// Drains outbound frames to the socket until every sender is dropped, each one
+/// closed with the connection's routed line terminator.
+async fn writer_loop(
+    mut writer: OwnedWriteHalf,
+    mut out_rx: UnboundedReceiver<String>,
+    terminator: Arc<OnceLock<&'static str>>,
+) {
     while let Some(frame) = out_rx.recv().await {
+        let term = terminator.get().copied().unwrap_or(DEFAULT_TERMINATOR);
         if writer
-            .write_all(frame_line(&frame).as_bytes())
+            .write_all(format!("{frame}{term}").as_bytes())
             .await
             .is_err()
         {
@@ -398,6 +577,44 @@ mod tests {
                  frames on any connection that already existed when it started"
             );
         });
+    }
+
+    /// V6 asks its clients to ping, so silence past three intervals is a dead
+    /// socket rather than a quiet one. Legacy never agreed to that, and reaping
+    /// its subscribers is what broke library syncs.
+    #[test]
+    fn only_v6_is_expected_to_keep_itself_alive() {
+        assert!(Proto::V6(V6Session::default()).pings_itself());
+        assert!(!Proto::Legacy(Session::default()).pings_itself());
+        assert!(!Proto::Pending.pings_itself());
+    }
+
+    #[test]
+    fn the_v6_silence_window_is_three_ping_intervals() {
+        let config = crate::config::Config {
+            ping_interval_secs: 15,
+            ..crate::config::Config::for_test(0)
+        };
+        let timeouts = IdleTimeouts::from(&config);
+        assert_eq!(timeouts.v6_silence, Duration::from_secs(45));
+    }
+
+    /// A refused connection must not first be told it was accepted. V6 can say
+    /// `not_allowed` (#118 §4); V4 has no frame for it, so legacy keeps the
+    /// shipped behaviour of a reply followed by a close.
+    #[test]
+    fn only_v6_answers_a_cap_refusal() {
+        assert_eq!(Proto::Pending.cap_refusal(), None);
+        assert_eq!(Proto::Legacy(Session::default()).cap_refusal(), None);
+
+        let frame = Proto::V6(V6Session::default())
+            .cap_refusal()
+            .expect("V6 refuses in words");
+        let v: serde_json::Value = serde_json::from_str(&frame).expect("a JSON frame");
+        assert_eq!(v["id"], 0);
+        assert_eq!(v["kind"], "response");
+        assert_eq!(v["error"]["code"], "not_allowed");
+        assert!(v.get("data").is_none(), "a refusal is not also a success");
     }
 
     /// The ping is the one pushed frame that belongs to a single connection, so

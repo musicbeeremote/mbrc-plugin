@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod v6;
+
 /// Line terminator for the legacy CRLF-JSON protocol.
 pub const TERMINATOR: &str = "\r\n";
 
@@ -185,14 +187,14 @@ impl ClientHandshake {
 /// a peer that streams bytes without ever sending a terminator (issue #138).
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 
-/// Splits a byte stream into CRLF-delimited frames, matching the legacy
-/// client's strict `\r\n` framing.
+/// Splits a byte stream into newline-delimited frames.
 ///
-/// Bytes go in with [`push_bytes`](Self::push_bytes), frames come out of
-/// [`next_frame`](Self::next_frame). A max-frame cap (default
-/// [`DEFAULT_MAX_FRAME_BYTES`]) bounds buffering: bytes past it with no
-/// terminator are dropped and [`overflowed`](Self::overflowed) latches, so an
-/// unauthenticated peer cannot exhaust memory.
+/// It breaks on `\n` and trims a single trailing `\r`, so legacy CRLF and V6
+/// bare-LF framing decode identically - one accumulator reads the socket before
+/// the first frame has routed the connection. Bytes go in with
+/// [`push_bytes`](Self::push_bytes) and come out of
+/// [`next_frame`](Self::next_frame); the [`DEFAULT_MAX_FRAME_BYTES`] cap keeps
+/// an unauthenticated peer from exhausting memory.
 pub struct FrameAccumulator {
     acc: String,
     max_frame: usize,
@@ -222,14 +224,18 @@ impl FrameAccumulator {
     }
 
     /// Pops the next complete frame (terminator stripped), or `None` if no full
-    /// frame has arrived yet. When the buffer grows past the cap with no
-    /// terminator, the accumulated bytes are dropped and
-    /// [`overflowed`](Self::overflowed) latches true so the caller can close the
-    /// connection.
+    /// frame has arrived yet. Splits on `\n`; a trailing `\r` (the CR of a
+    /// legacy `\r\n`) is stripped, since a JSON frame body never ends in `\r`.
+    /// When the buffer grows past the cap with no terminator, the accumulated
+    /// bytes are dropped and [`overflowed`](Self::overflowed) latches true so the
+    /// caller can close the connection.
     pub fn next_frame(&mut self) -> Option<String> {
-        if let Some(idx) = self.acc.find(TERMINATOR) {
-            let line = self.acc[..idx].to_string();
-            self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
+        if let Some(idx) = self.acc.find('\n') {
+            let mut line = self.acc[..idx].to_string();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+            self.acc = self.acc[idx + 1..].to_string();
             return Some(line);
         }
         // Past the cap with no terminator is an unbounded-buffer attack: drop it
@@ -340,6 +346,19 @@ mod tests {
         acc.push_bytes(b"{\"a\":1}\r\n{\"b\":2}\r");
         assert_eq!(acc.next_frame().as_deref(), Some(r#"{"a":1}"#));
         // Second frame is incomplete (no trailing \n yet).
+        assert_eq!(acc.next_frame(), None);
+        acc.push_bytes(b"\n");
+        assert_eq!(acc.next_frame().as_deref(), Some(r#"{"b":2}"#));
+        assert_eq!(acc.next_frame(), None);
+    }
+
+    /// One accumulator decodes the socket before the connection is routed, so a
+    /// V6 stream - bare LF, no CR anywhere - has to split exactly as CRLF does.
+    #[test]
+    fn accumulator_splits_on_bare_lf() {
+        let mut acc = FrameAccumulator::default();
+        acc.push_bytes(b"{\"a\":1}\n{\"b\":2}");
+        assert_eq!(acc.next_frame().as_deref(), Some(r#"{"a":1}"#));
         assert_eq!(acc.next_frame(), None);
         acc.push_bytes(b"\n");
         assert_eq!(acc.next_frame().as_deref(), Some(r#"{"b":2}"#));

@@ -28,7 +28,11 @@ use crate::store::Db;
 pub struct Core {
     pub providers: Arc<dyn Providers>,
     pub config: Config,
+    /// Fan-out to legacy V4/V5 broadcast subscribers (V4-shaped frames).
     pub broadcaster: Broadcaster,
+    /// Fan-out to V6 broadcast subscribers (V6 event frames). Separate client set
+    /// so V4-shaped frames never reach a V6 socket and vice-versa.
+    pub v6_broadcaster: Broadcaster,
     pub now_playing: NowPlayingCache,
     /// The on-disk album cover cache (resize/hash/store/serve). Rooted at
     /// `config.storage_path`; the background build is kicked when networking
@@ -78,6 +82,7 @@ impl Core {
             providers,
             config,
             broadcaster: Broadcaster::default(),
+            v6_broadcaster: Broadcaster::default(),
             now_playing,
             cover_store,
             metadata_cache,
