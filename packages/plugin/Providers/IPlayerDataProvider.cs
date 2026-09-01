@@ -117,6 +117,13 @@ namespace MusicBeePlugin.Providers
         bool SetScrobble(bool enabled);
 
         /// <summary>
+        ///     Whether a Last.fm account is configured (a non-empty user id). Lets
+        ///     the core reject scrobbling / love / ban with a proper error when they
+        ///     can't succeed.
+        /// </summary>
+        bool HasLastFmAccount();
+
+        /// <summary>
         ///     Sets AutoDJ mode enabled or disabled.
         /// </summary>
         /// <param name="enabled">True to start AutoDJ, false to stop</param>

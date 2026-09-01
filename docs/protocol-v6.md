@@ -92,6 +92,27 @@ All enums are lowercase strings:
 - **repeat**: `none` \| `all` \| `one`
 - **lfm_status**: `normal` \| `love` \| `ban`
 
+## Canonical track
+
+Track objects are uniform across every domain (`track_get`, `now_playing_state`,
+`library_tracks`, `now_playing_list`). Base fields are always present; the four typed fields
+are `null` when unknown; `cover_hash` is omitted when the album has no cached cover.
+
+```json
+{
+  "src": "C:\\Music\\s.mp3",
+  "artist": "Artist", "title": "Title", "album": "Album", "album_artist": "AlbumArtist",
+  "track_no": 1, "disc_no": 1, "genre": "Rock",
+  "year": 2007,            // int | null (4-digit year parsed from the raw tag)
+  "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")
+  "rating": 4.5,           // float | null (0-5)
+  "date_added": "2024-01-02T03:04:05Z",  // ISO-8601 UTC | null
+  "cover_hash": "<sha1>"   // present only when a cached album cover exists
+}
+```
+
+`cover_hash` is an album-level content hash; fetch the image with `cover_get`.
+
 ## Pagination
 
 Browse/list ops take `{offset?, limit?}` (both default sensibly; `limit:0` means "to the end")

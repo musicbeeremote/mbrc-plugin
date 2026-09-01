@@ -149,6 +149,20 @@ pub enum QueryType {
     LibraryTrackPaths = 32,
     LibraryTracksForPaths = 33,
     LibrarySyncDelta = 34,
+    // The extended tags MusicBee ships as strings (Year/Duration/Rating/
+    // DateAdded), read per path and parsed into the typed V6 `track` schema.
+    // Separate from `LibraryTracksForPaths = 33`, the V4 browse track, which must
+    // stay byte-identical (#114/#112).
+    LibraryTrackTags = 35,
+    // V6 synchronized lyrics: `Library_GetLyrics(url, Synchronised)` (falling back
+    // to unsynced then the paramless now-playing lyrics), so tracks whose synced
+    // LRC the paramless `Lyrics = 4` call misses are covered (#113). The raw LRC
+    // reaches the core; the V6 codec parses it into structured lines.
+    NowPlayingLyricsSynced = 36,
+    // Whether a last.fm account is configured (a non-empty user id). Lets the V6
+    // core reject `player_set_scrobbling`(on)/love/ban with a proper `unavailable`
+    // error instead of a generic command failure when scrobbling can't be enabled.
+    HasLastFmAccount = 37,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

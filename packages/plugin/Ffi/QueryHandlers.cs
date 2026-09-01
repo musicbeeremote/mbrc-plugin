@@ -50,6 +50,8 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.TrackInfo: return Pack(BuildTrackInfo());
                 case QueryType.CoverData: return Pack(BuildCover());
                 case QueryType.Lyrics: return Pack(BuildLyrics());
+                case QueryType.NowPlayingLyricsSynced: return Pack(BuildSyncedLyrics());
+                case QueryType.HasLastFmAccount: return Pack(_player.HasLastFmAccount());
                 case QueryType.NowPlayingDetails: return Pack(BuildTrackDetails());
                 case QueryType.PlaybackPosition: return Pack(BuildPlaybackPosition());
                 case QueryType.OutputDevices: return Pack(BuildOutputDevices());
@@ -72,6 +74,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.BatchMetadata: return Pack(BuildBatchMetadata(Msgpack.Deserialize<BatchMetadataParams>(p)));
                 case QueryType.LibraryTrackPaths: return Pack(_library.GetAllTrackPaths());
                 case QueryType.LibraryTracksForPaths: return Pack(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
+                case QueryType.LibraryTrackTags: return Pack(_library.GetTrackTags(Msgpack.Deserialize<PathsParams>(p).paths));
                 case QueryType.LibrarySyncDelta: return Pack(BuildSyncDelta(Msgpack.Deserialize<SyncDeltaParams>(p)));
                 default: return null;
             }
@@ -105,6 +108,12 @@ namespace MusicBeePlugin.Ffi
         private Lyrics BuildLyrics()
         {
             var text = _track.GetNowPlayingLyrics() ?? string.Empty;
+            return new Lyrics { status = text.Length > 0 ? 200 : 404, lyrics = text };
+        }
+
+        private Lyrics BuildSyncedLyrics()
+        {
+            var text = _track.GetSyncedLyrics() ?? string.Empty;
             return new Lyrics { status = text.Length > 0 ? 200 : 404, lyrics = text };
         }
 
