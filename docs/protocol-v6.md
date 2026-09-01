@@ -173,6 +173,39 @@ and return:
 `now_playing_lyrics` returns structured lyrics; synced lines carry `at_ms`, plain lines do not,
 and `type:"none"` yields an empty `lines`.
 
+### Now Playing List (the queue)
+
+One canonical list (no per-client-type variants). Each item is the
+[canonical track](#canonical-track) plus **three** 0-based indices:
+
+- **`order`** - the absolute MusicBee list index. This IS the key the mutations consume, so
+  `now_playing_list_play`/`remove`/`move` take exactly this value. (In the default view it is
+  contiguous; in the up-next view it follows shuffle and is non-contiguous.)
+- **`position`** - the sequential display rank within the returned window (`offset`, `offset+1`, …).
+- **`play_position`** - the rank in the shuffle **play** order (`0` = current, `1` = next up, …), or
+  **`-1` if the track has already been played**. Lets the default view show play order + played state.
+
+`now_playing_list` has two views via `up_next`:
+
+- **default** (`up_next` absent/false): the **full list in list order** - every track, played and
+  unplayed, as MusicBee holds it. Here `order == position ==` the storage index, and `play_position`
+  marks each track's place in the shuffle order (or `-1` = already played).
+- **`up_next: true`**: MusicBee's shuffle-aware **play order from the current track**; already-played
+  tracks are dropped. `order` is the true storage index; `position == play_position`.
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `now_playing_list` | `{offset?, limit?, up_next?}` | canonical tracks + `order` + `position` + `play_position` |
+| `now_playing_list_play` | `{"index":N}` | `{}` - `index` = an item's `order` |
+| `now_playing_list_remove` | `{"index":N}` | `{}` - `index` = an item's `order` |
+| `now_playing_list_move` | `{"from":N,"to":M}` | `{}` - `from`/`to` = `order` values |
+| `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
+| `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add-all","play?":"<path>"}` | `{}` |
+
+> A single view that is *both* shuffle-play-order *and* keeps already-played tracks is impossible -
+> MusicBee's `GetNextIndex` is forward-only, so a played track's play order can't be recovered. The
+> `play_position: -1` marker is the answer instead (#118 §7 / #94).
+
 ### Library
 
 | Op | Request `data` | Response |

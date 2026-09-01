@@ -1,17 +1,20 @@
-//! V6 op dispatch. A lean parallel to the legacy [`commands`](super::commands)
-//! module: handlers take `(&Value, &dyn Providers, ...)` and return typed V6
-//! response `data` or a typed error - no `Ctx`/`WireCodec` (those carry V4
-//! spellings). The [`V6Session`](super::session_v6::V6Session) frames the envelope
-//! around the returned value.
+//! V6 op dispatch.
+//!
+//! A lean parallel to the legacy [`commands`](super::commands) module: handlers
+//! take `(&Value, &dyn Providers, ...)` and return typed V6 response `data` or a
+//! typed error, with no `Ctx`/`WireCodec` (those carry V4 spellings). The
+//! [`V6Session`](super::session_v6::V6Session) frames the envelope around the
+//! returned value.
 
 pub mod library;
 pub mod nowplaying;
+pub mod nowplaying_list;
 pub mod player;
 pub mod playlist;
 pub mod system;
 pub mod track;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
@@ -20,9 +23,9 @@ use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
 
-/// Ops handled by the session itself (the spine), advertised alongside the domain
-/// op lists in the handshake capabilities.
-const SPINE_OPS: &[&str] = &["handshake", "ping"];
+/// Ops the session answers itself, advertised in the handshake capabilities
+/// alongside every domain's own list.
+const SESSION_OPS: &[&str] = &["handshake", "ping"];
 
 /// Event names the server may emit (best-effort). Advertised in capabilities so a
 /// client knows what to expect; it stays in sync with `notifications_v6::build`.
@@ -35,13 +38,15 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "now_playing_list_changed",
     "cover_cache_changed",
     "library_changed",
+    "server_shutdown",
 ];
 
-/// The capability set advertised in the handshake response: the ops the server
-/// accepts and the events it may emit. Added additively (#118 §9 Q5) - clients
-/// tolerate its absence. Each new domain appends its `OPS` here.
+/// The capability set advertised in the handshake response.
+///
+/// The ops the server accepts and the events it may emit. Additive (#118 §9
+/// Q5), so clients tolerate its absence; each domain appends its own `OPS`.
 pub fn capabilities() -> Value {
-    let ops: Vec<&str> = SPINE_OPS
+    let ops: Vec<&str> = SESSION_OPS
         .iter()
         .chain(player::OPS)
         .chain(system::OPS)
@@ -49,6 +54,7 @@ pub fn capabilities() -> Value {
         .chain(library::OPS)
         .chain(playlist::OPS)
         .chain(nowplaying::OPS)
+        .chain(nowplaying_list::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
@@ -90,6 +96,7 @@ pub fn dispatch(
         .or_else(|| library::dispatch(op, data, providers, cover_store, metadata_cache))
         .or_else(|| playlist::dispatch(op, data, providers))
         .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
+        .or_else(|| nowplaying_list::dispatch(op, data, providers, now_playing, cover_store))
 }
 
 /// The shared V6 pagination envelope: `{ total, offset, items }` (#118 §8). `total`
@@ -98,17 +105,28 @@ pub(crate) fn page_json(total: usize, offset: i64, items: Vec<Value>) -> Value {
     json!({ "total": total, "offset": offset, "items": items })
 }
 
+/// The page size served when a request names none.
+///
+/// Absent `limit` used to mean "to the end", which made the laziest possible
+/// call - `library_tracks {}` - read every tag in the library and serialize it
+/// into one frame. A default page keeps the obvious request cheap; a client that
+/// genuinely wants everything still asks for it with an explicit `limit: 0`.
+pub(crate) const DEFAULT_PAGE_LIMIT: i64 = 1000;
+
 /// `(offset, limit)` from a paginated request, each clamped to the non-negative
-/// `i32` range the providers accept (`limit` 0 means "to the end"). Clamping here
-/// means the downstream `as i32` casts can never wrap a huge or negative client
-/// value into a bogus page index (or an FFI-crossing negative), and the `offset`
-/// echoed in the response envelope always matches the one actually used.
+/// `i32` range the providers accept.
+///
+/// An absent `limit` is [`DEFAULT_PAGE_LIMIT`]; an explicit `0` still means "to
+/// the end". Clamping here means the downstream `as i32` casts can never wrap a
+/// huge or negative client value into a bogus page index (or an FFI-crossing
+/// negative), and the `offset` echoed in the response envelope always matches
+/// the one actually used.
 pub(crate) fn page_args(data: &Value) -> Result<(i64, i64), V6Error> {
     let offset = opt_i64(data, "offset")?
         .unwrap_or(0)
         .clamp(0, i32::MAX as i64);
     let limit = opt_i64(data, "limit")?
-        .unwrap_or(0)
+        .unwrap_or(DEFAULT_PAGE_LIMIT)
         .clamp(0, i32::MAX as i64);
     Ok((offset, limit))
 }
@@ -165,6 +183,32 @@ pub(crate) fn req_str<'a>(data: &'a Value, field: &str) -> Result<&'a str, V6Err
         Some(v) => v.as_str().ok_or_else(|| {
             V6Error::new(ErrorCode::InvalidField, format!("{field} must be a string"))
         }),
+    }
+}
+
+/// A required array-of-strings field (`missing_field` if absent, `invalid_field`
+/// if not an array of strings).
+pub(crate) fn req_str_array(data: &Value, field: &str) -> Result<Vec<String>, V6Error> {
+    match data.get(field) {
+        None => Err(V6Error::new(
+            ErrorCode::MissingField,
+            format!("missing required field: {field}"),
+        )),
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .map(|v| {
+                v.as_str().map(String::from).ok_or_else(|| {
+                    V6Error::new(
+                        ErrorCode::InvalidField,
+                        format!("{field} must be an array of strings"),
+                    )
+                })
+            })
+            .collect(),
+        Some(_) => Err(V6Error::new(
+            ErrorCode::InvalidField,
+            format!("{field} must be an array"),
+        )),
     }
 }
 
@@ -233,8 +277,24 @@ mod tests {
         assert_eq!(i32_saturating(42), 42);
     }
 
+    /// The laziest request a client can write used to mean "read every tag in
+    /// the library and put it in one frame".
     #[test]
-    fn capabilities_advertise_spine_and_domain_ops_and_events() {
+    fn an_absent_limit_is_a_page_not_the_whole_library() {
+        let (offset, limit) = page_args(&json!({})).unwrap();
+        assert_eq!(offset, 0);
+        assert_eq!(limit, DEFAULT_PAGE_LIMIT);
+    }
+
+    /// The escape hatch stays: a caller that means everything says so.
+    #[test]
+    fn an_explicit_zero_limit_still_means_everything() {
+        let (_, limit) = page_args(&json!({ "limit": 0 })).unwrap();
+        assert_eq!(limit, 0);
+    }
+
+    #[test]
+    fn capabilities_advertise_session_and_domain_ops_and_events() {
         let caps = capabilities();
         let ops: Vec<&str> = caps["ops"]
             .as_array()

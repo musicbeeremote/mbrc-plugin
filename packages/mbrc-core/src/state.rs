@@ -518,12 +518,27 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
             core.scanner_nudge.notify_one();
             broadcast_library_changed(core);
         }
+        NotificationType::NowPlayingListChanged => core.now_playing.bump_list_version(),
         _ => {}
     }
 
     let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
     core.broadcaster.broadcast(&v4_frames);
     core.v6_broadcaster.broadcast(&v6_frames);
+}
+
+/// Tells V6 subscribers the server is going away, so a client can tell a
+/// deliberate shutdown from a network drop and not reconnect into a closing
+/// MusicBee.
+///
+/// Best-effort by nature: it is queued on each connection's writer just before
+/// networking is torn down, so it goes out with whatever time the shutdown
+/// sequence leaves. V4 has no frame for this and is left alone.
+fn broadcast_server_shutdown(core: &Core) {
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "server_shutdown",
+        serde_json::json!({}),
+    )]);
 }
 
 /// Fans out the V6 `library_changed` marker; the client re-queries what it needs.
@@ -561,6 +576,7 @@ pub fn shutdown() -> MbrcResult {
         Some(runtime) => {
             runtime.core.begin_stopping();
             if let Some(net) = runtime.net {
+                broadcast_server_shutdown(&runtime.core);
                 net.stop();
             }
             MbrcResult::Ok
@@ -604,6 +620,7 @@ pub fn stop_networking() -> MbrcResult {
             // Before the join inside `stop`: this is the call the host makes
             // first, so it is the one that has to release the long blocking work.
             runtime.core.begin_stopping();
+            broadcast_server_shutdown(&runtime.core);
             net.stop();
             MbrcResult::Ok
         }

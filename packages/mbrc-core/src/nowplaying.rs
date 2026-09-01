@@ -16,7 +16,7 @@
 //! Seeding once on a background task (and refreshing on track change) pays that
 //! cost off the request path, so `init` never blocks on it.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use crate::protocol::messages::{
@@ -43,6 +43,7 @@ pub struct NowPlayingCache {
     providers: Arc<dyn Providers>,
     state: RwLock<NowPlaying>,
     seeded: AtomicBool,
+    list_version: AtomicU64,
 }
 
 impl NowPlayingCache {
@@ -51,7 +52,26 @@ impl NowPlayingCache {
             providers,
             state: RwLock::new(NowPlaying::default()),
             seeded: AtomicBool::new(false),
+            list_version: AtomicU64::new(0),
         }
+    }
+
+    /// The queue's version, as served with a now-playing list page.
+    ///
+    /// MusicBee has no durable handle for a queue entry - it addresses the list
+    /// purely by index - so a client's `order` is only meaningful while the list
+    /// it came from still holds. Pairing the two (#118 §7) lets a mutation say
+    /// which list it meant, and be refused rather than hit the wrong slot.
+    pub fn list_version(&self) -> u64 {
+        self.list_version.load(Ordering::Acquire)
+    }
+
+    /// Marks the queue as changed. Bumped from the `NowPlayingListChanged`
+    /// notification and again after a mutation this server made, because
+    /// MusicBee's notification is asynchronous: without the second bump a
+    /// mutate-then-read hands back a version that is already spent.
+    pub fn bump_list_version(&self) {
+        self.list_version.fetch_add(1, Ordering::AcqRel);
     }
 
     // ── Writers (FFI -> cache) ───────────────────────────────────────
