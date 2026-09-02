@@ -327,4 +327,85 @@ mod tests {
         assert_eq!(i["data"][0]["artist"], json!(""));
         assert!(i["data"][0].get("album").is_some());
     }
+
+    /// Asserts a frame matches the bytes the shipped C# plugin sends, order
+    /// included.
+    ///
+    /// The expectations are transcribed from the committed golden traces, not
+    /// from this codec's output: they pin C#'s field order, not Rust's. Every
+    /// other test here reads fields by key and passes either way, so a failure
+    /// here almost never means the expectation needs updating.
+    fn assert_shipped_order(frame: &Value, expected: &str) {
+        assert_eq!(frame.to_string(), expected);
+    }
+
+    #[test]
+    fn player_status_serializes_in_the_shipped_field_order() {
+        let state = PlayerState {
+            play_state: PlayState::Playing,
+            volume: 66,
+            mute: false,
+            shuffle: ShuffleMode::Off,
+            repeat: RepeatMode::None,
+            scrobble: false,
+            ..Default::default()
+        };
+        assert_shipped_order(
+            &V4_CODEC.player_status(&state),
+            r#"{"playerrepeat":"None","playermute":false,"playershuffle":"off","scrobbler":false,"playerstate":"Playing","playervolume":"66"}"#,
+        );
+    }
+
+    #[test]
+    fn track_info_serializes_in_the_shipped_field_order() {
+        // Also pins the defaulting path: `track_info` fills empty fields with
+        // `insert`, which must land in the DTO's slot rather than appending.
+        let info = TrackInfo {
+            artist: String::new(),
+            title: "Track 1".into(),
+            album: "Album 1".into(),
+            year: "2008".into(),
+            path: "00 - Track 1.mp3".into(),
+        };
+        assert_shipped_order(
+            &V4_CODEC.track_info(&info),
+            r#"{"artist":"Unknown Artist","title":"Track 1","album":"Album 1","year":"2008","path":"00 - Track 1.mp3"}"#,
+        );
+    }
+
+    #[test]
+    fn now_playing_list_serializes_in_the_shipped_field_order() {
+        let page = Page {
+            total: 1,
+            offset: 0,
+            limit: 100,
+            data: vec![NowPlayingListTrack {
+                artist: "Artist 2".into(),
+                album: String::new(),
+                album_artist: String::new(),
+                title: "Track 29".into(),
+                path: "item-1.dat".into(),
+                position: 0,
+            }],
+        };
+        // Android: page wrapper total/offset/limit/data, items without album keys.
+        assert_shipped_order(
+            &V4_CODEC.now_playing_list(&page, Platform::Android),
+            r#"{"total":1,"offset":0,"limit":100,"data":[{"artist":"Artist 2","title":"Track 29","path":"item-1.dat","position":0}]}"#,
+        );
+        // iOS: the same wrapper, items carrying album/album_artist after artist.
+        assert_shipped_order(
+            &V4_CODEC.now_playing_list(&page, Platform::Ios),
+            r#"{"total":1,"offset":0,"limit":100,"data":[{"artist":"Artist 2","album":"","album_artist":"","title":"Track 29","path":"item-1.dat","position":0}]}"#,
+        );
+    }
+
+    #[test]
+    fn lyrics_serializes_in_the_shipped_field_order() {
+        let lyrics = Lyrics {
+            status: 404,
+            lyrics: String::new(),
+        };
+        assert_shipped_order(&V4_CODEC.lyrics(&lyrics), r#"{"status":404,"lyrics":""}"#);
+    }
 }

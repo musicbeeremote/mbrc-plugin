@@ -15,7 +15,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
+# preserve_order is restated here rather than left to the workspace inheritance:
+# the V4 wire order (see wire/v4.rs) depends on it, and the dev-dependency on
+# mbrc-capture turns it on for `cargo test` regardless - so dropping it from the
+# workspace root would ship an alphabetizing core with a green test suite.
+serde_json = { workspace = true, features = ["preserve_order"] }
 rmp-serde = "=1.3.1"
 # Cover decode/encode (moving cover handling into the core; C# hands over raw
 # artwork). Pure-Rust decoders, so it cross-compiles to i686 with no C toolchain.
