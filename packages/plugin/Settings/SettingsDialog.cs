@@ -56,6 +56,10 @@ namespace MusicBeePlugin.Settings
         private const int DialogWidth = 560;
         private const int DialogHeight = 860;
 
+        // The label column every settings row lays its caption in; the value
+        // column takes the rest of the width.
+        private const int LabelColumnWidth = 140;
+
         // Usable width of a value column: client width less the label column and
         // padding, with headroom so a vertical scrollbar appearing on a short
         // screen cannot force a horizontal one as well.
@@ -657,7 +661,7 @@ namespace MusicBeePlugin.Settings
                 AutoSize = true,
                 Padding = new Padding(8, 4, 8, 8),
             };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColumnWidth));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             return layout;
         }
