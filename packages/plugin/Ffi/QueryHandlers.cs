@@ -93,11 +93,16 @@ namespace MusicBeePlugin.Ffi
 
         private TrackInfo BuildTrackInfo() => _track.GetNowPlayingTrackInfo() ?? new TrackInfo();
 
+        /// <summary>
+        ///     The now-playing artwork as MusicBee holds it: embedded art if
+        ///     there is any, otherwise downloaded art. Status is 200 when
+        ///     something was found and 404 when nothing was; the bytes are
+        ///     unresized, because the core owns sizing and caching.
+        /// </summary>
         private Cover BuildCover()
         {
-            // The now-playing artwork is a thin MusicBee-API read (no image work -
-            // the Rust core owns resize/cache). Prefer embedded art, fall back to
-            // downloaded art, matching the retired CoverService.GetNowPlayingCover.
+            // A thin API read, matching the retired
+            // CoverService.GetNowPlayingCover.
             var art = _track.GetNowPlayingArtwork();
             if (string.IsNullOrEmpty(art))
                 art = _track.GetNowPlayingDownloadedArtwork();
@@ -127,6 +132,13 @@ namespace MusicBeePlugin.Ffi
         private Page<Playlist> BuildPlaylists(PaginationParams p) =>
             Paginate(_playlist.GetPlaylists(), p.offset, p.limit);
 
+        /// <summary>
+        ///     A page of the now-playing list. <paramref name="ordered" /> picks
+        ///     the variant: the "ordered" walk runs from the current track
+        ///     forward and reports the length of that walk as its total, while
+        ///     the sequential one pages the whole queue and reports the real
+        ///     count. The two totals mean different things - see below.
+        /// </summary>
         private Page<NowPlayingListTrack> BuildNowPlayingList(PaginationParams p, bool ordered)
         {
             // Platform never crosses the FFI: the core asks for "ordered" (iOS,

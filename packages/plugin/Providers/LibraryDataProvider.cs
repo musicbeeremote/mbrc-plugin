@@ -148,6 +148,12 @@ namespace MusicBeePlugin.Providers
             }
         }
 
+        /// <summary>
+        ///     Albums in browse order, deduplicated on (album artist, album),
+        ///     first occurrence wins. Every entry's count is 1 - this list is for
+        ///     browsing, not for reporting track counts (see GetArtistAlbums for
+        ///     those).
+        /// </summary>
         public List<AlbumData> BrowseAlbums(int offset = 0, int limit = 4000)
         {
             // A first-wins HashSet keyed on artist\0album reproduces what
@@ -244,11 +250,16 @@ namespace MusicBeePlugin.Providers
             }
         }
 
+        /// <summary>
+        ///     One entry per (album artist, album) for the given artist, each
+        ///     carrying its track count. Unlike BrowseAlbums, the count here is
+        ///     real.
+        /// </summary>
         public List<AlbumData> GetArtistAlbums(string artist, SearchSource searchSource)
         {
-            // Dedup by (albumArtist, album) and count the tracks per album. The
-            // retired internal AlbumData did this via IEquatable + IncreaseCount;
-            // here a Dictionary keyed on albumArtist\0album carries the count.
+            // The retired internal AlbumData did this via IEquatable +
+            // IncreaseCount; here a Dictionary keyed on albumArtist\0album
+            // carries the count.
             var albums = new Dictionary<string, AlbumData>(StringComparer.Ordinal);
             var filter = XmlFilterHelper.CreateFilter(
                 ArtistSearchFields, artist, true, searchSource);
@@ -336,6 +347,12 @@ namespace MusicBeePlugin.Providers
 
         #region Album Cover Cache Support
 
+        /// <summary>
+        ///     One identity per album - artist, album, the first track path
+        ///     seen, and the newest modification time across its tracks. The
+        ///     core fingerprints the library from these, so the Modified value
+        ///     is what decides whether the cover cache rebuilds.
+        /// </summary>
         public List<(string Artist, string Album, string Path, long Modified)> GetAlbumIdentities()
         {
             // One `Library_QueryFiles` pass folded to one identity per album: a
@@ -413,11 +430,17 @@ namespace MusicBeePlugin.Providers
 
         #region Library Cache
 
+        /// <summary>
+        ///     Every track path in the library, in the same browse order as
+        ///     BrowseTracks. The order is the contract, not a side effect: the
+        ///     core stores these as an ordinal index and serves browse pages by
+        ///     position into it, so returning them in a different order silently
+        ///     renumbers every client's track list.
+        /// </summary>
         public List<string> GetAllTrackPaths()
         {
-            // The array form of the Library_QueryFiles(null) stream BrowseTracks
-            // uses, so the paths come back in the same browse order - the core's
-            // ordinal index relies on that.
+            // The array form of the same Library_QueryFiles(null) stream
+            // BrowseTracks walks, which is what makes the orders match.
             var success = _api.Library_QueryFilesEx(null, out var files);
             return success && files != null ? files.ToList() : new List<string>();
         }

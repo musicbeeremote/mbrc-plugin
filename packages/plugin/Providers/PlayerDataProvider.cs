@@ -182,12 +182,17 @@ namespace MusicBeePlugin.Providers
             return _api.Player_SetRepeat(mbMode);
         }
 
+        /// <summary>
+        ///     Turns scrobbling on or off. Returns false - changing nothing -
+        ///     when asked to enable it with no Last.fm account configured, so a
+        ///     false here means "refused", not just "the API call failed".
+        ///     Disabling always attempts the call.
+        /// </summary>
         public bool SetScrobble(bool enabled)
         {
-            // Enabling scrobbling when no Last.fm account is configured makes
-            // MusicBee pop a modal login dialog that blocks the plugin thread
-            // (and thus all remote actions). Guard against it: only turn
-            // scrobbling on when an account exists. Disabling is always safe.
+            // Enabling scrobbling with no account makes MusicBee pop a modal
+            // login dialog that blocks the plugin thread, and with it every
+            // remote action. That is what the guard below is avoiding.
             if (enabled && !HasLastFmAccount())
             {
                 return false;
