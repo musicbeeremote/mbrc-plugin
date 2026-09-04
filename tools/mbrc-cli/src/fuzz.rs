@@ -80,26 +80,111 @@ struct Input {
     note: String,
 }
 
-pub fn run(args: &[String]) -> ExitCode {
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let port = parse_port(flag_value(args, "--port"), 3000);
-    let seed: u64 = flag_value(args, "--seed")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
-    let iterations: usize = flag_value(args, "--iterations")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(200);
-    let wait = Duration::from_millis(
-        flag_value(args, "--wait-ms")
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(300),
-    );
-    let destructive = has_flag(args, "--destructive");
-    let out_path = flag_value(args, "--out");
-    let diff_host = flag_value(args, "--diff-host");
-    let diff_port = parse_port(flag_value(args, "--diff-port"), port);
+/// Everything the fuzz subcommand takes off the command line.
+struct Options {
+    host: String,
+    port: u16,
+    seed: u64,
+    iterations: usize,
+    wait: Duration,
+    destructive: bool,
+    out_path: Option<String>,
+    save_script: Option<String>,
+    corpus: Option<String>,
+    diff_host: Option<String>,
+    diff_port: u16,
+}
 
-    if destructive {
+impl Options {
+    fn parse(args: &[String]) -> Self {
+        let port = parse_port(flag_value(args, "--port"), 3000);
+        Self {
+            host: flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string()),
+            port,
+            seed: flag_value(args, "--seed")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1),
+            iterations: flag_value(args, "--iterations")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(200),
+            wait: Duration::from_millis(
+                flag_value(args, "--wait-ms")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(300),
+            ),
+            destructive: has_flag(args, "--destructive"),
+            out_path: flag_value(args, "--out"),
+            save_script: flag_value(args, "--save-script"),
+            corpus: flag_value(args, "--corpus"),
+            diff_host: flag_value(args, "--diff-host"),
+            diff_port: parse_port(flag_value(args, "--diff-port"), port),
+        }
+    }
+}
+
+/// Freezes the generated inputs as a replayable c2s script.
+///
+/// Timestamps are pinned rather than taken from the clock, so a given seed
+/// writes a byte-identical file.
+fn save_script(path: &str, inputs: &[Input]) {
+    let script: Vec<String> = inputs
+        .iter()
+        .enumerate()
+        .map(|(i, inp)| {
+            let raw = String::from_utf8_lossy(&inp.bytes);
+            let mut f = Frame::new(
+                0,
+                i as u64,
+                "c2s",
+                0,
+                raw.trim_end_matches(['\r', '\n']).as_bytes(),
+            );
+            f.ts = "1970-01-01T00:00:00Z".to_string();
+            serde_json::to_string(&f).unwrap_or_default()
+        })
+        .collect();
+    let _ = std::fs::write(path, script.join("\n"));
+    println!("wrote {} input frames to {path}", inputs.len());
+}
+
+/// Reports both targets and returns whether the run should fail the process.
+fn report_run(
+    opts: &Options,
+    inputs: &[Input],
+    lines_a: &[String],
+    anomalies_a: &[String],
+    b: Option<(Vec<String>, Vec<String>)>,
+) -> bool {
+    let (host, port, seed) = (&opts.host, opts.port, opts.seed);
+    println!(
+        "fuzzed {} input(s) against {host}:{port} (seed {seed})",
+        inputs.len()
+    );
+    report_anomalies("target A", anomalies_a);
+    let mut failed = !anomalies_a.is_empty();
+
+    if let Some((lines_b, anomalies_b)) = b {
+        report_anomalies("target B", &anomalies_b);
+        println!("\n-- differential diff (A vs B) --");
+        // Drop ping/pong keepalives - their presence is timing-dependent, not a
+        // real behavioral divergence between the two targets.
+        let differing = diff_report(
+            &strip_keepalive(lines_a),
+            &strip_keepalive(&lines_b),
+            false,
+            &[],
+        );
+        failed = failed || !anomalies_b.is_empty() || differing > 0;
+    }
+
+    println!("\nseed {seed} reproduces this run.");
+    failed
+}
+
+pub fn run(args: &[String]) -> ExitCode {
+    let opts = Options::parse(args);
+
+    if opts.destructive {
         eprintln!(
             "--destructive: fuzzing reversible player state ({}); snapshotting via playerstatus \
              and restoring afterward.",
@@ -107,36 +192,18 @@ pub fn run(args: &[String]) -> ExitCode {
         );
     }
 
-    let corpus = flag_value(args, "--corpus")
-        .and_then(|p| read_all(&p).ok())
+    let corpus = opts
+        .corpus
+        .as_deref()
+        .and_then(|p| read_all(p).ok())
         .map(|c| load_corpus(&c))
         .unwrap_or_default();
 
-    let mut rng = Rng::new(seed);
-    let inputs = generate(&mut rng, iterations, &corpus, destructive);
+    let mut rng = Rng::new(opts.seed);
+    let inputs = generate(&mut rng, opts.iterations, &corpus, opts.destructive);
 
-    // Freeze the generated inputs as a replayable c2s script.
-    if let Some(path) = flag_value(args, "--save-script") {
-        let script: Vec<String> = inputs
-            .iter()
-            .enumerate()
-            .map(|(i, inp)| {
-                let raw = String::from_utf8_lossy(&inp.bytes);
-                let mut f = Frame::new(
-                    0,
-                    i as u64,
-                    "c2s",
-                    0,
-                    raw.trim_end_matches(['\r', '\n']).as_bytes(),
-                );
-                // A frozen script must be byte-stable for a given seed, so pin
-                // the otherwise-wall-clock timestamp.
-                f.ts = "1970-01-01T00:00:00Z".to_string();
-                serde_json::to_string(&f).unwrap_or_default()
-            })
-            .collect();
-        let _ = std::fs::write(&path, script.join("\n"));
-        println!("wrote {} input frames to {path}", inputs.len());
+    if let Some(path) = &opts.save_script {
+        save_script(path, &inputs);
     }
 
     let rt = match tokio::runtime::Runtime::new() {
@@ -149,18 +216,18 @@ pub fn run(args: &[String]) -> ExitCode {
 
     let result = rt.block_on(async {
         // Snapshot reversible player state before a destructive run, restore after.
-        let snapshot = if destructive {
-            snapshot_player(&host, port, wait).await?
+        let snapshot = if opts.destructive {
+            snapshot_player(&opts.host, opts.port, opts.wait).await?
         } else {
             None
         };
-        let a = drive(&host, port, &inputs, wait).await?;
-        let b = match &diff_host {
-            Some(h) => Some(drive(h, diff_port, &inputs, wait).await?),
+        let a = drive(&opts.host, opts.port, &inputs, opts.wait).await?;
+        let b = match &opts.diff_host {
+            Some(h) => Some(drive(h, opts.diff_port, &inputs, opts.wait).await?),
             None => None,
         };
         if let Some(snap) = &snapshot {
-            restore_player(&host, port, wait, snap).await?;
+            restore_player(&opts.host, opts.port, opts.wait, snap).await?;
         }
         Ok::<_, std::io::Error>((a, b, snapshot))
     });
@@ -176,35 +243,11 @@ pub fn run(args: &[String]) -> ExitCode {
     if let Some(snap) = &snapshot {
         println!("restored player state: {snap:?}");
     }
-
-    if let Some(path) = &out_path {
+    if let Some(path) = &opts.out_path {
         let _ = std::fs::write(path, lines_a.join("\n"));
     }
 
-    println!(
-        "fuzzed {} input(s) against {host}:{port} (seed {seed})",
-        inputs.len()
-    );
-    report_anomalies("target A", &anomalies_a);
-
-    let mut failed = !anomalies_a.is_empty();
-
-    if let Some((lines_b, anomalies_b)) = b {
-        report_anomalies("target B", &anomalies_b);
-        println!("\n-- differential diff (A vs B) --");
-        // Drop ping/pong keepalives - their presence is timing-dependent, not a
-        // real behavioral divergence between the two targets.
-        let differing = diff_report(
-            &strip_keepalive(&lines_a),
-            &strip_keepalive(&lines_b),
-            false,
-            &[],
-        );
-        failed = failed || !anomalies_b.is_empty() || differing > 0;
-    }
-
-    println!("\nseed {seed} reproduces this run.");
-    if failed {
+    if report_run(&opts, &inputs, &lines_a, &anomalies_a, b) {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS

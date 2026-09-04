@@ -211,29 +211,54 @@ impl Default for Scan {
     }
 }
 
-/// Scans one source file into comment blocks.
-pub fn scan(source: &str, lang: Lang) -> Scan {
-    let mut out = Scan {
-        lang,
-        ..Scan::default()
-    };
-    let mut in_string: Option<StringKind> = None;
-    let mut block_depth = 0usize;
-    let mut pending: Vec<Line> = Vec::new();
-    // One flag per open brace: did a `fn` open it? A closure inside a function
-    // keeps the enclosing `true`, which is what "mid-function" should mean.
-    let mut fn_braces: Vec<Option<usize>> = Vec::new();
-    let mut pending_fn = false;
-    let mut trait_braces: Vec<bool> = Vec::new();
-    let mut next_fn_id = 0usize;
+/// The brace, string and comment state carried from one line to the next.
+struct Cursor {
+    in_string: Option<StringKind>,
+    block_depth: usize,
+    /// One entry per open brace: the id of the function that opened it, if a
+    /// function did. A closure inside a function keeps the enclosing id, which
+    /// is what "mid-function" should mean.
+    fn_braces: Vec<Option<usize>>,
+    trait_braces: Vec<bool>,
+    pending_fn: bool,
+    next_fn_id: usize,
+}
 
-    for (idx, raw) in source.split('\n').enumerate() {
-        let number = idx + 1;
-        let line = raw.strip_suffix('\r').unwrap_or(raw);
+impl Cursor {
+    fn new() -> Self {
+        Self {
+            in_string: None,
+            block_depth: 0,
+            fn_braces: Vec::new(),
+            trait_braces: Vec::new(),
+            pending_fn: false,
+            next_fn_id: 0,
+        }
+    }
+
+    /// The id of the innermost function body the cursor is inside.
+    fn fn_id(&self) -> Option<usize> {
+        self.fn_braces.iter().rev().find_map(|f| *f)
+    }
+
+    fn in_trait(&self) -> bool {
+        self.trait_braces.iter().any(|t| *t)
+    }
+
+    /// Walks one line, updating brace, string and block-comment state.
+    ///
+    /// Returns the `//` comment it ran into, as the rest of the line and
+    /// whether code preceded it on the same line.
+    fn walk(
+        &mut self,
+        line: &str,
+        number: usize,
+        fn_starts: &mut std::collections::BTreeMap<usize, usize>,
+    ) -> Option<(String, bool)> {
         let bytes: Vec<char> = line.chars().collect();
         let mut i = 0usize;
         let mut saw_code = false;
-        let mut comment: Option<(usize, bool)> = None;
+        let mut comment = None;
         // `fn` before the first brace on this line, so a multi-line signature
         // still marks the body it eventually opens.
         let opens_fn = declares_fn(line);
@@ -241,16 +266,16 @@ pub fn scan(source: &str, lang: Lang) -> Scan {
         let mut first_brace = true;
 
         while i < bytes.len() {
-            if let Some(kind) = in_string {
-                i += consume_string(&bytes, i, kind, &mut in_string);
+            if let Some(kind) = self.in_string {
+                i += consume_string(&bytes, i, kind, &mut self.in_string);
                 continue;
             }
-            if block_depth > 0 {
+            if self.block_depth > 0 {
                 if bytes[i] == '*' && bytes.get(i + 1) == Some(&'/') {
-                    block_depth -= 1;
+                    self.block_depth -= 1;
                     i += 2;
                 } else if bytes[i] == '/' && bytes.get(i + 1) == Some(&'*') {
-                    block_depth += 1;
+                    self.block_depth += 1;
                     i += 2;
                 } else {
                     i += 1;
@@ -259,17 +284,16 @@ pub fn scan(source: &str, lang: Lang) -> Scan {
             }
             match bytes[i] {
                 '/' if bytes.get(i + 1) == Some(&'/') => {
-                    comment = Some((i, saw_code));
+                    comment = Some((bytes[i..].iter().collect::<String>(), saw_code));
                     break;
                 }
                 '/' if bytes.get(i + 1) == Some(&'*') => {
-                    block_depth += 1;
+                    self.block_depth += 1;
                     saw_code = true;
                     i += 2;
                 }
                 '"' => {
-                    let hashes = raw_prefix(&bytes, i);
-                    in_string = Some(match hashes {
+                    self.in_string = Some(match raw_prefix(&bytes, i) {
                         Some(h) => StringKind::Raw(h),
                         None => StringKind::Normal,
                     });
@@ -277,23 +301,23 @@ pub fn scan(source: &str, lang: Lang) -> Scan {
                     i += 1;
                 }
                 '{' => {
-                    let id = if first_brace && (opens_fn || pending_fn) {
-                        next_fn_id += 1;
-                        out.fn_starts.insert(next_fn_id, number);
-                        Some(next_fn_id)
+                    let id = if first_brace && (opens_fn || self.pending_fn) {
+                        self.next_fn_id += 1;
+                        fn_starts.insert(self.next_fn_id, number);
+                        Some(self.next_fn_id)
                     } else {
                         None
                     };
-                    fn_braces.push(id);
-                    trait_braces.push(first_brace && opens_trait);
+                    self.fn_braces.push(id);
+                    self.trait_braces.push(first_brace && opens_trait);
                     first_brace = false;
-                    pending_fn = false;
+                    self.pending_fn = false;
                     saw_code = true;
                     i += 1;
                 }
                 '}' => {
-                    fn_braces.pop();
-                    trait_braces.pop();
+                    self.fn_braces.pop();
+                    self.trait_braces.pop();
                     saw_code = true;
                     i += 1;
                 }
@@ -310,56 +334,70 @@ pub fn scan(source: &str, lang: Lang) -> Scan {
         }
 
         if opens_fn && first_brace {
-            pending_fn = true;
+            self.pending_fn = true;
         }
-        let fn_id = fn_braces.iter().rev().find_map(|f| *f);
-        let in_fn = fn_id.is_some();
-        let in_trait = trait_braces.iter().any(|t| *t);
+        comment
+    }
+}
 
-        match comment {
-            Some((at, trailing)) => {
-                let rest: String = bytes[at..].iter().collect();
-                let (kind, text) = classify(&rest);
-                out.comment_lines += 1;
-                if kind == Kind::Line {
-                    out.prose_lines += 1;
-                }
-                if trailing {
-                    out.code_lines += 1;
-                }
-                if let Some(allow) = parse_allow(&text, number) {
-                    flush(&mut pending, &mut out);
-                    out.allows.push(allow);
-                    continue;
-                }
-                let entry = Line {
-                    number,
-                    text,
-                    kind,
-                    in_fn,
-                    fn_id,
-                    in_trait,
-                };
-                if trailing {
-                    flush(&mut pending, &mut out);
-                    out.trailing.push(entry);
-                } else {
-                    let breaks = pending
-                        .last()
-                        .is_some_and(|p| p.kind != kind || p.number + 1 != number);
-                    if breaks {
-                        flush(&mut pending, &mut out);
-                    }
-                    pending.push(entry);
-                }
+/// Scans one source file into comment blocks.
+pub fn scan(source: &str, lang: Lang) -> Scan {
+    let mut out = Scan {
+        lang,
+        ..Scan::default()
+    };
+    let mut cursor = Cursor::new();
+    let mut pending: Vec<Line> = Vec::new();
+
+    for (idx, raw) in source.split('\n').enumerate() {
+        let number = idx + 1;
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let comment = cursor.walk(line, number, &mut out.fn_starts);
+
+        let Some((rest, trailing)) = comment else {
+            flush(&mut pending, &mut out);
+            if !line.trim().is_empty() {
+                out.code_lines += 1;
             }
-            None => {
-                flush(&mut pending, &mut out);
-                if !line.trim().is_empty() {
-                    out.code_lines += 1;
-                }
-            }
+            continue;
+        };
+
+        let (kind, text) = classify(&rest);
+        out.comment_lines += 1;
+        if kind == Kind::Line {
+            out.prose_lines += 1;
         }
+        if trailing {
+            out.code_lines += 1;
+        }
+        if let Some(allow) = parse_allow(&text, number) {
+            flush(&mut pending, &mut out);
+            out.allows.push(allow);
+            continue;
+        }
+
+        let fn_id = cursor.fn_id();
+        let entry = Line {
+            number,
+            text,
+            kind,
+            in_fn: fn_id.is_some(),
+            fn_id,
+            in_trait: cursor.in_trait(),
+        };
+        if trailing {
+            flush(&mut pending, &mut out);
+            out.trailing.push(entry);
+            continue;
+        }
+
+        let breaks = pending
+            .last()
+            .is_some_and(|p| p.kind != kind || p.number + 1 != number);
+        if breaks {
+            flush(&mut pending, &mut out);
+        }
+        pending.push(entry);
     }
     flush(&mut pending, &mut out);
     attach_followers(&mut out, source);

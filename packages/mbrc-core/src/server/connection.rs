@@ -75,20 +75,23 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let writer_task = tokio::spawn(writer_loop(writer, out_rx));
 
     let conn_id = core.next_conn_id();
-    let conn_span = conn_span(conn_id);
+    let timeouts = IdleTimeouts::from(&core.config);
+    let mut ping_tick = ping_ticker(Duration::from_secs(core.config.ping_interval_secs)).await;
+    let conn = Conn {
+        span: conn_span(conn_id),
+        shutdown: Arc::new(Notify::new()),
+        core,
+        peer,
+        conn_id,
+        out_tx,
+    };
+
     let mut session = Session::default();
     let mut accumulator = FrameAccumulator::default();
     let mut buf = [0u8; 4096];
     let mut registered = false;
     let mut closing = false;
     let opened_at = tokio::time::Instant::now();
-
-    // Fired by the registry to supersede a stale main socket.
-    let shutdown = Arc::new(Notify::new());
-
-    let unhandshaked_timeout = Duration::from_secs(core.config.unhandshaked_timeout_secs);
-    let aux_idle_timeout = Duration::from_secs(core.config.aux_idle_timeout_secs);
-    let mut ping_tick = ping_ticker(Duration::from_secs(core.config.ping_interval_secs)).await;
     let mut last_inbound = tokio::time::Instant::now();
 
     tracing::debug!(%peer, conn_id, "connection opened");
@@ -104,76 +107,21 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
             },
             // Superseded by a newer main for the same client_id, or a per-client
             // cap eviction: close after the in-flight frame.
-            _ = shutdown.notified() => {
+            _ = conn.shutdown.notified() => {
                 tracing::debug!(%peer, conn_id, "connection superseded; closing");
                 break;
             }
             _ = ping_tick.tick() => {
-                if session.protocol_version.is_none() {
-                    let idle = last_inbound.elapsed();
-                    if idle >= unhandshaked_timeout {
-                        tracing::debug!(
-                            %peer,
-                            conn_id,
-                            idle_ms = idle.as_millis() as u64,
-                            "closing un-handshaked idle connection"
-                        );
-                        break;
-                    }
+                match conn.on_ping_tick(&session, registered, last_inbound.elapsed(), &timeouts) {
+                    Tick::Waiting => continue,
+                    Tick::Retire => break,
                 }
-                let subscribes = registered && !session.no_broadcast;
-                if registered && !subscribes && aux_idle_timeout > Duration::ZERO {
-                    let idle = last_inbound.elapsed();
-                    if idle >= aux_idle_timeout {
-                        tracing::debug!(
-                            %peer,
-                            conn_id,
-                            idle_ms = idle.as_millis() as u64,
-                            "closing idle auxiliary connection"
-                        );
-                        break;
-                    }
-                }
-                if subscribes {
-                    if out_tx.send(PING_FRAME.to_string()).is_err() {
-                        break;
-                    }
-                    log_ping(conn_id);
-                }
-                continue;
             }
         };
         last_inbound = tokio::time::Instant::now();
-        core.registry.touch(conn_id);
+        conn.core.registry.touch(conn_id);
         accumulator.push_bytes(&buf[..n]);
-
-        while let Some(line) = accumulator.next_frame() {
-            let _guard = conn_span.enter();
-            let outcome = session.handle_frame(
-                &line,
-                core.providers.as_ref(),
-                Some(&core.now_playing),
-                Some(core.cover_store.as_ref()),
-                Some(core.metadata_cache.as_ref()),
-            );
-            for reply in outcome.replies {
-                if out_tx.send(reply).is_err() {
-                    closing = true;
-                    break;
-                }
-            }
-            if !registered && session.protocol_version.is_some() {
-                registered = true;
-                if !register_and_subscribe(&core, &session, conn_id, peer, &shutdown, &out_tx) {
-                    closing = true;
-                    break;
-                }
-            }
-            if outcome.close {
-                closing = true;
-                break;
-            }
-        }
+        closing = conn.drain_frames(&mut session, &mut accumulator, &mut registered);
 
         // Such a peer never goes idle, so this is the only bound on it (#138).
         if accumulator.overflowed() {
@@ -187,25 +135,152 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         }
     }
 
-    core.broadcaster.unregister(conn_id);
-    core.registry
+    conn.core.broadcaster.unregister(conn_id);
+    conn.core
+        .registry
         .unregister(conn_id, session.client_id.as_deref());
-    drop(out_tx); // drop the last sender so the writer task drains and exits
+    conn.log_closed(&session, registered, opened_at);
+    drop(conn); // drop the last sender so the writer task drains and exits
     let _ = writer_task.await;
-    // One-line post-mortem per socket. A closed iOS control socket shows
-    // handshaken=false with a high dropped count - the whole bug in one line.
-    tracing::debug!(
-        %peer,
-        conn_id,
-        platform = session.platform.as_deref().unwrap_or("none"),
-        handshaken = session.protocol_version.is_some(),
-        registered,
-        frames_in = session.frames_in,
-        dropped_pre_handshake = session.dropped_pre_handshake,
-        duration_ms = opened_at.elapsed().as_millis() as u64,
-        "connection closed"
-    );
     Ok(())
+}
+
+/// The two deadlines an idle socket is measured against.
+struct IdleTimeouts {
+    unhandshaked: Duration,
+    auxiliary: Duration,
+}
+
+impl From<&crate::config::Config> for IdleTimeouts {
+    fn from(config: &crate::config::Config) -> Self {
+        Self {
+            unhandshaked: Duration::from_secs(config.unhandshaked_timeout_secs),
+            auxiliary: Duration::from_secs(config.aux_idle_timeout_secs),
+        }
+    }
+}
+
+/// What a keepalive tick decided about the connection.
+enum Tick {
+    /// Keep it, and go back to waiting for input.
+    Waiting,
+    /// The idle policy retired this socket.
+    Retire,
+}
+
+/// Everything about one connection that outlives a single trip round the loop.
+///
+/// Holds the outbound sender, so dropping it is what lets the writer task drain
+/// and exit.
+struct Conn {
+    core: Arc<Core>,
+    peer: SocketAddr,
+    conn_id: u64,
+    span: tracing::Span,
+    shutdown: Arc<Notify>,
+    out_tx: UnboundedSender<String>,
+}
+
+impl Conn {
+    /// Applies the idle policy, then pings if the peer is a broadcast subscriber.
+    ///
+    /// The three rules and the reasoning behind them are on [`run`].
+    fn on_ping_tick(
+        &self,
+        session: &Session,
+        registered: bool,
+        idle: Duration,
+        timeouts: &IdleTimeouts,
+    ) -> Tick {
+        let (peer, conn_id) = (self.peer, self.conn_id);
+        let idle_ms = idle.as_millis() as u64;
+
+        if session.protocol_version.is_none() && idle >= timeouts.unhandshaked {
+            tracing::debug!(%peer, conn_id, idle_ms, "closing un-handshaked idle connection");
+            return Tick::Retire;
+        }
+
+        let subscribes = registered && !session.no_broadcast;
+        let abandoned = registered
+            && !subscribes
+            && timeouts.auxiliary > Duration::ZERO
+            && idle >= timeouts.auxiliary;
+        if abandoned {
+            tracing::debug!(%peer, conn_id, idle_ms, "closing idle auxiliary connection");
+            return Tick::Retire;
+        }
+
+        if subscribes {
+            if self.out_tx.send(PING_FRAME.to_string()).is_err() {
+                return Tick::Retire;
+            }
+            log_ping(conn_id);
+        }
+        Tick::Waiting
+    }
+
+    /// Runs every whole frame the accumulator is holding.
+    ///
+    /// Returns whether the connection is finished, which a client can ask for
+    /// outright and a departed writer task forces.
+    fn drain_frames(
+        &self,
+        session: &mut Session,
+        accumulator: &mut FrameAccumulator,
+        registered: &mut bool,
+    ) -> bool {
+        while let Some(line) = accumulator.next_frame() {
+            let _guard = self.span.enter();
+            let outcome = session.handle_frame(
+                &line,
+                self.core.providers.as_ref(),
+                Some(&self.core.now_playing),
+                Some(self.core.cover_store.as_ref()),
+                Some(self.core.metadata_cache.as_ref()),
+            );
+            for reply in outcome.replies {
+                if self.out_tx.send(reply).is_err() {
+                    return true;
+                }
+            }
+            if !*registered && session.protocol_version.is_some() {
+                *registered = true;
+                if !register_and_subscribe(
+                    &self.core,
+                    session,
+                    self.conn_id,
+                    self.peer,
+                    &self.shutdown,
+                    &self.out_tx,
+                ) {
+                    return true;
+                }
+            }
+            if outcome.close {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// One-line post-mortem per socket.
+    ///
+    /// A closed iOS control socket shows `handshaken=false` with a high dropped
+    /// count, which is the whole bug on one line.
+    fn log_closed(&self, session: &Session, registered: bool, opened_at: tokio::time::Instant) {
+        let (peer, conn_id) = (self.peer, self.conn_id);
+        tracing::debug!(
+            %peer,
+            conn_id,
+            platform = session.platform.as_deref().unwrap_or("none"),
+            handshaken = session.protocol_version.is_some(),
+            registered,
+            frames_in = session.frames_in,
+            dropped_pre_handshake = session.dropped_pre_handshake,
+            duration_ms = opened_at.elapsed().as_millis() as u64,
+            "connection closed"
+        );
+    }
 }
 
 /// Applies the socket options every connection wants.

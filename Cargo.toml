@@ -41,6 +41,13 @@ too_long_first_doc_paragraph = "warn"
 # unsafe in this workspace, and "the caller's contract" is only a real answer
 # when it is written down next to the block that relies on it.
 undocumented_unsafe_blocks = "warn"
+# Nesting and branching, not length: a flat 60-line match of wire quirks is
+# easy to read, a 25-line function three levels deep is not. Nursery, which the
+# exact toolchain pin makes safe to rely on.
+cognitive_complexity = "warn"
+# The backstop for what the metric above forgives. 100 sits just above the
+# tree's p99, so it catches outliers rather than arguing with ordinary work.
+too_many_lines = "warn"
 
 # Exact-version pins match the api-debugger's supply-chain hardening so both
 # workspaces resolve the shared crates against identical dependency versions.

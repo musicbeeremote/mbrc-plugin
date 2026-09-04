@@ -610,46 +610,78 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// The scratch storage dir a capture end-to-end run works in.
+    ///
+    /// Seeded with a log line written before the capture starts, which the
+    /// window must later exclude.
+    fn scratch_storage() -> (std::path::PathBuf, String, u64) {
+        let dir = std::env::temp_dir().join("mbrc-capture-endtoend");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let storage = dir.to_str().expect("utf8 dir").to_owned();
+
+        let before = "before the capture\n";
+        std::fs::write(crate::logging::active_log_path(&storage), before).expect("seed log");
+        (dir, storage, before.len() as u64)
+    }
+
+    fn scratch_core(storage: &str) -> std::sync::Arc<crate::state::Core> {
+        use crate::config::Config;
+        use crate::providers::NullProviders;
+
+        let config = Config {
+            storage_path: storage.to_owned(),
+            // Never 0.0.0.0 in a test: it raises a firewall prompt per binary.
+            ..Config::for_test(0)
+        };
+        std::sync::Arc::new(Core::new(std::sync::Arc::new(NullProviders), config))
+    }
+
+    fn host_environment() -> Vec<CaptureEnvEntry> {
+        vec![CaptureEnvEntry {
+            key: "musicbee_build".to_owned(),
+            value: "3.6.8859".to_owned(),
+        }]
+    }
+
+    fn append_to_log(storage: &str, line: &str) {
+        use std::io::Write as _;
+        let mut log = std::fs::OpenOptions::new()
+            .append(true)
+            .open(crate::logging::active_log_path(storage))
+            .expect("append to log");
+        writeln!(log, "{line}").expect("write log line");
+    }
+
+    fn entry_of(bundle: &str, name: &str) -> String {
+        use std::io::Read as _;
+        let file = std::fs::File::open(bundle).expect("bundle exists");
+        let mut archive = zip::ZipArchive::new(file).expect("bundle is a zip");
+        let mut body = String::new();
+        archive
+            .by_name(name)
+            .unwrap_or_else(|_| panic!("{name} present"))
+            .read_to_string(&mut body)
+            .expect("read entry");
+        body
+    }
+
     /// Drives a whole capture against a real `Core` on a scratch storage dir:
     /// start, log something, stop, and read the bundle back. The one test that
     /// proves the pieces fit together rather than testing each in isolation.
     #[test]
     fn a_capture_start_to_bundle_produces_a_readable_zip() {
         let _exclusive = exclusive();
-        use crate::config::Config;
-        use crate::providers::NullProviders;
-        use std::sync::Arc;
-
         reset();
-        let dir = std::env::temp_dir().join("mbrc-capture-endtoend");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
-        let storage = dir.to_str().expect("utf8 dir").to_owned();
+        let (dir, storage, offset) = scratch_storage();
+        let core = scratch_core(&storage);
 
-        // A line from before the capture, for the window to exclude.
-        std::fs::write(
-            crate::logging::active_log_path(&storage),
-            "before the capture\n",
-        )
-        .expect("seed log");
-
-        let config = Config {
-            storage_path: storage.clone(),
-            // Never 0.0.0.0 in a test: it raises a firewall prompt per binary.
-            ..Config::for_test(0)
-        };
-        let core = Arc::new(Core::new(Arc::new(NullProviders), config));
-
-        let environment = vec![CaptureEnvEntry {
-            key: "musicbee_build".to_owned(),
-            value: "3.6.8859".to_owned(),
-        }];
         assert_eq!(
             start(
                 &core,
                 CaptureRequest {
                     destination_dir: String::new(),
-                    host_environment: environment,
+                    host_environment: host_environment(),
                 }
             ),
             MbrcResult::Ok,
@@ -662,24 +694,10 @@ mod tests {
         );
 
         let started = status().started_unix_ms;
-        let offset = "before the capture
-"
-        .len() as u64;
+        append_to_log(&storage, "during the capture");
 
-        // A log line written inside the capture window.
-        {
-            use std::io::Write as _;
-            let mut log = std::fs::OpenOptions::new()
-                .append(true)
-                .open(crate::logging::active_log_path(&storage))
-                .expect("append to log");
-            writeln!(log, "during the capture").expect("write log line");
-        }
-
-        let out = dir.join("desktop");
-        // Stop carries only the destination, as the host does.
         let request = CaptureRequest {
-            destination_dir: out.to_str().expect("utf8 dir").to_owned(),
+            destination_dir: dir.join("desktop").to_str().expect("utf8 dir").to_owned(),
             host_environment: Vec::new(),
         };
         assert_eq!(stop(core.clone(), &request), MbrcResult::Ok);
@@ -691,10 +709,7 @@ mod tests {
             started_unix_ms: started,
             started: Instant::now(),
             log_offset: offset,
-            host_environment: vec![CaptureEnvEntry {
-                key: "musicbee_build".to_owned(),
-                value: "3.6.8859".to_owned(),
-            }],
+            host_environment: host_environment(),
         };
         finish(&core, &session, &request.destination_dir);
 
@@ -705,31 +720,13 @@ mod tests {
             settled.message
         );
 
-        let file = std::fs::File::open(&settled.bundle_path).expect("bundle exists");
-        let mut archive = zip::ZipArchive::new(file).expect("bundle is a zip");
-        let mut window = String::new();
-        {
-            use std::io::Read as _;
-            archive
-                .by_name("capture.log")
-                .expect("capture.log present")
-                .read_to_string(&mut window)
-                .expect("read capture.log");
-        }
         assert_eq!(
-            window, "during the capture\n",
+            entry_of(&settled.bundle_path, "capture.log"),
+            "during the capture\n",
             "the window should exclude what was logged before the capture"
         );
 
-        let mut body = String::new();
-        {
-            use std::io::Read as _;
-            archive
-                .by_name("report.json")
-                .expect("report.json present")
-                .read_to_string(&mut body)
-                .expect("read report.json");
-        }
+        let body = entry_of(&settled.bundle_path, "report.json");
         let report: serde_json::Value = serde_json::from_str(&body).expect("report parses");
         assert_eq!(
             report["capture"]["host_environment"]["musicbee_build"],

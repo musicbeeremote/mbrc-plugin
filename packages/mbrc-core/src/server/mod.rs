@@ -318,7 +318,7 @@ pub(crate) fn rebuild(core: &Core, scope: RebuildScope) {
 /// init, a library switch, and a manual rebuild can't run concurrently against
 /// the shared caches. Skipped when no storage path is set (test `Config`s).
 fn run_reconcile(core: &Core, scope: RebuildScope) {
-    use crate::cover::{cover_identifier, from_base64, store::AlbumIdentity};
+    use crate::cover::{cover_identifier, store::AlbumIdentity};
 
     if core.config.storage_path.is_empty() {
         return;
@@ -350,38 +350,9 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                     modified: a.modified,
                 })
                 .collect();
-            let album_count = identities.len();
 
             if scope.does_metadata() {
-                let fingerprint = crate::metadata_cache::fingerprint(
-                    identities.iter().map(|a| (a.key.as_str(), a.modified)),
-                );
-                let changed = core.metadata_cache.reconcile(fingerprint);
-                let needs_rebuild =
-                    changed || !commands::library::browse_lists_cached(&core.metadata_cache);
-                let (counts, tracks) = if needs_rebuild {
-                    let counts = commands::library::prewarm_browse_lists(
-                        &core.metadata_cache,
-                        core.providers.as_ref(),
-                    );
-                    let tracks = commands::library::build_track_index(
-                        &core.metadata_cache,
-                        core.providers.as_ref(),
-                    );
-                    (Some(counts), tracks)
-                } else {
-                    (None, core.metadata_cache.track_count() as usize)
-                };
-                tracing::info!(
-                    albums = album_count,
-                    fingerprint,
-                    library_changed = changed,
-                    rebuilt = needs_rebuild,
-                    counts = ?counts,
-                    tracks,
-                    rss_mib = crate::logging::rss_mib(),
-                    "library metadata reconciled"
-                );
+                reconcile_metadata(core, &identities);
             }
 
             // Covers are the expensive half nobody waits for on the way out.
@@ -391,43 +362,7 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
             }
 
             if scope.does_covers() {
-                core.cover_store.warm_up(&identities);
-                let prep_ms = started.elapsed().as_millis();
-                tracing::info!(
-                    albums = album_count,
-                    prep_ms,
-                    "cover cache: preparation complete"
-                );
-
-                let build_started = std::time::Instant::now();
-                let providers = core.providers.clone();
-                let stats = core.cover_store.build_until(
-                    |path| {
-                        let b64 = providers.artwork_raw(path).ok()?;
-                        if b64.is_empty() {
-                            return None;
-                        }
-                        from_base64(&b64)
-                    },
-                    core.config.log_level.is_trace(),
-                    &|| core.is_stopping(),
-                );
-                tracing::info!(
-                    albums = album_count,
-                    cached = core.cover_store.cached_count(),
-                    attempted = stats.attempted,
-                    stored = stats.stored,
-                    no_art = stats.no_art,
-                    failed = stats.failed,
-                    fetch_ms = stats.fetch_ms,
-                    store_ms = stats.store_ms,
-                    slowest_ms = stats.slowest_ms,
-                    slowest_path = %stats.slowest_path,
-                    stopped = stats.stopped,
-                    build_ms = build_started.elapsed().as_millis(),
-                    total_ms = started.elapsed().as_millis(),
-                    "cover cache build complete"
-                );
+                build_cover_cache(core, &identities, started);
             }
         }
         Err(e) => tracing::warn!(error = %e, "reconcile: album enumeration failed"),
@@ -445,6 +380,89 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     // event sees a cache that is no longer building.
     drop(reconcile);
     notify_reconcile(core, scope, false);
+}
+
+/// Re-fingerprints the library and rebuilds the metadata caches if it moved.
+///
+/// A rebuild is also forced when the browse lists are missing, which is the
+/// cold-start case: the fingerprint matches but there is nothing to serve.
+fn reconcile_metadata(core: &Core, identities: &[crate::cover::store::AlbumIdentity]) {
+    let fingerprint =
+        crate::metadata_cache::fingerprint(identities.iter().map(|a| (a.key.as_str(), a.modified)));
+    let changed = core.metadata_cache.reconcile(fingerprint);
+    let needs_rebuild = changed || !commands::library::browse_lists_cached(&core.metadata_cache);
+
+    let (counts, tracks) = if needs_rebuild {
+        let counts =
+            commands::library::prewarm_browse_lists(&core.metadata_cache, core.providers.as_ref());
+        let tracks =
+            commands::library::build_track_index(&core.metadata_cache, core.providers.as_ref());
+        (Some(counts), tracks)
+    } else {
+        (None, core.metadata_cache.track_count() as usize)
+    };
+
+    tracing::info!(
+        albums = identities.len(),
+        fingerprint,
+        library_changed = changed,
+        rebuilt = needs_rebuild,
+        counts = ?counts,
+        tracks,
+        rss_mib = crate::logging::rss_mib(),
+        "library metadata reconciled"
+    );
+}
+
+/// Warms the cover store against the current albums, then fetches what is missing.
+///
+/// `started` is the whole reconcile's clock, so the log can separate preparation
+/// from the fetch that dominates a cold build.
+fn build_cover_cache(
+    core: &Core,
+    identities: &[crate::cover::store::AlbumIdentity],
+    started: std::time::Instant,
+) {
+    use crate::cover::from_base64;
+
+    let album_count = identities.len();
+    core.cover_store.warm_up(identities);
+    tracing::info!(
+        albums = album_count,
+        prep_ms = started.elapsed().as_millis(),
+        "cover cache: preparation complete"
+    );
+
+    let build_started = std::time::Instant::now();
+    let providers = core.providers.clone();
+    let stats = core.cover_store.build_until(
+        |path| {
+            let b64 = providers.artwork_raw(path).ok()?;
+            if b64.is_empty() {
+                return None;
+            }
+            from_base64(&b64)
+        },
+        core.config.log_level.is_trace(),
+        &|| core.is_stopping(),
+    );
+
+    tracing::info!(
+        albums = album_count,
+        cached = core.cover_store.cached_count(),
+        attempted = stats.attempted,
+        stored = stats.stored,
+        no_art = stats.no_art,
+        failed = stats.failed,
+        fetch_ms = stats.fetch_ms,
+        store_ms = stats.store_ms,
+        slowest_ms = stats.slowest_ms,
+        slowest_path = %stats.slowest_path,
+        stopped = stats.stopped,
+        build_ms = build_started.elapsed().as_millis(),
+        total_ms = started.elapsed().as_millis(),
+        "cover cache build complete"
+    );
 }
 
 /// Tells the host UI, and network clients when covers are in scope, that a
