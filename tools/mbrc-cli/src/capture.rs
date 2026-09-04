@@ -185,7 +185,11 @@ async fn handle_session(
 
     let result = tokio::try_join!(flatten(c2s), flatten(s2c));
 
-    let by = session.closed_by.lock().unwrap().unwrap_or("proxy");
+    let by = session
+        .closed_by
+        .lock()
+        .expect("closed_by mutex poisoned")
+        .unwrap_or("proxy");
     let reason = match &result {
         Ok(_) => "eof".to_string(),
         Err(e) => format!("error:{e}"),
@@ -217,7 +221,7 @@ where
         let n = src.read_until(b'\n', &mut buf).await?;
         if n == 0 {
             {
-                let mut cb = session.closed_by.lock().unwrap();
+                let mut cb = session.closed_by.lock().expect("closed_by mutex poisoned");
                 if cb.is_none() {
                     *cb = Some(if dir == "c2s" { "client" } else { "server" });
                 }
@@ -272,7 +276,10 @@ async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
                 .and_then(|f| f.get("data"))
                 .and_then(|d| d.as_str())
             {
-                *session.client_type.lock().unwrap() = Some(ct.to_string());
+                *session
+                    .client_type
+                    .lock()
+                    .expect("client_type mutex poisoned") = Some(ct.to_string());
             }
         }
         Some("protocol") => {
@@ -282,7 +289,11 @@ async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
                 .and_then(|f| f.get("data"))
                 .and_then(|d| d.get("protocol_version"))
                 .and_then(|v| v.as_i64());
-            let client_type = session.client_type.lock().unwrap().clone();
+            let client_type = session
+                .client_type
+                .lock()
+                .expect("client_type mutex poisoned")
+                .clone();
             append_line(
                 &session.shared,
                 &meta_handshake(session.conn_id, client_type.as_deref(), protocol_version),

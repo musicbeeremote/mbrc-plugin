@@ -48,6 +48,11 @@ cognitive_complexity = "warn"
 # The backstop for what the metric above forgives. 100 sits just above the
 # tree's p99, so it catches outliers rather than arguing with ordinary work.
 too_many_lines = "warn"
+# A panic in the core unwinds into MusicBee's own thread. `expect` stays
+# available because its message is the argument for why the case cannot
+# happen; a bare `unwrap` makes that argument without stating it. Tests are
+# exempt via clippy.toml.
+unwrap_used = "warn"
 
 # Exact-version pins match the api-debugger's supply-chain hardening so both
 # workspaces resolve the shared crates against identical dependency versions.

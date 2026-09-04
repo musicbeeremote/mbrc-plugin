@@ -1,0 +1,5 @@
+# Tests may unwrap: a panic there is the failure report, and threading a
+# Result through every assertion buys nothing. Production code may not, which
+# is what `clippy::unwrap_used` in the workspace lints enforces.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

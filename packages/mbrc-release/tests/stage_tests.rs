@@ -6,6 +6,8 @@
 //! opaque - staging copies them to disk for the helper to re-verify, and never
 //! looks at them.
 
+#![allow(clippy::unwrap_used)]
+
 mod support;
 
 use std::io::Write;

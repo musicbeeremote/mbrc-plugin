@@ -288,7 +288,7 @@ impl CoverStore {
                         let mut local = BuildStats::default();
                         loop {
                             // Held only to pull one item, never across the store.
-                            let item = rx.lock().unwrap().recv();
+                            let item = rx.lock().expect("cover queue mutex poisoned").recv();
                             let Ok((key, path, raw, fetch_ms)) = item else {
                                 break; // producer dropped the sender: queue drained
                             };

@@ -1,6 +1,8 @@
 //! Integration test: start the real TCP server and drive a V4 handshake plus
 //! keepalive/health frames over a socket, asserting the wire replies.
 
+#![allow(clippy::unwrap_used)]
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::Arc;

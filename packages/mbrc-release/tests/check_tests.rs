@@ -8,6 +8,8 @@
 //! vary the *running* version instead - which is the input that actually varies
 //! in the field.
 
+#![allow(clippy::unwrap_used)]
+
 mod support;
 
 use mbrc_release::{check, Channel, CheckOptions, CheckOutcome, UpdateError, UpdateState};

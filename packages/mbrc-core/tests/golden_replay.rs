@@ -9,6 +9,8 @@
 //! shows must appear in the core's output with the same type (the core may add
 //! optional fields the golden happened not to exercise).
 
+#![allow(clippy::unwrap_used)]
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::Arc;

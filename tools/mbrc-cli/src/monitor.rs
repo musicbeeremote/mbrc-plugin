@@ -504,7 +504,7 @@ async fn pager_loop(
             }
         }
 
-        let c = conn.as_mut().unwrap();
+        let Some(c) = conn.as_mut() else { continue };
         iter += 1;
         let start = Instant::now();
         let sweep = sweep_browsetracks(c, cfg.page_size, cfg.req_timeout).await;

@@ -169,11 +169,13 @@ pub fn trim_capture(contents: &str) -> TrimOutput {
     let mut order: Vec<u32> = Vec::new();
     let mut by_conn: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
     for (i, fr) in frames.iter().enumerate() {
-        by_conn.entry(fr.conn_id).or_insert_with(|| {
-            order.push(fr.conn_id);
-            Vec::new()
-        });
-        by_conn.get_mut(&fr.conn_id).unwrap().push(i);
+        by_conn
+            .entry(fr.conn_id)
+            .or_insert_with(|| {
+                order.push(fr.conn_id);
+                Vec::new()
+            })
+            .push(i);
     }
 
     // Bucket connections by (platform, protocol), preserving first-seen order.
@@ -297,7 +299,7 @@ fn bucket_name(platform: Option<&str>, protocol: Option<i64>) -> String {
         None => "apidebugger",
     };
     match protocol {
-        Some(2) | Some(3) => format!("legacy-v{}", protocol.unwrap()),
+        Some(v @ (2 | 3)) => format!("legacy-v{v}"),
         Some(v) => format!("legacy-v{v}-{plat}"),
         None => format!("legacy-unknown-{plat}"),
     }

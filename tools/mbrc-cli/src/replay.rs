@@ -114,11 +114,13 @@ fn plan_connections(golden: &str) -> Vec<ReplayConn> {
     for line in golden.lines() {
         if let Some(Record::Frame(f)) = parse_line(line) {
             if f.dir == "c2s" {
-                by_conn.entry(f.conn_id).or_insert_with(|| {
-                    order.push(f.conn_id);
-                    Vec::new()
-                });
-                by_conn.get_mut(&f.conn_id).unwrap().push(*f);
+                by_conn
+                    .entry(f.conn_id)
+                    .or_insert_with(|| {
+                        order.push(f.conn_id);
+                        Vec::new()
+                    })
+                    .push(*f);
             }
         }
     }
