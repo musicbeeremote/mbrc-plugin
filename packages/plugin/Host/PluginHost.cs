@@ -49,13 +49,10 @@ namespace MusicBeePlugin.Host
             var playlist = new PlaylistDataProvider(api);
             var library = new LibraryDataProvider(api);
 
-            // Settings are Rust-owned; C# caches only the few the host reads
-            // (search source, version, storage path), refreshed from the core
-            // after init. The core migrates settings.xml and owns the JSON store.
-            // The product version, prerelease suffix and all - not
-            // AssemblyVersion, which drops it. This is what the update check
-            // compares against, so a beta reporting the final version would
-            // never be offered anything (see Plugin.ProductVersion).
+            // Settings are Rust-owned; C# caches only what the host reads,
+            // refreshed from the core after init. The version is the product one,
+            // suffix and all, because that is what the update check compares
+            // against (see Plugin.ProductVersion).
             var settings = new UserSettingsService { CurrentVersion = version };
             settings.SetStoragePath(storagePath);
             _userSettings = settings;
@@ -110,10 +107,10 @@ namespace MusicBeePlugin.Host
         /// </summary>
         public Ffi.ListeningInfo ReadListeningAddresses() => _bridge.ReadListeningAddresses();
 
-        /// <summary>Trigger a background rebuild of the metadata (browse) cache.</summary>
+        /// <inheritdoc cref="NativeBridge.RebuildMetadata" />
         public bool RebuildMetadata() => _bridge.RebuildMetadata();
 
-        /// <summary>Trigger a background rebuild of the cover cache.</summary>
+        /// <inheritdoc cref="NativeBridge.RebuildCovers" />
         public bool RebuildCovers() => _bridge.RebuildCovers();
 
         /// <summary>
@@ -122,7 +119,7 @@ namespace MusicBeePlugin.Host
         /// </summary>
         public List<BlockedConnection> ReadBlockedConnections() => _bridge.ReadBlockedConnections();
 
-        /// <summary>Clear the core's in-memory blocked-connection log.</summary>
+        /// <inheritdoc cref="NativeBridge.ClearBlockedConnections" />
         public bool ClearBlockedConnections() => _bridge.ClearBlockedConnections();
 
         /// <summary>Where the update flow stands, for the panel's Updates group.</summary>
@@ -134,7 +131,7 @@ namespace MusicBeePlugin.Host
         /// <summary>Download and stage the update the last check found.</summary>
         public bool DownloadUpdate() => _bridge.DownloadUpdate();
 
-        /// <summary>Record that the user does not want this version offered again.</summary>
+        /// <inheritdoc cref="NativeBridge.SkipUpdate" />
         public bool SkipUpdate() => _bridge.SkipUpdate();
 
         /// <summary>

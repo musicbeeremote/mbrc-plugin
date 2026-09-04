@@ -19,7 +19,7 @@ namespace MusicBeePlugin.Ffi.Generated
 
 
         /// <summary>
-        ///  Initialize the core with the C# callback table and a storage directory.
+        ///  Initializes the core with the C# callback table and a storage directory.
         ///  Call exactly once. The callback struct is copied; the caller may free it.
         ///
         ///  `abi_version` is the contract version C# was compiled against; it must equal
@@ -33,13 +33,13 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_initialize(int abi_version, MbrcCallbacks callbacks, byte* storage_path);
 
         /// <summary>
-        ///  Stop networking and release the core (a later `mbrc_initialize` may re-init).
+        ///  Stops networking and releases the core; a later `mbrc_initialize` may re-init.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_shutdown", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_shutdown();
 
         /// <summary>
-        ///  Start the TCP command server + UDP discovery responder.
+        ///  Starts the TCP command server + UDP discovery responder.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_start_networking", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_start_networking();
@@ -51,25 +51,24 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_stop_networking();
 
         /// <summary>
-        ///  Tell the long-running background work to wind down. Stops nothing by itself.
+        ///  Tells the long-running background work to wind down. Stops nothing by itself.
         ///
-        ///  Notice, not an order to shut down: the cover build is minutes of blocking
-        ///  work on a first run, and teardown waits for it. A host that knows it is about
-        ///  to tear down - an uninstall, say, which first closes a window and removes a
-        ///  menu entry - can call this and hand those milliseconds to the build as a head
-        ///  start, so the wait in `mbrc_stop_networking` is usually already over.
-        ///
-        ///  Cleared by the next `mbrc_start_networking`, so a stop/start (a port change)
-        ///  is unaffected. Idempotent.
+        ///  Notice, not an order: a first cover build is minutes of blocking work and
+        ///  teardown waits for it, so a host that knows it is about to tear down can
+        ///  hand those milliseconds over as a head start and find the wait in
+        ///  `mbrc_stop_networking` already over. Cleared by the next
+        ///  `mbrc_start_networking`, so a port change is unaffected. Idempotent.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_begin_stopping", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_begin_stopping();
 
         /// <summary>
-        ///  Read the core's current settings as a MessagePack buffer for the settings
-        ///  panel. Writes the byte length to `out_len` and returns a Rust-owned pointer
-        ///  that C# must release via [`mbrc_free_bytes`]. Returns null (and leaves
-        ///  `out_len` at 0) if the core is not initialized or on error.
+        ///  Reads the core's current settings as a MessagePack buffer for the settings
+        ///  panel.
+        ///
+        ///  Writes the byte length to `out_len` and returns a Rust-owned pointer that C#
+        ///  must release via [`mbrc_free_bytes`]. Returns null (and leaves `out_len` at
+        ///  0) if the core is not initialized or on error.
         ///
         ///  # Safety
         ///  `out_len` must be null or point to a writable `u32`.
@@ -78,10 +77,11 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern byte* mbrc_read_settings(uint* out_len);
 
         /// <summary>
-        ///  Validate and persist new settings from a MessagePack buffer (Rust owns
-        ///  `core_settings.json`, written as JSON). Does NOT reload the running core; the
-        ///  host re-inits when the change needs it. On invalid input the write is refused
-        ///  and an error status returned.
+        ///  Validates and persists new settings from a MessagePack buffer (Rust owns
+        ///  `core_settings.json`, written as JSON).
+        ///
+        ///  Does NOT reload the running core; the host re-inits when the change needs
+        ///  it. On invalid input the write is refused and an error status returned.
         ///
         ///  # Safety
         ///  `buf` must be null or point to `len` readable bytes.
@@ -90,11 +90,13 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_write_settings(byte* buf, uint len);
 
         /// <summary>
-        ///  Generic host -&gt; core query (request/response). Dispatches on the
-        ///  [`HostQueryType`] discriminant and returns a Rust-owned MessagePack buffer
-        ///  (released via [`mbrc_free_bytes`]) with its byte length in `out_len`. Returns
-        ///  null (and leaves `out_len` at 0) on an unknown query, a not-initialized core,
-        ///  or a handler with no answer. Params are an optional MessagePack buffer.
+        ///  Generic host -&gt; core query (request/response).
+        ///
+        ///  Dispatches on the [`HostQueryType`] discriminant and returns a Rust-owned
+        ///  MessagePack buffer (released via [`mbrc_free_bytes`]) with its byte length
+        ///  in `out_len`. Returns null (and leaves `out_len` at 0) on an unknown query,
+        ///  a not-initialized core, or a handler with no answer. Params are an optional
+        ///  MessagePack buffer.
         ///
         ///  # Safety
         ///  `params_buf` must be null or point to `params_len` readable bytes; `out_len`
@@ -115,7 +117,7 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_command(int command_type, byte* params_buf, uint params_len);
 
         /// <summary>
-        ///  Free a byte buffer returned by [`mbrc_read_settings`]. `len` must be the
+        ///  Frees a byte buffer returned by [`mbrc_read_settings`]. `len` must be the
         ///  length that call reported. A null pointer is ignored; never free twice.
         ///
         ///  # Safety
@@ -125,15 +127,17 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern void mbrc_free_bytes(byte* ptr, uint len);
 
         /// <summary>
-        ///  Forward a MusicBee notification. Carries an optional MessagePack payload
-        ///  (`params_buf`/`params_len`, e.g. the added/changed file URL) so the fan-out
-        ///  in Slice 3 can build the right broadcast. Empty payload = null/0.
+        ///  Forwards a MusicBee notification.
+        ///
+        ///  Carries an optional MessagePack payload (`params_buf`/`params_len`, e.g. the
+        ///  added/changed file URL) so the broadcast fan-out can build the right
+        ///  broadcast. Empty payload = null/0.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_handle_notification", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_handle_notification(int notification_type, byte* _params_buf, uint _params_len);
 
         /// <summary>
-        ///  Emit a log line from C# through the core's logger. `level`: 0=trace..4=error.
+        ///  Emits a log line from C# through the core's logger. `level`: 0=trace..4=error.
         ///
         ///  # Safety
         ///  `target` and `message` must be null or valid NUL-terminated C strings.
@@ -142,7 +146,7 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_log(int level, byte* target, byte* message);
 
         /// <summary>
-        ///  Set the log-filter directive (e.g. `"mbrc_core=debug,info"`).
+        ///  Sets the log-filter directive (e.g. `"mbrc_core=debug,info"`).
         ///
         ///  # Safety
         ///  `directive` must be null or a valid NUL-terminated C string.
@@ -151,28 +155,20 @@ namespace MusicBeePlugin.Ffi.Generated
         internal static extern int mbrc_set_log_level(byte* directive);
 
         /// <summary>
-        ///  Apply the staged update: verify the staged helper, elevate if the plugins
+        ///  Applies the staged update: verify the staged helper, elevate if the plugins
         ///  directory needs it, and start the helper.
         ///
-        ///  Takes nothing, deliberately. The storage directory comes from the initialized
-        ///  core, the plugins directory is where this DLL was loaded from, MusicBee is
-        ///  this process, and the pid is our own. A caller that could name the directory
-        ///  to overwrite would be a caller worth attacking; there is nothing to pass, so
-        ///  there is nothing to tamper with.
-        ///
-        ///  Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
-        ///  waiting for MusicBee to exit - the caller is expected to shut MusicBee down
-        ///  next. `Cancelled` (the user declined elevation) is a normal outcome and
-        ///  leaves the staged update in place for a retry. `NotAnUpgrade` means the
-        ///  staged bundle verified but is not newer than the running plugin, which is a
-        ///  refusal rather than a failure: a valid signature does not make a stale
-        ///  release the right one to install.
+        ///  Takes nothing on purpose: every path is derived here, so a caller cannot
+        ///  name the directory to overwrite. `Launched` means the helper is up and
+        ///  waiting for MusicBee to exit, so the caller shuts it down next. `Cancelled`
+        ///  leaves the staged update in place for a retry, and `NotAnUpgrade` means the
+        ///  bundle verified but is not newer - a refusal rather than a failure.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_apply_staged_update", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int mbrc_apply_staged_update();
 
         /// <summary>
-        ///  Free a string previously returned to C# by the core. Null-safe. This is the
+        ///  Frees a string previously returned to C# by the core. Null-safe. This is the
         ///  only Rust-owned allocation the C# side frees through us.
         ///
         ///  # Safety
@@ -188,27 +184,22 @@ namespace MusicBeePlugin.Ffi.Generated
     /// <summary>
     ///  Callback table handed from C# to Rust at `mbrc_initialize`.
     ///
-    ///  Two callbacks carry the in-process RPC, with distinct shapes matching their
-    ///  roles:
-    ///  - **`query_data` (get, request/response)**: reads MusicBee data (see
-    ///    [`QueryType`]) and returns a MessagePack result buffer via the out-params.
-    ///  - **`execute_command` (update, one-way)**: mutates state fire-and-forget (see
-    ///    [`CommandType`]); returns *only* a status - no result buffer. Handlers that
-    ///    need to report new state re-query afterward.
+    ///  Two callbacks carry the in-process RPC: `query_data` reads MusicBee data
+    ///  (see [`QueryType`]) and returns a MessagePack buffer through its out-params,
+    ///  while `execute_command` mutates state one-way (see [`CommandType`]) and
+    ///  returns only a status. `free_buffer` releases what `query_data` allocated.
     ///
-    ///  `free_buffer` releases the C#-allocated result buffer from a `query_data`
-    ///  call. Transport controls are ordinary `CommandType` variants (no special
-    ///  player path).
+    ///  # Status contract
     ///
-    ///  **Callback status contract (C# -&gt; Rust):** `0` = success. For `query_data`,
-    ///  success MUST return a valid, non-empty MessagePack buffer; a domain "not
-    ///  found" is encoded *inside* the payload (e.g. `Cover{status:404}`), never as
-    ///  an empty buffer. A non-zero status means the C# provider threw - the core
-    ///  logs it and sends no reply. `query_data` returning `status 0` with a null or
-    ///  empty buffer is a contract violation and is treated as an error.
+    ///  `0` is success, and for `query_data` success must carry a non-empty
+    ///  MessagePack buffer: a domain "not found" is encoded inside the payload
+    ///  (`Cover{status:404}`), never as an empty one. A non-zero status means the C#
+    ///  provider threw, and the core logs it and sends no reply. Success with a null
+    ///  or empty buffer is a contract violation, treated as an error.
     ///
-    ///  Layout is 4 pointers (16 bytes on i686); the C# `MbrcCallbacks` struct must
-    ///  match. Being finalized pre-cutover; afterward, extend through the enums.
+    ///  # Layout
+    ///
+    ///  Four pointers, 16 bytes on i686; the C# `MbrcCallbacks` must match.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal unsafe partial struct MbrcCallbacks

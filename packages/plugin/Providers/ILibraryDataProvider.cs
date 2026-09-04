@@ -95,15 +95,14 @@ namespace MusicBeePlugin.Providers
 
         /// <summary>
         ///     Single-pass album identity scan feeding the Rust core's cover cache.
-        ///     One library scan, folded to one entry per album (album artist +
-        ///     album, case-insensitively): the representative track path (artwork
-        ///     source) and the newest track modification time as unix seconds. The
-        ///     core derives the cache key by hashing artist+album, so this does no
-        ///     hashing. Replaces the old three-call
-        ///     <see cref="GetAllAlbumIdentifiers" /> + <see cref="GetTrackPaths" /> +
-        ///     <see cref="GetFileModificationDates" /> sequence (which scanned the
-        ///     library 2-3 times).
         /// </summary>
+        /// <remarks>
+        ///     One library scan folded to one entry per album (album artist plus
+        ///     album, case-insensitively): the representative track path and the
+        ///     newest modification time in unix seconds. The core derives the cache
+        ///     key by hashing artist and album, so this does no hashing. It replaces
+        ///     a three-call sequence that scanned the library 2-3 times.
+        /// </remarks>
         /// <returns>One (Artist, Album, Path, Modified) per unique album.</returns>
         List<(string Artist, string Album, string Path, long Modified)> GetAlbumIdentities();
 
@@ -116,7 +115,7 @@ namespace MusicBeePlugin.Providers
         /// <returns>Dictionary mapping track path to (Artist, Album) tuple</returns>
         Dictionary<string, (string Artist, string Album)> GetBatchTrackMetadata(IEnumerable<string> trackPaths);
 
-        // Library Cache (MBRCIP-0001)
+        // Library Cache
 
         /// <summary>
         ///     Every track path in library browse order, in a single

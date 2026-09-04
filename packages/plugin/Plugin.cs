@@ -120,11 +120,9 @@ namespace MusicBeePlugin
                 _about.Revision = Convert.ToInt16(version.Build);
                 _about.MinInterfaceVersion = MinInterfaceVersion;
                 _about.MinApiRevision = MinApiRevision;
-                // PlayerEvents drives the now-playing/transport broadcasts; TagEvents
-                // delivers the library-change notifications the Scanner reacts to
-                // (FileAddedToLibrary, TagsChanged, FileDeleted, LibrarySwitched) so a
-                // tag/artwork edit refreshes the metadata + cover caches without a
-                // restart. Unhandled types are ignored in ReceiveNotification.
+                // PlayerEvents drives the now-playing broadcasts; TagEvents
+                // delivers the library changes the Scanner reacts to, so a tag or
+                // artwork edit refreshes the caches without a restart.
                 _about.ReceiveNotifications =
                     ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents;
                 // Non-zero height tells MusicBee this plugin has a preferences panel;
@@ -545,11 +543,9 @@ namespace MusicBeePlugin
                     return;
             }
 
-            // Guarded like every other MusicBee-facing entry point, and this is the
-            // busiest of them: it fires for every player event and every tag or
-            // library change. The FFI call itself is guarded inside the bridge, so
-            // this is the belt to that braces - a notification must never be able
-            // to throw back into MusicBee's event dispatch.
+            // The busiest MusicBee-facing entry point, and the bridge guards the
+            // FFI call too: a notification must never throw back into MusicBee's
+            // event dispatch.
             try
             {
                 _host.HandleNotification((int)coreType);

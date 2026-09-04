@@ -8,17 +8,17 @@ namespace MusicBeePlugin.Settings
     ///     Owns the one settings window, opened from both the Configure button and
     ///     the Tools menu entry.
     ///
-    ///     Shown <b>modeless</b>, which is what the pre-Rust plugin did
-    ///     (<c>WindowManager.DisplayInfoWindow</c> kept the window in a field and
-    ///     called <c>Show()</c>). A modal dialog freezes MusicBee behind it, and
-    ///     this is a window people leave open while they reproduce a problem,
-    ///     watch the cache rebuild, or wait on an update - all of which want
-    ///     MusicBee still usable.
-    ///
-    ///     Modeless means the instance has to be tracked: a second Configure click
-    ///     must raise the window already on screen rather than stack another one
-    ///     over it, each with its own event subscription and poll timer.
     /// </summary>
+    /// <remarks>
+    ///     Shown modeless: a modal dialog freezes MusicBee behind it, and this is
+    ///     a window people leave open while they reproduce a problem, watch the
+    ///     cache rebuild, or wait on an update.
+    ///     <para>
+    ///         That means tracking the instance, so a second Configure click
+    ///         raises the window already on screen rather than stacking another
+    ///         with its own subscription and poll timer.
+    ///     </para>
+    /// </remarks>
     internal static class SettingsWindow
     {
         private static SettingsDialog _current;

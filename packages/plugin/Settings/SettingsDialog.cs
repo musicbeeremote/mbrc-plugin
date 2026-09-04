@@ -50,21 +50,15 @@ namespace MusicBeePlugin.Settings
         // Plugin help / documentation, opened from the footer link.
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
 
-        // The dialog's fixed width, and the height it wants when the screen has
-        // room. Seven groups plus the footer do not fit a 720p screen (or a 1080p
-        // one at 150% scaling, which is the same thing in logical pixels), so the
-        // height is what actually gets clamped - see PreferredDialogHeight. The
-        // full-height value is what a 1080p screen can give once the taskbar and
-        // chrome are taken off; anything shorter scrolls.
+        // Fixed width, and the height wanted when the screen has room. Seven
+        // groups plus the footer do not fit 720p, so height is what gets clamped
+        // (see PreferredDialogHeight) and anything shorter scrolls.
         private const int DialogWidth = 560;
         private const int DialogHeight = 860;
 
-        // Usable width of a group's value column: the dialog's client width less
-        // the 140px label column and the layout's padding. Wrapping labels are
-        // capped to it so a long sentence stays inside the fixed-width dialog.
-        // Kept clear of the value column's full width so that a vertical
-        // scrollbar (about 17px) appearing on a short screen cannot push the
-        // longest line into needing a horizontal one too.
+        // Usable width of a value column: client width less the label column and
+        // padding, with headroom so a vertical scrollbar appearing on a short
+        // screen cannot force a horizontal one as well.
         private const int StatusWidth = 355;
 
         // Closing MusicBee after an update is handed to the helper: the same
@@ -147,11 +141,9 @@ namespace MusicBeePlugin.Settings
             // refresh those lines live while this dialog is open.
             _host.CoreEvent += OnCoreEvent;
 
-            // Two things need polling rather than an event. The blocked-connections
-            // log has no push event at all, so a device blocked during
-            // troubleshooting bumps the count without reopening the panel. And a
-            // running capture's countdown ticks on its own - the core only raises
-            // an event when the capture *changes* state, not once a second.
+            // Two things have no event to wait on: the blocked-connections log
+            // never pushes, and a running capture's countdown ticks on its own
+            // while the core only raises an event on a state change.
             _blockedTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             _blockedTimer.Tick += (s, e) =>
             {
@@ -204,11 +196,9 @@ namespace MusicBeePlugin.Settings
 
         private void BuildLayout()
         {
-            // Docked to the top and auto-sizing, so the table grows to whatever
-            // height its groups need instead of squeezing them into the window.
-            // That overflow is what the scroller below can then scroll: a
-            // Dock=Fill table lays its rows out inside its own bounds and clips
-            // them, leaving AutoScroll nothing to act on.
+            // Top-docked and auto-sizing, so the table grows past the window and
+            // gives the scroller something to scroll. A Dock=Fill table lays out
+            // inside its own bounds and clips, leaving AutoScroll nothing to do.
             var root = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -237,14 +227,10 @@ namespace MusicBeePlugin.Settings
             // No trailing spacer row: a Percent-100 row would absorb every
             // overflow and the scroller below would never see one.
 
-            // The scrolling viewport. The groups live in here; the footer does
-            // not, which is the point - on a screen too short for the whole
-            // dialog the settings scroll and Save/Close stay put.
-            // The scroll extent is measured from where the child controls end,
-            // which counts neither the table's bottom padding nor the last
-            // group's margin - so the bottom of the last group stays just out of
-            // reach. AutoScrollMargin is the knob for that: it pads the
-            // scrollable area itself, and it has to clear both.
+            // The scrolling viewport: groups in, footer out, so Save and Close
+            // stay put on a short screen. The scroll extent stops where the child
+            // controls end, counting neither the table's bottom padding nor the
+            // last group's margin, which is what AutoScrollMargin has to clear.
             var scroller = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -253,11 +239,9 @@ namespace MusicBeePlugin.Settings
             };
             scroller.Controls.Add(root);
 
-            // The button row is docked to the bottom of the form so it (and the
-            // version/Help footer inside it) always stays on-screen even if the
-            // grouped settings above overflow the dialog height. Add the
-            // bottom-docked row first, then the fill panel, so the fill claims the
-            // remaining space above it.
+            // Bottom-docked so the row and its footer stay on-screen when the
+            // settings overflow. Added before the fill panel, so the fill claims
+            // only the space left above it.
             var footer = BuildButtonRow();
             footer.Dock = DockStyle.Bottom;
             footer.Padding = new Padding(12, 6, 12, 10);
@@ -730,12 +714,10 @@ namespace MusicBeePlugin.Settings
                 ? Color.Firebrick
                 : SystemColors.GrayText;
 
-            // Only on the Writing -> Done transition, which is a bundle that
-            // finished while this dialog was watching. Testing "was not Done"
-            // instead would fire on the first read of every dialog opened later
-            // in the session: the core's state stays Done, but a fresh dialog's
-            // field starts at Idle, so reopening Configure would pop an Explorer
-            // window at the old bundle every time.
+            // Only the Writing -> Done transition, meaning a bundle that finished
+            // while this dialog watched. Testing "was not Done" would fire for
+            // every dialog opened later: the core stays Done while a fresh
+            // dialog's field starts at Idle.
             if (previous == CaptureStates.Writing && _captureState == CaptureStates.Done) RevealBundle();
         }
 
@@ -825,11 +807,9 @@ namespace MusicBeePlugin.Settings
 
             if (!_host.StartCapture(HostEnvironment()))
             {
-                // The command channel only reports pass/fail, so "already
-                // running" has to be read back rather than assumed - the same
-                // false covers a core that is not running at all, and telling
-                // someone a capture is in progress while they are trying to
-                // report that the plugin will not start is the wrong answer.
+                // The command channel only reports pass/fail, and the same false
+                // covers a core that is not running at all, so "already running"
+                // is read back rather than assumed.
                 var running = _host.ReadCaptureStatus()?.state == CaptureStates.Capturing;
                 SetStatus(running
                     ? "A capture is already running."
@@ -921,11 +901,9 @@ namespace MusicBeePlugin.Settings
                     SetStatus("Log folder not found.", false);
                     return;
                 }
-                // Explorer runs outside our process. On the Store build that
-                // matters: MSIX redirects %APPDATA%, so the path we just confirmed
-                // exists is one Explorer cannot resolve, and it reports "Location
-                // is not available". The Directory.Exists above cannot catch that -
-                // from in here the path really does exist.
+                // Explorer runs outside the MSIX container, so it resolves the
+                // un-redirected %APPDATA% and reports "Location is not available".
+                // The check above cannot see that: in here the path does exist.
                 Process.Start(new ProcessStartInfo(PackagePaths.ForExternalProcess(dir))
                 {
                     UseShellExecute = true
@@ -1092,12 +1070,9 @@ namespace MusicBeePlugin.Settings
             _updateState = status.state ?? UpdateStates.Unknown;
             _notesUrl = status.notes_url ?? string.Empty;
 
-            // The core cannot see MusicBee's version, so the manifest's floor is
-            // enforced here, where the running build is a process away.
-            // An update the panel could download: the states where the button
-            // fetches rather than checks or installs. The core cannot see
-            // MusicBee's version, so the manifest's floor is enforced here, where
-            // the running build is a process away.
+            // An update the panel could download, meaning the states where the
+            // button fetches rather than checks or installs. The manifest's floor
+            // is enforced here because the core cannot see MusicBee's version.
             var offered = _updateState == UpdateStates.Available
                           || _updateState == UpdateStates.DownloadFailed;
             var build = MusicBeeBuild();
@@ -1333,11 +1308,9 @@ namespace MusicBeePlugin.Settings
             }
         }
 
-        // Self-test: connect to the running server on loopback and round-trip a
-        // `verifyconnection` frame (answered before the handshake), the same probe
-        // the old plugin used. Proves the plugin is listening and the socket path
-        // works locally - NOT that a remote client can reach it through a firewall.
-        // Runs off the UI thread (a connect can block); the result marshals back.
+        // Round-trips a `verifyconnection` frame on loopback, which proves the
+        // plugin is listening and the socket path works locally - not that a
+        // remote client can get through a firewall. Runs off the UI thread.
         private void RunConnectionTest()
         {
             // The live/running port (not the possibly-unsaved edit in the field).

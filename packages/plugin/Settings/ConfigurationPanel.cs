@@ -6,15 +6,14 @@ namespace MusicBeePlugin.Settings
 {
     /// <summary>
     ///     The compact panel MusicBee embeds in its Preferences &gt; Plugins page.
-    ///     MusicBee already renders the plugin name and description in the row, so
-    ///     this panel is just a Configure button (positioned like every other
-    ///     plugin's) that opens the separate <see cref="SettingsDialog"/> - also
-    ///     reachable from the Tools menu. Keeping the panel to a single button
-    ///     avoids MusicBee's Save/Apply owning our form.
-    ///
-    ///     The window itself is opened through <see cref="SettingsWindow"/>, which
-    ///     owns the single modeless instance shared with the Tools menu entry.
     /// </summary>
+    /// <remarks>
+    ///     MusicBee already renders the name and description, so this is just a
+    ///     Configure button opening <see cref="SettingsDialog"/>, which keeps
+    ///     MusicBee's Save/Apply from owning our form. The window is opened
+    ///     through <see cref="SettingsWindow"/>, which owns the single modeless
+    ///     instance shared with the Tools menu entry.
+    /// </remarks>
     internal sealed class ConfigurationPanel
     {
         private readonly PluginHost _host;

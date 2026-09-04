@@ -11,13 +11,14 @@ namespace MusicBeePlugin.Ffi
     ///     <see cref="IPluginLogger" /> that routes C# logs through the Rust core's
     ///     logger (<c>mbrc_log</c>), so the whole plugin logs to one place
     ///     (<c>mbrc-core.log</c>).
-    ///
+    /// </summary>
+    /// <remarks>
     ///     Before the core is initialized (see <see cref="MarkReady" />) the Rust
     ///     logger isn't up yet, so those early wiring logs - and any that occur if
     ///     init fails outright - go to a bootstrap file (<c>mbrc-bootstrap.log</c>)
     ///     next to the core log instead of being lost. A logging failure never
     ///     throws.
-    /// </summary>
+    /// </remarks>
     public sealed class FfiLogger : IPluginLogger
     {
         // Core log levels: 0=trace, 1=debug, 2=info, 3=warn, 4=error.

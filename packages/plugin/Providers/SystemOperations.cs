@@ -15,10 +15,7 @@ namespace MusicBeePlugin.Providers
             _api = api;
         }
 
-        /// <summary>
-        ///     Sets the message displayed for the currently running background task.
-        /// </summary>
-        /// <param name="message">The progress message to display</param>
+        /// <inheritdoc />
         public void SetBackgroundTaskMessage(string message)
         {
             _api.MB_SetBackgroundTaskMessage(message);

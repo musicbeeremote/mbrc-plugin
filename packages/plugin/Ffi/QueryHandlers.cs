@@ -120,25 +120,17 @@ namespace MusicBeePlugin.Ffi
 
         private Page<NowPlayingListTrack> BuildNowPlayingList(PaginationParams p, bool ordered)
         {
-            // The core requests the "ordered" variant for iOS (anchored at the
-            // current track) and the sequential "page" for Android; both carry the
-            // full field set (the V4 wire codec drops album/album_artist for
-            // Android). Platform never crosses the FFI - it's the core's choice.
-            //
-            // Source-side paging: the provider reads tags only for the requested
-            // window (O(limit)), never the whole list, and the total comes from a
-            // separate cheap paths-only count. The now-playing list is live (it
-            // changes on every track/queue op), so it is never cached.
+            // Platform never crosses the FFI: the core asks for "ordered" (iOS,
+            // anchored at the current track) or the sequential page (Android).
+            // Tags are read only for the requested window, and the list is live,
+            // so it is never cached.
             var data = (ordered
                 ? _track.GetNowPlayingListOrdered(p.offset, p.limit)
                 : _track.GetNowPlayingListPage(p.offset, p.limit)).ToList();
-            // The ordered (iOS) variant is a "current track forward" walk that
-            // terminates at the end of the queue, so its total is the length of
-            // that walk (what the shipped C# reported via data.Count), NOT the
-            // full-queue count. Reporting the full count here ships total=N next
-            // to fewer than N items, and an iOS client that sizes its list off
-            // total then indexes past the array end. The sequential (Android)
-            // variant is true source-side paging and wants the real total.
+            // The ordered walk stops at the end of the queue, so its total is the
+            // walk's length, not the full-queue count. Reporting the latter ships
+            // total=N beside fewer than N items, and an iOS client sizing its list
+            // off total then indexes past the end.
             return new Page<NowPlayingListTrack>
             {
                 offset = p.offset,

@@ -38,7 +38,7 @@ namespace MusicBeeRemote.Core.Tests.Providers
 
             var result = new PlayerDataProvider(api).SetScrobble(true);
 
-            result.Should().BeFalse("no account means we must not trigger the blocking login UI");
+            result.Should().BeFalse("enabling with no account pops a blocking login dialog");
             enableCalled.Should().BeFalse();
         }
 
@@ -69,8 +69,7 @@ namespace MusicBeeRemote.Core.Tests.Providers
         [Fact]
         public void SetScrobble_Enable_WhenUserIdDelegateUnbound_FallsBackToEnabling()
         {
-            // Older MusicBee API revisions may not bind Setting_GetLastFmUserId;
-            // when we can't tell, prefer enabling over blocking scrobbling.
+            // Older API revisions may not bind Setting_GetLastFmUserId.
             bool? enabledArg = null;
             var api = new Plugin.MusicBeeApiInterface
             {

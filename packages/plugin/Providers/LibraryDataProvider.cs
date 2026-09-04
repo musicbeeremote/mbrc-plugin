@@ -138,11 +138,9 @@ namespace MusicBeePlugin.Providers
 
         public List<AlbumData> BrowseAlbums(int offset = 0, int limit = 4000)
         {
-            // Returns List because deduplication requires collapsing duplicates.
-            // The internal AlbumData used IEquatable + Distinct (dedup by
-            // artist+album, count stays 1); replicate that externally with a
-            // first-wins HashSet keyed on artist\0album so ordering and count are
-            // identical (do NOT increment - BrowseAlbums count is always 1).
+            // A first-wins HashSet keyed on artist\0album reproduces what
+            // AlbumData's IEquatable + Distinct did, so ordering and count match.
+            // Count stays 1 per entry: this is a browse list, not a tally.
             var albums = new List<AlbumData>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -328,12 +326,9 @@ namespace MusicBeePlugin.Providers
 
         public List<(string Artist, string Album, string Path, long Modified)> GetAlbumIdentities()
         {
-            // One library scan, folded to one identity per album. The shipped
-            // PrepareCache did this in three calls (GetAllAlbumIdentifiers +
-            // GetTrackPaths + GetFileModificationDates), each re-enumerating the
-            // library and re-reading tags - 2-3 full scans plus ~4N tag reads.
-            // Here it is a single Library_QueryFiles pass: a bulk two-tag read and
-            // one property read per track, folded in memory.
+            // One `Library_QueryFiles` pass folded to one identity per album: a
+            // bulk two-tag read and one property read per track. The three-call
+            // shape it replaces cost 2-3 full scans plus about 4N tag reads.
             var albums = new Dictionary<string, (string Artist, string Album, string Path, long Modified)>();
 
             if (!_api.Library_QueryFiles(null))
@@ -404,7 +399,7 @@ namespace MusicBeePlugin.Providers
 
         #endregion
 
-        #region Library Cache (MBRCIP-0001)
+        #region Library Cache
 
         public List<string> GetAllTrackPaths()
         {

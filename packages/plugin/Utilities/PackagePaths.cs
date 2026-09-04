@@ -7,23 +7,19 @@ namespace MusicBeePlugin.Utilities
 {
     /// <summary>
     ///     Translates a path this process sees into one another process can open.
-    ///
-    ///     The Microsoft Store build of MusicBee is an MSIX package, and MSIX
-    ///     redirects <c>%APPDATA%</c> transparently: the packaged process asks for
-    ///     <c>C:\Users\x\AppData\Roaming\MusicBee\mb_remote</c> and the bytes land in
-    ///     <c>%LOCALAPPDATA%\Packages\&lt;family&gt;\LocalCache\Roaming\MusicBee\mb_remote</c>.
-    ///     Everything inside the container works, because the redirection is
-    ///     invisible to it - the core logs the un-redirected path, reads and writes
-    ///     it happily, and <see cref="Directory.Exists" /> agrees it is there.
-    ///
-    ///     It only breaks when the path leaves the container. Explorer runs
-    ///     outside, resolves it literally, and reports "Location is not available"
-    ///     for a folder that on that install does not exist at all - the real
-    ///     <c>%APPDATA%\MusicBee</c> is never created.
-    ///
-    ///     That is also why an existence check cannot catch it: from in here the
-    ///     path does exist. Detection has to be package identity.
     /// </summary>
+    /// <remarks>
+    ///     The Store build is an MSIX package, and MSIX redirects
+    ///     <c>%APPDATA%</c> transparently, so the packaged process asks for the
+    ///     Roaming path and the bytes land under <c>LocalCache</c>. Everything
+    ///     inside the container works, because the redirection is invisible to it.
+    ///     <para>
+    ///         It breaks when the path leaves. Explorer resolves it literally and
+    ///         reports "Location is not available" for a folder that on such an
+    ///         install was never created. An existence check cannot catch that -
+    ///         from in here the path does exist - so detection is package identity.
+    ///     </para>
+    /// </remarks>
     public static class PackagePaths
     {
         /// <summary>The process has no package identity (i.e. it is not packaged).</summary>
@@ -52,15 +48,14 @@ namespace MusicBeePlugin.Utilities
         /// <summary>
         ///     A path safe to hand to a process outside this one - Explorer, for
         ///     instance.
-        ///
-        ///     Unpackaged, or for a path that is not under roaming AppData (a
-        ///     portable install keeps its storage beside the executable), the input
-        ///     is returned untouched.
-        ///
-        ///     The translation is only used when the translated path can be seen to
-        ///     exist. A wrong guess then costs nothing: the caller gets today's
-        ///     behaviour rather than a second, differently wrong path.
         /// </summary>
+        /// <remarks>
+        ///     Unpackaged, or for a path outside roaming AppData (a portable
+        ///     install keeps its storage beside the executable), the input is
+        ///     returned untouched. The translation is used only when the result
+        ///     can be seen to exist, so a wrong guess costs nothing: the caller
+        ///     gets today's behaviour rather than a differently wrong path.
+        /// </remarks>
         public static string ForExternalProcess(string path)
         {
             if (string.IsNullOrEmpty(path) || !IsPackaged) return path;

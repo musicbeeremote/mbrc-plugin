@@ -16,13 +16,14 @@ namespace MusicBeePlugin.Ffi
     ///     library preload, delegate pinning, lifecycle, and the callback
     ///     marshaling. The read/write dispatch lives in <see cref="QueryHandlers"/>
     ///     and <see cref="CommandHandlers"/>; this class owns the boundary.
-    ///
-    ///     Safety: every callback body is wrapped so a managed exception never
-    ///     crosses the native boundary, and all provider access runs under a
-    ///     single lock (MusicBee's API is not thread-safe and Rust calls from
-    ///     tokio threads). P/Invoke signatures + the MbrcCallbacks layout are
-    ///     generated into <see cref="NativeMethods"/> from the Rust source.
     /// </summary>
+    /// <remarks>
+    ///     Every callback body is wrapped so a managed exception never crosses
+    ///     the native boundary, and all provider access runs under a single lock
+    ///     (MusicBee's API is not thread-safe and Rust calls from tokio threads).
+    ///     P/Invoke signatures and the MbrcCallbacks layout are generated into
+    ///     <see cref="NativeMethods"/> from the Rust source.
+    /// </remarks>
     public sealed class NativeBridge : IDisposable
     {
         /// <summary>Must equal MBRC_ABI_VERSION in mbrc-core/src/ffi/types.rs.</summary>
@@ -311,12 +312,14 @@ namespace MusicBeePlugin.Ffi
         ///     Ask the core to apply a staged update: it verifies the staged helper,
         ///     prompts for elevation if the plugins directory needs it, and starts
         ///     the helper, which waits for MusicBee to exit before swapping files.
+        /// </summary>
+        /// <remarks>
         ///     Takes no arguments by design - every path is derived inside the core,
         ///     so there is nothing here that could name a directory to overwrite.
         ///     On <see cref="UpdateLaunch.Launched" /> the caller is expected to shut
         ///     MusicBee down; <see cref="UpdateLaunch.Cancelled" /> means the user
         ///     declined the prompt and the staged update is still there to retry.
-        /// </summary>
+        /// </remarks>
         public UpdateLaunch ApplyStagedUpdate()
         {
             if (!_initialized) return UpdateLaunch.Failed;
@@ -700,19 +703,21 @@ namespace MusicBeePlugin.Ffi
 
         /// <summary>
         ///     Unmap mbrc_core.dll from this process so the file can be deleted.
+        /// </summary>
+        /// <remarks>
         ///     Windows will not unlink a loaded image, and the plugin cannot outlive
         ///     MusicBee to do it later, so an uninstall that wants to remove the core
-        ///     has to unload it first.
-        ///     Freed in a loop rather than once: this class holds one reference from
-        ///     its own preload, and the CLR holds another from resolving the DllImports
-        ///     - which it never releases, since a P/Invoke module stays for the life of
-        ///     the process. Dropping ours alone leaves the file mapped.
-        ///     After this returns 0 modules loaded, **every** NativeMethods call is an
-        ///     access violation waiting to happen: the IL stubs hold cached addresses
-        ///     into an image that is no longer there. Only call it from
-        ///     <see cref="Plugin.Uninstall" />, after the host is disposed and
-        ///     <see cref="FfiLogger.MarkUnavailable" /> has stopped log forwarding.
-        /// </summary>
+        ///     has to unload it first. Freed in a loop rather than once: this class
+        ///     holds one reference from its own preload, and the CLR holds another
+        ///     from resolving the DllImports, which it never releases.
+        ///     <para>
+        ///         After this returns 0 modules loaded, every NativeMethods call is
+        ///         an access violation waiting to happen: the IL stubs hold cached
+        ///         addresses into an image that is gone. Only call it from
+        ///         <see cref="Plugin.Uninstall" />, after the host is disposed and
+        ///         <see cref="FfiLogger.MarkUnavailable" /> stopped log forwarding.
+        ///     </para>
+        /// </remarks>
         /// <returns>true if the module is no longer loaded.</returns>
         public static bool UnloadNativeLibrary()
         {

@@ -13,11 +13,7 @@ namespace MusicBeeRemote.Core.Tests.Providers
     /// </summary>
     public class TrackNowPlayingNullSafetyTests
     {
-        /// <summary>
-        /// A MusicBee that has nothing playing: every now-playing read hands back null,
-        /// and the bulk tag read reports success with a null-filled array, which is what
-        /// it does for a loaded track with unset tags.
-        /// </summary>
+        /// <summary>An api with nothing playing: every read returns null, the bulk tag read succeeds with a null-filled array.</summary>
         private static Plugin.MusicBeeApiInterface NothingPlaying()
         {
             return new Plugin.MusicBeeApiInterface

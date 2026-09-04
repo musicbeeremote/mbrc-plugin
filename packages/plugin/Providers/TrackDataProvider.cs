@@ -224,12 +224,10 @@ namespace MusicBeePlugin.Providers
 
                 if (position > offset)
                 {
-                    // Read by INDEX, not by URL. Every virtual track of a
-                    // single-file .cue album reports the same container URL, so a
-                    // URL-keyed read returns the container's (empty) file-level
-                    // tags for all of them - which is what made such albums show
-                    // N rows of "Unknown Artist" (#87). The index-keyed call
-                    // returns the per-subsong tags MusicBee already has.
+                    // By INDEX, not URL: every virtual track of a single-file
+                    // .cue album reports the same container URL, so a URL-keyed
+                    // read returns the container's empty tags for all of them and
+                    // the album shows N rows of "Unknown Artist" (#87).
                     var success = _api.NowPlayingList_GetFileTags(itemIndex, NowPlayingFields, out var results);
                     // Raw values; the empty title -> file name fallback lives in the
                     // Rust V4 wire codec now. position is the actual list index.
@@ -254,18 +252,10 @@ namespace MusicBeePlugin.Providers
             if (!_api.NowPlayingList_QueryFiles(null))
                 yield break;
 
-            // Walk the list by INDEX rather than with the query cursor, so the
-            // path and the tags for a row come from the same index and can never
-            // be attributed to different tracks. That matters because the tags are
-            // now read by index too: every virtual track of a single-file .cue
-            // album reports the same container URL, so the old URL-keyed read
-            // returned the container's (empty) file-level tags for all of them -
-            // N rows of "Unknown Artist" (#87).
-            //
-            // Skipped items cost nothing now: the window can be entered directly
-            // instead of pulling a path per item to advance a cursor. Ordering is
-            // sequential (Android variant), unchanged - `GetListFileUrl` walks the
-            // list in the same storage order the cursor did.
+            // By INDEX rather than the query cursor, so a row's path and tags come
+            // from the same index and cannot be attributed to different tracks.
+            // That also lets the window be entered directly instead of pulling a
+            // path per item to advance a cursor.
             var windowEnd = limit > 0 ? (long)offset + limit : long.MaxValue;
             var index = offset > 0 ? offset : 0;
             var position = index + 1;
