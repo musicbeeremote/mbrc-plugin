@@ -76,6 +76,12 @@ mbrc-discovery = { path = "packages/mbrc-discovery" }
 # workspace dependency's default features.
 mbrc-release = { path = "packages/mbrc-release", default-features = false }
 
+# Backtraces keep file and line, without the full type information that made
+# the dev artifacts the largest thing in the tree. Cargo never collects the
+# stale ones, so what a bump leaves behind is paid for until a sweep.
+[profile.dev]
+debug = "line-tables-only"
+
 # Size-optimised release build; only affects `--release` (cargo test uses dev).
 [profile.release]
 opt-level = "z"
@@ -91,3 +97,8 @@ strip = true
 [profile.plugin]
 inherits = "release"
 panic = "unwind"
+# Client-supplied numbers reach arithmetic here: the paging offset and limit,
+# and the ordinals they index the track store by. Wrapping silently turns a
+# hostile or buggy request into a page from the wrong place; panicking turns it
+# into the error code the FFI boundary's catch_unwind already returns.
+overflow-checks = true
