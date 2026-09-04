@@ -222,7 +222,55 @@ pub fn init(storage_path: &str) {
         .with(fmt::layer().with_ansi(false).with_writer(writer))
         .try_init();
 
+    install_panic_logger();
     let _ = INIT.set(());
+}
+
+/// Routes every panic, on any thread, into the log before the process moves on.
+///
+/// MusicBee gives a plugin no console, so a panic on a spawned thread writes to
+/// a stderr nobody reads: the scanner or the cover build stops and the log says
+/// nothing about why. The previous hook still runs afterwards, so a panic under
+/// `cargo test` or the CLI keeps printing as it always did.
+fn install_panic_logger() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(target: "mbrc::panic", "{}", describe_panic(info));
+        previous(info);
+    }));
+}
+
+/// Renders a panic as one line: which thread, where, and what it said.
+fn describe_panic(info: &std::panic::PanicHookInfo<'_>) -> String {
+    let thread = std::thread::current();
+    let location = info
+        .location()
+        .map(|at| format!("{}:{}", at.file(), at.line()));
+    panic_line(
+        thread.name().unwrap_or("unnamed"),
+        location.as_deref(),
+        payload_message(info.payload()),
+    )
+}
+
+/// The human-readable half of a panic payload.
+///
+/// `&str` for a bare `panic!`, `String` once it formats arguments, and neither
+/// for `panic_any`, which is why the last arm exists at all.
+fn payload_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<non-string panic payload>")
+}
+
+/// Formats the one line a panic gets in the log.
+fn panic_line(thread: &str, location: Option<&str>, message: &str) -> String {
+    match location {
+        Some(at) => format!("panicked on thread '{thread}' at {at}: {message}"),
+        None => format!("panicked on thread '{thread}': {message}"),
+    }
 }
 
 /// Renders a wire frame for logging.
@@ -473,6 +521,57 @@ pub mod test_support {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_panic_payload_reads_as_its_message() {
+        assert_eq!(payload_message(&"boom"), "boom");
+        assert_eq!(payload_message(&String::from("formatted 1")), "formatted 1");
+        assert_eq!(payload_message(&7u8), "<non-string panic payload>");
+    }
+
+    #[test]
+    fn a_panic_line_names_the_thread_and_where_it_happened() {
+        assert_eq!(
+            panic_line("scanner", Some("src/server/scanner.rs:40"), "boom"),
+            "panicked on thread 'scanner' at src/server/scanner.rs:40: boom"
+        );
+    }
+
+    #[test]
+    fn a_panic_without_a_location_still_names_the_thread() {
+        assert_eq!(
+            panic_line("unnamed", None, "boom"),
+            "panicked on thread 'unnamed': boom"
+        );
+    }
+
+    /// A panic on a spawned thread is the case the hook exists for: nothing
+    /// joins these threads in production, so without it the failure is silent.
+    #[test]
+    fn a_panic_on_a_spawned_thread_is_described_with_its_location() {
+        static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|info| {
+            SEEN.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(describe_panic(info));
+        }));
+        let worker = std::thread::Builder::new()
+            .name("scanner".to_owned())
+            .spawn(|| panic!("boom {}", 1))
+            .expect("spawn worker");
+        assert!(worker.join().is_err(), "the worker should have panicked");
+        std::panic::set_hook(previous);
+
+        let seen = SEEN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let line = seen.last().expect("the hook ran");
+        assert!(line.contains("thread 'scanner'"), "got: {line}");
+        assert!(line.contains("boom 1"), "got: {line}");
+        assert!(line.contains("logging.rs:"), "got: {line}");
+    }
 
     #[test]
     fn redact_elides_blob_fields() {
