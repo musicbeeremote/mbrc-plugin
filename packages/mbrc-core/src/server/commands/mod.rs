@@ -145,8 +145,16 @@ pub type Reply = (String, Value);
 pub type HandlerResult = Result<Vec<Reply>, String>;
 
 /// Extract `{offset, limit}` from a paginated request payload (0 when absent).
+///
+/// Values outside `i32` saturate rather than truncate. A cast would wrap
+/// `u32::MAX - 5` to `-6`, which the store then clamps to 0, so a request far
+/// past the end of the library answered with its first page.
 pub fn pagination(data: &Value) -> (i32, i32) {
-    let field = |key: &str| data.get(key).and_then(Value::as_i64).unwrap_or(0) as i32;
+    let field = |key: &str| {
+        data.get(key)
+            .and_then(Value::as_i64)
+            .map_or(0, |v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+    };
     (field("offset"), field("limit"))
 }
 
@@ -364,6 +372,18 @@ mod audit {
         assert_eq!(as_int_lenient(&json!(" 50 ")), Some(50));
         assert_eq!(as_int_lenient(&json!("status")), None); // iOS position poll
         assert_eq!(as_int_lenient(&Value::Null), None);
+    }
+
+    #[test]
+    fn pagination_saturates_instead_of_wrapping() {
+        let far_past_the_end = json!({"offset": 4_294_967_290i64, "limit": 100});
+        assert_eq!(pagination(&far_past_the_end), (i32::MAX, 100));
+
+        let below_zero = json!({"offset": -4_294_967_290i64, "limit": 0});
+        assert_eq!(pagination(&below_zero), (i32::MIN, 0));
+
+        assert_eq!(pagination(&json!({"offset": 10, "limit": 5})), (10, 5));
+        assert_eq!(pagination(&json!({})), (0, 0));
     }
 
     #[test]
