@@ -1,49 +1,13 @@
 //! Removing files earlier versions left behind.
 //!
-//! Nothing removes them otherwise. The updater's manifest is an allowlist of
-//! what a release *writes*; it has no notion of what a release *retires*, and
-//! only the NSIS installer deletes anything - which covers exactly one of the
-//! three ways the plugin gets installed. A zip extraction and the Store's "Add
-//! Plugin" both only ever add files, so a machine that started on 1.4.x keeps
-//! its 1.4.x leftovers forever.
+//! Nothing else removes them: the updater's manifest only lists what a release
+//! *writes*, and only the NSIS installer deletes anything, so a machine that
+//! started on 1.4.x keeps its leftovers forever.
 //!
-//! Deleting files is the kind of convenience that turns into a bug report, so
-//! the rules here are deliberately narrow:
-//!
-//! - **Exact names, compiled in.** No globs and no "delete what looks old". The
-//!   only pattern is a bounded numeric one for a rotation scheme we shipped
-//!   ourselves, and it is spelled out rather than matched loosely.
-//! - **Only two directories, and only bare names inside them.** The plugins
-//!   directory is derived - asked of the loader, so it is true by construction.
-//!   The storage directory is *not*: it arrives over FFI from the C# side, which
-//!   takes it from MusicBee. That is not a path an attacker picks, but it is
-//!   supplied rather than derived, so the names joined onto it carry the weight
-//!   here - every one is a compile-time constant with no separator in it.
-//! - **Regular files, singly linked.** A directory or a reparse point with a
-//!   matching name is left alone: following one would let anything able to
-//!   create it aim a delete somewhere else. So is a file with more than one hard
-//!   link, which `is_file()` alone cannot tell apart from an ordinary one - the
-//!   name would be ours to remove, but the data would not.
-//! - **Absolute directories only.** A relative one would resolve against the
-//!   process working directory, which for us is MusicBee's install folder - so
-//!   an empty or relative storage path would aim these deletes at a directory
-//!   nobody chose. The helper's `checked_path` refuses relative paths for the
-//!   same reason.
-//! - **No descending through a link.** The leaf check above does not cover the
-//!   directory components above it, and `cache/` is the one component this
-//!   walks through. A junction there would redirect the delete wholesale, so it
-//!   has to be a real directory - the same rule the update staging code applies
-//!   to its own directories.
-//! - **Best effort, never fatal.** A file that cannot be removed is logged and
-//!   skipped. This runs during startup and must never be the reason the plugin
-//!   does not start.
-//!
-//! What is deliberately *not* defended against is the window between the check
-//! and the delete. It does not need to be: both platforms unlink the name rather
-//! than following it, so a link swapped in after the check is itself what gets
-//! removed, never its target. And everything here runs unelevated, as the user
-//! who already owns these directories - so there is no privilege to gain by
-//! racing it.
+//! Deleting files is a convenience that turns into a bug report, so the sweep is
+//! narrow: compiled-in exact names, two derived directories, bare filenames
+//! inside them, and regular singly-linked files. Each of those limits is a test
+//! at the foot of this file, and the test names are the specification.
 
 use std::path::Path;
 
@@ -65,33 +29,28 @@ const LEGACY_LOGS: &[&str] = &[
 
 /// The C# firewall utility, replaced by `mbrc-helper.exe` in 1.5.0.
 ///
-/// The NSIS installer already deletes this on both install and uninstall; this
-/// is for the routes it does not run on.
-///
-/// `License.txt` is deliberately absent, though a 1.4.x-era copy does turn up
-/// beside our own `LICENSE` in the wild. It is probably ours, but the plugins
-/// folder is shared with every other MusicBee plugin and a generically named
-/// file there cannot be proven to be. Deleting someone else's file to reclaim
-/// 38 KB is not a trade worth making, and "probably" is not the standard this
-/// list is held to.
+/// The NSIS installer deletes it on install and uninstall; this covers the
+/// routes it does not run on. A 1.4.x `License.txt` also turns up beside our
+/// own `LICENSE`, and is deliberately absent from this list: the plugins folder
+/// is shared with every other plugin, so a generically named file there cannot
+/// be shown to be ours, and "probably" is not the standard for a delete.
 const RETIRED_PLUGIN_FILES: &[&str] = &["firewall-utility.exe"];
+
+/// The cover state file, renamed rather than deleted when that state moved into
+/// redb, as a safety net for a migration that has long since shipped.
+const MIGRATED_COVER_STATE: &str = "state.json.migrated";
 
 /// Sweeps the storage directory, and the plugins directory when one was
 /// resolved.
 ///
-/// Nothing checks whether either is writable first: on a standard installation
-/// the plugins directory is not, and the delete simply fails and is skipped -
-/// which is correct there anyway, because the installer removes that file on its
-/// own route.
-///
-/// Returns nothing: every outcome here is advisory, and the caller has no
-/// decision to make based on it.
+/// A relative storage path is refused: it would resolve against MusicBee's
+/// install directory. Writability is not checked first - on a standard install
+/// the plugins directory is not writable and the failed delete is correct, since
+/// the installer removes that file itself. Portable and Store installs have no
+/// installer, which is the gap this fills. Every outcome is advisory.
 pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
     let storage = Path::new(storage_path);
     if !storage.is_absolute() {
-        // Relative would resolve against MusicBee's install directory. Nothing
-        // should ever hand us one, which is exactly why it is worth saying so
-        // instead of quietly deleting somewhere else.
         tracing::warn!(
             path = %storage.display(),
             "not sweeping: the storage path is not absolute"
@@ -108,21 +67,6 @@ pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
         }
     }
 
-    // `settings.xml` is only inert once the core has its own settings file.
-    // Until then it is the one record of a 1.4.x user's configuration and
-    // `migrate_legacy_settings` still needs it.
-    //
-    // Removing it afterwards is not tidiness for its own sake: the migration
-    // runs whenever `core_settings.json` is absent, so leaving the XML in place
-    // means deleting the JSON to reset the settings silently restores the old
-    // ones instead. Reset should mean reset.
-    //
-    // Non-empty, not merely present: `migrate_legacy_settings` writes the JSON
-    // with create-truncate-write, so a second MusicBee starting at that exact
-    // moment would otherwise see a zero-length file, call the migration done and
-    // delete the only copy of the settings. Two instances sharing one %APPDATA%
-    // is ordinary - a Program Files and a portable install do - and this is the
-    // one file here whose loss costs the user something.
     if migrated_settings_are_present(storage) {
         if let Some(size) = remove_file(storage, "settings.xml") {
             removed += 1;
@@ -130,23 +74,14 @@ pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
         }
     }
 
-    // Renamed rather than deleted when the cover state moved into redb, as a
-    // safety net for a migration that has long since shipped.
-    //
-    // This is the only directory component the sweep walks through, and the
-    // leaf's reparse-point check says nothing about it: a junction here would
-    // redirect the delete somewhere else entirely.
     let cache = storage.join("cache");
     if is_real_directory(&cache) {
-        if let Some(size) = remove_file(&cache, "state.json.migrated") {
+        if let Some(size) = remove_file(&cache, MIGRATED_COVER_STATE) {
             removed += 1;
             freed += size;
         }
     }
 
-    // The plugins directory is not writable on a standard installation, and does
-    // not need to be: the installer deletes this one itself. Portable and Store
-    // installations are writable and have no installer, which is the gap.
     if let Some(plugins) = plugins_dir {
         for name in RETIRED_PLUGIN_FILES {
             if let Some(size) = remove_file(plugins, name) {
@@ -187,9 +122,6 @@ fn remove_file(dir: &Path, name: &str) -> Option<u64> {
     }
 
     if is_multiply_linked(&path, &meta) {
-        // Deliberately vague: this is also how "could not be opened to check"
-        // arrives, and naming a cause we have not established would send whoever
-        // reads it the wrong way.
         tracing::warn!(
             path = %path.display(),
             "leaving a retired name that could not be shown to be safe to unlink"
@@ -204,9 +136,6 @@ fn remove_file(dir: &Path, name: &str) -> Option<u64> {
             Some(size)
         }
         Err(e) => {
-            // Read-only media, a locked file, a directory we cannot write. All
-            // of them mean "leave it", and none of them is worth a warning on
-            // every start.
             tracing::debug!(path = %path.display(), error = %e, "could not remove a file from an earlier version");
             None
         }
@@ -214,6 +143,13 @@ fn remove_file(dir: &Path, name: &str) -> Option<u64> {
 }
 
 /// Whether `core_settings.json` is there *and* has something in it.
+///
+/// Gates removing `settings.xml`, which stays until the core has its own
+/// settings: until then it is a 1.4.x user's only configuration. Afterwards it
+/// must go, or deleting the JSON to reset the settings would silently restore
+/// the old ones. Non-empty rather than present, because the migration writes
+/// create-truncate-write and a second MusicBee starting at that instant would
+/// see a zero-length file and delete the only copy.
 fn migrated_settings_are_present(storage: &Path) -> bool {
     std::fs::metadata(storage.join("core_settings.json"))
         .map(|meta| meta.is_file() && meta.len() > 0)
@@ -244,8 +180,9 @@ fn is_real_directory(path: &Path) -> bool {
 ///
 /// `is_file()` cannot see the difference, and the difference matters: unlinking
 /// a name we recognise is fine, but only when that name is the only way to the
-/// data. Anything unexpected here counts as multiply linked - refusing to delete
-/// on a doubt costs a few kilobytes, and the alternative costs someone's file.
+/// data. The link count is not on Windows' stable `Metadata`, so this takes a
+/// handle, and anything unexpected - a file we cannot even open included -
+/// counts as multiply linked and is left alone.
 #[cfg(windows)]
 fn is_multiply_linked(path: &Path, _meta: &std::fs::Metadata) -> bool {
     use std::os::windows::io::AsRawHandle;
@@ -254,12 +191,11 @@ fn is_multiply_linked(path: &Path, _meta: &std::fs::Metadata) -> bool {
         GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
     };
 
-    // The link count is not on the stable `Metadata` for Windows, so it takes a
-    // handle. Opening for read is enough, and a file we cannot even open is one
-    // we are certainly not going to delete.
     let Ok(file) = std::fs::File::open(path) else {
         return true;
     };
+    // SAFETY: an all-zero BY_HANDLE_FILE_INFORMATION is the documented starting
+    // value, and the call below fills it.
     let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     // SAFETY: the handle is live for the call, and `info` is a plain
     // out-parameter of the size the API expects.

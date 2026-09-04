@@ -1,6 +1,8 @@
 //! The TCP command server: a dedicated thread runs a Tokio runtime that accepts
-//! connections and (Slice 3) fans out broadcasts. The pure handshake/dispatch
-//! logic lives in [`session`]; the per-connection IO in [`connection`].
+//! connections and fans out broadcasts.
+//!
+//! The pure handshake/dispatch logic lives in [`session`]; the per-connection
+//! IO in [`connection`].
 
 pub mod blocked;
 pub mod broadcaster;
@@ -44,7 +46,7 @@ pub struct NetHandle {
 }
 
 impl NetHandle {
-    /// Signal the server thread to stop and wait for it to finish.
+    /// Signals the server thread to stop and wait for it to finish.
     pub fn stop(self) {
         self.shutdown.notify_waiters();
         if self.thread.join().is_err() {
@@ -53,10 +55,15 @@ impl NetHandle {
     }
 }
 
-/// Start the TCP command server (and the UDP discovery responder) on a
-/// dedicated thread with its own Tokio runtime. Blocks only until the listener
-/// is bound, so a bind failure (e.g. the port is in use) is reported
-/// synchronously to the caller.
+/// Starts the TCP command server (and the UDP discovery responder) on a
+/// dedicated thread with its own Tokio runtime.
+///
+/// Blocks only until the listener is bound, so a bind failure (e.g. the port is
+/// in use) is reported synchronously to the caller.
+///
+/// # Errors
+/// The listener could not bind, or the networking thread exited before it
+/// reached the bind.
 pub fn start(core: Arc<Core>) -> std::io::Result<NetHandle> {
     let shutdown = Arc::new(Notify::new());
     let shutdown_for_thread = shutdown.clone();
@@ -98,19 +105,7 @@ fn run_thread(
     };
 
     runtime.block_on(async move {
-        // A bad address in core_settings.json falls back to listening on every
-        // interface rather than refusing to start, since a plugin that silently
-        // never listens is the worst of the available failures.
-        let bind_ip: std::net::IpAddr = match core.config.bind_address.parse() {
-            Ok(ip) => ip,
-            Err(_) => {
-                tracing::warn!(
-                    bind_address = %core.config.bind_address,
-                    "invalid bind_address; falling back to 0.0.0.0"
-                );
-                std::net::IpAddr::from([0, 0, 0, 0])
-            }
-        };
+        let bind_ip = resolve_bind_address(&core.config.bind_address);
 
         let listener = match TcpListener::bind((bind_ip, core.config.port)).await {
             Ok(listener) => {
@@ -128,78 +123,14 @@ fn run_thread(
             "command server listening"
         );
 
-        // Discovery advertises this host to the LAN over UDP multicast, which
-        // makes no sense for a loopback-only listener that nothing off-box can
-        // reach anyway. Skipping it also keeps it from binding INADDR_ANY and
-        // raising the Windows Firewall prompt during tests.
-        let discovery = if bind_ip.is_loopback() {
-            tracing::debug!("discovery responder skipped (bound to loopback)");
-            None
-        } else {
-            Some(tokio::spawn(crate::discovery::run(
-                core.config.port,
-                shutdown.clone(),
-            )))
-        };
-        // The standard way to be found, additive to the responder above (#160).
-        // Same loopback rule and for the same two reasons: nothing off-box can
-        // reach a loopback listener, and binding 5353 on a test run would raise
-        // the firewall prompt this suite exists without.
-        let mdns = if bind_ip.is_loopback() || !core.config.mdns_enabled {
-            tracing::debug!(
-                enabled = core.config.mdns_enabled,
-                "mDNS advertisement skipped"
-            );
-            None
-        } else {
-            Some(tokio::spawn(crate::mdns::run(
-                core.config.port,
-                shutdown.clone(),
-            )))
-        };
+        let discovery = spawn_discovery(&core, bind_ip, &shutdown);
+        let mdns = spawn_mdns(&core, bind_ip, &shutdown);
         let monitor = tokio::spawn(monitor::run(core.clone(), shutdown.clone()));
         let scanner = tokio::spawn(scanner::run(core.clone(), shutdown.clone()));
-
-        // Seed the now-playing cache once, off the async workers: the first
-        // downloaded-lyrics fetch can block ~2.7s inside MusicBee, so paying it
-        // here keeps the first client's `init` off that path.
-        let seed_core = core.clone();
-        tokio::task::spawn_blocking(move || seed_core.now_playing.refresh_all());
-
-        // Reconcile the library in the background (one library scan): fingerprint
-        // it to validate/refresh the metadata cache, eager-prewarm the browse
-        // lists, then build the album cover cache (resize/hash/store), with the
-        // build-status broadcast so clients refresh the cover grid. Off the async
-        // workers - the scan, browse fetches, and artwork fetches are blocking
-        // MusicBee calls.
-        let cache_core = core.clone();
-        tokio::task::spawn_blocking(move || reconcile_library(&cache_core));
-
-        // Sweep the staging directory of an update that has already been applied.
-        // The helper cannot remove it (it runs from inside it), so it falls to the
-        // next start - which this is. Not gated on the update preference: the
-        // residue exists whether or not the user wants checks, and it is a few
-        // megabytes per release if nobody clears it. Blocking, so off the async
-        // workers.
-        let sweep_storage = core.config.storage_path.clone();
-        tokio::task::spawn_blocking(move || {
-            crate::updates::sweep_applied_staging(&sweep_storage);
-        });
-
-        // One update check per session, and only if the user asked for them.
-        // Delayed so it does not compete with the library reconcile and cover
-        // build above, which are what MusicBee was actually opened for; the
-        // interval in the settings still decides whether the check does anything
-        // once it fires. Skipped outright when the preference is off, so a staged
-        // update stays the panel's headline instead of being overwritten with
-        // "checking is disabled".
-        if core.config.update_check_enabled {
-            let update_core = core.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(STARTUP_UPDATE_CHECK_DELAY).await;
-                crate::updates::service::start_check(update_core, false);
-            });
-        }
+        seed_now_playing(&core);
+        spawn_library_reconcile(&core);
+        spawn_staging_sweep(&core);
+        spawn_startup_update_check(&core);
 
         tokio::select! {
             _ = accept_loop(listener, core.clone()) => {}
@@ -208,22 +139,133 @@ fn run_thread(
         if let Some(discovery) = discovery {
             discovery.abort();
         }
-        // Awaited rather than aborted, unlike everything else here: it has a
-        // shutdown path - the goodbye packets that get this host out of every
-        // browser on the LAN - and the whole point of sending them is that they
-        // arrive. Bounded, because a task that will not finish must not be able
-        // to hold MusicBee's shutdown.
-        if let Some(mdns) = mdns {
-            if tokio::time::timeout(MDNS_SHUTDOWN_GRACE, mdns)
-                .await
-                .is_err()
-            {
-                tracing::warn!("mDNS did not withdraw in time");
-            }
-        }
+        withdraw_mdns(mdns).await;
         monitor.abort();
         scanner.abort();
     });
+}
+
+/// The address to bind, falling back to every interface on an unusable setting.
+///
+/// A plugin that silently never listens is the worst of the available failures,
+/// so a malformed `bind_address` warns rather than refusing to start.
+fn resolve_bind_address(bind_address: &str) -> IpAddr {
+    match bind_address.parse() {
+        Ok(ip) => ip,
+        Err(_) => {
+            tracing::warn!(
+                bind_address,
+                "invalid bind_address; falling back to 0.0.0.0"
+            );
+            IpAddr::from([0, 0, 0, 0])
+        }
+    }
+}
+
+/// Spawns the UDP multicast discovery responder, unless bound to loopback.
+///
+/// Advertising to the LAN makes no sense for a listener nothing off-box can
+/// reach, and skipping it keeps the responder from binding INADDR_ANY and
+/// raising the Windows Firewall prompt during tests.
+fn spawn_discovery(
+    core: &Arc<Core>,
+    bind_ip: IpAddr,
+    shutdown: &Arc<Notify>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    if bind_ip.is_loopback() {
+        tracing::debug!("discovery responder skipped (bound to loopback)");
+        return None;
+    }
+    Some(tokio::spawn(crate::discovery::run(
+        core.config.port,
+        shutdown.clone(),
+    )))
+}
+
+/// Spawns the mDNS advertisement (#160), additive to the discovery responder.
+///
+/// Skipped for a loopback listener on the same reasoning as
+/// [`spawn_discovery`], and skipped outright when the user has turned it off.
+fn spawn_mdns(
+    core: &Arc<Core>,
+    bind_ip: IpAddr,
+    shutdown: &Arc<Notify>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    if bind_ip.is_loopback() || !core.config.mdns_enabled {
+        tracing::debug!(
+            enabled = core.config.mdns_enabled,
+            "mDNS advertisement skipped"
+        );
+        return None;
+    }
+    Some(tokio::spawn(crate::mdns::run(
+        core.config.port,
+        shutdown.clone(),
+    )))
+}
+
+/// Seeds the now-playing cache once, off the async workers.
+///
+/// The first downloaded-lyrics fetch can block for seconds inside MusicBee, so
+/// paying it here keeps the first client's `init` off that path.
+fn seed_now_playing(core: &Arc<Core>) {
+    let core = core.clone();
+    tokio::task::spawn_blocking(move || core.now_playing.refresh_all());
+}
+
+/// Reconciles the library in the background: one scan, then the metadata cache,
+/// then the album cover cache.
+///
+/// Off the async workers because the scan, the browse fetches and the artwork
+/// fetches are all blocking MusicBee calls.
+fn spawn_library_reconcile(core: &Arc<Core>) {
+    let core = core.clone();
+    tokio::task::spawn_blocking(move || reconcile_library(&core));
+}
+
+/// Sweeps the staging directory of an update that has already been applied.
+///
+/// The helper cannot remove it, since it runs from inside it, so it falls to the
+/// next start - which this is. Not gated on the update preference: the residue
+/// exists either way, and is a few megabytes per release if nobody clears it.
+fn spawn_staging_sweep(core: &Arc<Core>) {
+    let storage = core.config.storage_path.clone();
+    tokio::task::spawn_blocking(move || crate::updates::sweep_applied_staging(&storage));
+}
+
+/// Spawns this session's one update check, when the user has asked for them.
+///
+/// Delayed by [`STARTUP_UPDATE_CHECK_DELAY`] so it does not compete with the
+/// reconcile and cover build, which are what MusicBee was opened for. Skipped
+/// entirely when the preference is off, so a staged update stays the panel's
+/// headline rather than being overwritten with "checking is disabled".
+fn spawn_startup_update_check(core: &Arc<Core>) {
+    if !core.config.update_check_enabled {
+        return;
+    }
+    let core = core.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(STARTUP_UPDATE_CHECK_DELAY).await;
+        crate::updates::service::start_check(core, false);
+    });
+}
+
+/// Waits for the mDNS advertisement to withdraw, rather than aborting it.
+///
+/// Its goodbye packets are what get this host out of every browser on the LAN,
+/// and the point of sending them is that they arrive. Bounded by
+/// [`MDNS_SHUTDOWN_GRACE`]: a task that will not finish must not be able to hold
+/// up MusicBee's shutdown.
+async fn withdraw_mdns(mdns: Option<tokio::task::JoinHandle<()>>) {
+    let Some(mdns) = mdns else {
+        return;
+    };
+    if tokio::time::timeout(MDNS_SHUTDOWN_GRACE, mdns)
+        .await
+        .is_err()
+    {
+        tracing::warn!("mDNS did not withdraw in time");
+    }
 }
 
 /// Reconcile the library after a scan, then build the album cover cache. Shared
@@ -286,29 +328,14 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
         return;
     };
 
-    // Start/finish transitions. The host UI (settings cache line) always
-    // refreshes; the `librarycovercachebuildstatus` broadcast to network clients
-    // is cover-specific, so it only fires when covers are in scope.
-    let notify = |building: bool| {
-        core.providers
-            .emit_event(crate::ffi::types::HostEventType::CacheStatusChanged, &[]);
-        if scope.does_covers() {
-            core.broadcaster.broadcast(&[notifications::frame(
-                "librarycovercachebuildstatus",
-                serde_json::json!(building),
-            )]);
-        }
-    };
-
-    // Surface progress in MusicBee's status bar (host-only UI); best-effort, so a
-    // failed status update never aborts the build.
+    // Best-effort: a failed status update never aborts the build.
     let set_status = |message: String| {
         if let Err(e) = core.providers.set_background_task_message(&message) {
             tracing::debug!(error = %e, "reconcile: status message failed");
         }
     };
 
-    notify(true);
+    notify_reconcile(core, scope, true);
     set_status(scope.status_label().to_string());
 
     let started = std::time::Instant::now();
@@ -326,11 +353,6 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
             let album_count = identities.len();
 
             if scope.does_metadata() {
-                // Fingerprint the library and reconcile the metadata cache
-                // (clears stale entries on a library change, validates for
-                // reads/writes), then eager-prewarm the flat browse lists - but
-                // only when the library changed or the persisted lists are
-                // missing, so an unchanged warm cache skips the all-track tag read.
                 let fingerprint = crate::metadata_cache::fingerprint(
                     identities.iter().map(|a| (a.key.as_str(), a.modified)),
                 );
@@ -338,9 +360,6 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                 let needs_rebuild =
                     changed || !commands::library::browse_lists_cached(&core.metadata_cache);
                 let (counts, tracks) = if needs_rebuild {
-                    // Small lists cached whole; the tracks list becomes the ordinal
-                    // index (no full-tag read, no blob) - built last so its presence
-                    // marks the whole cache warm for the next run.
                     let counts = commands::library::prewarm_browse_lists(
                         &core.metadata_cache,
                         core.providers.as_ref(),
@@ -365,9 +384,7 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                 );
             }
 
-            // Between the two halves: the metadata pass is done and persisted,
-            // and the cover build is the expensive half nobody is waiting for
-            // once MusicBee is on its way out.
+            // Covers are the expensive half nobody waits for on the way out.
             if core.is_stopping() {
                 tracing::info!("core is stopping; skipping the cover cache build");
                 return;
@@ -393,9 +410,6 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
                         from_base64(&b64)
                     },
                     core.config.log_level.is_trace(),
-                    // A first build of a large library is minutes of blocking
-                    // work, and teardown waits for it. Stopping between albums
-                    // is what keeps MusicBee's exit from waiting on covers.
                     &|| core.is_stopping(),
                 );
                 tracing::info!(
@@ -427,31 +441,37 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     } else {
         "MusicBee Remote: Done. Library metadata refreshed.".to_string()
     });
-    // Before the finish notification, so a panel refreshing on that event sees
-    // a cache that is no longer building. (The previous explicit
-    // `end_reconcile()` ran after `notify(false)`, so the line could stay on
-    // "Rebuilding cache..." until the next unrelated refresh.)
+    // Dropped before the finish notification, so a panel refreshing on that
+    // event sees a cache that is no longer building.
     drop(reconcile);
-    notify(false);
+    notify_reconcile(core, scope, false);
 }
 
-/// Incremental album-cover refresh, run from the Scanner's nudge path (a
-/// `FileAddedToLibrary` / `TagsChanged` / `FileDeleted` notification). Unlike
-/// [`run_reconcile`] this does no metadata work and stays quiet: it only
-/// broadcasts `librarycovercachebuildstatus` when the cached cover set actually
-/// changed, so a nudge that touched no artwork produces no client traffic and no
-/// status-bar churn.
+/// Tells the host UI, and network clients when covers are in scope, that a
+/// reconcile has started or finished.
 ///
-/// The delta is entirely `warm_up` + `build`:
-/// - `warm_up` re-maps album keys from the live `album_identifiers` and drops the
-///   covers of albums that were modified (artwork edited) or removed (last track
-///   deleted). An album key survives while any track keeps it in the library, and
-///   `prune_orphans` only deletes a content-hashed file once no key references it,
-///   so a delete never removes a cover another album still uses.
-/// - `build` refetches the dropped/new albums' artwork.
+/// The settings panel's cache line always refreshes; the
+/// `librarycovercachebuildstatus` broadcast is cover-specific, so a
+/// metadata-only pass produces no client traffic.
+fn notify_reconcile(core: &Core, scope: RebuildScope, building: bool) {
+    core.providers
+        .emit_event(crate::ffi::types::HostEventType::CacheStatusChanged, &[]);
+    if scope.does_covers() {
+        core.broadcaster.broadcast(&[notifications::frame(
+            "librarycovercachebuildstatus",
+            serde_json::json!(building),
+        )]);
+    }
+}
+
+/// Incremental album-cover refresh, run from the Scanner's nudge path.
+///
+/// Unlike [`run_reconcile`] this does no metadata work and stays quiet: it
+/// broadcasts `librarycovercachebuildstatus` only when the cover set actually
+/// changed, so a nudge that touched no artwork produces no client traffic.
 ///
 /// The caller must already hold the reconcile single-flight guard (the Scanner
-/// does), so this can't race an init/library-switch/manual rebuild.
+/// does), so this cannot race an init, a library switch, or a manual rebuild.
 pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
     use crate::cover::{cover_identifier, from_base64, store::AlbumIdentity};
 
@@ -470,9 +490,6 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
         }
     };
 
-    // `dropped` (covers invalidated by an edit/delete) plus `stored` (covers
-    // (re)fetched) together tell us whether the grid changed. A pure deletion
-    // drops without storing; a new album with art stores without dropping.
     let before = core.cover_store.cached_count();
     core.cover_store.warm_up(&identities);
     let kept = core.cover_store.cached_count();
@@ -491,7 +508,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
         &|| core.is_stopping(),
     );
 
-    let changed = dropped > 0 || stats.stored > 0;
+    let changed = cover_set_changed(dropped, stats.stored);
     tracing::debug!(
         albums = identities.len(),
         dropped,
@@ -508,6 +525,14 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
             serde_json::json!(false),
         )]);
     }
+}
+
+/// Whether the cached cover set changed, so clients should refetch the grid.
+///
+/// Either half moves on its own: a pure deletion drops without storing, and a
+/// new album with artwork stores without dropping.
+fn cover_set_changed(dropped: usize, stored: usize) -> bool {
+    dropped > 0 || stored > 0
 }
 
 /// RAII release of a reserved per-IP connection slot. Dropping it (normal end
@@ -529,9 +554,6 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
         match listener.accept().await {
             Ok((stream, peer)) => {
                 let core = core.clone();
-                // Client-address filtering (loopback always allowed). Rejected
-                // peers get the `notallowed` frame then a close, matching the
-                // shipped plugin - so the app shows "not allowed", not a silent drop.
                 if !core.config.is_client_allowed(peer.ip()) {
                     tracing::debug!(%peer, "rejecting client: address not allowed");
                     core.blocked.record(
@@ -553,9 +575,8 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                             "per-IP cap reached; evicted an idle connection to admit this one"
                         );
                     }
-                    // WARN, not DEBUG: this is the point where the user's app
-                    // stops working, and at the default INFO level a DEBUG line
-                    // meant their log said nothing at all about it.
+                    // WARN: this is where the user's app stops working, and the
+                    // default INFO level would have shown them nothing.
                     registry::IpAdmit::Rejected => {
                         tracing::warn!(
                             %peer,
@@ -568,9 +589,6 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                     }
                 }
                 tokio::spawn(async move {
-                    // Release the reserved per-IP slot on drop, so it is returned
-                    // even if `connection::run` panics (unwinds) rather than
-                    // returning - a leaked slot would eat into the per-IP cap.
                     let _slot = IpSlotGuard {
                         core: core.clone(),
                         ip: peer.ip(),
@@ -580,10 +598,6 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
                     }
                 });
             }
-            // Do not spin. A transient failure is worth retrying immediately in
-            // principle, but a persistent one - descriptor exhaustion, a wedged
-            // listener - would otherwise turn this into a busy loop pegging a core
-            // inside MusicBee and filling the log as fast as it can rotate.
             Err(e) => {
                 tracing::warn!(error = %e, "accept failed");
                 tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
@@ -592,8 +606,11 @@ async fn accept_loop(listener: TcpListener, core: Arc<Core>) {
     }
 }
 
-/// Send the `notallowed` frame to a filtered-out client and close, mirroring C#
+/// Sends the `notallowed` frame to a filtered-out client and closes, mirroring C#
 /// `SocketServer.RejectConnection`.
+///
+/// The frame is what makes the app show "not allowed" rather than appearing to
+/// drop the connection silently.
 async fn reject_client(mut stream: tokio::net::TcpStream) {
     use tokio::io::AsyncWriteExt;
     let frame = mbrc_wire::frame_line(&notifications::frame("notallowed", serde_json::json!("")));
@@ -609,7 +626,7 @@ mod cover_delta_tests {
     use crate::providers::MockProviders;
     use tokio::sync::mpsc;
 
-    /// Build a `Core` on a fresh temp storage dir with a mock host that returns
+    /// Builds a `Core` on a fresh temp storage dir with a mock host that returns
     /// `albums` for the album scan and one canned JPEG for every artwork fetch.
     fn temp_core(name: &str, albums: Vec<AlbumIdentifier>) -> Arc<Core> {
         let dir = std::env::temp_dir().join(format!("mbrc-cover-delta-{name}"));

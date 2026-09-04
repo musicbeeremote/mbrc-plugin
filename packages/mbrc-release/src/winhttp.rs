@@ -1,26 +1,23 @@
 //! The production [`HttpClient`]: WinHTTP.
 //!
-//! Chosen over a Rust HTTP stack for two properties an unattended updater cannot
-//! add later (see `docs/updates.md`): the *system* proxy, PAC and WPAD included,
-//! which is the only route out of a managed desktop; and the OS root store, which
-//! Windows Update keeps current long after this build was cut. A third reason is
-//! build tooling - rustls' crypto providers want NASM or CMake for the i686
-//! target, and this target is not negotiable.
+//! Chosen over a Rust HTTP stack for what an unattended updater cannot add later
+//! (see `docs/updates.md`): the *system* proxy, PAC and WPAD included, and the OS
+//! root store, which Windows Update keeps current long after this build was cut.
+//! Build tooling settles it - rustls' crypto providers want NASM or CMake for the
+//! non-negotiable i686 target.
 //!
 //! The cost is this file: flat C API, manual handle lifetimes, `GetLastError`
-//! mapping, and nothing here can run on a non-Windows host. That cost is bounded
-//! by the [`HttpClient`] seam - everything that makes a decision sits above it and
-//! is tested against a stub.
+//! mapping, Windows-only. The [`HttpClient`] seam bounds it - everything that
+//! makes a decision sits above and is tested against a stub.
 //!
-//! Two things are deliberate rather than incidental:
+//! Two deliberate choices:
 //!
-//! - **TLS is pinned to 1.2 and 1.3.** Older Windows still negotiates TLS 1.0 by
-//!   default, and GitHub refuses it. Left unset, an update check fails on exactly
-//!   the machines least likely to be updated by hand.
-//! - **Only HTTPS is fetched at all.** The redirect policy refuses an
-//!   HTTPS-to-HTTP downgrade, and [`WinHttpClient::get`] refuses a plain-HTTP URL
-//!   before a socket is opened. Signature verification does not depend on this,
-//!   but there is no reason to let the bytes travel in the clear either.
+//! - **TLS is pinned to 1.2 and 1.3.** Older Windows negotiates TLS 1.0, which
+//!   GitHub refuses, so left unset the check fails on exactly the machines least
+//!   likely to be updated by hand.
+//! - **Only HTTPS is fetched.** The redirect policy refuses an HTTPS-to-HTTP
+//!   downgrade and [`WinHttpClient::get`] refuses a plain-HTTP URL before a
+//!   socket is opened.
 
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
@@ -55,12 +52,16 @@ const MAX_BODY: usize = 64 * 1024 * 1024;
 /// is usually less than this; the constant only bounds one read.
 const READ_CHUNK: usize = 32 * 1024;
 
-// Milliseconds. Resolve and connect are short because a machine that cannot get
-// out should fail and back off rather than hang a background tick; receive is
-// generous because it applies per read on a multi-megabyte download.
+/// Milliseconds to resolve a host. Short, because a machine that cannot get out
+/// should fail and back off rather than hang a background tick.
 const RESOLVE_TIMEOUT_MS: i32 = 10_000;
+/// Milliseconds to open the connection. Short, for the same reason as
+/// [`RESOLVE_TIMEOUT_MS`].
 const CONNECT_TIMEOUT_MS: i32 = 15_000;
+/// Milliseconds to send the request.
 const SEND_TIMEOUT_MS: i32 = 30_000;
+/// Milliseconds per read. Generous, because it applies to each read of a
+/// multi-megabyte download rather than to the download as a whole.
 const RECEIVE_TIMEOUT_MS: i32 = 60_000;
 
 /// An owned `HINTERNET`. Every WinHTTP handle in this file is wrapped in one, so
@@ -95,6 +96,7 @@ impl Drop for Handle {
 // this client never uses the asynchronous API (no callback, no context). The
 // session handle is only ever read from `&self`.
 unsafe impl Send for Handle {}
+// SAFETY: as above - the handle is only ever read from `&self`.
 unsafe impl Sync for Handle {}
 
 /// A blocking HTTPS client over WinHTTP, holding one session for its lifetime.
@@ -112,6 +114,9 @@ impl WinHttpClient {
     /// `user_agent` is sent as `User-Agent` on every request; GitHub rejects
     /// requests without one, so it is required rather than defaulted. `proxy` is
     /// the user's override from settings: empty or `None` means auto-detect.
+    ///
+    /// # Errors
+    /// The WinHTTP session could not be opened, or its options were refused.
     pub fn new(user_agent: &str, proxy: Option<&str>) -> Result<Self> {
         let agent = wide(user_agent);
         let proxy = proxy.filter(|p| !p.trim().is_empty()).map(wide);
@@ -256,18 +261,13 @@ fn secure_protocols() -> u32 {
     WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3
 }
 
-/// Restricts the session to sound TLS versions, narrowing rather than failing on
-/// a Windows that has never heard of TLS 1.3.
+/// Restricts the session to sound TLS versions, narrowing rather than failing
+/// on a Windows that has never heard of TLS 1.3.
 ///
-/// WinHTTP validates the mask and rejects unknown bits outright with
-/// `ERROR_INVALID_PARAMETER`, and the TLS 1.3 bit is unknown before Windows 10
-/// 1903. Treating that as fatal would mean the whole updater refuses to start on
-/// exactly the older machines the proxy fallback above is there to support - and
-/// it would say so as error 87, which tells the user nothing. So the combined
-/// mask is attempted first and TLS 1.2 alone is the fallback.
-///
-/// The one thing that never happens is giving up on the option: unset, the
-/// session may offer TLS 1.0, which GitHub refuses.
+/// WinHTTP rejects unknown bits with `ERROR_INVALID_PARAMETER`, and the TLS 1.3
+/// bit is unknown before Windows 10 1903, so the combined mask is tried first
+/// and TLS 1.2 alone is the fallback. What never happens is giving up on the
+/// option: unset, the session may offer TLS 1.0, which GitHub refuses.
 fn set_secure_protocols(session: &Handle) -> Result<()> {
     if set_option(session, WINHTTP_OPTION_SECURE_PROTOCOLS, secure_protocols()).is_ok() {
         return Ok(());
@@ -359,8 +359,7 @@ fn header(request: &Handle, info_level: u32) -> Result<Option<String>> {
         // A header that needs no buffer is an empty one.
         return Ok(None);
     }
-    // SAFETY: no pointers are dereferenced; this reads the calling thread's code.
-    match unsafe { GetLastError() } {
+    match last_error_code() {
         ERROR_INSUFFICIENT_BUFFER => {}
         ERROR_WINHTTP_HEADER_NOT_FOUND => return Ok(None),
         _ => return Err(last_error("WinHttpQueryHeaders(header)")),
@@ -471,7 +470,7 @@ struct Target {
 impl Target {
     fn parse(url: &str) -> Result<Self> {
         let wide_url = wide(url);
-        let mut components: URL_COMPONENTS = unsafe { std::mem::zeroed() };
+        let mut components: URL_COMPONENTS = empty_url_components();
         components.dwStructSize = size_of::<URL_COMPONENTS>() as u32;
         // A null pointer with a non-zero length asks WinHTTP for a pointer into
         // `wide_url` rather than a copy, which is why `wide_url` must outlive it.
@@ -486,9 +485,8 @@ impl Target {
             return Err(UpdateError::Network(format!("{url} is not a valid URL")));
         }
 
-        // Refused here rather than trusted to the redirect policy: that only
-        // covers a downgrade *during* a request, not a plain-HTTP URL to start
-        // with. Every URL the updater fetches comes from GitHub over TLS.
+        // The redirect policy only covers a downgrade during a request, not a
+        // plain-HTTP URL to begin with.
         if components.nScheme != WINHTTP_INTERNET_SCHEME_HTTPS {
             return Err(UpdateError::Network(format!(
                 "refusing a non-HTTPS URL: {url}"
@@ -503,11 +501,8 @@ impl Target {
         // SAFETY: as above.
         let query = unsafe { slice(components.lpszExtraInfo, components.dwExtraInfoLength) };
 
-        // Taken as two pieces and rejoined rather than as one slice spanning
-        // both: `https://host?x=1` cracks to an empty path and a non-empty query,
-        // and a slice of the pair would hand WinHttpOpenRequest an object name
-        // starting at `?`, which is not a request target. The root has to be put
-        // back explicitly.
+        // Two pieces rejoined, not one slice: `https://host?x=1` cracks to an
+        // empty path, and a slice would start the object name at `?`.
         let mut object = Vec::with_capacity(url_path.len() + query.len() + 1);
         if url_path.is_empty() {
             object.push(u16::from(b'/'));
@@ -533,6 +528,8 @@ unsafe fn slice<'a>(ptr: *const u16, len: u32) -> &'a [u16] {
     if ptr.is_null() || len == 0 {
         &[]
     } else {
+        // SAFETY: the pointer is null-checked above and the contract says it covers that
+        // many readable bytes.
         unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 }
@@ -555,9 +552,22 @@ fn wide(s: &str) -> Vec<u16> {
 /// to whoever reads the log: "the proxy refused us" and "the certificate is not
 /// trusted" call for very different responses from a user.
 fn last_error(op: &str) -> UpdateError {
-    // SAFETY: no pointers are involved; this reads the calling thread's code.
-    let code = unsafe { GetLastError() };
+    let code = last_error_code();
     UpdateError::Network(format!("{op}: {} ({code})", describe(code)))
+}
+
+/// A `URL_COMPONENTS` in its documented starting state.
+///
+/// `dwStructSize` and the length fields are assigned by the caller.
+fn empty_url_components() -> URL_COMPONENTS {
+    // SAFETY: an all-zero URL_COMPONENTS is the documented starting value.
+    unsafe { std::mem::zeroed() }
+}
+
+/// This thread's last Win32 error code.
+fn last_error_code() -> u32 {
+    // SAFETY: reads this thread's last error code and has no preconditions.
+    unsafe { GetLastError() }
 }
 
 /// A plain-language description of the WinHTTP error codes an update check can
@@ -657,10 +667,8 @@ mod tests {
 
     #[test]
     fn winhttp_rejects_a_protocol_bit_it_does_not_know() {
-        // The premise of the TLS 1.3 fallback: WinHTTP validates this mask rather
-        // than ignoring what it cannot use, so a session on a Windows without TLS
-        // 1.3 would fail to open unless the narrower mask is tried. If this ever
-        // starts passing, the fallback is dead code and can go.
+        // The premise of the TLS 1.3 fallback: WinHTTP validates this mask, so
+        // a pass here would make the narrower fallback dead code.
         let client = WinHttpClient::new("mbrc-test/0.0", None).unwrap();
         let unknown = 0x0000_4000;
         assert!(
@@ -741,10 +749,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status, 200);
-        // Byte-oriented on purpose: what is under test is that the bytes arrived
-        // intact through the redirect. This particular sidecar happens to be
-        // UTF-16 with a BOM, which is between whoever cut the 2021 release and
-        // their shell, and none of the updater's business.
+        // Byte-oriented on purpose: what is under test is that the bytes
+        // survived the redirect intact, BOM and all.
         let hex: Vec<u8> = response
             .body
             .iter()

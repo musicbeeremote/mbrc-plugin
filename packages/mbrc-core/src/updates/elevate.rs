@@ -2,33 +2,14 @@
 //!
 //! The panel presses a button; this decides whether elevation is needed, proves
 //! the helper it is about to run is the one the release signed, and launches it.
+//! What may be passed to the helper, what is verified before it runs, and what
+//! counts as an upgrade are pinned by the tests at the foot of this file; why
+//! the verification still holds at launch time is on [`VerifiedHelper`].
 //!
-//! Four things here are not arbitrary:
-//!
-//! - **Nothing is taken from the caller.** The plugins directory is where this
-//!   very DLL was loaded from, MusicBee is this process, and the pid is our own.
-//!   A panel that could name the directory to overwrite would be a panel worth
-//!   attacking; there is nothing to pass, so there is nothing to tamper with.
-//! - **The staged helper is verified before it is *executed*, and cannot be
-//!   swapped in between.** It runs elevated out of a user-writable directory, so
-//!   its signature check is the security boundary, and it lands earlier than the
-//!   check the helper performs on the DLLs. Verifying by path and then launching
-//!   by path would leave a window: any process running as this user could
-//!   replace the file after it verified and have *its* binary run as
-//!   administrator, on the prompt the user was expecting. So the file is opened
-//!   denying write and delete sharing, verified through that handle, and the
-//!   handle is held open across the launch. The installed helper cannot be used
-//!   instead: a release replaces `mbrc-helper.exe` too, and a running image
-//!   cannot overwrite itself.
-//! - **A staged bundle that is not newer is refused.** Every release is public
-//!   and legitimately signed, so a signature alone does not make a bundle the
-//!   right one to install: without this, anyone who can write to the staging
-//!   directory could roll the plugin back to an older release - with a valid
-//!   signature - and undo whatever the newer one fixed.
-//! - **Elevation is asked for now, not later.** `runas` prompts while the user is
-//!   still looking at the button they pressed. If the helper self-elevated after
-//!   MusicBee had exited, a declined prompt would leave a closed MusicBee, no UI,
-//!   and nothing to report the cancellation into.
+//! The one rule nothing else records: elevation is asked for **now**, not later.
+//! `runas` prompts while the user is still looking at the button they pressed. A
+//! helper that self-elevated once MusicBee had exited would leave a declined
+//! prompt with no UI to report it into.
 
 use std::path::{Path, PathBuf};
 
@@ -176,6 +157,38 @@ fn verified_helper(staged: &Path) -> Result<VerifiedHelper, String> {
     })
 }
 
+/// A `STARTUPINFOEXW` in its documented starting state.
+///
+/// `cb` and the attribute list are assigned by the caller before it is used.
+#[cfg(windows)]
+fn empty_startup_info() -> windows_sys::Win32::System::Threading::STARTUPINFOEXW {
+    // SAFETY: an all-zero STARTUPINFOEXW is the documented starting value.
+    unsafe { std::mem::zeroed() }
+}
+
+/// A `PROCESS_INFORMATION` for `CreateProcessW` to fill in.
+#[cfg(windows)]
+fn empty_process_information() -> windows_sys::Win32::System::Threading::PROCESS_INFORMATION {
+    // SAFETY: an all-zero PROCESS_INFORMATION is the documented starting value.
+    unsafe { std::mem::zeroed() }
+}
+
+/// A `SHELLEXECUTEINFOW` in its documented starting state.
+///
+/// `cbSize` and the verb are assigned by the caller before it is used.
+#[cfg(windows)]
+fn empty_shell_execute_info() -> windows_sys::Win32::UI::Shell::SHELLEXECUTEINFOW {
+    // SAFETY: an all-zero SHELLEXECUTEINFOW is the documented starting value.
+    unsafe { std::mem::zeroed() }
+}
+
+/// This thread's last Win32 error code.
+#[cfg(windows)]
+fn last_error() -> u32 {
+    // SAFETY: reads this thread's last error code and has no preconditions.
+    unsafe { windows_sys::Win32::Foundation::GetLastError() }
+}
+
 /// Opens a file for reading while denying write and delete sharing.
 ///
 /// Execution is still allowed: Windows counts `FILE_EXECUTE` as read access when
@@ -220,15 +233,6 @@ fn arguments(staged: &Path, target: &Path, relaunch: &Path) -> Vec<String> {
         "--relaunch".into(),
         relaunch.display().to_string(),
     ];
-    // Only a packaged (Store) MusicBee has one, and only a packaged MusicBee
-    // needs it: Windows refuses to execute the image under `WindowsApps`
-    // directly, so the path above cannot start it and the package has to be
-    // activated by identity instead.
-    //
-    // Derived here rather than accepted from the host, which is the rule this
-    // whole module is built on: nothing is taken from the caller, so there is
-    // nothing to tamper with. The core runs inside MusicBee, so it is entitled to
-    // ask Windows who it is.
     if let Some(aumid) = current_aumid() {
         args.push("--relaunch-aumid".into());
         args.push(aumid);
@@ -237,7 +241,12 @@ fn arguments(staged: &Path, target: &Path, relaunch: &Path) -> Vec<String> {
 }
 
 /// This process's Application User Model ID, or `None` when it has no package
-/// identity - which is the ordinary desktop install and by far the common case.
+/// identity - the ordinary desktop install, and by far the common case.
+///
+/// Only a packaged (Store) MusicBee has one, and only a packaged MusicBee needs
+/// it: Windows refuses to execute the image under `WindowsApps` by path, so the
+/// package has to be activated by identity instead. Asked of Windows rather than
+/// taken from the host, per this module's first rule.
 #[cfg(windows)]
 fn current_aumid() -> Option<String> {
     use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
@@ -331,15 +340,12 @@ pub(crate) fn plugins_dir() -> Option<PathBuf> {
 
 /// Starts the helper, with an elevation prompt when `elevate` is set.
 ///
-/// Two different mechanisms, because they want different things: an ordinary
-/// child process when no elevation is needed (see [`spawn_direct`]), and the
-/// shell's `runas` verb when it is - `CreateProcess` cannot elevate.
+/// An ordinary child process when no elevation is needed (see [`spawn_direct`]),
+/// and the shell's `runas` verb when it is, since `CreateProcess` cannot elevate.
 ///
-/// `runas` is what produces the UAC prompt. A declined prompt comes back as
-/// `ERROR_CANCELLED`, which is a distinct outcome rather than a failure: the
-/// staged download is untouched and the user can press the button again. That
-/// outcome is unreachable on the direct path, correctly - there is no prompt to
-/// decline.
+/// A declined UAC prompt comes back as `ERROR_CANCELLED`: a distinct outcome
+/// rather than a failure, since the staged download is untouched and the button
+/// still works. Unreachable on the direct path, which has no prompt.
 #[cfg(windows)]
 fn spawn(exe: &Path, arguments: &[String], elevate: bool) -> UpdateLaunch {
     if !elevate {
@@ -350,45 +356,24 @@ fn spawn(exe: &Path, arguments: &[String], elevate: bool) -> UpdateLaunch {
 
 /// Starts the helper as an ordinary child process.
 ///
-/// `CreateProcess` rather than the shell, and that distinction is the whole fix
-/// for the Store build. `ShellExecuteExW` hands the launch to Explorer, and a
-/// process Explorer starts is **outside** MusicBee's package container - so the
-/// paths in its argv, which MSIX virtualizes, resolve to nothing and the helper
-/// correctly refuses to act on them. A direct child inherits the container and
-/// sees exactly what the core sees.
-///
-/// It also removes a step that was never wanted here: the shell was only ever
-/// being used for its `runas` verb, which this path does not need.
-///
-/// The verified-helper handle the caller is holding stays meaningful. It denies
-/// write and delete sharing while permitting read, and Windows counts the image
-/// loader's `FILE_EXECUTE` as read - so the file can be executed but not swapped
-/// between the hash check and this call. Rust opens files non-inheritable, so the
-/// handle is not passed to the child either.
+/// `CreateProcess` rather than the shell, which is the whole fix for the Store
+/// build: an Explorer-started process runs outside MusicBee's package container,
+/// so the MSIX-virtualized paths in its argv resolve to nothing. The caller's
+/// verified-helper handle stays meaningful throughout: the image loader's
+/// `FILE_EXECUTE` counts as read, so the file runs but cannot be swapped.
 ///
 /// # Why a packaged parent needs more than `Command::spawn`
 ///
-/// A `CreateProcess` child of a packaged (MSIX) app does **not** inherit the
-/// package container by default, and that is documented behaviour rather than an
-/// anomaly: `PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY` defaults to
-/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`, which puts
-/// children *outside* the desktop app runtime environment. The helper then sees
-/// the un-redirected `%APPDATA%`, where nothing we staged exists, and correctly
-/// refuses to act on paths it cannot resolve.
+/// A `CreateProcess` child of a packaged (MSIX) app does not inherit the package
+/// container: `PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY` defaults to
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`. The helper then
+/// sees the un-redirected `%APPDATA%`, where nothing we staged exists (observed
+/// on a real Store install as `os error 3` resolving `--staged`).
 ///
-/// Observed twice on a real Store install, both times as
-/// `--staged "..." cannot be resolved: The system cannot find the path
-/// specified. (os error 3)`. The job object a packaged app runs in was
-/// suspected first and is ruled out: the helper ran, logged, and exited of its
-/// own accord.
-///
-/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE` reverses that for the
-/// child being created (not its descendants, which is all we need). The child
-/// then sees exactly what the core sees, so the existing argv needs no path
-/// translation - which is the reason this is preferable to resolving container
-/// paths with `GetFinalPathNameByHandleW` before passing them: that returns
-/// `\?\`-prefixed paths, and the helper's `checked_path` rejects a leading
-/// double backslash as a network path.
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE` reverses that for the child
+/// being created, so the existing argv needs no path translation - preferable to
+/// resolving container paths with `GetFinalPathNameByHandleW`, whose
+/// `\?\`-prefixed output the helper's `checked_path` rejects as a network path.
 #[cfg(windows)]
 fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     // Only a packaged parent has the problem, and the attribute is only
@@ -405,9 +390,8 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
                     UpdateLaunch::Failed
                 }
                 Ok(None) => UpdateLaunch::Launched,
-                // Not knowing is not the same as knowing it is fine, but the
-                // helper was started and the alternative is refusing an update
-                // that is probably running. Say so and go on.
+                // The helper did start, and refusing an update that is probably
+                // running is the worse answer. Say so and go on.
                 Err(e) => {
                     tracing::warn!(error = %e, "could not confirm the update helper is still running");
                     UpdateLaunch::Launched
@@ -424,32 +408,24 @@ fn spawn_direct(exe: &Path, arguments: &[String]) -> UpdateLaunch {
 /// How long to watch a just-started helper before believing it.
 ///
 /// `Launched` makes the panel close MusicBee, so reporting it for a helper that
-/// has already refused produces the worst outcome available: MusicBee shuts, the
-/// update does not happen, and there is no window left to say so. Every refusal
-/// the helper can reach before it starts waiting - a path it cannot resolve, a
-/// bundle that does not verify - happens in milliseconds, while a healthy helper
-/// then sits waiting for MusicBee for two minutes. A short pause separates the
-/// two cleanly, and it costs a keypress that was about to close the app anyway.
+/// has already refused is the worst outcome available: MusicBee shuts, the
+/// update does not happen, and no window is left to say so. Every refusal the
+/// helper can reach first happens in milliseconds, while a healthy one then
+/// waits minutes for MusicBee, so a short pause separates the two cleanly.
 #[cfg(windows)]
 const SETTLE: std::time::Duration = std::time::Duration::from_millis(750);
 
-/// Starts the helper as a child that stays *inside* this packaged app's
-/// container.
+/// Starts the helper as a child that stays *inside* this packaged container.
 ///
 /// `std::process::Command` cannot set proc-thread attributes, so this is raw
-/// `CreateProcessW` with an attribute list. The dance is fiddly in three places
-/// and each one is load-bearing:
-///
-/// - the attribute list is sized by a first, deliberately-failing
-///   `InitializeProcThreadAttributeList` call, then allocated and initialized;
-/// - `policy` must outlive the attribute list, because `UpdateProcThreadAttribute`
-///   stores the pointer rather than copying the value - a temporary here would
-///   be a dangling read at `CreateProcessW`;
-/// - `lpCommandLine` must be a writable buffer: `CreateProcessW` may modify it
-///   in place.
+/// `CreateProcessW` with an attribute list, and three details are load-bearing:
+/// the list is sized by a first, deliberately-failing
+/// `InitializeProcThreadAttributeList`; `policy` must outlive it, because
+/// `UpdateProcThreadAttribute` stores the pointer rather than the value; and
+/// `lpCommandLine` must be writable, because `CreateProcessW` may modify it.
 #[cfg(windows)]
 fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
         CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
         UpdateProcThreadAttribute, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
@@ -473,7 +449,7 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     // SAFETY: `buffer` is `size` bytes, which is what the probe asked for.
     if unsafe { InitializeProcThreadAttributeList(list, 1, 0, &mut size) } == 0 {
         tracing::error!(
-            code = unsafe { GetLastError() },
+            code = last_error(),
             "could not initialize the process attribute list"
         );
         return UpdateLaunch::Failed;
@@ -495,17 +471,17 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
         )
     };
     if updated == 0 {
-        let code = unsafe { GetLastError() };
+        let code = last_error();
         // SAFETY: `list` was initialized.
         unsafe { DeleteProcThreadAttributeList(list) };
         tracing::error!(code, "could not set the desktop-app breakaway policy");
         return UpdateLaunch::Failed;
     }
 
-    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    let mut startup: STARTUPINFOEXW = empty_startup_info();
     startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
     startup.lpAttributeList = list;
-    let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    let mut process: PROCESS_INFORMATION = empty_process_information();
 
     // SAFETY: `command_line` is a writable null-terminated wide buffer that
     // outlives the call, and the startup info carries its real size plus the
@@ -524,7 +500,7 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
             &mut process,
         )
     };
-    let code = unsafe { GetLastError() };
+    let code = last_error();
     // SAFETY: `list` was initialized and is no longer referenced by anything.
     unsafe { DeleteProcThreadAttributeList(list) };
 
@@ -535,11 +511,11 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
         );
         return UpdateLaunch::Failed;
     }
-    // Watch it briefly before believing it (see `SETTLE`), then let it go: the
-    // helper outlives us deliberately, so the handles are closed rather than
-    // held until process exit.
-    // SAFETY: both handles come from a successful CreateProcessW.
-    let status = settled_exit_code(process.hProcess);
+    // The helper outlives us by design, so the handles are closed rather than
+    // held to process exit.
+    // SAFETY: `CreateProcessW` succeeded, so the handle is live until closed
+    // below.
+    let status = unsafe { settled_exit_code(process.hProcess) };
     // SAFETY: both handles come from a successful CreateProcessW.
     unsafe {
         CloseHandle(process.hThread);
@@ -567,17 +543,20 @@ fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
 /// exit is a reason to refuse: `WAIT_FAILED` and a `GetExitCodeProcess` that
 /// does not succeed leave us not knowing, and turning not-knowing into a refusal
 /// would strand an update that is very likely applying.
+///
+/// # Safety
+/// `process` must be a live process handle that outlives the call.
 #[cfg(windows)]
-fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> Option<u32> {
+unsafe fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> Option<u32> {
     use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 
-    // SAFETY: `process` is a live process handle owned by the caller.
+    // SAFETY: the caller's contract says the handle is live for this call.
     if unsafe { WaitForSingleObject(process, SETTLE.as_millis() as u32) } != WAIT_OBJECT_0 {
         return None;
     }
     let mut status: u32 = 0;
-    // SAFETY: same handle, still live; `status` is a plain out-parameter.
+    // SAFETY: the same handle, plus `status` as a plain out-parameter.
     if unsafe { GetExitCodeProcess(process, &mut status) } == 0 {
         tracing::warn!("the update helper exited but its status could not be read");
         return None;
@@ -585,9 +564,15 @@ fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> Option<
     Some(status)
 }
 
+/// Starts the helper through the shell's `runas` verb, raising the UAC prompt.
+///
+/// `SEE_MASK_NOASYNC` because this process is about to be asked to exit: the
+/// shell must finish launching before we can go away. `SEE_MASK_NOCLOSEPROCESS`
+/// so `hProcess` comes back and the launch can be confirmed the way the direct
+/// paths confirm theirs, with the handle ours to close.
 #[cfg(windows)]
 fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
     use windows_sys::Win32::UI::Shell::{
         ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
     };
@@ -597,12 +582,8 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     let file = wide(&exe.display().to_string());
     let parameters = wide(&quote(arguments));
 
-    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    let mut info: SHELLEXECUTEINFOW = empty_shell_execute_info();
     info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
-    // NOASYNC because this process is about to be asked to exit: the shell must
-    // finish launching before we can go away.
-    // NOCLOSEPROCESS so `hProcess` comes back and the launch can be confirmed
-    // the same way the direct paths confirm theirs; the handle is ours to close.
     info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
     info.lpVerb = verb.as_ptr();
     info.lpFile = file.as_ptr();
@@ -613,13 +594,12 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     // outlives the call, and `cbSize` is the struct's real size.
     let ok = unsafe { ShellExecuteExW(&mut info) };
     if ok != 0 {
-        // `SEE_MASK_NOASYNC` waits for the shell to *start* the helper, not for
-        // it to survive - so without this an instant refusal still closes
-        // MusicBee into silence, which is the whole failure `SETTLE` exists to
-        // stop. The handle can still be null if the shell reused an existing
-        // process; nothing to watch then, and nothing to close.
+        // Null when the shell reused an existing process: nothing to watch,
+        // and nothing to close.
         if !info.hProcess.is_null() {
-            let status = settled_exit_code(info.hProcess);
+            // SAFETY: non-null after a successful `ShellExecuteExW` with
+            // NOCLOSEPROCESS, and closed only below.
+            let status = unsafe { settled_exit_code(info.hProcess) };
             // SAFETY: the handle came from a successful ShellExecuteExW with
             // NOCLOSEPROCESS, so closing it is this function's job.
             unsafe { CloseHandle(info.hProcess) };
@@ -634,8 +614,7 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
         return UpdateLaunch::Launched;
     }
 
-    // SAFETY: no pointers; reads the calling thread's code.
-    match unsafe { GetLastError() } {
+    match last_error() {
         ERROR_CANCELLED => {
             tracing::info!("the user declined the elevation prompt");
             UpdateLaunch::Cancelled
@@ -699,9 +678,6 @@ mod tests {
 
     #[test]
     fn a_staged_bundle_the_release_keys_do_not_trust_is_refused() {
-        // The marker says something is staged, the bundle is not signed by a
-        // release key, and nothing is launched. This is the check that matters:
-        // the file is about to run as administrator.
         let dir = std::env::temp_dir().join("mbrc-elevate-untrusted");
         let _ = std::fs::remove_dir_all(&dir);
         let staged = dir.join(STAGING_DIR).join("9.9.9");
@@ -730,10 +706,8 @@ mod tests {
         );
         assert_eq!(args[0], "update");
         assert_eq!(args[2], std::process::id().to_string());
-        // The helper parses `--flag value` pairs and rejects anything else, so
-        // the shape matters as much as the values. Nine, or eleven when this
-        // process is a packaged app and `--relaunch-aumid` is appended - which a
-        // test runner never is, but the assertion should say why it is nine.
+        // The helper parses `--flag value` pairs, so the shape matters as much
+        // as the values: eleven only when `--relaunch-aumid` is appended.
         assert!(
             args.len() == 9 || args.len() == 11,
             "unexpected argv shape: {args:?}"
@@ -762,16 +736,13 @@ mod tests {
 
     #[test]
     fn only_a_newer_bundle_is_an_upgrade() {
-        // The host reports a four-component .NET version; the staged manifest
-        // carries three. Both normalize before they are compared.
+        // Four .NET components against three; both normalize first.
         assert!(is_upgrade("1.6.0", "1.5.0.0"));
         assert!(is_upgrade("1.5.1", "1.5.0.0"));
-        // The case this gate exists for: a real, signed, older release staged by
-        // someone who could write to the staging directory.
+        // The case the gate exists for: a real, signed, older release.
         assert!(!is_upgrade("1.4.1", "1.5.0.0"));
         assert!(!is_upgrade("1.5.0", "1.5.0.0"));
-        // A prerelease sits below the release it precedes, so being offered
-        // 1.6.0-rc.1 while running 1.6.0 is not an upgrade either.
+        // A prerelease sits below the release it precedes.
         assert!(!is_upgrade("1.6.0-rc.1", "1.6.0.0"));
         assert!(is_upgrade("1.6.0-rc.1", "1.5.0.0"));
         // Unparseable on either side cannot be shown to be newer.

@@ -10,7 +10,7 @@
 //! So every line the helper prints is also appended to `mbrc-helper.log` beside
 //! the plugin's other logs. Printing continues: it costs nothing when there is no
 //! console and it is how the helper is read when run by hand, which is how the
-//! first of those bugs was actually found.
+//! first of those bugs was found.
 //!
 //! Deliberately not a logging framework. The helper is a short-lived process that
 //! writes a handful of lines; a dependency, a filter and a level system would all
@@ -36,26 +36,22 @@ fn sink() -> std::sync::MutexGuard<'static, Option<PathBuf>> {
 
 /// Point the log at the storage directory derived from `staged`.
 ///
-/// `staged` is `<storage>/updates/<version>`, so the storage directory is two
-/// levels up - the same derivation `update::backup_root` uses, kept consistent
-/// with it deliberately.
+/// `staged` is `<storage>/updates/<version>`, so storage is two levels up - the
+/// same derivation `update::backup_root` uses.
 ///
-/// Falls back to the temp directory when that cannot be written. This is not a
-/// theoretical fallback: a helper that started outside its package container
-/// cannot see the storage directory at all, and that is precisely the failure
-/// this log exists to make visible.
+/// Falls back to the temp directory when that cannot be written, which is not
+/// theoretical: a helper started outside its package container cannot see the
+/// storage directory at all, and that is the failure this log exists to show.
 pub fn direct_to_storage(staged: &Path) {
     *sink() = choose_sink(staged, &std::env::temp_dir());
 }
 
-/// Records where this process actually is, which is the question every
+/// Records where this process is running from, which is the question every
 /// Store-install failure has turned on.
 ///
-/// It is not answerable from the log otherwise, and the ambiguity is not
-/// theoretical: a helper that ran *outside* a package container resolves
-/// `%APPDATA%` literally, and on a machine that also has an ordinary install
-/// that path exists - so its lines append to the *other* install's
-/// `mbrc-helper.log` with nothing to say they came from somewhere else. Two
+/// A helper running outside a package container resolves `%APPDATA%` literally,
+/// and on a machine that also has an ordinary install that path exists - so its
+/// lines append to the *other* install's log with nothing to say so. Two
 /// installs, one file, no attribution. This line is the attribution.
 pub fn note_environment() {
     let identity = match package_family_name() {
@@ -106,16 +102,11 @@ fn package_family_name() -> Option<String> {
 
 /// Where a line would go, given a staging directory and a fallback directory.
 ///
-/// Split from [`direct_to_storage`] so it can be tested without the fallback
-/// resolving to the real temp directory - a test writing into the actual
-/// `%TEMP%/mbrc-helper.log` would leave its fixtures in a file a user is later
-/// asked to read, and a diagnostics bundle would collect them.
-///
-/// `None` when `staged` is not a real staging path at all, which only a caller
-/// bug produces. The fallback is for a storage directory that exists and cannot
-/// be written - the outside-the-container case - not for arguments that were
-/// never a path; inventing a log file for those is how the test suite ended up
-/// writing into the user's.
+/// Split from [`direct_to_storage`] so a test need not point the fallback at the
+/// real `%TEMP%`, where its fixtures would land in a file users are asked to
+/// read. `None` when `staged` is not a staging path at all: the fallback covers
+/// a storage directory that cannot be written, not arguments that were never a
+/// path.
 fn choose_sink(staged: &Path, fallback_dir: &Path) -> Option<PathBuf> {
     let storage = staged.parent().and_then(Path::parent)?;
     if !storage.is_absolute() {
@@ -128,7 +119,7 @@ fn choose_sink(staged: &Path, fallback_dir: &Path) -> Option<PathBuf> {
     Some(fallback_dir.join(LOG_FILE))
 }
 
-/// Record a line, and print it too.
+/// Records a line, and prints it too.
 ///
 /// Never fails and never panics: the helper is mid-way through replacing a
 /// plugin, and losing a log line is not a reason to change what it does.
@@ -149,7 +140,7 @@ fn append(path: &Path, message: &str) -> std::io::Result<()> {
     writeln!(file, "{} mbrc-helper: {message}", timestamp())
 }
 
-/// Whether a line can actually be appended here, tested by opening rather than by
+/// Whether a line can be appended here, tested by opening rather than by
 /// checking the directory: under a package container the answer depends on who is
 /// asking, not on what the path looks like.
 fn writable(path: &Path) -> bool {
@@ -235,15 +226,11 @@ mod tests {
 
     #[test]
     fn falls_back_when_the_storage_directory_is_unreachable() {
-        // What a helper started outside its package container sees: the storage
-        // path it was handed does not resolve. Uses a scratch fallback rather
-        // than the real temp directory, so the suite never writes into the log a
-        // user is actually asked to read.
+        // A scratch fallback rather than the real temp directory, so the suite
+        // never writes into a log a user is actually asked to read.
         let fallback = scratch("fallback");
-        // Absolute, so it is a real staging path on either platform, but pointing
-        // into a directory that does not exist - a Windows-shaped literal like
-        // `Z:\...` is one component with no parent on Linux and would take the
-        // "never a path" branch instead, testing nothing.
+        // Absolute but nonexistent on either platform: a Windows-shaped literal
+        // would take the "never a path" branch and test nothing.
         let staged = scratch("unreachable")
             .join("no-such-directory")
             .join("mb_remote")
@@ -297,11 +284,11 @@ mod tests {
 
     #[test]
     fn the_timestamp_is_a_real_date() {
-        // 2026-08-22T13:00:00Z
-        let (y, m, d) = civil_from_days(20_687);
-        assert_eq!((y, m, d), (2026, 8, 22));
-        // Epoch day zero, and a leap day.
-        assert_eq!(civil_from_days(0), (1970, 1, 1));
-        assert_eq!(civil_from_days(19_782), (2024, 2, 29));
+        const DAYS_TO_22_AUG_2026: i64 = 20_687;
+        const DAYS_TO_LEAP_DAY_2024: i64 = 19_782;
+
+        assert_eq!(civil_from_days(DAYS_TO_22_AUG_2026), (2026, 8, 22));
+        assert_eq!(civil_from_days(0), (1970, 1, 1), "epoch day zero");
+        assert_eq!(civil_from_days(DAYS_TO_LEAP_DAY_2024), (2024, 2, 29));
     }
 }

@@ -103,7 +103,7 @@ struct Persisted {
     host_environment: Vec<CaptureEnvEntry>,
 }
 
-/// Begin a capture. Refused while one is already running.
+/// Begins a capture. Refused while one is already running.
 pub fn start(core: &Core, request: CaptureRequest) -> MbrcResult {
     let storage = core.config.storage_path.clone();
     let mut guard = lock();
@@ -132,7 +132,7 @@ pub fn start(core: &Core, request: CaptureRequest) -> MbrcResult {
     MbrcResult::Ok
 }
 
-/// End the capture and write the bundle in the background.
+/// Ends the capture and writes the bundle in the background.
 ///
 /// The write is off-thread for the same reason the update flow's are: the host
 /// calls this from MusicBee's UI thread, and zipping tens of megabytes of log
@@ -153,13 +153,8 @@ pub fn stop(core: std::sync::Arc<Core>, request: &CaptureRequest) -> MbrcResult 
 
     let destination = request.destination_dir.clone();
     std::thread::spawn(move || {
-        // Zipping tens of megabytes takes seconds, and the C# callback delegates
-        // are released at `mbrc_shutdown` - which a user pressing Stop and then
-        // immediately closing MusicBee (or saving a port change, which re-inits
-        // the core) reaches well inside that window. The report reads the plugin
-        // version back through the host, so this is checked before the build, not
-        // just before the event. Narrows the window rather than closing it,
-        // exactly as the update jobs do.
+        // Checked before the build, not just before the event: zipping takes
+        // seconds, and the host's delegates go away at `mbrc_shutdown`.
         if !crate::state::is_initialized() {
             tracing::warn!("skipping the diagnostics bundle: the core shut down first");
             lock().resting = CAPTURE_IDLE;
@@ -170,7 +165,7 @@ pub fn stop(core: std::sync::Arc<Core>, request: &CaptureRequest) -> MbrcResult 
     MbrcResult::Ok
 }
 
-/// Build the bundle and record the outcome. Split out of the thread body in
+/// Builds the bundle and records the outcome. Split out of the thread body in
 /// [`stop`] so the shutdown guard and the work it guards can be exercised
 /// separately - a test builds a `Core` directly rather than through
 /// `state::initialize`, so it never satisfies that guard.
@@ -198,7 +193,7 @@ fn finish(core: &Core, session: &Session, destination: &str) {
     }
 }
 
-/// Abandon the capture: restore the level and write nothing.
+/// Abandons the capture: restores the level and writes nothing.
 pub fn cancel(core: &Core) -> MbrcResult {
     let mut guard = lock();
     if guard.session.take().is_none() {
@@ -238,26 +233,22 @@ pub fn status() -> CaptureStatus {
     }
 }
 
-/// Serialize the status as MessagePack for the settings panel.
+/// Serializes the status as MessagePack for the settings panel.
 pub fn status_bytes() -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(&status()).ok()
 }
 
-/// Resume a capture that a MusicBee restart interrupted.
+/// Resumes a capture that a MusicBee restart interrupted.
 ///
-/// Called once from init. The log file is appended across restarts rather than
-/// truncated, so the original offset still points at the start of the window and
-/// the capture simply continues - which is the whole reason a startup bug can be
-/// captured at all. A record older than [`MAX_CAPTURE`] is dropped instead:
-/// resuming it would immediately expire.
+/// Called once from init. The log is appended across restarts rather than
+/// truncated, so the original offset still points at the start of the window -
+/// which is the whole reason a startup bug can be captured at all. A record
+/// older than [`MAX_CAPTURE`] is dropped rather than resumed into an instant
+/// expiry, and a session that is already live is left alone: a port change
+/// re-inits the core without clearing this module's state.
 pub fn resume_after_restart(core: &Core) {
-    // A settings save that changes the port re-inits the core in-process
-    // (`mbrc_shutdown` + `mbrc_initialize`), and shutdown does not clear this
-    // module's state - so without this the live session would be replayed over
-    // itself: a second watchdog, a bumped generation, and the status reset
-    // mid-capture.
-    // Scoped so the guard is unmistakably released before the lock is taken
-    // again below - this mutex is not reentrant.
+    // Scoped so the guard is released before the lock is taken again below:
+    // this mutex is not reentrant.
     {
         let guard = lock();
         if guard.session.is_some() {
@@ -282,20 +273,7 @@ pub fn resume_after_restart(core: &Core) {
     let session = Session {
         generation: GENERATION.fetch_add(1, Ordering::AcqRel) + 1,
         started_unix_ms: persisted.started_unix_ms,
-        // Rebased onto this process's clock, with the elapsed time already spent
-        // taken off, so the auto-stop still fires 30 minutes after the capture
-        // began rather than 30 minutes after the restart.
-        //
-        // `checked_sub`, not `-`: on Windows an `Instant` counts from boot, and
-        // the restart being resumed through is very often a *reboot*. Subtracting
-        // four minutes of elapsed capture from a machine that has been up for one
-        // would underflow, and plain `Sub` panics on that - inside
-        // `mbrc_initialize`, which would report the whole plugin as failed to
-        // start while the core was in fact already up. Falling back to now just
-        // gives the resumed capture its full window again.
-        started: Instant::now()
-            .checked_sub(MAX_CAPTURE - remaining)
-            .unwrap_or_else(Instant::now),
+        started: rebased_start(remaining),
         log_offset: persisted.log_offset,
         host_environment: persisted.host_environment,
     };
@@ -313,7 +291,20 @@ pub fn resume_after_restart(core: &Core) {
     spawn_watchdog(generation, remaining);
 }
 
-/// Assemble the report and hand it to the bundle writer.
+/// Assembles the report and hands it to the bundle writer.
+/// The start instant of a resumed capture, rebased onto this process's clock.
+///
+/// The time already spent is taken off, so the auto-stop fires [`MAX_CAPTURE`]
+/// after the capture began rather than after the restart. `checked_sub` because
+/// a Windows `Instant` counts from boot and the restart is often a reboot:
+/// taking four minutes of capture off a machine up for one would panic inside
+/// `mbrc_initialize` and report the plugin as failed to start.
+fn rebased_start(remaining: Duration) -> Instant {
+    Instant::now()
+        .checked_sub(MAX_CAPTURE - remaining)
+        .unwrap_or_else(Instant::now)
+}
+
 fn build_bundle(core: &Core, session: &Session, destination: &str) -> Result<String, String> {
     if destination.trim().is_empty() {
         return Err("no destination folder was given for the bundle".to_owned());
@@ -329,7 +320,7 @@ fn build_bundle(core: &Core, session: &Session, destination: &str) -> Result<Str
     Ok(path.to_string_lossy().into_owned())
 }
 
-/// End a capture that nobody stopped, restoring the log level.
+/// Ends a capture that nobody stopped, restoring the log level.
 ///
 /// Deliberately does not write a bundle: there is no destination to write it to
 /// (the host supplies that on stop), and a user who walked away is not waiting
@@ -360,7 +351,7 @@ fn expire(generation: u64) {
     }
 }
 
-/// Watch a capture and expire it once `remaining` has passed.
+/// Watches a capture and expire it once `remaining` has passed.
 ///
 /// A thread rather than a lazy check on the next query: with the panel closed
 /// nothing queries, and the whole point is to bound a capture the user forgot.
@@ -386,7 +377,7 @@ fn spawn_watchdog(generation: u64, remaining: Duration) {
     });
 }
 
-/// Raise the log level for the capture, without ever lowering it: a user already
+/// Raises the log level for the capture, without ever lowering it: a user already
 /// running at trace asked for more than debug, and a capture should not take it
 /// away.
 fn raise_level(core: &Core) {
@@ -397,7 +388,7 @@ fn raise_level(core: &Core) {
     apply_level(level);
 }
 
-/// Put the level back to whatever the user has saved.
+/// Puts the level back to whatever the user has saved.
 fn restore_level(core: &Core) {
     apply_level(core.config.log_level);
 }
@@ -419,7 +410,7 @@ fn directive_for(level: LogLevel) -> &'static str {
     }
 }
 
-/// Tell an open panel to re-query. Best effort: no host callback, no event.
+/// Tells an open panel to re-query. Best effort: no host callback, no event.
 fn emit(core: &Core) {
     core.providers
         .emit_event(HostEventType::CaptureStatusChanged, &[]);
@@ -436,7 +427,7 @@ fn capture_file(storage: &str) -> std::path::PathBuf {
     std::path::Path::new(storage).join(CAPTURE_FILE)
 }
 
-/// Record the running capture. A failure here is logged and tolerated: it costs
+/// Records the running capture. A failure here is logged and tolerated: it costs
 /// the restart-survival, not the capture.
 fn persist(storage: &str, session: &Session) {
     if storage.is_empty() {
@@ -503,7 +494,7 @@ mod tests {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Reset the module's global between tests, which share the process.
+    /// Resets the module's global between tests, which share the process.
     fn reset() {
         let mut guard = lock();
         guard.session = None;
@@ -525,9 +516,8 @@ mod tests {
     #[test]
     fn status_round_trips_as_named_msgpack() {
         let _exclusive = exclusive();
-        // Locks the serialization the C# contractless resolver reads by name;
-        // to_vec (positional) would deserialize as a fixarray and break the
-        // panel at runtime, which no serde round-trip test would catch.
+        // `to_vec` would write a positional fixarray and break the panel at
+        // runtime, which no serde round-trip would catch.
         reset();
         let bytes = status_bytes().expect("status serializes");
         let back: CaptureStatus = rmp_serde::from_slice(&bytes).expect("named map decodes");
@@ -620,7 +610,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Drive a whole capture against a real `Core` on a scratch storage dir:
+    /// Drives a whole capture against a real `Core` on a scratch storage dir:
     /// start, log something, stop, and read the bundle back. The one test that
     /// proves the pieces fit together rather than testing each in isolation.
     #[test]
@@ -636,8 +626,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("create scratch dir");
         let storage = dir.to_str().expect("utf8 dir").to_owned();
 
-        // Seed a log with a line from *before* the capture, so the window has
-        // something to exclude.
+        // A line from before the capture, for the window to exclude.
         std::fs::write(
             crate::logging::active_log_path(&storage),
             "before the capture\n",
@@ -646,8 +635,7 @@ mod tests {
 
         let config = Config {
             storage_path: storage.clone(),
-            // Loopback: a test must never bind 0.0.0.0 (Windows Firewall prompts
-            // per binary path, and cargo re-hashes those every rebuild).
+            // Never 0.0.0.0 in a test: it raises a firewall prompt per binary.
             ..Config::for_test(0)
         };
         let core = Arc::new(Core::new(Arc::new(NullProviders), config));
@@ -668,7 +656,6 @@ mod tests {
             "a capture should start on an idle core"
         );
         assert_eq!(status().state, CAPTURE_CAPTURING);
-        // A second start while one runs is refused, not queued.
         assert_eq!(
             start(&core, CaptureRequest::default()),
             MbrcResult::AlreadyRunning
@@ -679,7 +666,7 @@ mod tests {
 "
         .len() as u64;
 
-        // Something happening during the window.
+        // A log line written inside the capture window.
         {
             use std::io::Write as _;
             let mut log = std::fs::OpenOptions::new()
@@ -690,18 +677,15 @@ mod tests {
         }
 
         let out = dir.join("desktop");
-        // Stop carries only the destination; the environment was recorded at
-        // start, which is what the host does.
+        // Stop carries only the destination, as the host does.
         let request = CaptureRequest {
             destination_dir: out.to_str().expect("utf8 dir").to_owned(),
             host_environment: Vec::new(),
         };
         assert_eq!(stop(core.clone(), &request), MbrcResult::Ok);
 
-        // `stop` hands the build to a thread that first checks the core is still
-        // initialized - which a directly-constructed `Core` never is, so the
-        // thread returns without building. Drive the work half here; the guard
-        // itself is covered by `a_bundle_is_skipped_when_the_core_shut_down`.
+        // An uninitialized `Core` means `stop`'s thread returns without
+        // building, so drive the work half directly.
         let session = Session {
             generation: 0,
             started_unix_ms: started,
@@ -752,7 +736,6 @@ mod tests {
             "3.6.8859"
         );
         assert_eq!(report["listening"]["port"], 0);
-        // The redaction policy travelled with the report.
         assert_eq!(
             report["settings"]["redacted_keys"],
             serde_json::json!(["allowed_addresses"])
@@ -765,9 +748,8 @@ mod tests {
     #[test]
     fn a_bundle_is_skipped_when_the_core_shut_down() {
         let _exclusive = exclusive();
-        // The C# callback delegates are released at `mbrc_shutdown`, and the
-        // report reads the plugin version back through them. A test `Core` is
-        // never registered in the global state, so this is the shut-down case.
+        // A test `Core` is never in the global state, which is the shut-down
+        // case: the report reads the plugin version back through the host.
         use crate::config::Config;
         use crate::providers::NullProviders;
         use std::sync::Arc;

@@ -1,7 +1,9 @@
-//! Per-connection IO. Inbound frames run through the pure [`Session`] state
-//! machine; outbound frames - both request replies and broadcasts - funnel
-//! through one channel to a dedicated writer task, so the read loop and the
-//! broadcast fan-out never race on the socket.
+//! Per-connection IO.
+//!
+//! Inbound frames run through the pure [`Session`] state machine; outbound
+//! frames - both request replies and broadcasts - funnel through one channel to
+//! a dedicated writer task, so the read loop and the broadcast fan-out never
+//! race on the socket.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -11,51 +13,38 @@ use socket2::{SockRef, TcpKeepalive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Notify;
 
 use mbrc_wire::{frame_line, FrameAccumulator};
 
-use crate::server::registry::Admit;
+use crate::server::registry::{Admit, Role};
 use crate::server::session::Session;
 use crate::state::Core;
 
 /// Pre-serialized server keepalive frame (raw JSON; the writer adds framing).
-/// Sent every `ping_interval_secs` (15s, the C# plugin's cadence) to broadcast
-/// subscribers only. A live client answers each ping with `pong`; the ping also
-/// fails fast on a half-open socket (the send errors, closing the connection).
+/// Sent every `ping_interval_secs` to broadcast subscribers only. Its real job
+/// is failing fast on a half-open socket: the send errors and the connection
+/// closes, whether or not the client bothers to `pong`.
 const PING_FRAME: &str = r#"{"context":"ping","data":""}"#;
 
-/// Tag every frame/decision emitted while handling one socket with its
-/// `conn_id`, so the interleaved wire log (many overlapping iOS sockets) can be
-/// attributed to a single connection. `peer` stays on the open/close lines.
+/// Tags every frame and decision from one socket with its `conn_id`, so the
+/// interleaved wire log (many overlapping iOS sockets) can be read per
+/// connection. `peer` stays on the open/close lines.
 ///
-/// Deliberately INFO, not DEBUG. A span caches whether it is enabled **when it
-/// is constructed** and never re-evaluates it, and the reload layer cannot
-/// revive one that was born as `Span::none()`. A diagnostics capture raises the
-/// level only after the fact, so a DEBUG span left every connection that already
-/// existed permanently unattributable - including the long-lived broadcast
-/// socket, the one a push-path investigation is actually about. Measured on
-/// 2026-08-30: the subscriber contributed zero attributed lines across sixteen
-/// minutes, while a connection opened after the raise carried its `conn_id`
-/// throughout.
-///
-/// INFO is the floor of every filter the plugin installs (both `logging::init`
-/// fallbacks and all three levels in `capture.rs` / `NativeBridge.SetLogLevel`),
-/// so the span is always live. The span emits nothing itself; its level only
-/// decides whether it exists, which costs one span per connection and nothing
-/// per frame.
+/// INFO, not DEBUG: a span caches whether it is enabled at construction and can
+/// never be revived, so a DEBUG span leaves every connection predating a capture
+/// unattributable. It is held across the synchronous `handle_frame`, covering
+/// the wire logs and handshake decisions inside it without crossing an await.
 fn conn_span(conn_id: u64) -> tracing::Span {
     tracing::info_span!("conn", conn_id)
 }
 
-/// Log a keepalive ping on the same `mbrc::wire` target as every other frame.
-/// Pings are pushed, not replies, so nothing else in the wire log would show
-/// them; without this a capture can't tell a quiet client from a dead one.
-/// Logged here rather than in the broadcaster because a ping belongs to one
-/// connection - hence the `conn_id`, which broadcast lines deliberately lack.
-/// DEBUG, not TRACE: a diagnostics capture only raises the level to DEBUG, and
-/// at 4 pings/min per subscriber the volume is nothing next to a real capture.
+/// Logs a keepalive ping on the same `mbrc::wire` target as every other frame,
+/// so a capture can tell a quiet client from a dead one. Logged here rather than
+/// in the broadcaster because a ping belongs to one connection - hence the
+/// `conn_id`, which broadcast lines lack. DEBUG, not TRACE: a diagnostics
+/// capture only raises the level to DEBUG.
 fn log_ping(conn_id: u64) {
     tracing::debug!(
         target: "mbrc::wire",
@@ -68,17 +57,18 @@ fn log_ping(conn_id: u64) {
     );
 }
 
-/// Drive one client connection to completion (EOF, close request, or IO error).
+/// Drives one client connection to completion (EOF, close request, or IO error).
+///
+/// # Idle policy
+///
+/// Three rules, by what the socket has become. An un-handshaked socket is reaped
+/// quickly. A broadcast subscriber is never reaped: reaping one breaks library
+/// sync, and the shipped C# plugin did not either. An auxiliary channel sits
+/// between - kept for reuse, closed once abandoned past `aux_idle_timeout_secs`,
+/// because shipped iOS clients leak one per user action and would otherwise walk
+/// into the per-IP cap. That cap's eviction, not this, is the real bound.
 pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::io::Result<()> {
-    stream.set_nodelay(true).ok();
-    // OS-level TCP keepalive so the kernel detects and drops dead half-open
-    // sockets. This is the leak defense that lets us stop idle-reaping live
-    // handshaked connections at the app layer (which was killing syncs).
-    let keepalive =
-        TcpKeepalive::new().with_time(Duration::from_secs(core.config.tcp_keepalive_secs));
-    if let Err(e) = SockRef::from(&stream).set_tcp_keepalive(&keepalive) {
-        tracing::debug!(%peer, error = %e, "failed to set TCP keepalive");
-    }
+    configure_socket(&stream, peer, core.config.tcp_keepalive_secs);
     let (mut reader, writer) = stream.into_split();
 
     let (out_tx, out_rx) = mpsc::unbounded_channel::<String>();
@@ -93,18 +83,12 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let mut closing = false;
     let opened_at = tokio::time::Instant::now();
 
-    // Per-connection close signal, fired by the registry to supersede a stale
-    // main socket when the same client_id reconnects.
+    // Fired by the registry to supersede a stale main socket.
     let shutdown = Arc::new(Notify::new());
 
-    // Server keepalive + un-handshaked reap. `read` in the select is cancel-safe,
-    // so dropping it when the ping tick fires loses no bytes.
-    let ping_interval = Duration::from_secs(core.config.ping_interval_secs);
     let unhandshaked_timeout = Duration::from_secs(core.config.unhandshaked_timeout_secs);
     let aux_idle_timeout = Duration::from_secs(core.config.aux_idle_timeout_secs);
-    let mut ping_tick = tokio::time::interval(ping_interval);
-    ping_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    ping_tick.tick().await; // consume the immediate first tick
+    let mut ping_tick = ping_ticker(Duration::from_secs(core.config.ping_interval_secs)).await;
     let mut last_inbound = tokio::time::Instant::now();
 
     tracing::debug!(%peer, conn_id, "connection opened");
@@ -125,17 +109,6 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 break;
             }
             _ = ping_tick.tick() => {
-                // A socket that connected but never completed the handshake is
-                // reaped quickly (it negotiated nothing). A broadcast subscriber is
-                // never idle-reaped at all, matching the shipped C# plugin: a real
-                // client keeps its event socket open and closes it itself, so
-                // reaping it mid-idle is exactly what breaks sync / leaves the app
-                // non-responsive. Auxiliary channels sit between the two - kept
-                // open for reuse, but closed once abandoned past
-                // `aux_idle_timeout_secs`, which defaults high enough that reuse
-                // still works. Dead sockets are also caught by OS TCP keepalive or
-                // the ping send failing; leaks are bounded by the per-client /
-                // per-IP caps.
                 if session.protocol_version.is_none() {
                     let idle = last_inbound.elapsed();
                     if idle >= unhandshaked_timeout {
@@ -148,14 +121,6 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                         break;
                     }
                 }
-                // Auxiliary (no_broadcast) sockets get a long idle window of
-                // their own. Shipped iOS clients open one of these per user
-                // action and never close it, so without a drain they accumulate
-                // until the per-IP cap starts refusing. Subscribers are exempt -
-                // reaping those is what broke library syncs - and the window is
-                // deliberately generous, because iOS does reuse some aux sockets.
-                // The per-IP eviction path is what actually guarantees a client
-                // can't lock itself out; this is slow hygiene for long sessions.
                 let subscribes = registered && !session.no_broadcast;
                 if registered && !subscribes && aux_idle_timeout > Duration::ZERO {
                     let idle = last_inbound.elapsed();
@@ -179,15 +144,10 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
             }
         };
         last_inbound = tokio::time::Instant::now();
-        // Keep the registry's idea of activity current, so the per-IP cap evicts
-        // sockets the client has abandoned rather than ones it is still using.
         core.registry.touch(conn_id);
         accumulator.push_bytes(&buf[..n]);
 
         while let Some(line) = accumulator.next_frame() {
-            // handle_frame is synchronous (no await), so holding the span guard
-            // across it is safe. It covers the c2s/s2c wire logs and the
-            // handshake/drop decisions emitted inside.
             let _guard = conn_span.enter();
             let outcome = session.handle_frame(
                 &line,
@@ -202,49 +162,11 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                     break;
                 }
             }
-            // Once the handshake completes, register the connection (enforcing the
-            // per-client cap + superseding a stale main), then subscribe to
-            // broadcasts unless the client opted out with no_broadcast.
             if !registered && session.protocol_version.is_some() {
                 registered = true;
-                let is_main = !session.no_broadcast;
-                match core.registry.register(
-                    conn_id,
-                    peer.ip(),
-                    session.client_id.as_deref(),
-                    is_main,
-                    peer.ip().is_loopback(),
-                    shutdown.clone(),
-                ) {
-                    Admit::Admitted => {
-                        tracing::debug!(
-                            platform = session.platform.as_deref().unwrap_or("unknown"),
-                            protocol = session.protocol_version.unwrap_or(0),
-                            broadcasts = is_main,
-                            client_id = session.client_id.as_deref().unwrap_or("none"),
-                            "handshake complete; connection registered"
-                        );
-                        if is_main {
-                            core.broadcaster.register(conn_id, out_tx.clone());
-                        }
-                    }
-                    // WARN for the same reason as the per-IP refusal: the client
-                    // is about to stop working and INFO would say nothing.
-                    Admit::RejectedCap => {
-                        tracing::warn!(
-                            %peer,
-                            conn_id,
-                            client_id = session.client_id.as_deref().unwrap_or("none"),
-                            "rejecting connection: per-client cap reached"
-                        );
-                        core.blocked.record(
-                            peer.ip(),
-                            peer.port(),
-                            crate::server::blocked::BlockReason::PerClientCap,
-                        );
-                        closing = true;
-                        break;
-                    }
+                if !register_and_subscribe(&core, &session, conn_id, peer, &shutdown, &out_tx) {
+                    closing = true;
+                    break;
                 }
             }
             if outcome.close {
@@ -253,11 +175,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
             }
         }
 
-        // A frame that blew past the accumulator's cap with no terminator is an
-        // unbounded-buffer attack or a badly broken peer. The accumulator has
-        // already dropped the buffered bytes; close the socket (issue #138). Such
-        // a peer is never idle by the reaper's reckoning - it is sending
-        // constantly - so this is the only bound on it.
+        // Such a peer never goes idle, so this is the only bound on it (#138).
         if accumulator.overflowed() {
             tracing::warn!(
                 %peer,
@@ -274,10 +192,8 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         .unregister(conn_id, session.client_id.as_deref());
     drop(out_tx); // drop the last sender so the writer task drains and exits
     let _ = writer_task.await;
-    // One-line post-mortem per socket: whether it ever handshaked, how many
-    // frames it sent, and how many commands were dropped for want of a
-    // handshake. A closed iOS control socket shows handshaken=false with a high
-    // dropped count - the whole bug in a single line, no grep archaeology.
+    // One-line post-mortem per socket. A closed iOS control socket shows
+    // handshaken=false with a high dropped count - the whole bug in one line.
     tracing::debug!(
         %peer,
         conn_id,
@@ -292,7 +208,86 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     Ok(())
 }
 
-/// Drain outbound frames to the socket until every sender is dropped.
+/// Applies the socket options every connection wants.
+///
+/// OS-level TCP keepalive drops dead half-open sockets, which is what lets the
+/// server stop idle-reaping live handshaked connections - that was killing
+/// library syncs.
+fn configure_socket(stream: &TcpStream, peer: SocketAddr, keepalive_secs: u64) {
+    stream.set_nodelay(true).ok();
+    let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(keepalive_secs));
+    if let Err(e) = SockRef::from(stream).set_tcp_keepalive(&keepalive) {
+        tracing::debug!(%peer, error = %e, "failed to set TCP keepalive");
+    }
+}
+
+/// The server-keepalive ticker, with its immediate first tick consumed.
+///
+/// `read` in the select is cancel-safe, so dropping it when this fires loses no
+/// bytes.
+async fn ping_ticker(interval: Duration) -> tokio::time::Interval {
+    let mut tick = tokio::time::interval(interval);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    tick.tick().await;
+    tick
+}
+
+/// Registers a freshly handshaked connection and subscribes it to broadcasts
+/// unless it opted out, returning false when the per-client cap refuses it.
+///
+/// The refusal logs at WARN for the same reason the per-IP one does: the client
+/// is about to stop working, and at the default level INFO would say nothing.
+fn register_and_subscribe(
+    core: &Arc<Core>,
+    session: &Session,
+    conn_id: u64,
+    peer: SocketAddr,
+    shutdown: &Arc<Notify>,
+    out_tx: &UnboundedSender<String>,
+) -> bool {
+    let role = if session.no_broadcast {
+        Role::Auxiliary
+    } else {
+        Role::Subscriber
+    };
+    match core.registry.register(
+        conn_id,
+        peer.ip(),
+        session.client_id.as_deref(),
+        role,
+        shutdown.clone(),
+    ) {
+        Admit::Admitted => {
+            tracing::debug!(
+                platform = session.platform.as_deref().unwrap_or("unknown"),
+                protocol = session.protocol_version.unwrap_or(0),
+                broadcasts = role.is_subscriber(),
+                client_id = session.client_id.as_deref().unwrap_or("none"),
+                "handshake complete; connection registered"
+            );
+            if role == Role::Subscriber {
+                core.broadcaster.register(conn_id, out_tx.clone());
+            }
+            true
+        }
+        Admit::RejectedCap => {
+            tracing::warn!(
+                %peer,
+                conn_id,
+                client_id = session.client_id.as_deref().unwrap_or("none"),
+                "rejecting connection: per-client cap reached"
+            );
+            core.blocked.record(
+                peer.ip(),
+                peer.port(),
+                crate::server::blocked::BlockReason::PerClientCap,
+            );
+            false
+        }
+    }
+}
+
+/// Drains outbound frames to the socket until every sender is dropped.
 async fn writer_loop(mut writer: OwnedWriteHalf, mut out_rx: UnboundedReceiver<String>) {
     while let Some(frame) = out_rx.recv().await {
         if writer
@@ -311,12 +306,9 @@ mod tests {
     use super::*;
     use crate::logging::test_support::capture_wire_lines;
 
-    /// The regression guard for attribution across a level change. A span caches
-    /// whether it is enabled at construction and can never be revived, so a span
-    /// born while the filter sat at INFO - which is where it sits until a
-    /// capture raises it - has to be live at INFO or every connection that
-    /// predates the capture loses its `conn_id` for good. A `debug_span!` here
-    /// fails this.
+    /// Attribution has to survive a level change: a span born at INFO can never
+    /// be revived, so connections predating a capture would lose their `conn_id`
+    /// for good. A `debug_span!` fails this.
     #[test]
     fn the_conn_span_survives_being_created_before_a_capture() {
         let at_info = tracing_subscriber::fmt()

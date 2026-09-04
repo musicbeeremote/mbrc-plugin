@@ -28,14 +28,12 @@ const SCAN_INTERVAL_SECS: u64 = 60;
 /// burst of per-file `FileAddedToLibrary` notifications coalesces into one pass.
 const DEBOUNCE_SECS: u64 = 2;
 
-/// Run the Scanner loop until `shutdown` fires.
+/// Runs the Scanner loop until `shutdown` fires.
 pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
     let mut interval = tokio::time::interval(Duration::from_secs(SCAN_INTERVAL_SECS));
-    // A long blocking scan can miss ticks; skip the backlog instead of firing a
-    // burst of catch-up scans right after.
+    // Skip a missed-tick backlog rather than firing catch-up scans.
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    // The first tick fires immediately; the init reconcile already built the
-    // cache, so swallow it.
+    // The init reconcile already built the cache, so swallow the first tick.
     interval.tick().await;
 
     loop {
@@ -44,36 +42,44 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
             _ = core.scanner_nudge.notified() => {
                 // Debounce: let a burst of per-file nudges settle before scanning.
                 tokio::time::sleep(Duration::from_secs(DEBOUNCE_SECS)).await;
-                // A nudge means the library actually changed (a file was added,
-                // its tags edited, or it was deleted), so refresh the cover cache
-                // too - the only place a runtime artwork edit reaches the grid.
-                scan(&core, true).await;
+                scan_after_a_library_change(&core).await;
             }
             _ = interval.tick() => {
                 if core.broadcaster.client_count() > 0 {
-                    // Periodic RSS sample (debug-gated, so the syscall is skipped
-                    // when the level filters it out): during a paging sweep of a
-                    // huge library this should stay flat, proving the cache is
-                    // O(page) - the server-side half of the validation plan.
+                    // Debug-gated, so the syscall is skipped when filtered out.
+                    // Should stay flat under a paging sweep: the cache is O(page).
                     tracing::debug!(
                         rss_mib = crate::logging::rss_mib(),
                         tracks = core.metadata_cache.track_count(),
                         clients = core.broadcaster.client_count(),
                         "core memory sample"
                     );
-                    // Periodic safety net for metadata only; the album cover
-                    // delta rides the nudge path (an explicit change signal), so
-                    // an idle tick never does the extra album-enumeration FFI.
-                    scan(&core, false).await;
+                    scan_periodically(&core).await;
                 }
             }
         }
     }
 }
 
-/// Run one delta pass on a blocking worker, under the reconcile single-flight
-/// guard (so it never races an init/library-switch rebuild). When `covers` is
-/// set (the nudge path), the album cover cache is delta-refreshed too.
+/// A delta pass prompted by an explicit change signal.
+///
+/// A nudge means the library really changed - a file added, its tags edited, or
+/// it deleted - so the cover cache is refreshed too. This is the only path by
+/// which a runtime artwork edit reaches the grid.
+async fn scan_after_a_library_change(core: &Arc<Core>) {
+    scan(core, true).await;
+}
+
+/// The periodic safety net, for metadata only.
+///
+/// The cover delta rides the nudge path instead, so an idle tick never pays for
+/// the extra album-enumeration FFI.
+async fn scan_periodically(core: &Arc<Core>) {
+    scan(core, false).await;
+}
+
+/// Runs one delta pass on a blocking worker, under the reconcile single-flight
+/// guard, so it never races an init or library-switch rebuild.
 async fn scan(core: &Arc<Core>, covers: bool) {
     use crate::ffi::types::HostEventType;
 
@@ -83,19 +89,16 @@ async fn scan(core: &Arc<Core>, covers: bool) {
             tracing::debug!("scanner: reconcile in progress; skipping delta");
             return;
         };
-        // Tell the settings panel a scan is running (its cache-status line reads
-        // `is_reconciling`), matching what a manual rebuild emits. Paired with the
-        // finish event below so the line clears once the delta completes.
+        // Tells the panel's cache-status line a scan is running, and is paired
+        // with the finish event below so the line clears again.
         core.providers
             .emit_event(HostEventType::CacheStatusChanged, &[]);
         commands::library::refresh_library_delta(&core.metadata_cache, core.providers.as_ref());
         if covers {
             super::refresh_covers_delta(&core);
         }
-        // Released before the finish event, not after: the panel answers that
-        // event by re-reading `is_reconciling`, so telling it to look while the
-        // guard is still held would leave the line saying "Rebuilding cache..."
-        // until something else happened to refresh it.
+        // Released before the finish event: the panel answers that event by
+        // re-reading `is_reconciling`, so the guard must already be gone.
         drop(reconcile);
         core.providers
             .emit_event(HostEventType::CacheStatusChanged, &[]);

@@ -49,7 +49,7 @@ impl MetadataCache {
         self.validated.store(value, Ordering::Release);
     }
 
-    /// Read a cached response by key, deserialized to `T`. `None` when the cache
+    /// Reads a cached response by key, deserialized to `T`. `None` when the cache
     /// is disabled or not yet validated, on a miss, or on a decode error - the
     /// caller then falls back to the provider.
     pub fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
@@ -87,7 +87,7 @@ impl MetadataCache {
             .unwrap_or(false)
     }
 
-    /// Cache a response under `key`. No-op when disabled or not validated.
+    /// Caches a response under `key`. No-op when disabled or not validated.
     pub fn put<T: Serialize>(&self, key: &str, value: &T) {
         if !self.is_validated() {
             return;
@@ -102,7 +102,7 @@ impl MetadataCache {
         });
     }
 
-    /// Drop every cached entry (used on a library change): the generic blob cache
+    /// Drops every cached entry (used on a library change): the generic blob cache
     /// plus the track ordinal index and path-keyed tag cache. Resets the tracks
     /// watermark so the next scan rebuilds from scratch, but keeps the `META`
     /// table (it also holds the library fingerprint). Does not touch the
@@ -127,14 +127,10 @@ impl MetadataCache {
         self.clear();
     }
 
-    // ── Track ordinal index + path-keyed tag cache (MBRCIP-0001) ──
+    // ── Track ordinal index + path-keyed tag cache ──
     //
-    // The tracks list is the only browse list large enough to OOM the 32-bit
-    // core as a single blob, so it is stored as an ordinal path index
-    // (`TRACK_PATHS`, browse order) plus a path-keyed tag cache (`TRACK_TAGS`).
-    // A browse page reads one redb range over the index and looks up each path's
-    // tags - O(page), never the whole library. All reads/writes honor the same
-    // `validated` gate as the generic cache above.
+    // Tracks would OOM the 32-bit core as one blob, so it is an index plus a
+    // tag cache, behind the same `validated` gate as above.
 
     /// Number of tracks in the ordinal index. Zero when disabled, not validated,
     /// or the index is empty.
@@ -185,7 +181,7 @@ impl MetadataCache {
             .unwrap_or_default()
     }
 
-    /// Replace the ordinal index with `paths` in browse order (positions `0..n`).
+    /// Replaces the ordinal index with `paths` in browse order (positions `0..n`).
     /// Drops the previous index first, so add / delete / reorder all converge.
     /// No-op when disabled or not validated.
     pub fn replace_track_index(&self, paths: &[String]) {
@@ -222,7 +218,7 @@ impl MetadataCache {
         rmp_serde::from_slice(&bytes).ok()
     }
 
-    /// Cache the given tracks, keyed by each track's `src` path, in one write
+    /// Caches the given tracks, keyed by each track's `src` path, in one write
     /// transaction. No-op when disabled, not validated, or empty.
     pub fn put_track_tags(&self, tracks: &[Track]) {
         if !self.is_validated() || tracks.is_empty() {
@@ -239,7 +235,7 @@ impl MetadataCache {
         });
     }
 
-    /// Drop cached tags for these paths (a delta marked them changed; they are
+    /// Drops cached tags for these paths (a delta marked them changed; they are
     /// re-read lazily on the next serve). No-op when disabled, not validated, or
     /// empty.
     pub fn drop_track_tags(&self, paths: &[String]) {
@@ -272,7 +268,7 @@ impl MetadataCache {
             .unwrap_or(0)
     }
 
-    /// Record the tracks-cache sync watermark (unix seconds).
+    /// Records the tracks-cache sync watermark (unix seconds).
     pub fn set_tracks_synced_at(&self, ts: i64) {
         self.db.write(Durability::Immediate, |txn| {
             let mut table = txn.open_table(META)?;
@@ -281,7 +277,7 @@ impl MetadataCache {
         });
     }
 
-    /// Reconcile the stored library fingerprint against the current one. When
+    /// Reconciles the stored library fingerprint against the current one. When
     /// they differ (or none is stored), the cache is stale for this library, so
     /// it is cleared and the new fingerprint recorded. Either way the cache is
     /// marked validated, so reads/writes go live afterward. Returns whether the
@@ -427,53 +423,75 @@ mod tests {
         );
     }
 
-    #[test]
-    fn track_index_pages_and_tag_cache_round_trip() {
-        let cache = MetadataCache::new(temp_db("tracks"));
-        // Gated until validated.
-        cache.replace_track_index(&["a".into(), "b".into()]);
-        assert_eq!(cache.track_count(), 0, "no-op until validated");
-        assert!(cache.track_page_paths(0, 10).is_empty());
-
+    /// A cache holding five tracks and the tags for two of them.
+    fn indexed_cache(name: &str) -> MetadataCache {
+        let cache = MetadataCache::new(temp_db(name));
         cache.reconcile(1);
         let paths: Vec<String> = (0..5).map(|i| format!("/m/{i}.mp3")).collect();
         cache.replace_track_index(&paths);
-        assert_eq!(cache.track_count(), 5);
+        cache
+    }
 
-        // Range paging: offset 1, limit 2 -> items 1,2, in index order.
+    fn tagged(src: &str) -> Track {
+        Track {
+            src: src.into(),
+            title: "t".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_track_index_is_gated_until_the_cache_is_validated() {
+        let cache = MetadataCache::new(temp_db("tracks"));
+        cache.replace_track_index(&["a".into(), "b".into()]);
+        assert_eq!(cache.track_count(), 0);
+        assert!(cache.track_page_paths(0, 10).is_empty());
+    }
+
+    #[test]
+    fn a_page_is_served_from_the_index_in_order() {
+        let cache = indexed_cache("paging");
+        assert_eq!(cache.track_count(), 5);
         assert_eq!(
             cache.track_page_paths(1, 2),
             vec!["/m/1.mp3".to_string(), "/m/2.mp3".to_string()]
         );
-        // limit <= 0 -> the rest from offset.
-        assert_eq!(cache.track_page_paths(3, 0).len(), 2);
-        // Offset past the end -> empty.
-        assert!(cache.track_page_paths(99, 10).is_empty());
+    }
 
-        // Tag cache keyed by path.
-        let track = |src: &str| Track {
-            src: src.into(),
-            title: "t".into(),
-            ..Default::default()
-        };
+    #[test]
+    fn a_limit_of_zero_takes_the_rest_from_the_offset() {
+        assert_eq!(indexed_cache("limit").track_page_paths(3, 0).len(), 2);
+    }
+
+    #[test]
+    fn an_offset_past_the_end_is_empty() {
+        assert!(indexed_cache("offset").track_page_paths(99, 10).is_empty());
+    }
+
+    #[test]
+    fn tags_are_cached_by_path() {
+        let cache = indexed_cache("tags");
         assert!(cache.track_tags("/m/1.mp3").is_none());
-        cache.put_track_tags(&[track("/m/1.mp3"), track("/m/2.mp3")]);
+        cache.put_track_tags(&[tagged("/m/1.mp3")]);
         assert_eq!(cache.track_tags("/m/1.mp3").unwrap().title, "t");
-        // Drop marks only that path a miss again (re-read lazily).
+    }
+
+    #[test]
+    fn dropping_tags_affects_only_the_dropped_path() {
+        let cache = indexed_cache("drop");
+        cache.put_track_tags(&[tagged("/m/1.mp3"), tagged("/m/2.mp3")]);
         cache.drop_track_tags(&["/m/1.mp3".into()]);
         assert!(cache.track_tags("/m/1.mp3").is_none());
-        assert!(
-            cache.track_tags("/m/2.mp3").is_some(),
-            "only the dropped path is affected"
-        );
+        assert!(cache.track_tags("/m/2.mp3").is_some());
+    }
 
-        // A reorder rewrites the index but leaves path-keyed tags intact.
+    #[test]
+    fn a_reorder_rewrites_the_index_and_keeps_the_tags() {
+        let cache = indexed_cache("reorder");
+        cache.put_track_tags(&[tagged("/m/2.mp3")]);
         cache.replace_track_index(&["/m/2.mp3".into(), "/m/1.mp3".into()]);
         assert_eq!(cache.track_page_paths(0, 1), vec!["/m/2.mp3".to_string()]);
-        assert!(
-            cache.track_tags("/m/2.mp3").is_some(),
-            "tags survive a reorder"
-        );
+        assert!(cache.track_tags("/m/2.mp3").is_some());
     }
 
     #[test]
@@ -489,8 +507,7 @@ mod tests {
             src: "/x.mp3".into(),
             ..Default::default()
         }]);
-        // A library change clears index + tags + watermark (fingerprint gate kept).
-        assert!(cache.reconcile(2), "new fingerprint clears");
+        assert!(cache.reconcile(2), "a new fingerprint clears the cache");
         assert_eq!(cache.track_count(), 0);
         assert!(cache.track_tags("/x.mp3").is_none());
         assert_eq!(

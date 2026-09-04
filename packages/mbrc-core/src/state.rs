@@ -65,9 +65,7 @@ pub struct Core {
 impl Core {
     pub fn new(providers: Arc<dyn Providers>, config: Config) -> Self {
         let now_playing = NowPlayingCache::new(providers.clone());
-        // One shared redb store for both durable caches. Disabled (no-op) when
-        // there's no storage path (unit/integration tests). Import a shipped
-        // state.json once before the cover store reads from redb.
+        // One shared redb store for both durable caches.
         let db = Db::open(&config.storage_path);
         db.migrate_cover_state(&config.storage_path);
         let cover_store = Arc::new(CoverStore::new(db.clone(), config.storage_path.clone()));
@@ -92,7 +90,7 @@ impl Core {
         }
     }
 
-    /// Tell the long-running background work to stop at its next checkpoint.
+    /// Tells the long-running background work to stop at its next checkpoint.
     ///
     /// Set by both teardown paths, because the host uses both: `PluginHost` calls
     /// `mbrc_stop_networking` and only then `mbrc_shutdown`, so setting this in
@@ -101,7 +99,7 @@ impl Core {
         self.stopping.store(true, Ordering::Release);
     }
 
-    /// Clear it again, because stopping networking is not always leaving.
+    /// Clears it again, because stopping networking is not always leaving.
     ///
     /// Saving a new port stops and restarts networking on the same core, and a
     /// flag left set there would silently disable the cover build for the rest
@@ -122,16 +120,14 @@ impl Core {
         self.conn_counter.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Acquire the single-flight reconcile right, or `None` if one is already in
+    /// Acquires the single-flight reconcile right, or `None` if one is already in
     /// progress.
     ///
-    /// A guard rather than a pair of calls, because the work it spans is long
-    /// (a library scan, blocking calls into MusicBee, and a thread pool doing
-    /// the cover build) and the cost of not releasing it is silent and
-    /// permanent: no further rebuild would run for the rest of the session, a
-    /// library switch would be ignored, and the settings panel would sit on
-    /// "Rebuilding cache..." forever. Dropping is the one thing that happens on
-    /// every path out, including a panic.
+    /// A guard rather than a pair of calls: the work it spans is long, and the
+    /// cost of not releasing it is silent and permanent - no rebuild would run
+    /// again for the session, a library switch would be ignored, and the panel
+    /// would sit on "Rebuilding cache..." forever. Dropping is the one thing
+    /// that happens on every path out, including a panic.
     pub fn begin_reconcile(&self) -> Option<ReconcileGuard<'_>> {
         if self.reconciling.swap(true, Ordering::AcqRel) {
             None
@@ -171,7 +167,7 @@ fn lock() -> MutexGuard<'static, Option<Runtime>> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Store the initialized core. `AlreadyInitialized` if called again without an
+/// Stores the initialized core. `AlreadyInitialized` if called again without an
 /// intervening `shutdown`.
 pub fn initialize(providers: Arc<dyn Providers>, config: Config) -> MbrcResult {
     let mut guard = lock();
@@ -185,11 +181,13 @@ pub fn initialize(providers: Arc<dyn Providers>, config: Config) -> MbrcResult {
     MbrcResult::Ok
 }
 
-/// Serialize the initialized core's current settings as MessagePack (named maps,
-/// the on-disk settable fields; `storage_path` is skipped). `None` if not
-/// initialized. The settings panel reads this to populate its controls - Rust
-/// owns the read. MessagePack (not JSON) so the host needs no JSON dependency;
-/// the on-disk `core_settings.json` stays human-readable JSON separately.
+/// Serializes the initialized core's current settings as MessagePack (named
+/// maps, the on-disk settable fields; `storage_path` is skipped).
+///
+/// `None` if not initialized. The settings panel reads this to populate its
+/// controls - Rust owns the read. MessagePack (not JSON) so the host needs no
+/// JSON dependency; the on-disk `core_settings.json` stays human-readable JSON
+/// separately.
 pub fn read_settings_bytes() -> Option<Vec<u8>> {
     let guard = lock();
     let config = &guard.as_ref()?.core.config;
@@ -197,17 +195,16 @@ pub fn read_settings_bytes() -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(config).ok()
 }
 
-/// Validate and persist new settings (MessagePack from the host) to
-/// `core_settings.json` in the core's storage dir - Rust owns the write. The
-/// file stays JSON on disk; only the transport is MessagePack. The running core
-/// is NOT hot-reloaded here; the host re-inits (when the change needs it) to
-/// apply. Returns an error string on parse/validation/write failure.
+/// Validates and persists new settings (MessagePack from the host) to
+/// `core_settings.json` in the core's storage dir - Rust owns the write.
 ///
-/// The write is a **merge**, not a replace: the host's payload is applied key by
-/// key over the config currently on disk. The panel only knows a subset of
-/// [`Config`]'s fields, and deserializing its payload straight into a fresh
-/// `Config` would reset every field it omits back to its default - so saving the
-/// panel would silently wipe any Rust-only setting.
+/// The file stays JSON on disk; only the transport is MessagePack, and the host
+/// re-inits to apply rather than this hot-reloading. The write is a **merge**:
+/// the panel knows only a subset of [`Config`], so deserializing into a fresh
+/// one would reset every field it omits and wipe the Rust-only settings.
+///
+/// # Errors
+/// The payload failed to parse, failed validation, or could not be written.
 pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     let storage = storage_path().ok_or("core not initialized")?;
     let patch: serde_json::Value =
@@ -220,7 +217,7 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
 }
 
-/// Hand the staged update to the elevated helper.
+/// Hands the staged update to the elevated helper.
 ///
 /// The version the host reports is the one the staged bundle has to beat: a
 /// signature proves a bundle is ours, not that it is newer than what is running,
@@ -234,9 +231,7 @@ pub fn apply_staged_update() -> Option<crate::ffi::types::UpdateLaunch> {
     if storage.is_empty() {
         return None;
     }
-    // Falling back to the core's own version keeps a host that cannot answer
-    // from turning into an unconditional refusal; the two are stamped from the
-    // same `Directory.Build.props`.
+    // Safe to substitute: both are stamped from the same `Directory.Build.props`.
     let current = core.providers.plugin_version().unwrap_or_else(|e| {
         tracing::warn!(error = %e, "the host could not report its version; using the core's");
         crate::updates::CORE_VERSION.to_owned()
@@ -274,7 +269,7 @@ pub fn storage_path() -> Option<String> {
         .map(|state| state.core.config.storage_path.clone())
 }
 
-/// Apply the host's settings payload over `base`, field by field.
+/// Applies the host's settings payload over `base`, field by field.
 ///
 /// Going through `serde_json::Value` keeps this free of a hand-maintained list
 /// of settable fields: whatever keys the payload carries win, everything else
@@ -310,10 +305,12 @@ struct CacheStatus {
     metadata_ready: bool,
 }
 
-/// Dispatch a host -> core query (request/response). Returns the MessagePack
-/// result, or `None` when the core is not initialized or the handler has no
-/// answer. The generic entry point for the C# host's app-level reads; add a
-/// [`HostQueryType`] variant + arm here rather than a new FFI export.
+/// Dispatches a host -> core query (request/response).
+///
+/// Returns the MessagePack result, or `None` when the core is not initialized
+/// or the handler has no answer. The generic entry point for the C# host's
+/// app-level reads; add a [`HostQueryType`] variant + arm here rather than a
+/// new FFI export.
 pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
     match kind {
         HostQueryType::CacheStatus => cache_status_bytes(),
@@ -326,7 +323,7 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-/// Dispatch a host -> core command (fire-and-forget). The generic entry point
+/// Dispatches a host -> core command (fire-and-forget). The generic entry point
 /// for the C# host's app-level actions; add a [`HostCommandType`] variant + arm.
 pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
     match kind {
@@ -362,7 +359,7 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
     }
 }
 
-/// Decode a capture command's params. An empty payload is a valid request with
+/// Decodes a capture command's params. An empty payload is a valid request with
 /// nothing in it (`CancelCapture` sends one), so it is not an error.
 fn capture_request(params: &[u8]) -> Result<crate::ffi::dtos::CaptureRequest, String> {
     if params.is_empty() {
@@ -371,7 +368,7 @@ fn capture_request(params: &[u8]) -> Result<crate::ffi::dtos::CaptureRequest, St
     rmp_serde::from_slice(params).map_err(|e| e.to_string())
 }
 
-/// Run `action` against the initialized core, or report `NotInitialized`. The
+/// Runs `action` against the initialized core, or report `NotInitialized`. The
 /// lock is released before `action` runs: the update jobs it starts touch the
 /// core from their own threads.
 fn with_core(action: impl FnOnce(Arc<Core>) -> MbrcResult) -> MbrcResult {
@@ -385,7 +382,7 @@ fn with_core(action: impl FnOnce(Arc<Core>) -> MbrcResult) -> MbrcResult {
     action(core)
 }
 
-/// Serialize the current cache status as MessagePack for the settings panel.
+/// Serializes the current cache status as MessagePack for the settings panel.
 /// `None` if the core is not initialized.
 fn cache_status_bytes() -> Option<Vec<u8>> {
     let core = {
@@ -402,7 +399,7 @@ fn cache_status_bytes() -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(&status).ok()
 }
 
-/// Serialize the recent blocked-connection entries (newest first) as MessagePack
+/// Serializes the recent blocked-connection entries (newest first) as MessagePack
 /// for the settings panel. `None` if the core is not initialized; an empty log
 /// serializes to an empty array (not `None`).
 fn recent_blocked_bytes() -> Option<Vec<u8>> {
@@ -413,7 +410,7 @@ fn recent_blocked_bytes() -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(&core.blocked.recent()).ok()
 }
 
-/// Serialize the addresses a client can reach the server on (candidate interface
+/// Serializes the addresses a client can reach the server on (candidate interface
 /// IPv4s + the bound port) as MessagePack for the settings panel. `None` if the
 /// core is not initialized; an interface-less host yields an empty address list.
 fn listening_info_bytes() -> Option<Vec<u8>> {
@@ -429,7 +426,7 @@ fn listening_info_bytes() -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(&info).ok()
 }
 
-/// Serialize where the update flow stands as MessagePack for the settings panel.
+/// Serializes where the update flow stands as MessagePack for the settings panel.
 /// `None` if the core is not initialized; every other state is a real answer,
 /// including "nothing has been checked yet".
 fn update_status_bytes() -> Option<Vec<u8>> {
@@ -440,7 +437,7 @@ fn update_status_bytes() -> Option<Vec<u8>> {
     crate::updates::service::status_bytes(&core)
 }
 
-/// Clear the in-memory blocked-connection log (the panel's "Clear" button).
+/// Clears the in-memory blocked-connection log (the panel's "Clear" button).
 fn clear_blocked() -> MbrcResult {
     let guard = lock();
     match guard.as_ref() {
@@ -452,7 +449,7 @@ fn clear_blocked() -> MbrcResult {
     }
 }
 
-/// Kick a background rebuild of the requested cache (the settings panel's per-
+/// Kicks a background rebuild of the requested cache (the settings panel's per-
 /// cache buttons). A metadata rebuild first invalidates the metadata cache so the
 /// reconcile re-fetches the browse lists (an unchanged fingerprint would
 /// otherwise skip the re-fetch); a cover rebuild is incremental (re-fetches
@@ -474,7 +471,13 @@ fn rebuild(scope: RebuildScope) -> MbrcResult {
     MbrcResult::Ok
 }
 
-/// Build and fan out the broadcast frames for a MusicBee notification.
+/// Builds and fan out the broadcast frames for a MusicBee notification.
+///
+/// Library-changing notifications also maintain the metadata cache, which
+/// happens here rather than in the pure [`notifications::on_notification`]
+/// because it needs the owned `Arc<Core>`: the C# notification thread has no
+/// Tokio runtime, so the reconcile is spawned on a plain thread and does
+/// blocking FFI.
 pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
     // Clone the Arc and drop the lock before querying/broadcasting.
     let core = {
@@ -485,10 +488,6 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
         }
     };
 
-    // Library-changing notifications maintain the metadata cache. Handled here
-    // (not in the pure `on_notification`) because the switch needs the owned
-    // `Arc<Core>` to spawn the reconcile on a plain thread - the C# notification
-    // thread has no Tokio runtime, and the reconcile does blocking FFI.
     match ntype {
         NotificationType::LibrarySwitched => {
             // Gate reads off + clear immediately so nothing stale is served in
@@ -499,11 +498,8 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
             return MbrcResult::Ok;
         }
         NotificationType::FileAddedToLibrary => {
-            // A file changed the library: nudge the background Scanner to run a
-            // delta sooner (it rebuilds the ordinal index and drops changed
-            // tracks' cached tags). Debounced there, so a big import that fires
-            // this per-file collapses to a scan or two - NOT a full cache clear
-            // per file (which would wipe the whole ordinal index each time).
+            // A nudge, not a clear: the Scanner debounces these, so a big import
+            // collapses to a scan or two instead of a wipe per file.
             core.scanner_nudge.notify_one();
         }
         _ => {}
@@ -514,7 +510,7 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
     MbrcResult::Ok
 }
 
-/// Tell the background work to wind down, without stopping anything yet.
+/// Tells the background work to wind down, without stopping anything yet.
 ///
 /// For a host that knows it is about to tear down but has its own work to do
 /// first - an uninstall closes a window and takes a menu entry out before it
@@ -531,14 +527,11 @@ pub fn begin_stopping() -> MbrcResult {
     }
 }
 
-/// Stop networking (if running) and drop the core, allowing a later re-init.
+/// Stops networking (if running) and drops the core, allowing a later re-init.
 pub fn shutdown() -> MbrcResult {
     let mut guard = lock();
     match guard.take() {
         Some(runtime) => {
-            // Before the join below: the blocking work checks this between
-            // items, and everything it is told to stop doing is time MusicBee
-            // would otherwise spend waiting to exit.
             runtime.core.begin_stopping();
             if let Some(net) = runtime.net {
                 net.stop();
@@ -549,7 +542,7 @@ pub fn shutdown() -> MbrcResult {
     }
 }
 
-/// Start the TCP server + discovery responder.
+/// Starts the TCP server + discovery responder.
 pub fn start_networking() -> MbrcResult {
     let mut guard = lock();
     let Some(runtime) = guard.as_mut() else {
@@ -573,7 +566,7 @@ pub fn start_networking() -> MbrcResult {
     }
 }
 
-/// Stop the TCP server + discovery responder (leaves the core initialized).
+/// Stops the TCP server + discovery responder (leaves the core initialized).
 pub fn stop_networking() -> MbrcResult {
     let mut guard = lock();
     let Some(runtime) = guard.as_mut() else {
@@ -597,7 +590,7 @@ mod tests {
     use crate::providers::NullProviders;
 
     #[test]
-    fn settings_round_trip_through_state() {
+    fn settings_and_host_queries_round_trip_through_state() {
         let dir = std::env::temp_dir().join("mbrc-settings-state-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -611,14 +604,28 @@ mod tests {
         let _ = shutdown(); // ensure a clean slate (this is the only STATE test)
         assert_eq!(initialize(Arc::new(NullProviders), config), MbrcResult::Ok);
 
-        // Read reflects the in-memory config as MessagePack; round-trips back to
-        // a Config with the same port and no storage_path.
+        a_read_reflects_the_in_memory_config();
+        a_valid_write_persists_as_json(&dir);
+        an_invalid_port_is_refused();
+        a_panel_payload_leaves_unknown_fields_alone(&dir);
+        an_empty_blocked_log_queries_as_an_empty_array();
+        listening_addresses_reports_the_port_the_core_is_bound_to();
+
+        let _ = shutdown();
+    }
+
+    fn a_read_reflects_the_in_memory_config() {
         let bytes = read_settings_bytes().expect("read settings");
         let echoed: Config = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(echoed.port, 4321);
-        assert_eq!(echoed.storage_path, ""); // skipped, not exposed
+        assert_eq!(
+            echoed.storage_path, "",
+            "storage_path is skipped, not exposed"
+        );
+    }
 
-        // A valid write (MessagePack in) persists core_settings.json as JSON.
+    /// MessagePack in, JSON on disk.
+    fn a_valid_write_persists_as_json(dir: &std::path::Path) {
         let update = Config {
             port: 5555,
             filter_mode: crate::config::FilterMode::Specific,
@@ -629,18 +636,20 @@ mod tests {
         let on_disk = std::fs::read_to_string(dir.join("core_settings.json")).unwrap();
         assert!(on_disk.contains("5555"));
         assert!(on_disk.contains("10.0.0.0/8"));
+    }
 
-        // An invalid write (port 0) is refused; the file is unchanged.
+    fn an_invalid_port_is_refused() {
         let bad = rmp_serde::to_vec_named(&Config {
             port: 0,
             ..Config::default()
         })
         .unwrap();
         assert!(write_settings_bytes(&bad).is_err());
+    }
 
-        // A panel-shaped payload (the 8 fields the C# `CoreSettings` DTO carries)
-        // must not disturb the fields it doesn't know about. Seed the file with
-        // non-default values for two of those, then save from the "panel".
+    /// The C# `CoreSettings` DTO carries 8 of [`Config`]'s fields, so saving from
+    /// the panel must leave every field it does not know about alone.
+    fn a_panel_payload_leaves_unknown_fields_alone(dir: &std::path::Path) {
         std::fs::write(
             dir.join("core_settings.json"),
             r#"{"port":3000,"bind_address":"127.0.0.1","tcp_keepalive_secs":99}"#,
@@ -660,16 +669,16 @@ mod tests {
         let saved: Config =
             serde_json::from_str(&std::fs::read_to_string(dir.join("core_settings.json")).unwrap())
                 .unwrap();
-        assert_eq!(saved.port, 6001); // the panel's edit landed
+        assert_eq!(saved.port, 6001, "the panel's own edit lands");
         assert_eq!(saved.log_level, crate::config::LogLevel::Debug);
-        assert_eq!(saved.bind_address, "127.0.0.1"); // not clobbered back to 0.0.0.0
-        assert_eq!(saved.tcp_keepalive_secs, 99); // nor to its default
+        assert_eq!(saved.bind_address, "127.0.0.1", "not reset to the default");
+        assert_eq!(saved.tcp_keepalive_secs, 99, "not reset to the default");
+    }
 
-        // Blocked-connection host dispatch (folded in here to avoid a second
-        // concurrent STATE test): an empty log queries to an empty array - Some,
-        // not None - and the clear command succeeds. Populating the log needs the
-        // accept loop, so the non-empty path is covered by the `blocked` unit
-        // tests; this pins the dispatch arms + the empty-not-None contract.
+    /// `Some` holding an empty array, never `None`. Filling the log needs the
+    /// accept loop, so the non-empty path lives in the `blocked` unit tests and
+    /// this pins the dispatch arms.
+    fn an_empty_blocked_log_queries_as_an_empty_array() {
         let blocked = host_query(HostQueryType::RecentBlocked, &[]).expect("recent-blocked query");
         let entries: Vec<crate::ffi::dtos::BlockedConnection> =
             rmp_serde::from_slice(&blocked).unwrap();
@@ -678,17 +687,16 @@ mod tests {
             host_command(HostCommandType::ClearBlockedLog, &[]),
             MbrcResult::Ok
         );
+    }
 
-        // Listening-addresses host dispatch: reports the in-memory bound port
-        // (4321, not the 5555 just written - a write doesn't hot-reload). The
-        // address list is interface-dependent (empty on a loopback-only runner),
-        // so only the port is pinned here.
+    /// The bound port, not the one just written: a settings write does not
+    /// hot-reload. The address list is interface-dependent, so only the port is
+    /// pinned here.
+    fn listening_addresses_reports_the_port_the_core_is_bound_to() {
         let listening =
             host_query(HostQueryType::ListeningAddresses, &[]).expect("listening query");
         let info: crate::ffi::dtos::ListeningInfo = rmp_serde::from_slice(&listening).unwrap();
         assert_eq!(info.port, 4321);
-
-        let _ = shutdown();
     }
 
     #[test]
@@ -719,9 +727,8 @@ mod tests {
         core.begin_stopping(); // idempotent: the host may say so more than once
         assert!(core.is_stopping());
 
-        // Saving a new port stops and restarts networking on the same core. If
-        // the flag survived that, the cover build would never run again for the
-        // rest of the session and nothing would say why.
+        // Saving a port restarts networking on the same core; a flag that
+        // survived that would silently stop every later cover build.
         core.clear_stopping();
         assert!(!core.is_stopping());
     }
@@ -738,9 +745,7 @@ mod tests {
 
     #[test]
     fn merge_drops_keys_the_core_does_not_know() {
-        // A stale key on disk (the pre-`log_level` `debug` bool) is not carried
-        // through the merge, and an unknown key in the payload is ignored rather
-        // than written back.
+        // `debug` is the stale pre-`log_level` key: unknown on both sides.
         let merged = merge_settings(
             Config::default(),
             &serde_json::json!({"debug": true, "port": 4000}),

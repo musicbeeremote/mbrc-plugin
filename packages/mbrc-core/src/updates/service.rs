@@ -42,10 +42,11 @@ pub const STATE_SKIPPED: &str = "skipped";
 pub const STATE_DISABLED: &str = "disabled";
 /// The last check failed; `message` says how, and so does the log.
 pub const STATE_ERROR: &str = "error";
-/// The download of an available update failed. Distinct from [`STATE_ERROR`]
-/// because the update is still known and still worth retrying - and because
-/// "no update could be found" is the wrong thing to tell someone who just
-/// pressed Download.
+/// The download of an available update failed.
+///
+/// Distinct from [`STATE_ERROR`] because the update is still known and still
+/// worth retrying - and because "no update could be found" is the wrong thing
+/// to tell someone who just pressed Download.
 pub const STATE_DOWNLOAD_FAILED: &str = "download_failed";
 
 /// The status is a generated DTO (the C# side reads it by field name), so it
@@ -123,12 +124,12 @@ pub fn status(core: &Core) -> UpdateStatus {
         .clone()
 }
 
-/// Serialize the status as MessagePack for the settings panel.
+/// Serializes the status as MessagePack for the settings panel.
 pub fn status_bytes(core: &Core) -> Option<Vec<u8>> {
     rmp_serde::to_vec_named(&status(core)).ok()
 }
 
-/// Start a background check. `force` bypasses both the `update_check_enabled`
+/// Starts a background check. `force` bypasses both the `update_check_enabled`
 /// preference and the interval; the panel's button forces, the startup check
 /// does not.
 pub fn start_check(core: Arc<Core>, force: bool) -> MbrcResult {
@@ -138,29 +139,39 @@ pub fn start_check(core: Arc<Core>, force: bool) -> MbrcResult {
     // What the panel is showing now, kept so an outcome that turns out to be no
     // news can put it back.
     let previous = status(&core);
-    // Only a forced check announces itself. The one the core runs a minute into
-    // the session has nobody waiting on it, and flashing "Checking for
-    // updates..." over an offer the user is reading would be pure noise.
+    // Only a forced check announces itself: the startup one has nobody waiting,
+    // and would flash "Checking..." over an offer the user is reading.
     if force {
         publish(&core, UpdateStatus::with_state(STATE_CHECKING));
     }
-    std::thread::spawn(move || {
-        let _job = job;
-        // The core can be shut down between the request and this thread being
-        // scheduled; there is then no host to report to.
-        if !crate::state::is_initialized() {
-            return;
-        }
-        let status = match client(&core) {
-            Ok(client) => run_check(&core, client.as_ref(), force, previous),
-            Err(e) => failure("could not start the update check", &e),
-        };
-        publish(&core, status);
+    spawn_publishing(core, job, move |core| match client(core) {
+        Ok(client) => run_check(core, client.as_ref(), force, previous),
+        Err(e) => failure("could not start the update check", &e),
     });
     MbrcResult::Ok
 }
 
-/// Start a background download of the update the last check produced. Refused
+/// Runs `work` on a background thread and publishes whatever status it returns.
+///
+/// The job guard is held for the thread's life. The core can be shut down
+/// between the request and this thread being scheduled, and there is then no
+/// host to report to, so it returns without publishing.
+fn spawn_publishing(
+    core: Arc<Core>,
+    job: Job,
+    work: impl FnOnce(&Core) -> UpdateStatus + Send + 'static,
+) {
+    std::thread::spawn(move || {
+        let _job = job;
+        if !crate::state::is_initialized() {
+            return;
+        }
+        let status = work(&core);
+        publish(&core, status);
+    });
+}
+
+/// Starts a background download of the update the last check produced. Refused
 /// when there is none: the host cannot name a release, only accept the one the
 /// core verified.
 pub fn start_download(core: Arc<Core>) -> MbrcResult {
@@ -172,23 +183,14 @@ pub fn start_download(core: Arc<Core>) -> MbrcResult {
         return MbrcResult::AlreadyRunning;
     };
     publish(&core, downloading(&update));
-    std::thread::spawn(move || {
-        let _job = job;
-        // The core can be shut down between the request and this thread being
-        // scheduled; there is then no host to report to.
-        if !crate::state::is_initialized() {
-            return;
-        }
-        let status = match client(&core) {
-            Ok(client) => run_download(&core, client.as_ref(), &update),
-            Err(e) => download_failure(&update, &e),
-        };
-        publish(&core, status);
+    spawn_publishing(core, job, move |core| match client(core) {
+        Ok(client) => run_download(core, client.as_ref(), &update),
+        Err(e) => download_failure(&update, &e),
     });
     MbrcResult::Ok
 }
 
-/// Record that the user does not want to be offered the available version again.
+/// Records that the user does not want to be offered the available version again.
 ///
 /// Only an actual offer can be skipped. `version` is populated for `up_to_date`
 /// too (it names the latest published release), so skipping "whatever the status
@@ -230,10 +232,8 @@ fn run_check(
     force: bool,
     previous: UpdateStatus,
 ) -> UpdateStatus {
-    // The plugin's version, not the core's: they are stamped from the same
-    // `Directory.Build.props`, but the release is the plugin's, and the host is
-    // the one that knows what it is running. Falling back keeps a host that
-    // cannot answer from blocking the check entirely.
+    // The plugin's version: the release is its, and the host knows what it runs.
+    // Both come from the same `Directory.Build.props`, so the fallback is safe.
     let current = core.providers.plugin_version().unwrap_or_else(|e| {
         tracing::warn!(error = %e, "the host could not report its version; using the core's");
         super::CORE_VERSION.to_owned()
@@ -324,9 +324,8 @@ fn interpret(outcome: Result<CheckOutcome>, staged: Option<&str>, checked_at: &s
             }),
             None,
         ),
-        // A 304 says the release document has not changed since the ETag we
-        // cached, and "not due" says we did not ask. Neither is news, and
-        // neither may be allowed to retract an offer already on screen.
+        // Unchanged since our ETag, or never asked: neither may retract an
+        // offer already on screen.
         Ok(CheckOutcome::NotModified) | Ok(CheckOutcome::NotDue) => Verdict::NoNews,
         Ok(CheckOutcome::Disabled) => {
             Verdict::Fresh(UpdateStatus::with_state(STATE_DISABLED), None)
@@ -334,9 +333,8 @@ fn interpret(outcome: Result<CheckOutcome>, staged: Option<&str>, checked_at: &s
         Err(e) => {
             let detail = e.to_string();
             tracing::warn!(error = %detail, "the update check failed");
-            // A staged bundle outlives a failed check: the restart is still the
-            // thing to offer, with the failure as a footnote rather than as the
-            // whole answer.
+            // A staged bundle outlives a failed check, so the restart is still
+            // the offer and the failure is a footnote.
             let mut status = match staged {
                 Some(_) => quiet(staged),
                 None => UpdateStatus::with_state(STATE_ERROR),
@@ -427,7 +425,7 @@ fn staged_version(storage: &str) -> Option<String> {
     }
 }
 
-/// Store the new status and tell the host, so an open panel refreshes without
+/// Stores the new status and tells the host, so an open panel refreshes without
 /// waiting for its poll.
 ///
 /// The event is skipped once the core has been shut down: these jobs run on
@@ -550,9 +548,8 @@ mod tests {
 
     #[test]
     fn no_news_outcomes_do_not_answer_at_all() {
-        // A 304 and a not-due check learned nothing, so they must not be turned
-        // into an answer: doing so is what would let the *second* press of Check
-        // now retract the offer the first one found.
+        // Answering here is what would let a second press of Check now retract
+        // the offer the first press found.
         for outcome in [Ok(CheckOutcome::NotModified), Ok(CheckOutcome::NotDue)] {
             assert!(matches!(interpret(outcome, None, ""), Verdict::NoNews));
         }
@@ -651,9 +648,8 @@ mod tests {
 
     #[test]
     fn a_failed_download_still_names_its_update() {
-        // Its own state, because "no update could be found" is the wrong thing to
-        // tell someone who just pressed Download - and because the update is
-        // still there to retry.
+        // "No update could be found" is the wrong thing to tell someone who just
+        // pressed Download at an update that is still there to retry.
         let update = match available("1.6.0") {
             Ok(CheckOutcome::Available(update)) => update,
             _ => unreachable!(),

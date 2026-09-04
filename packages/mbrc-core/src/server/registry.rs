@@ -2,20 +2,15 @@
 //! per client-provided `client_id`) and supersedes a stale main socket when a
 //! client reconnects.
 //!
-//! This is the leak/abuse backstop that lets us drop the aggressive idle-reap:
-//! normal recycling is handled by the per-connection idle-timeout + OS TCP
-//! keepalive, and this registry only catches a runaway before it accumulates.
+//! Normal recycling is the per-connection idle timeout plus OS TCP keepalive;
+//! this only catches a runaway.
 //!
-//! Catching a runaway means evicting, not refusing. Shipped iOS clients open a
-//! socket per user action and never close it; turning the newest one away just
-//! discards the user's request, so at the cap the stalest non-subscriber from
-//! that IP is closed to make room instead.
+//! At the cap it evicts rather than refuses: shipped iOS clients leak a socket
+//! per user action, and turning the newest one away discards the user's
+//! request, so the stalest non-subscriber from that IP goes instead.
 //!
-//! Two identities per connection: the server-assigned `conn_id` and the optional
-//! client-provided `client_id` (Android v4 sends a UUID; iOS and old Android send
-//! none). When a `client_id` is present we can group its sockets - enforce a
-//! per-client cap and retire a superseded main. When it is absent we make no
-//! grouping assumptions and rely on the per-IP cap + keepalive.
+//! Sockets can only be grouped when the client sends a `client_id` (Android v4
+//! does, iOS and old Android do not); without one, only the per-IP cap applies.
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -29,6 +24,22 @@ use tokio::sync::Notify;
 /// it. Well above a request's round trip, so a socket that is mid-exchange is
 /// never taken; the sockets this actually frees have been silent for minutes.
 const MIN_EVICT_IDLE_MS: u64 = 10_000;
+
+/// What a connection is for, which decides whether it may be evicted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// Receives broadcasts. Never evicted: losing one silently stops every push
+    /// to that client, which is worse than refusing a new socket.
+    Subscriber,
+    /// Request and response only, opened with `no_broadcast`. Evictable.
+    Auxiliary,
+}
+
+impl Role {
+    pub fn is_subscriber(self) -> bool {
+        self == Role::Subscriber
+    }
+}
 
 /// Result of registering a handshaked connection.
 #[derive(Debug, PartialEq, Eq)]
@@ -53,36 +64,30 @@ pub enum IpAdmit {
 
 /// What the registry can say about itself for a diagnostics report.
 ///
-/// The counts here deliberately measure different populations, and the field
-/// names say which: `handshaked` includes loopback and excludes sockets that
-/// never negotiated, while `slots_by_ip` is the opposite on both counts. They
-/// were previously named as though they were two views of one number, which held
-/// up only because no capture had yet been taken with a loopback client
-/// connected.
+/// The counts measure different populations on purpose, and the field names say
+/// which: `handshaked` includes loopback and excludes un-negotiated sockets,
+/// `slots_by_ip` is the opposite on both counts.
 pub struct RegistryStats {
     /// Handshaked connections currently held, loopback included.
     pub handshaked: usize,
     /// How many of those are broadcast subscribers.
     pub subscribers: usize,
-    /// Sockets holding a per-IP slot that have not completed a handshake. They
-    /// count against the cap like any other, so they belong in a report about
-    /// the cap.
+    /// Sockets holding a per-IP slot without having handshaked. They count
+    /// against the cap, so a report about the cap has to show them.
     pub unhandshaked: usize,
     /// Reserved per-IP slots, busiest first. Loopback is exempt from the cap and
     /// so never appears here, and un-handshaked sockets do.
     pub slots_by_ip: Vec<(String, usize)>,
-    /// How long the most neglected *non-subscriber* has been silent. This is the
-    /// actionable one: aux sockets are what the reaper and the per-IP eviction
-    /// act on, so a large value means abandoned sockets are piling up.
+    /// How long the most neglected *non-subscriber* has been silent. Aux sockets
+    /// are what the reaper and the per-IP eviction act on, so a large value
+    /// means abandoned sockets are piling up.
     pub oldest_aux_idle_secs: u64,
     /// How long the quietest subscriber has been silent inbound.
     ///
-    /// **Not a liveness signal.** iOS never answers a ping (zero pongs against
-    /// 105 pings in a 30-minute session on 2026-08-30), so this climbs without
-    /// bound on a perfectly healthy event socket and a large value here is
-    /// normal. A subscriber's health is the ping *send* succeeding plus TCP
-    /// keepalive, not this. Reported apart from the aux figure precisely so it
-    /// stops making a working connection look stale.
+    /// **Not a liveness signal.** iOS never answers a ping, so this climbs
+    /// without bound on a healthy event socket; subscriber health is the ping
+    /// *send* succeeding plus TCP keepalive. Kept apart from the aux figure so
+    /// it stops making a working connection look stale.
     pub subscriber_idle_secs: u64,
     pub evicted_total: u64,
     pub rejected_per_ip_total: u64,
@@ -102,7 +107,7 @@ struct ConnMeta {
     ip: IpAddr,
     /// Broadcast subscribers are never evicted: losing one silently stops every
     /// push to that client, which is far worse than refusing a socket.
-    is_main: bool,
+    role: Role,
     /// Millis since [`ConnectionRegistry::origin`] of the last inbound frame.
     last_active_ms: u64,
     shutdown: Arc<Notify>,
@@ -157,7 +162,7 @@ impl ConnectionRegistry {
         now
     }
 
-    /// Move the clock forward, ageing every recorded connection at once.
+    /// Moves the clock forward, ageing every recorded connection at once.
     #[cfg(test)]
     fn advance(&self, ms: u64) {
         self.test_offset_ms.fetch_add(ms, Ordering::Relaxed);
@@ -167,22 +172,14 @@ impl ConnectionRegistry {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Reserve an IP slot at accept time. Loopback is always admitted (local
-    /// tooling / the same-host debugger are never capped).
+    /// Reserves an IP slot at accept time. Loopback is never capped.
     ///
-    /// At the cap this evicts rather than refusing, when it can. Refusing the
-    /// newest socket is the wrong answer to a client that leaks: the newcomer is
-    /// the one carrying the user's request, while the sockets already held are
-    /// the abandoned ones. Shipped iOS clients open a socket per user action and
-    /// never close it, so without this they walk into the cap and every later
-    /// action is silently discarded (the app spins forever). The C# plugin had no
-    /// cap at all and absorbed the leak; evicting keeps the bound without
-    /// reintroducing that lockout.
-    ///
-    /// The victim is the least recently active non-subscriber from the same IP
-    /// that has been silent for at least [`MIN_EVICT_IDLE_MS`]. Its slot is
-    /// released when its task actually finishes, so the count sits one over the
-    /// cap until then; the overshoot is bounded by evictions in flight.
+    /// At the cap this evicts rather than refuses: against a client that leaks
+    /// sockets the newcomer carries the user's request and the held sockets are
+    /// the abandoned ones, so refusing it made iOS lock itself out. The victim is
+    /// the least recently active non-subscriber from that IP, silent for at least
+    /// [`MIN_EVICT_IDLE_MS`]; its slot frees when its task finishes, so the count
+    /// sits one over the cap until then.
     pub fn admit_ip(&self, ip: IpAddr) -> IpAdmit {
         if ip.is_loopback() {
             return IpAdmit::Admitted;
@@ -213,17 +210,16 @@ impl ConnectionRegistry {
             .iter()
             .filter(|(_, meta)| {
                 meta.ip == ip
-                    && !meta.is_main
+                    && !meta.role.is_subscriber()
                     && now.saturating_sub(meta.last_active_ms) >= MIN_EVICT_IDLE_MS
             })
             .min_by_key(|(conn_id, meta)| (meta.last_active_ms, **conn_id))
             .map(|(conn_id, _)| *conn_id)
     }
 
-    /// Record inbound activity, so eviction prefers genuinely abandoned sockets
-    /// over ones the client is still using. Called per inbound frame; frames run
-    /// at a few hundred per session, so taking the lock here is cheaper than
-    /// plumbing a shared atomic through every connection.
+    /// Records inbound activity, so eviction prefers genuinely abandoned sockets
+    /// over ones the client is still using. Called per inbound frame - a few
+    /// hundred a session, so the lock is cheaper than a plumbed-through atomic.
     pub fn touch(&self, conn_id: u64) {
         let now = self.now_ms();
         let mut inner = self.lock();
@@ -232,7 +228,7 @@ impl ConnectionRegistry {
         }
     }
 
-    /// Release the IP slot reserved by [`try_admit_ip`](Self::try_admit_ip) when
+    /// Releases the IP slot reserved by [`admit_ip`](Self::admit_ip) when
     /// the connection ends. Loopback was never counted, so it is a no-op.
     pub fn release_ip(&self, ip: IpAddr) {
         if ip.is_loopback() {
@@ -247,33 +243,32 @@ impl ConnectionRegistry {
         }
     }
 
-    /// Register a handshaked connection: record its shutdown handle, enforce the
-    /// per-`client_id` cap (only when a `client_id` is present and not loopback),
-    /// and - for a main (broadcast) connection - retire any prior main of the
-    /// same `client_id` by firing its shutdown signal. An ungrouped connection
-    /// (no `client_id`) is always admitted with no cap or supersession.
+    /// Registers a handshaked connection: record its shutdown handle, enforce the
+    /// per-`client_id` cap, and retire any prior main of the same `client_id`.
+    /// Both need a `client_id`; without one the connection is always admitted.
     pub fn register(
         &self,
         conn_id: u64,
         ip: IpAddr,
         client_id: Option<&str>,
-        is_main: bool,
-        loopback: bool,
+        role: Role,
         shutdown: Arc<Notify>,
     ) -> Admit {
+        // Derived rather than passed: a caller handing in both an address and a
+        // flag about it is a caller that can contradict itself.
+        let loopback = ip.is_loopback();
         let now = self.now_ms();
         let mut inner = self.lock();
 
         let Some(client_id) = client_id else {
             inner.shutdown.insert(conn_id, shutdown.clone());
-            // Ungrouped connections are exactly the ones that need the eviction
-            // path: with no client_id there is no per-client cap holding them
-            // back, so the per-IP cap is their only bound.
+            // With no client_id there is no per-client cap, so the per-IP cap is
+            // an ungrouped connection's only bound.
             inner.conns.insert(
                 conn_id,
                 ConnMeta {
                     ip,
-                    is_main,
+                    role,
                     last_active_ms: now,
                     shutdown,
                 },
@@ -287,7 +282,7 @@ impl ConnectionRegistry {
                 return Admit::RejectedCap; // nothing recorded; caller closes
             }
             entry.conns.insert(conn_id);
-            if is_main {
+            if role.is_subscriber() {
                 entry.main.replace(conn_id) // prior main, if any
             } else {
                 None
@@ -299,7 +294,7 @@ impl ConnectionRegistry {
             conn_id,
             ConnMeta {
                 ip,
-                is_main,
+                role,
                 last_active_ms: now,
                 shutdown,
             },
@@ -315,7 +310,7 @@ impl ConnectionRegistry {
         Admit::Admitted
     }
 
-    /// Remove a connection's bookkeeping on close (shutdown handle + client
+    /// Removes a connection's bookkeeping on close (shutdown handle + client
     /// grouping). IP release is separate - see [`release_ip`](Self::release_ip) -
     /// because a connection may end before it ever handshakes.
     pub fn unregister(&self, conn_id: u64, client_id: Option<&str>) {
@@ -341,9 +336,8 @@ impl ConnectionRegistry {
         }
     }
 
-    /// A snapshot of what is connected, for `report.json`. Without this a bug
-    /// report shows the refusals but not the accumulation that caused them,
-    /// which is the half that actually names the problem.
+    /// A snapshot of what is connected, for `report.json`. Without it a bug
+    /// report shows the refusals but not the accumulation behind them.
     pub fn stats(&self) -> RegistryStats {
         let now = self.now_ms();
         let inner = self.lock();
@@ -356,11 +350,10 @@ impl ConnectionRegistry {
         slots_by_ip.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         let idle_secs = |m: &ConnMeta| now.saturating_sub(m.last_active_ms) / 1000;
-        // Split the idle figures by role. Lumping them together let a subscriber
-        // - silent by design, since iOS never pongs - stand in as "the oldest
-        // idle connection" and make a healthy plugin look stalled.
+        // Split the idle figures by role: a subscriber is silent by design
+        // (iOS never pongs), and lumping it in made a healthy plugin look stalled.
         let (subs, aux): (Vec<&ConnMeta>, Vec<&ConnMeta>) =
-            inner.conns.values().partition(|m| m.is_main);
+            inner.conns.values().partition(|m| m.role.is_subscriber());
         // Slots are only reserved for non-loopback peers, so the handshaked
         // connections that can account for one are the non-loopback ones.
         let slots_reserved: usize = inner.by_ip.values().sum();
@@ -430,8 +423,8 @@ mod tests {
         assert_eq!(r.ip_count(lo), 0, "loopback is not counted");
     }
 
-    /// The fix for the iOS lockout: at the cap, the socket the client abandoned
-    /// longest ago goes, and the newcomer carrying the user's request gets in.
+    /// At the cap the longest-abandoned socket goes and the newcomer gets in -
+    /// the fix for the iOS lockout.
     #[test]
     fn at_the_cap_the_stalest_connection_is_evicted_not_the_newcomer() {
         let r = ConnectionRegistry::new(20, 2);
@@ -439,9 +432,9 @@ mod tests {
         assert_eq!(r.admit_ip(peer), IpAdmit::Admitted);
         assert_eq!(r.admit_ip(peer), IpAdmit::Admitted);
         // conn 1 goes quiet 5s before conn 2 does.
-        r.register(1, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Auxiliary, notify());
         r.advance(5_000);
-        r.register(2, peer, None, false, false, notify());
+        r.register(2, peer, None, Role::Auxiliary, notify());
         r.advance(STALE);
 
         assert_eq!(r.admit_ip(peer), IpAdmit::Evicted(1));
@@ -458,9 +451,9 @@ mod tests {
         let peer = ip("192.168.1.5");
         r.admit_ip(peer);
         r.admit_ip(peer);
-        r.register(1, peer, None, true, false, notify()); // the subscriber
+        r.register(1, peer, None, Role::Subscriber, notify());
         r.advance(60_000); // by far the stalest
-        r.register(2, peer, None, false, false, notify());
+        r.register(2, peer, None, Role::Auxiliary, notify());
         r.advance(STALE);
 
         assert_eq!(r.admit_ip(peer), IpAdmit::Evicted(2));
@@ -473,7 +466,7 @@ mod tests {
         let r = ConnectionRegistry::new(20, 1);
         let peer = ip("192.168.1.5");
         r.admit_ip(peer);
-        r.register(1, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Auxiliary, notify());
 
         assert_eq!(r.admit_ip(peer), IpAdmit::Rejected);
         assert_eq!(r.stats().rejected_per_ip_total, 1);
@@ -488,9 +481,9 @@ mod tests {
         let peer = ip("192.168.1.5");
         r.admit_ip(peer);
         r.admit_ip(peer);
-        r.register(1, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Auxiliary, notify());
         r.advance(5_000);
-        r.register(2, peer, None, false, false, notify());
+        r.register(2, peer, None, Role::Auxiliary, notify());
         r.advance(STALE);
         // conn 1 speaks up, so conn 2 is now the stalest.
         r.touch(1);
@@ -505,9 +498,9 @@ mod tests {
         let quiet = ip("192.168.1.6");
         r.admit_ip(noisy);
         r.admit_ip(quiet);
-        r.register(1, quiet, None, false, false, notify());
+        r.register(1, quiet, None, Role::Auxiliary, notify());
         r.advance(60_000); // conn 1 is stalest overall, but on a different IP
-        r.register(2, noisy, None, false, false, notify());
+        r.register(2, noisy, None, Role::Auxiliary, notify());
         r.advance(STALE);
 
         assert_eq!(r.admit_ip(noisy), IpAdmit::Evicted(2));
@@ -518,7 +511,7 @@ mod tests {
         let r = ConnectionRegistry::new(20, 1);
         let peer = ip("192.168.1.5");
         r.admit_ip(peer);
-        r.register(1, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Auxiliary, notify());
         r.advance(STALE);
         r.unregister(1, None);
 
@@ -537,9 +530,9 @@ mod tests {
         r.admit_ip(a);
         r.admit_ip(a);
         r.admit_ip(b);
-        r.register(1, a, None, true, false, notify());
-        r.register(2, a, None, false, false, notify());
-        r.register(3, b, None, false, false, notify());
+        r.register(1, a, None, Role::Subscriber, notify());
+        r.register(2, a, None, Role::Auxiliary, notify());
+        r.register(3, b, None, Role::Auxiliary, notify());
         // Only conn 2 stays quiet across the next 30 seconds.
         r.advance(30_000);
         r.touch(1);
@@ -558,17 +551,16 @@ mod tests {
     }
 
     /// iOS never answers a ping, so a subscriber's inbound activity never
-    /// advances. Counting it as "the oldest idle connection" made a healthy
-    /// plugin look stalled - a live capture reported 644s while everything was
-    /// working normally.
+    /// advances; counting it as the oldest idle connection made a healthy plugin
+    /// look stalled.
     #[test]
     fn a_silent_subscriber_does_not_masquerade_as_a_stale_connection() {
         let r = ConnectionRegistry::new(20, 40);
         let peer = ip("192.168.1.5");
         r.admit_ip(peer);
         r.admit_ip(peer);
-        r.register(1, peer, None, true, false, notify()); // subscriber, never speaks
-        r.register(2, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Subscriber, notify()); // subscriber, never speaks
+        r.register(2, peer, None, Role::Auxiliary, notify());
         r.advance(600_000);
         r.touch(2); // the aux socket is active
 
@@ -580,17 +572,16 @@ mod tests {
         );
     }
 
-    /// Loopback is exempt from the cap, so it reserves no slot while still being
-    /// a handshaked connection. The two counts measure different populations and
-    /// `unhandshaked` must not underflow between them.
+    /// Loopback is handshaked but reserves no slot, so `unhandshaked` must not
+    /// underflow between the two counts.
     #[test]
     fn loopback_counts_as_handshaked_but_reserves_no_slot() {
         let r = ConnectionRegistry::new(20, 40);
         let lo = ip("127.0.0.1");
         r.admit_ip(lo);
         r.admit_ip(lo);
-        r.register(1, lo, None, false, true, notify());
-        r.register(2, lo, None, false, true, notify());
+        r.register(1, lo, None, Role::Auxiliary, notify());
+        r.register(2, lo, None, Role::Auxiliary, notify());
 
         let stats = r.stats();
         assert_eq!(stats.handshaked, 2);
@@ -607,7 +598,7 @@ mod tests {
         r.admit_ip(peer); // handshakes below
         r.admit_ip(peer); // never handshakes
         r.admit_ip(peer); // never handshakes
-        r.register(1, peer, None, false, false, notify());
+        r.register(1, peer, None, Role::Auxiliary, notify());
 
         let stats = r.stats();
         assert_eq!(stats.handshaked, 1);
@@ -619,15 +610,15 @@ mod tests {
     fn per_client_cap_rejects_newest() {
         let r = ConnectionRegistry::new(2, 40);
         assert_eq!(
-            r.register(1, ip("10.0.0.1"), Some("cX"), false, false, notify()),
+            r.register(1, ip("10.0.0.1"), Some("cX"), Role::Auxiliary, notify()),
             Admit::Admitted
         );
         assert_eq!(
-            r.register(2, ip("10.0.0.1"), Some("cX"), false, false, notify()),
+            r.register(2, ip("10.0.0.1"), Some("cX"), Role::Auxiliary, notify()),
             Admit::Admitted
         );
         assert_eq!(
-            r.register(3, ip("10.0.0.1"), Some("cX"), false, false, notify()),
+            r.register(3, ip("10.0.0.1"), Some("cX"), Role::Auxiliary, notify()),
             Admit::RejectedCap,
             "3rd over the per-client cap of 2"
         );
@@ -635,7 +626,7 @@ mod tests {
         // A rejected conn was not recorded; freeing one admits again.
         r.unregister(1, Some("cX"));
         assert_eq!(
-            r.register(4, ip("10.0.0.1"), Some("cX"), false, false, notify()),
+            r.register(4, ip("10.0.0.1"), Some("cX"), Role::Auxiliary, notify()),
             Admit::Admitted
         );
     }
@@ -645,7 +636,7 @@ mod tests {
         let r = ConnectionRegistry::new(2, 40);
         for id in 0..10 {
             assert_eq!(
-                r.register(id, ip("10.0.0.1"), None, false, false, notify()),
+                r.register(id, ip("10.0.0.1"), None, Role::Auxiliary, notify()),
                 Admit::Admitted
             );
         }
@@ -656,12 +647,12 @@ mod tests {
         let r = ConnectionRegistry::new(20, 40);
         let old = notify();
         assert_eq!(
-            r.register(1, ip("10.0.0.1"), Some("cX"), true, false, old.clone()),
+            r.register(1, ip("10.0.0.1"), Some("cX"), Role::Subscriber, old.clone()),
             Admit::Admitted
         );
         // A second main for the same client fires the old main's shutdown.
         assert_eq!(
-            r.register(2, ip("10.0.0.1"), Some("cX"), true, false, notify()),
+            r.register(2, ip("10.0.0.1"), Some("cX"), Role::Subscriber, notify()),
             Admit::Admitted
         );
         // The old main's notify was signalled (permit stored) -> ready now.
@@ -673,7 +664,7 @@ mod tests {
     #[test]
     fn unregister_cleans_empty_client_entries() {
         let r = ConnectionRegistry::new(20, 40);
-        r.register(1, ip("10.0.0.1"), Some("cX"), true, false, notify());
+        r.register(1, ip("10.0.0.1"), Some("cX"), Role::Subscriber, notify());
         assert_eq!(r.client_count("cX"), 1);
         r.unregister(1, Some("cX"));
         assert_eq!(r.client_count("cX"), 0);
