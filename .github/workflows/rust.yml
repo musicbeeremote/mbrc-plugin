@@ -124,6 +124,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
-          flags: rust
+          # One workspace report, two flags: codecov.yml splits it by path so
+          # the CLI's coverage is reported apart from the shipped crates.
+          flags: rust,cli
           fail_ci_if_error: false
           verbose: true

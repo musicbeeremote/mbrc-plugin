@@ -7,3 +7,34 @@ coverage:
     patch: false
 
 github_checks: false
+
+# Each half of the tree is uploaded by its own path-filtered workflow, so a
+# commit touching only one half has no upload for the other. Carryforward is
+# what stops Codecov reading that absence as zero coverage for the half that
+# did not run.
+flag_management:
+  individual_flags:
+    - name: csharp
+      carryforward: true
+      paths:
+        - packages/plugin/
+        - tests/csharp/
+    - name: rust
+      carryforward: true
+      paths:
+        - packages/mbrc-
+        - tools/mbrc-lint/
+    - name: cli
+      carryforward: true
+      paths:
+        - tools/mbrc-cli/
+
+# The CLI's live-server drivers. They are socket loops and terminal output
+# around a running plugin, so a test for them would assert the mock rather
+# than the code.
+ignore:
+  - tools/mbrc-cli/src/fuzz.rs
+  - tools/mbrc-cli/src/monitor.rs
+  - tools/mbrc-cli/src/replay.rs
+  - tools/mbrc-cli/src/capture.rs
+  - tools/mbrc-cli/src/compare.rs
