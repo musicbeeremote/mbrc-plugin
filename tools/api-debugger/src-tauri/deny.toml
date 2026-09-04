@@ -1,0 +1,45 @@
+# Supply-chain gates for the api-debugger's own workspace. The root deny.toml
+# covers the plugin; this file exists because the debugger resolves a separate
+# dependency graph and is excluded from that workspace.
+
+[graph]
+# WebView2 and the plugin it debugs are Windows-only, so the tool builds for
+# Windows and nothing else. Without this the graph pulls in Tauri's GTK3 stack,
+# which is unmaintained but never compiled here.
+targets = ["x86_64-pc-windows-msvc"]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# A vulnerability fails here as it does everywhere. "Unmaintained" is scoped to
+# crates this workspace names itself: the rest of the graph is Tauri's, and an
+# advisory we cannot act on until Tauri releases would block every PR without
+# telling us anything we can use.
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+]
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

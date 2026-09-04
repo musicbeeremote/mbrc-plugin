@@ -1,0 +1,51 @@
+name: supply-chain
+
+# Advisories, licences, duplicate versions and source registries, over both
+# Cargo workspaces. The api-debugger is excluded from the root workspace and
+# resolves its own graph, so a single run would miss most of its dependencies.
+#
+# This overlaps Dependabot without replacing it, in both directions: cargo-deny
+# reads the RustSec database and filters by build target, so it catches Rust
+# advisories Dependabot has not mirrored and skips crates that never compile for
+# Windows; Dependabot covers the npm lockfile, which cargo-deny cannot see.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # New advisories land against unchanged code, so a PR-only gate would go
+    # stale between releases.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deny:
+    name: cargo-deny (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: plugin
+            manifest: Cargo.toml
+          - name: api-debugger
+            manifest: tools/api-debugger/src-tauri/Cargo.toml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: ${{ matrix.manifest }}
+          command: check
+          # Warnings are not failures here: `multiple-versions` is a warning by
+          # policy, and a mid-upgrade duplicate should not redden the tree.
+          arguments: --all-features

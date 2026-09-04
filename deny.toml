@@ -1,0 +1,48 @@
+# Supply-chain gates for the workspace: advisories, licences, and duplicate
+# versions. Run by the `security` workflow over both workspaces, since the
+# api-debugger resolves its own dependency graph.
+
+[graph]
+# The plugin only ever ships for 32-bit Windows, so a unix-only dependency of a
+# cross-platform crate is not in the binary and its advisories are not ours.
+targets = ["i686-pc-windows-msvc"]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Every dependency resolves to one of these. The list is an allowlist rather
+# than a denylist so a new copyleft dependency fails instead of arriving quietly
+# in a plugin that ships as a binary.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "Unicode-3.0",
+]
+# Our own crates carry the GPL plus a linking exception, which is a file rather
+# than an SPDX expression; the allowlist above is about what we depend on.
+private = { ignore = true }
+
+[bans]
+# A duplicate is a warning, not a failure: the second copy is nearly always a
+# transitive dependency mid-upgrade, and failing on it would mean the tree stays
+# red until an unrelated crate cuts a release.
+multiple-versions = "warn"
+wildcards = "deny"
+# Our own crates depend on each other by path and carry no version, which is a
+# wildcard by the letter of the rule and correct for a workspace that publishes
+# nothing.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
