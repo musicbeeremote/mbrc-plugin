@@ -36,7 +36,7 @@ zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate
 # `deflate-flate2` selects flate2 but no backend, so the backend is chosen here:
 # miniz_oxide, the same pure-Rust one mbrc-core already uses for its log gzip. No
 # C toolchain, and one decompressor in the workspace rather than two.
-flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"], optional = true }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"], optional = true }
 # Timestamps for the check interval and the staging marker.
 time = { workspace = true, features = ["parsing"], optional = true }
 
