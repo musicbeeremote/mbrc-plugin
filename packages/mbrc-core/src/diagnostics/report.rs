@@ -1,10 +1,8 @@
 //! `report.json`: the environment and core state a bug report needs, assembled
 //! in one place.
 //!
-//! Nothing here is new state - every value already existed for the settings
-//! panel, the update flow, or the caches. The point is that a maintainer
-//! reading an issue should not have to ask for any of it, and a user should not
-//! have to know it exists.
+//! Nothing here is new state - it is the values the settings panel, update flow
+//! and caches already hold, gathered so a maintainer never has to ask for them.
 
 use serde_json::{json, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -13,11 +11,11 @@ use crate::diagnostics::redact;
 use crate::ffi::dtos::CaptureEnvEntry;
 use crate::state::Core;
 
-/// Assemble the report for a capture that began at `started_unix_ms`.
+/// Assembles the report for a capture that began at `started_unix_ms`.
 ///
-/// Takes `&Core` rather than reaching for the global state so it stays testable
-/// and so the caller keeps control of the lock: this reads a fair amount, and
-/// none of it should happen with the core mutex held.
+/// Takes `&Core` rather than the global state so it stays testable and the
+/// caller keeps control of the lock - none of these reads should happen with
+/// the core mutex held.
 pub fn build(core: &Core, host_env: &[CaptureEnvEntry], started_unix_ms: i64) -> Value {
     json!({
         "generated_at": now_rfc3339(),
@@ -91,8 +89,8 @@ fn listening(core: &Core) -> Value {
 }
 
 /// What is connected right now. The blocked list below records refusals, but a
-/// refusal is a symptom: without the live counts a maintainer cannot see the
-/// accumulation that caused it, and a bug reporter has no way to produce it.
+/// refusal is only the symptom - the live counts show the accumulation behind
+/// it, which a bug reporter has no other way to produce.
 fn connections(core: &Core) -> Value {
     let stats = core.registry.stats();
     json!({
@@ -111,7 +109,7 @@ fn connections(core: &Core) -> Value {
     })
 }
 
-/// Cache health, the usual suspect behind "sync never finishes".
+/// Caches health, the usual suspect behind "sync never finishes".
 fn caches(core: &Core) -> Value {
     json!({
         "tracks_cached": crate::server::commands::library::cached_tracks_count(&core.metadata_cache),
@@ -124,9 +122,8 @@ fn caches(core: &Core) -> Value {
     })
 }
 
-/// Where the update flow stands, plus the persisted bookkeeping behind it -
-/// which channel the user follows is often the first thing worth knowing about
-/// a beta report.
+/// Where the update flow stands, plus the persisted bookkeeping behind it. The
+/// channel the user follows is often the first thing a beta report needs.
 fn update(core: &Core) -> Value {
     let status = crate::updates::service::status(core);
     json!({

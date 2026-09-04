@@ -1,26 +1,21 @@
 //! mDNS / DNS-SD advertisement, alongside the custom UDP responder (#160).
 //!
-//! [`discovery`](crate::discovery) is not going anywhere - every shipped client
-//! depends on it. What it cannot do is be found by anything not written against
-//! it, and both mobile platforms have DNS-SD browsing built in (`NsdManager`,
-//! `NWBrowser`), as does every diagnostic tool on the LAN. This publishes the
-//! same facts through the standard mechanism.
+//! [`discovery`](crate::discovery) stays - every shipped client depends on it -
+//! but nothing written against something else can find it, and both mobile
+//! platforms browse DNS-SD out of the box. This publishes the same facts through
+//! the standard mechanism. Four deliberate choices:
 //!
-//! Four things here are deliberate:
-//!
-//! - **Best-effort, exactly like the custom responder.** A daemon that will not
-//!   start, or a registration that is refused, logs a warning and leaves. Failing
-//!   to advertise must never be able to stop the plugin serving clients.
-//! - **A list of services, not one.** DNS-SD is per-service and one daemon can
-//!   hold several, so a second endpoint later (an HTTP server, say) is another
-//!   entry here rather than a rewrite.
-//! - **The addresses are ours, not the crate's.** `mdns-sd` can fill in every
-//!   address it finds; we hand it [`usable_ipv4_ifaces`] instead, so what is
-//!   advertised is the same set the panel's "Reachable at" row shows. mDNS has
-//!   no client-subnet hint, so unlike the custom responder we cannot pick *the*
-//!   reachable address - but we can at least not publish loopback and APIPA.
-//! - **Goodbye on the way out.** A stale instance sitting in every browser on the
-//!   LAN until its TTL expires is worse than never having advertised.
+//! - **Best-effort, like the custom responder.** A daemon that will not start
+//!   logs a warning and leaves; failing to advertise must never stop the plugin
+//!   serving clients.
+//! - **A list of services, not one.** One daemon can hold several, so a second
+//!   endpoint later is another entry rather than a rewrite.
+//! - **The addresses are ours, not the crate's.** We hand `mdns-sd`
+//!   [`usable_ipv4_ifaces`], so it advertises what the panel's "Reachable at"
+//!   row shows. mDNS carries no client-subnet hint, so we cannot pick *the*
+//!   reachable address, only avoid publishing loopback and APIPA.
+//! - **Goodbye on the way out.** A stale instance lingering in every browser on
+//!   the LAN is worse than never having advertised.
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -35,15 +30,11 @@ use crate::protocol::version::SUPPORTED_VERSIONS;
 
 /// The service type clients browse for.
 ///
-/// Four characters, well inside the fifteen RFC 6763 allows for a service name -
-/// `_musicbee-remote` would have sat exactly on the limit with no headroom. What
-/// a person reads in a picker is the *instance* name, which is this machine's
-/// name, so the type does not have to carry the branding. It also leaves room
-/// for a sibling type later: `_mbrc-http._tcp` fits, `_musicbeeremote-http`
-/// would not.
+/// Four characters, well inside the fifteen RFC 6763 allows. A picker shows the
+/// *instance* name, so the type needs no branding, and the headroom leaves room
+/// for a sibling like `_mbrc-http._tcp`.
 ///
-/// **Permanent.** Once a client ships against it, changing it makes that client
-/// blind to every server that follows us.
+/// **Permanent.** A client that ships against it goes blind if it changes.
 pub const SERVICE_TYPE: &str = "_mbrc._tcp.local.";
 
 /// How often the interface set is re-checked. mDNS advertises addresses, so a
@@ -63,7 +54,7 @@ struct Service {
     txt: HashMap<String, String>,
 }
 
-/// Advertise until `shutdown` is signalled, then withdraw.
+/// Advertises until `shutdown` is signalled, then withdraw.
 pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
     let daemon = match ServiceDaemon::new() {
         Ok(daemon) => daemon,
@@ -91,11 +82,8 @@ pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
         "mDNS advertisement started"
     );
 
-    // Pinned once outside the loop rather than created per iteration: `Notify`
-    // wakes the waiters registered at the moment it fires and stores nothing, so
-    // a notification arriving while this task was busy re-registering would be
-    // missed by a fresh `notified()` - and a missed shutdown here leaks the
-    // daemon thread, which would go on advertising a server that has stopped.
+    // Pinned outside the loop: `Notify` wakes only the waiters registered when
+    // it fires, so re-registering could miss a shutdown and leak the daemon.
     let notified = shutdown.notified();
     tokio::pin!(notified);
 
@@ -155,7 +143,7 @@ fn advertised_protocols() -> String {
         .join(",")
 }
 
-/// Register everything, returning the full names of what actually took. A
+/// Registers everything, returning the full names of what actually took. A
 /// registration that fails is logged and skipped rather than aborting the rest:
 /// one bad service should not cost the others.
 fn register_all(
@@ -185,7 +173,7 @@ fn register_all(
         .collect()
 }
 
-/// Build one service record. The host name is this machine under `.local.`,
+/// Builds one service record. The host name is this machine under `.local.`,
 /// which is what the SRV record points at and what the A records answer for.
 fn info(service: &Service, instance: &str, addresses: &[IpAddr]) -> mdns_sd::Result<ServiceInfo> {
     ServiceInfo::new(
@@ -198,7 +186,7 @@ fn info(service: &Service, instance: &str, addresses: &[IpAddr]) -> mdns_sd::Res
     )
 }
 
-/// Send the goodbye packets and give them a moment to leave, so browsers drop
+/// Sends the goodbye packets and give them a moment to leave, so browsers drop
 /// the instance now rather than when its TTL runs out.
 async fn withdraw(daemon: &ServiceDaemon, registered: &[String]) {
     if registered.is_empty() {
@@ -263,9 +251,8 @@ mod tests {
 
     #[test]
     fn the_service_type_fits_the_dns_sd_limit() {
-        // RFC 6763 allows at most 15 characters in a service name, underscore
-        // excluded. This is the value clients ship against, so it is pinned by a
-        // test rather than left to a careless edit.
+        // RFC 6763 allows at most 15 characters, underscore excluded, and this is
+        // the value clients ship against.
         let name = SERVICE_TYPE
             .strip_prefix('_')
             .and_then(|s| s.split('.').next())

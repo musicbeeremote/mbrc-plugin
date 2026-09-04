@@ -38,6 +38,9 @@ impl HttpResponse {
     /// for it, and those call sites check [`is_not_modified`](Self::is_not_modified)
     /// first. Reaching this with one means a conditional request was made
     /// somewhere that cannot handle the conditional answer.
+    ///
+    /// # Errors
+    /// The response carried a non-success status.
     pub fn into_body(self, url: &str) -> Result<Vec<u8>> {
         if self.is_success() {
             Ok(self.body)

@@ -55,10 +55,8 @@ impl NowPlayingCache {
     }
 
     // ── Writers (FFI -> cache) ───────────────────────────────────────
-    // Each fetches OUTSIDE the lock, then takes the write lock briefly. On a
-    // provider error the old value is kept (a transient FFI failure never blanks
-    // the cache). The 2.7s downloaded-lyrics fetch happens here, off the read
-    // path.
+    // Each fetches outside the lock, then takes it briefly, and keeps the old
+    // value on a provider error so a transient failure never blanks the cache.
 
     /// Full refresh: every cached field. Startup seed and a belt-and-braces
     /// resync. Marks the cache seeded.
@@ -104,19 +102,19 @@ impl NowPlayingCache {
         set(&mut s.lyrics, lyrics);
     }
 
-    /// Refresh the cover slice (MusicBee `NowPlayingArtworkReady`).
+    /// Refreshes the cover slice (MusicBee `NowPlayingArtworkReady`).
     pub fn refresh_cover(&self) {
         let cover = self.providers.cover().ok();
         set(&mut self.write().cover, cover);
     }
 
-    /// Refresh the lyrics slice (MusicBee `NowPlayingLyricsReady`).
+    /// Refreshes the lyrics slice (MusicBee `NowPlayingLyricsReady`).
     pub fn refresh_lyrics(&self) {
         let lyrics = self.providers.lyrics().ok();
         set(&mut self.write().lyrics, lyrics);
     }
 
-    /// Refresh the whole player slice (play-state/volume/mute notifications and
+    /// Refreshes the whole player slice (play-state/volume/mute notifications and
     /// the shuffle/repeat/scrobble poll). `player_state()` returns every player
     /// field in one FFI call, so one refresh serves all of them.
     pub fn refresh_player(&self) {
@@ -124,7 +122,7 @@ impl NowPlayingCache {
         set(&mut self.write().player, player);
     }
 
-    /// Store an already-fetched player state (the monitor poll already queried
+    /// Stores an already-fetched player state (the monitor poll already queried
     /// it for change-detection; avoid a second FFI call).
     pub fn set_player(&self, player: PlayerState) {
         self.write().player = player;
@@ -167,7 +165,7 @@ impl NowPlayingCache {
         self.read().player.clone()
     }
 
-    /// Fill a cold cache on first read. Idempotent; a benign race just refreshes
+    /// Fills a cold cache on first read. Idempotent; a benign race just refreshes
     /// twice once.
     fn ensure_seeded(&self) {
         if !self.seeded.load(Ordering::Acquire) {
@@ -183,7 +181,7 @@ impl NowPlayingCache {
     }
 }
 
-/// Overwrite `slot` only when the refresh produced a value; a provider error
+/// Overwrites `slot` only when the refresh produced a value; a provider error
 /// (`None`) leaves the previous value in place.
 fn set<T>(slot: &mut T, value: Option<T>) {
     if let Some(v) = value {

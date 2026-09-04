@@ -1,9 +1,8 @@
 //! Trim raw `mbrc-capture/2` traces into committable golden fixtures.
 //!
-//! Unlike the old pre-`mbrc-capture/2` pipeline, connection boundaries and
-//! platform/protocol are *not* inferred from `player` frames: the capture
-//! already carries a true TCP `conn_id` on every frame and a `handshake` meta
-//! record per connection, so we trust those directly.
+//! Connection boundaries and platform are not inferred from `player` frames:
+//! the capture carries a true TCP `conn_id` and a `handshake` meta record, so
+//! those are trusted directly.
 //!
 //! Transformations, in order:
 //! 1. Group frames by `conn_id`; classify each connection via its `handshake`
@@ -15,11 +14,9 @@
 //!    placeholders, cap arrays, scrub PII (file paths, library metadata), and
 //!    cap frames per context - re-deriving `raw` when a frame changes.
 //!
-//! Scrubbing (step 4) makes the fixture safe to commit to a public repo: real
-//! file paths (which leak usernames, host names, and library layout) are rewritten
-//! to synthetic ones, and library metadata (artist/album/title/genre/name) is
-//! replaced with deterministic pseudonyms. The mapping is stable within a bucket,
-//! so a name or path referenced across frames (browse -> cover -> queue) stays
+//! Scrubbing is what makes a fixture safe to commit: paths leak usernames and
+//! library layout, so they and the metadata become deterministic pseudonyms. The
+//! mapping is stable within a bucket, so a name referenced across frames stays
 //! consistent and the fixture still replays.
 
 use std::collections::{BTreeMap, HashSet};
@@ -108,7 +105,7 @@ struct Scrubber {
 }
 
 impl Scrubber {
-    /// Map `original` to a stable `"{display} {n}"` label within `category`.
+    /// Maps `original` to a stable `"{display} {n}"` label within `category`.
     fn label(&mut self, category: &'static str, display: &str, original: &str) -> String {
         if original.is_empty() {
             return String::new();
@@ -124,7 +121,7 @@ impl Scrubber {
         val
     }
 
-    /// Map a path with no useful sibling metadata to a stable synthetic path.
+    /// Maps a path with no useful sibling metadata to a stable synthetic path.
     fn path_token(&mut self, original: &str, ext: &str) -> String {
         let key = ("path", original.to_string());
         if let Some(v) = self.seen.get(&key) {
@@ -138,7 +135,7 @@ impl Scrubber {
     }
 }
 
-/// Trim the concatenated contents of one or more `mbrc-capture/2` files.
+/// Trims the concatenated contents of one or more `mbrc-capture/2` files.
 pub fn trim_capture(contents: &str) -> TrimOutput {
     // Parse frames (in order) and collect per-conn handshake metadata.
     let mut frames: Vec<FrameRec> = Vec::new();
@@ -228,7 +225,7 @@ pub fn trim_capture(contents: &str) -> TrimOutput {
     out
 }
 
-/// Keep at most `MAX_PER_CONTEXT` frames for each `(dir, context)`, in order.
+/// Keeps at most `MAX_PER_CONTEXT` frames for each `(dir, context)`, in order.
 /// This is what tames repetitive command storms (e.g. one `libraryalbumcover`
 /// per album) so a single exchange cannot dominate the fixture.
 fn cap_per_context(lines: &mut Vec<Value>) {
@@ -251,7 +248,7 @@ fn cap_per_context(lines: &mut Vec<Value>) {
     });
 }
 
-/// Classify a connection: prefer its `handshake` meta, else sniff the
+/// Classifies a connection: prefer its `handshake` meta, else sniff the
 /// connection's own `player` (c2s string) and `protocol` (c2s) frames.
 fn classify(
     cid: u32,
@@ -373,11 +370,9 @@ fn truncate_arrays(v: &mut Value) {
 /// paths, in place. Values are mapped through `scrub` so they stay consistent
 /// across the whole fixture.
 ///
-/// Two path strategies: `src`/`path`/`url` object fields are rebuilt from their
-/// sibling metadata (readable, consistent); any *other* path-shaped string -
-/// including bare paths inside arrays (`nowplayingqueue` sends folder paths as a
-/// list) or under odd keys (`play`) - is caught by shape and tokenized. Nothing
-/// path-shaped escapes.
+/// Two path strategies: `src`/`path`/`url` fields are rebuilt from their sibling
+/// metadata, and any other path-shaped string - including bare ones in arrays or
+/// under odd keys - is caught by shape and tokenized. Nothing escapes.
 fn scrub_value(v: &mut Value, scrub: &mut Scrubber) {
     match v {
         Value::Array(a) => {
@@ -435,7 +430,7 @@ fn looks_like_path(s: &str) -> bool {
     b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'/' || b[2] == b'\\')
 }
 
-/// Rewrite `src`/`path`/`url` string fields on this object to synthetic paths.
+/// Rewrites `src`/`path`/`url` string fields on this object to synthetic paths.
 /// Prefers rebuilding from the (already pseudonymized) sibling metadata so the
 /// path stays human-readable and internally consistent; falls back to an opaque
 /// token when there is nothing to build from.
@@ -578,7 +573,7 @@ mod tests {
     use super::*;
     use crate::Frame;
 
-    /// Build one capture line for a frame with the given conn/dir/context/data.
+    /// Builds one capture line for a frame with the given conn/dir/context/data.
     fn frame_line(conn_id: u32, seq: u64, dir: &str, context: &str, data: Value) -> String {
         let raw =
             serde_json::to_string(&serde_json::json!({"context": context, "data": data})).unwrap();

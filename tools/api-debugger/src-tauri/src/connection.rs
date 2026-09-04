@@ -83,7 +83,7 @@ pub struct ConnectionState {
 }
 
 impl ConnectionState {
-    /// Install (or clear) the connection for a slot, tearing down any previous.
+    /// Installs (or clears) the connection for a slot, tearing down any previous.
     fn replace(&self, slot: &str, conn: Option<Connection>) {
         let mut guard = self.slots.lock().unwrap();
         if let Some(old) = guard.remove(slot) {
@@ -104,7 +104,7 @@ impl ConnectionState {
     }
 }
 
-/// Send a line and mirror it into the slot's UI log as a "sent" message.
+/// Sends a line and mirror it into the slot's UI log as a "sent" message.
 fn emit_send(app: &AppHandle, slot: &str, tx: &mpsc::UnboundedSender<String>, line: String) {
     let context = context_of(&line);
     let _ = app.emit(

@@ -40,7 +40,7 @@ impl StubHttp {
             .insert(url.to_owned(), body.to_vec());
     }
 
-    /// Answer every conditional request with 304 from now on.
+    /// Answers every conditional request with 304 from now on.
     pub fn reply_not_modified(&self) {
         *self.not_modified.borrow_mut() = true;
     }

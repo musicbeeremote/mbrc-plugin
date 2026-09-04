@@ -1,9 +1,8 @@
 //! Rust-canonical runtime settings, read from `core_settings.json` in the
 //! storage directory handed to `mbrc_initialize`.
 //!
-//! This is the single source of truth for runtime config. At cutover the C#
-//! `Configure()` UI edits this file and signals a reload; there is no parallel
-//! C# settings store for these values.
+//! The single source of truth for runtime config: the C# `Configure()` UI edits
+//! this file and signals a reload, and there is no parallel C# settings store.
 //!
 //! Preferences only. What the updater has already *done* - when it last checked,
 //! the cached ETag, a version the user skipped - is machine-written state and
@@ -31,9 +30,10 @@ fn default_search_source() -> i32 {
     1 // SearchSource.Library
 }
 
-/// Which clients may connect, mirroring the shipped plugin's three modes. The
-/// server checks each inbound peer against the active mode (loopback is always
-/// allowed). Serialized lowercase to match the panel/JSON.
+/// Which clients may connect, mirroring the shipped plugin's three modes.
+///
+/// The server checks each inbound peer against the active mode (loopback is
+/// always allowed). Serialized lowercase to match the panel/JSON.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum FilterMode {
@@ -46,10 +46,12 @@ pub enum FilterMode {
     Specific,
 }
 
-/// How verbose the core's log is. Serialized lowercase to match the settings
-/// JSON and the panel's select. The host maps this to a tracing filter directive
-/// and pushes it via `mbrc_set_log_level`; the core also reads it directly to
-/// gate its most verbose per-item traces.
+/// How verbose the core's log is.
+///
+/// Serialized lowercase to match the settings JSON and the panel's select. The
+/// host maps this to a tracing filter directive and pushes it via
+/// `mbrc_set_log_level`; the core also reads it directly to gate its most
+/// verbose per-item traces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
@@ -70,7 +72,7 @@ impl LogLevel {
     }
 }
 
-/// Listen on every interface. Clients are phones elsewhere on the LAN.
+/// Listens on every interface. Clients are phones elsewhere on the LAN.
 fn default_bind_address() -> String {
     "0.0.0.0".to_string()
 }
@@ -127,19 +129,11 @@ pub struct Config {
     pub port: u16,
     /// Local address the command server binds to.
     ///
-    /// `0.0.0.0` in production: the whole point of the plugin is to accept
-    /// connections from phones on the LAN, so it must listen on every
-    /// interface. The field exists so tests can bind loopback instead.
-    ///
-    /// That is not cosmetic. A listener on `0.0.0.0` makes Windows Firewall
-    /// raise its "allow this app?" prompt, and it raises it per *program path*.
-    /// Cargo puts a fresh hash in every test binary's filename, so each rebuild
-    /// looked like a brand new program and left behind another firewall rule.
-    /// Loopback listeners are never filtered and never prompt.
-    ///
-    /// An unparseable value falls back to `0.0.0.0` rather than refusing to
-    /// start: a typo in `core_settings.json` should not leave the user with a
-    /// plugin that silently never listens.
+    /// `0.0.0.0` in production, since the plugin exists to accept connections
+    /// from phones. Tests bind loopback instead, which is not cosmetic: a
+    /// `0.0.0.0` listener raises the Windows Firewall prompt per program path,
+    /// and cargo re-hashes every test binary, so each rebuild left a stale rule.
+    /// An unparseable value falls back rather than refusing to start.
     pub bind_address: String,
     /// The client-address filtering mode (`all` / `range` / `specific`).
     pub filter_mode: FilterMode,
@@ -225,14 +219,10 @@ pub struct Config {
 impl Config {
     /// A config for integration tests: defaults, but bound to loopback.
     ///
-    /// Tests must not bind `0.0.0.0`. Doing so makes Windows Firewall prompt
-    /// for every test binary, and since Cargo rebuilds them under a new hash
-    /// each time, every rebuild leaves another stale rule behind. Loopback is
-    /// never filtered, so the prompt never appears and the tests are unaffected
-    /// - they connect to `127.0.0.1` regardless.
-    ///
-    /// This lives here rather than in each test file so a new test gets the
-    /// right behaviour by reaching for the obvious constructor.
+    /// Tests must not bind `0.0.0.0`: it prompts Windows Firewall per test
+    /// binary, and cargo re-hashes those every rebuild, so each one leaves a
+    /// stale rule. Loopback never prompts and the tests connect there anyway.
+    /// It lives here so reaching for the obvious constructor is enough.
     pub fn for_test(port: u16) -> Self {
         Self {
             port,
@@ -271,7 +261,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load `<storage_path>/core_settings.json`, falling back to defaults if the
+    /// Loads `<storage_path>/core_settings.json`, falling back to defaults if the
     /// file is missing or unparseable (logged, never fatal).
     pub fn load(storage_path: &str) -> Self {
         let path = Path::new(storage_path).join("core_settings.json");
@@ -299,7 +289,7 @@ impl Config {
         config
     }
 
-    /// Reject settings the core can't safely run with, so a typo in the panel
+    /// Rejects settings the core can't safely run with, so a typo in the panel
     /// can't persist a file that bricks the listener on the next init. Called by
     /// the write-settings FFI before anything is written to disk.
     pub fn validate(&self) -> Result<(), String> {
@@ -354,7 +344,7 @@ impl Config {
     }
 }
 
-/// Match a peer against one allow-list entry: an exact address, or a CIDR block
+/// Matches a peer against one allow-list entry: an exact address, or a CIDR block
 /// (`a.b.c.d/prefix`) when the entry contains a slash. Lets the `Specific` mode's
 /// list mix single IPs and subnets (the modern alternative to the legacy Range).
 fn ip_matches_entry(ip: IpAddr, entry: &str) -> bool {
@@ -385,10 +375,12 @@ fn ip_in_cidr(ip: IpAddr, network: &str, prefix: &str) -> bool {
 }
 
 /// One-time migration of the shipped plugin's `settings.xml` to the Rust-owned
-/// `core_settings.json`. Runs when the new file is absent but the legacy file is
-/// present in the same storage dir (`mb_remote/`). Best-effort: any failure
-/// leaves the core to start with defaults (logged, never fatal). Settings are
-/// Rust-owned, so the core owns this migration too.
+/// `core_settings.json`.
+///
+/// Runs when the new file is absent but the legacy file is present in the same
+/// storage dir (`mb_remote/`). Best-effort: any failure leaves the core to
+/// start with defaults (logged, never fatal). Settings are Rust-owned, so the
+/// core owns this migration too.
 pub fn migrate_legacy_settings(storage_path: &str) {
     let dir = Path::new(storage_path);
     let new_path = dir.join("core_settings.json");
@@ -409,7 +401,7 @@ pub fn migrate_legacy_settings(storage_path: &str) {
     }
 }
 
-/// Build a [`Config`] from the flat legacy `<mbremote>` XML. Missing/unknown
+/// Builds a [`Config`] from the flat legacy `<mbremote>` XML. Missing/unknown
 /// nodes fall back to defaults. The legacy format is our own (flat, ASCII
 /// values, no attributes or entities), so a targeted tag extractor suffices.
 fn config_from_legacy_xml(xml: &str) -> Config {
@@ -685,9 +677,8 @@ mod tests {
 
     #[test]
     fn an_older_settings_file_gains_the_update_defaults() {
-        // A file written before these fields existed must keep working, and it
-        // must not start checking for updates behind the user's back: an upgrade
-        // is not consent.
+        // An upgrade is not consent: a file written before these fields existed
+        // must not start checking for updates on its own.
         let c: Config = serde_json::from_str(r#"{"port":3000}"#).unwrap();
         assert!(!c.update_check_enabled);
         assert_eq!(c.update_channel, UpdateChannel::Stable);

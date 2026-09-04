@@ -185,7 +185,9 @@ impl Write for WriterHandle {
     }
 }
 
-/// Install the global tracing subscriber once, writing to `<storage>/mbrc-core.log`.
+/// Installs the global tracing subscriber once, writing to
+/// `<storage>/mbrc-core.log`.
+///
 /// Under MusicBee there is no console, so a file sink is the only way to see
 /// core logs. Falls back to stderr if the file can't be opened. Safe to call
 /// repeatedly; only the first call takes effect.
@@ -193,11 +195,8 @@ pub fn init(storage_path: &str) {
     if INIT.get().is_some() {
         return;
     }
-    // No console under MusicBee, so RUST_LOG is rarely set - the fallback is what
-    // actually applies until the host pushes the `log_level` setting via
-    // `mbrc_set_log_level`. Debug builds start a bit chattier; release starts at
-    // info. `mbrc_core` covers module-path targets; `mbrc` covers the
-    // `mbrc::wire` frame target.
+    // No console under MusicBee, so RUST_LOG is rarely set and this applies
+    // until the host pushes `log_level`. `mbrc` is the wire frame target.
     let fallback = if cfg!(debug_assertions) {
         "info,mbrc_core=debug,mbrc=debug"
     } else {
@@ -205,13 +204,11 @@ pub fn init(storage_path: &str) {
     };
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback));
 
-    // Wrap the filter in a reload layer and stash the handle so `set_level` can
-    // swap it live when the host changes the log level.
+    // Stashed so `set_level` can swap the filter live.
     let (filter_layer, handle) = reload::Layer::new(filter);
     let _ = RELOAD_HANDLE.set(handle);
 
-    // The storage dir may not exist yet at first init; create it so the log
-    // file open below doesn't silently fall back to stderr.
+    // Created first, or the log file open below falls back to stderr.
     let _ = std::fs::create_dir_all(storage_path);
     let path = Path::new(storage_path).join(LOG_FILE);
     // Runtime-rotating, size-capped file sink (bounds disk use). Fall back to
@@ -228,16 +225,14 @@ pub fn init(storage_path: &str) {
     let _ = INIT.set(());
 }
 
-/// Render a wire frame for logging. Redaction is **key-aware**: values under
-/// known blob fields (cover art, image data, lyrics) become `<base64 N bytes>`
-/// regardless of length, while every other field - notably file `path`s - stays
-/// readable. A generous length cap is still applied to non-blob strings as a
-/// safety net, but with a neutral `<N chars>` label rather than being
-/// mislabeled as base64. Non-JSON input is truncated.
+/// Renders a wire frame for logging.
 ///
-/// When `max_array` is `Some(n)`, long list bodies collapse to the first `n`
-/// elements plus a `<+N more items; keys: …>` schema summary (the DEBUG wire
-/// line); `None` keeps every element (the TRACE wire line).
+/// Redaction is **key-aware**: blob fields (cover art, image data, lyrics) become
+/// `<base64 N bytes>` at any length, while everything else - notably file
+/// `path`s - stays readable under a generous `<N chars>` cap.
+///
+/// `max_array` of `Some(n)` collapses long list bodies to `n` elements plus a
+/// `<+N more items; keys: …>` summary (DEBUG); `None` keeps them all (TRACE).
 pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
     match serde_json::from_str::<Value>(frame) {
         Ok(mut v) => {
@@ -254,15 +249,14 @@ pub fn redact_frame(frame: &str, max_array: Option<usize>) -> String {
     }
 }
 
-/// Pull the `context` value out of an already-serialized wire frame without
-/// re-parsing the whole thing. Broadcast and ping frames reach the log as
-/// strings, and a full `serde_json` parse just to name the event would double
-/// the work on every push. Returns `""` when the frame has no readable
-/// `context` (malformed input, or a value that isn't a plain string).
+/// Pulls the `context` value out of an already-serialized wire frame without
+/// re-parsing the whole thing.
 ///
-/// Frames are produced by [`mbrc_wire`]'s `frame`, so the value never contains
-/// an escape sequence; a frame carrying one is treated as unreadable rather
-/// than unescaped here.
+/// Broadcast and ping frames reach the log as strings, and parsing the whole
+/// thing just to name the event would double the work on every push. Returns
+/// `""` when there is no readable `context`, which includes a value carrying an
+/// escape sequence: [`mbrc_wire`]'s `frame` never emits one, so such a frame is
+/// treated as unreadable rather than unescaped here.
 pub fn frame_context(frame: &str) -> &str {
     context_of(frame).unwrap_or("")
 }
@@ -298,7 +292,7 @@ fn is_blob_key(key: Option<&str>) -> bool {
     key.is_some_and(|k| BLOB_KEYS.iter().any(|b| k.eq_ignore_ascii_case(b)))
 }
 
-/// Redact a value for logging. `key` is the object field name the value sits
+/// Redacts a value for logging. `key` is the object field name the value sits
 /// under (`None` at the frame root / inside arrays): blob fields are always
 /// elided as `<base64 N bytes>`, other over-long strings get a neutral
 /// `<N chars>` label. When `max_array` is set, long arrays are capped. Recurses
@@ -336,7 +330,7 @@ fn redact_value(v: &mut Value, key: Option<&str>, max_array: Option<usize>) {
     }
 }
 
-/// Compact shape hint for the elements dropped from a capped array: the object
+/// Compacts shape hint for the elements dropped from a capped array: the object
 /// keys (list items share a shape), or empty for scalars.
 fn array_schema(sample: &Value) -> String {
     match sample {
@@ -349,15 +343,17 @@ fn array_schema(sample: &Value) -> String {
 }
 
 /// Current process resident set size (physical memory) in MiB, or `None` if the
-/// platform query fails. The core runs as a 32-bit process, so this is the
-/// number that proves the library cache stays O(page): during a full paging
-/// sweep of a huge library it must stay flat, not track the library size. Cheap
-/// but a syscall, so callers gate it on the log level before sampling.
+/// platform query fails.
+///
+/// The core runs as a 32-bit process, so this is the number that proves the
+/// library cache stays O(page): during a full paging sweep of a huge library it
+/// must stay flat, not track the library size. Cheap but a syscall, so callers
+/// gate it on the log level before sampling.
 pub fn rss_mib() -> Option<u64> {
     memory_stats::memory_stats().map(|s| (s.physical_mem / (1024 * 1024)) as u64)
 }
 
-/// Emit a log line forwarded from C#. `level`: 0=trace .. 4=error.
+/// Emits a log line forwarded from C#. `level`: 0=trace .. 4=error.
 pub fn log(level: i32, target: &str, message: &str) {
     match level {
         0 => tracing::trace!("[{target}] {message}"),
@@ -368,9 +364,11 @@ pub fn log(level: i32, target: &str, message: &str) {
     }
 }
 
-/// Swap the active log filter at runtime. Parses the directive (a bad one is
-/// reported to C#), then reloads it through the handle installed by [`init`]. If
-/// logging was never initialized (unit tests), it just validates.
+/// Swaps the active log filter at runtime.
+///
+/// Parses the directive (a bad one is reported to C#), then reloads it through
+/// the handle installed by [`init`]. If logging was never initialized (unit
+/// tests), it just validates.
 pub fn set_level(directive: &str) -> Result<(), String> {
     let filter = EnvFilter::try_new(directive).map_err(|e| e.to_string())?;
     match RELOAD_HANDLE.get() {
@@ -456,7 +454,7 @@ pub mod test_support {
         }
     }
 
-    /// Run `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
+    /// Runs `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
     /// and above, and return what it captured.
     pub fn capture_wire_lines(f: impl FnOnce()) -> Vec<WireLine> {
         let lines = Arc::new(Mutex::new(Vec::new()));

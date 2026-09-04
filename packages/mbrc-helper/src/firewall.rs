@@ -1,25 +1,22 @@
 //! Windows Firewall rule management for the listening port.
 //!
-//! Ported from the retired C# `firewall-utility`, with two deliberate
-//! departures from it.
+//! Off Windows nothing here is reachable from `main`, so every item reads as
+//! dead code and the `mod` declaration carries an `allow`. It still compiles and
+//! its unit tests still run on Linux, which is the point: the create-or-update
+//! logic is platform-independent.
 //!
-//! [`RULE_NAME`] is *not* one of them: it is byte-identical to the name the C#
-//! utility used, because changing it would leave every existing user with a
-//! stale rule plus a duplicate.
+//! Ported from the retired C# `firewall-utility` with two deliberate departures.
+//! [`RULE_NAME`] is not one of them: it stays byte-identical, or every existing
+//! user gets a stale rule plus a duplicate.
 //!
-//! **The rule is written even when the firewall is disabled.** The C# returned
-//! early in that case. That made sense when nothing had been spent to get there,
-//! but the plugin launches this helper with `runas`, so by the time the check
-//! runs the user has already been shown a UAC prompt and approved it - and then
-//! got nothing for it. Worse, a rule that was never written is missing the day
-//! the firewall is turned back on, and the failure looks like a plugin bug. A
-//! rule added while the firewall is off is inert, persists, and applies the
-//! moment it is enabled, so writing it unconditionally costs nothing.
+//! **The rule is written even when the firewall is disabled**, where the C#
+//! returned early. The user has already approved a UAC prompt by then, and a
+//! rule that was never written goes missing the day the firewall comes back on.
+//! An inert rule costs nothing.
 //!
-//! **The enabled state is read per active profile**, where the C# read
-//! `INetFwMgr.LocalPolicy.CurrentProfile.FirewallEnabled`, the XP-era API that
-//! flattens the multi-profile case. Since the answer no longer gates anything it
-//! is purely diagnostic, and a failure to read it must not stop the rule being
+//! **The enabled state is read per active profile**, not through the XP-era
+//! `INetFwMgr.LocalPolicy.CurrentProfile` that flattens multiple profiles. It
+//! gates nothing any more, so a failure to read it must not stop the rule being
 //! written - hence [`Report::firewall_active`] being an `Option`.
 
 use std::fmt;
@@ -112,27 +109,30 @@ pub trait FirewallPolicy {
     /// difference does not matter.
     fn rules(&self) -> Result<Vec<(String, Self::Rule)>>;
 
-    /// Rewrite an existing rule's local port list.
+    /// Rewrites an existing rule's local port list.
     fn set_local_ports(&self, rule: &Self::Rule, ports: &str) -> Result<()>;
 
-    /// Add a new inbound allow rule for `ports`.
+    /// Adds a new inbound allow rule for `ports`.
     fn add_rule(&self, name: &str, ports: &str) -> Result<()>;
 }
 
-/// Create the rule, or point the existing one at `port`.
+/// Creates the rule, or point the existing one at `port`.
 ///
 /// Runs regardless of whether the firewall is enabled; see the module docs for
 /// why. Idempotent by design: running it twice with the same port is a no-op the
 /// second time apart from rewriting an identical port list.
+///
+/// # Errors
+/// COM could not bind the firewall policy, or the rule could not be created
+/// or updated.
 pub fn ensure_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Result<Report> {
     // Diagnostic only, and explicitly not a gate: a firewall whose state cannot
     // be read is still a firewall that needs the rule.
     let firewall_active = policy.is_enabled().ok();
 
     let ports = port.to_string();
-    // Match on the exact name, as the C# `x.Name == ruleName` did. Firewall
-    // rule names are case-preserving and users can create their own, so this
-    // stays an ordinal comparison rather than a case-insensitive one.
+    // Ordinal, as the C# `x.Name == ruleName` was: rule names are
+    // case-preserving and users can create their own.
     let existing = policy.rules()?.into_iter().find(|(n, _)| n == name);
 
     let outcome = match existing {
@@ -206,9 +206,8 @@ mod tests {
 
     #[test]
     fn writes_the_rule_even_when_the_firewall_is_disabled() {
-        // The old C# returned early here. It must not: the UAC prompt has
-        // already been paid for by the time this runs, and a rule that was never
-        // written is missing the day the firewall is switched back on.
+        // The UAC prompt is already paid for by the time this runs, and a rule
+        // never written goes missing the day the firewall is switched back on.
         let policy = FakePolicy {
             enabled: false,
             ..Default::default()

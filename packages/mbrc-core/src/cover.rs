@@ -1,8 +1,10 @@
 //! Cover image handling in the core: resizing, cache identities (SHA1), and the
-//! on-disk album cover cache. The C# host hands over raw MusicBee artwork and
-//! the core owns sizing + caching. The wire contract is unchanged -
-//! `nowplayingcover`/`libraryalbumcover` still reply `{status, cover, ...}` with
-//! base64 JPEG; only *where* the resize/cache happens moves.
+//! on-disk album cover cache.
+//!
+//! The C# host hands over raw MusicBee artwork and the core owns sizing +
+//! caching. The wire contract is unchanged -
+//! `nowplayingcover`/`libraryalbumcover` still reply `{status, cover, ...}`
+//! with base64 JPEG; only *where* the resize/cache happens moves.
 
 use std::fmt::Write as _;
 use std::io::Cursor;
@@ -65,11 +67,12 @@ pub fn sha1_hex_str(value: &str) -> String {
 }
 
 /// The album cache key: `SHA1("{artist.lower} {album.lower}")`, lowercase hex.
+///
 /// Byte-matches C# `HashingUtilities.CoverIdentifier`. The joined string always
 /// contains the separating space, so it is never empty (never the 40-zero hash)
 /// even when both parts are empty. Note: uses Unicode `to_lowercase`, which can
-/// differ from C# `ToLowerInvariant` for a few non-ASCII cases; parity holds for
-/// ASCII (the overwhelmingly common case) and existing keys re-resolve.
+/// differ from C# `ToLowerInvariant` for a few non-ASCII cases; parity holds
+/// for ASCII (the overwhelmingly common case) and existing keys re-resolve.
 pub fn cover_identifier(artist: &str, album: &str) -> String {
     sha1_hex_str(&format!(
         "{} {}",
@@ -78,7 +81,7 @@ pub fn cover_identifier(artist: &str, album: &str) -> String {
     ))
 }
 
-/// Resize raw image bytes to fit within `max_w` x `max_h`, preserving aspect and
+/// Resizes raw image bytes to fit within `max_w` x `max_h`, preserving aspect and
 /// never upscaling (mirrors C# `CalculateScaledSize`), re-encoding as JPEG.
 /// Decode an image with allocation + dimension limits enforced, so an untrusted
 /// payload can't trigger a huge allocation (a decompression bomb: a tiny file
@@ -103,6 +106,10 @@ fn decode_limited(raw: &[u8]) -> Result<image::DynamicImage, String> {
 /// (the measured bottleneck; several times faster than `image`'s scalar resize)
 /// -> JPEG-encode. Bilinear convolution: at a 150px thumbnail it is visually
 /// indistinguishable from bicubic/Lanczos while being the cheapest filter.
+///
+/// # Errors
+/// The bytes do not decode as a supported image, exceed the decode cap, or
+/// fail to re-encode as JPEG.
 pub fn resize_to_jpeg(raw: &[u8], max_w: u32, max_h: u32) -> Result<Vec<u8>, String> {
     let img = decode_limited(raw)?;
     let (w, h) = (img.width(), img.height());
@@ -131,9 +138,8 @@ pub fn resize_to_jpeg(raw: &[u8], max_w: u32, max_h: u32) -> Result<Vec<u8>, Str
         dst.into_vec()
     };
 
-    // Quality 80 to match the shipped C# (`DefaultJpegQuality = 80`); the crate
-    // default is 75. Encoder scales differ (GDI+ vs image crate) so bytes never
-    // matched C# anyway, but 80 keeps the visual fidelity the plugin always had.
+    // Quality 80 matches the shipped C# `DefaultJpegQuality`; the crate
+    // default is 75. Encoders differ, so bytes never matched anyway.
     let mut out = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut out), JPEG_QUALITY)
         .encode(&pixels, tw, th, image::ExtendedColorType::Rgb8)
@@ -146,14 +152,18 @@ pub fn to_base64(bytes: &[u8]) -> String {
     b64().encode(bytes)
 }
 
-/// Decode standard base64 (trimmed) to raw bytes. `None` on malformed input -
+/// Decodes standard base64 (trimmed) to raw bytes. `None` on malformed input -
 /// used to turn the host's base64 artwork back into image bytes for resizing.
 pub fn from_base64(input_b64: &str) -> Option<Vec<u8>> {
     b64().decode(input_b64.trim()).ok()
 }
 
-/// Resize a base64 image to fit within `max_w` x `max_h`, re-encoding as JPEG.
+/// Resizes a base64 image to fit within `max_w` x `max_h`, re-encoding as JPEG.
 /// Returns the base64 of the resized JPEG.
+///
+/// # Errors
+/// The input is not valid base64, or the decoded bytes fail
+/// [`resize_to_jpeg`].
 pub fn resize_base64_jpeg(input_b64: &str, max_w: u32, max_h: u32) -> Result<String, String> {
     let raw = b64()
         .decode(input_b64.trim())
@@ -238,9 +248,8 @@ mod tests {
 
     #[test]
     fn rejects_oversized_dimensions_decompression_bomb() {
-        // An image wider than the decode cap is rejected against its header, not
-        // decoded. Kept a real, tiny (~few KB PNG) 1px-tall image so that if the
-        // limit were NOT applied the assert just fails - it never OOMs the test.
+        // A real but tiny 1px-tall image, so an unapplied limit fails the
+        // assertion instead of OOMing the test.
         let big = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
             MAX_DECODE_DIM + 1000,
             1,
@@ -258,9 +267,9 @@ mod tests {
         assert!(resize_to_jpeg(&test_jpeg_bytes(1200, 800), 600, 600).is_ok());
     }
 
-    // Golden hashes computed with `sha1sum` (same algorithm as C#
-    // HashingUtilities), so these are an independent oracle - existing
-    // state.json keys written by the C# cache must resolve to the same values.
+    /// Golden hashes computed with `sha1sum` (same algorithm as C#
+    /// HashingUtilities), so these are an independent oracle - existing
+    /// state.json keys written by the C# cache must resolve to the same values.
     #[test]
     fn sha1_matches_known_vectors() {
         assert_eq!(

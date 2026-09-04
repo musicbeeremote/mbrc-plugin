@@ -1,18 +1,22 @@
 //! System handlers dispatched after the handshake: plugin version and `init`
-//! (the initial-state bundle). The handshake contexts themselves (player,
-//! protocol, ping, pong, verifyconnection) are handled in `session`.
+//! (the initial-state bundle).
+//!
+//! The handshake contexts themselves (player, protocol, ping, pong,
+//! verifyconnection) are handled in `session`.
 
 use serde_json::{json, Value};
 
 use super::{reply_dto, Ctx, HandlerResult};
 use crate::providers::Providers;
 
-/// The version advertised to V4 legacy clients. The V4 surface is a permanent
-/// legacy branch that must present exactly as the last pure-V4 plugin release
-/// (1.4.1), independent of the actual build/assembly version - the dev build
-/// reports 1.5.0.0, and the iOS 1.4.1 client changes its connection behaviour
-/// against a newer version (it stops handshaking its control socket). Pinning
-/// this keeps the V4 clients working as before.
+/// The version advertised to V4 legacy clients.
+///
+/// The V4 surface is a permanent legacy branch that must present exactly as the
+/// last pure-V4 plugin release (1.4.1), independent of the actual
+/// build/assembly version - the dev build reports 1.5.0.0, and the iOS 1.4.1
+/// client changes its connection behaviour against a newer version (it stops
+/// handshaking its control socket). Pinning this keeps the V4 clients working
+/// as before.
 pub const V4_PLUGIN_VERSION: &str = "1.4.1.0";
 
 pub fn plugin_version(_p: &dyn Providers) -> HandlerResult {
@@ -24,9 +28,14 @@ pub fn plugin_version(_p: &dyn Providers) -> HandlerResult {
 
 /// The V4 initial-state bundle: to the requesting client the plugin sends the
 /// current track, rating, Last.fm rating, and full player status, and pushes
-/// the cover and lyrics. In a single request/response exchange all of these go
-/// back on this connection. (The cover/lyrics broadcast fan-out is Slice 3; the
-/// requester still receives them here.)
+/// the cover and lyrics.
+///
+/// In a single request/response exchange all of these go back on this
+/// connection. (The cover and lyrics arrive by broadcast; the requester
+/// still receives them here.)
+///
+/// # Errors
+/// Any of the provider reads that make up the initial state failed.
 pub fn init(ctx: &Ctx) -> HandlerResult {
     // All fields served from the now-playing cache (no FFI on the request path).
     let state = ctx.now_player()?;
@@ -38,11 +47,8 @@ pub fn init(ctx: &Ctx) -> HandlerResult {
         ctx.wire().lfm_status(ctx.now_lfm()?),
     ));
     replies.push(("playerstatus".to_string(), ctx.wire().player_status(&state)));
-    // Cover and lyrics match the shipped C# init exactly: pushed only when
-    // present. C# sends the `{status:1}` "cover ready" marker only if artwork
-    // exists, and lyrics only if non-empty; otherwise it omits them. Emitting
-    // `{status:1}` with no artwork wrongly tells the client to fetch a cover
-    // that 404s. (init is a state push, so the cover is the marker, not inline.)
+    // Pushed only when present, matching the C# init: a `{status:1}` marker
+    // with no artwork tells the client to fetch a cover that 404s.
     let cover = ctx.now_cover()?;
     if !cover.cover.is_empty() {
         replies.push((
@@ -127,9 +133,8 @@ mod tests {
 
     #[test]
     fn init_omits_cover_and_lyrics_when_empty() {
-        // No artwork / no lyrics: init omits both, exactly like the C# handler
-        // (which only broadcasts them when non-empty). Emitting a {status:1}
-        // "cover ready" marker with no artwork would make the client 404-fetch.
+        // Both omitted, as the C# handler does: a `{status:1}` marker with no
+        // artwork would make the client 404-fetch.
         let m = MockProviders::default();
         let ctx = Ctx::new(&m, crate::protocol::version::ProtocolVersion::V4);
         let contexts: Vec<String> = init(&ctx).unwrap().into_iter().map(|(c, _)| c).collect();

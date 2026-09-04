@@ -1,7 +1,7 @@
 //! `mbrc` - headless CLI over the shared MusicBee Remote crates.
 //!
-//! Subcommands (A1): `discover`, `inspect`, `send`. The capture/trim/replay/
-//! compare pipeline lands in A2 / Milestone B and is stubbed for now.
+//! Subcommands: `discover`, `inspect`, `send`, `monitor`, `capture`, `trim`,
+//! `replay`, `fuzz`.
 
 use std::process::ExitCode;
 use std::time::Duration;
@@ -59,9 +59,8 @@ fn cmd_discover(args: &[String]) -> ExitCode {
         }
     };
     let timeout = Duration::from_millis(timeout_ms.clamp(500, 10_000));
-    // `--mdns` browses the DNS-SD advertisement instead of the custom protocol.
-    // Both answer "who is out there", and comparing them is the fastest way to
-    // tell a plugin that is not running from one that is not being *found*.
+    // Both answer "who is out there", so comparing them is the fastest way to
+    // tell a plugin that is not running from one that is not being found.
     let result = if args::has_flag(args, "--mdns") {
         mbrc_discovery::browse_mdns_blocking(timeout)
     } else {

@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, UpdateError};
 
-/// The only schema version this build understands. A manifest declaring anything
-/// else is rejected rather than best-effort parsed: an updater that guesses at a
-/// format it does not know is an updater that installs the wrong bytes.
+/// The only schema version this build understands.
+///
+/// A manifest declaring anything else is rejected rather than best-effort
+/// parsed: an updater that guesses at a format it does not know is an updater
+/// that installs the wrong bytes.
 pub const SCHEMA_VERSION: u32 = 1;
 
 /// Length of a hex-encoded SHA512 digest.
@@ -86,6 +88,10 @@ impl Manifest {
     /// Parses and validates. Prefer [`crate::verify::verify_manifest`], which
     /// checks the signature first: parsing unverified bytes is only safe because
     /// nothing here acts on them.
+    ///
+    /// # Errors
+    /// The bytes are not JSON, or declare a schema version this build does not
+    /// understand.
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let manifest: Self =
             serde_json::from_slice(bytes).map_err(|e| UpdateError::Parse(e.to_string()))?;
@@ -189,15 +195,13 @@ pub fn is_bare_filename(name: &str) -> bool {
     if name.is_empty() || name == "." || name == ".." {
         return false;
     }
-    // A leading dot hides the file on the platforms that care and buys nothing
-    // here; a trailing dot or space is silently stripped by Windows, so
-    // `mb_remote.dll.` and `mb_remote.dll` would name the same file.
+    // A leading dot hides the file; Windows silently strips a trailing dot or
+    // space, so `mb_remote.dll.` and `mb_remote.dll` would be one file.
     if name.starts_with('.') || name.ends_with('.') || name.ends_with(' ') {
         return false;
     }
-    // Separators and drive letters escape the directory outright. The rest are
-    // characters Windows refuses in a filename, and control characters, which
-    // exist in a name only to make a log line lie about what was written.
+    // Separators and drive letters escape the directory outright; the rest are
+    // characters Windows refuses, plus controls that make a log line lie.
     if name.chars().any(|c| {
         matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*') || c.is_control()
     }) {

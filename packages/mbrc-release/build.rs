@@ -50,10 +50,8 @@ fn main() {
         println!("cargo:warning=no release public keys in {} — signature verification will reject every manifest", keys_dir.display());
     }
 
-    // A local testing key is a supported workflow (see tools/stage-local-update.ps1)
-    // and is gitignored, but a build carrying one trusts anything writable in the
-    // staging directory and applies it elevated. Say so on every build: the cost of
-    // shipping such a binary by accident is far higher than the noise.
+    // A local testing key is supported and gitignored, but a build carrying
+    // one applies anything writable in the staging directory, elevated.
     for (name, _) in &keys {
         if name.starts_with("dev") {
             println!(

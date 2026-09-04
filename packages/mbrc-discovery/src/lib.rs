@@ -51,7 +51,7 @@ fn interface_ipv4s() -> Vec<Ipv4Addr> {
     addrs
 }
 
-/// Bind a multicast socket to `iface`, join the group on it, and send the
+/// Binds a multicast socket to `iface`, joins the group on it, and sends the
 /// discovery request advertising `iface` as the reply-to address.
 fn open_and_send(iface: Ipv4Addr) -> std::io::Result<UdpSocket> {
     // Binding to the interface's own IP makes the OS route outgoing multicast
@@ -69,19 +69,23 @@ fn open_and_send(iface: Ipv4Addr) -> std::io::Result<UdpSocket> {
 }
 
 /// The DNS-SD service type the plugin advertises (#160), alongside the custom
-/// protocol above. Must match `mbrc_core::mdns::SERVICE_TYPE`; the two crates do
-/// not share a dependency, the same way the multicast constants above are
-/// mirrored rather than shared.
+/// protocol above.
+///
+/// Must match `mbrc_core::mdns::SERVICE_TYPE`; the two crates do not share a
+/// dependency, the same way the multicast constants above are mirrored rather
+/// than shared.
 pub const MDNS_SERVICE_TYPE: &str = "_mbrc._tcp.local.";
 
 /// Blocking mDNS browse: collect the plugin instances that answer a DNS-SD query
 /// until `timeout` elapses.
 ///
-/// The other half of [`discover_blocking`], and useful for the same reason a
-/// browser is: it answers "is this host advertising, and with what?" without a
-/// packet capture. Where the custom probe returns the one address matching the
-/// client's subnet, this returns whatever the record lists - mDNS has no
-/// subnet hint - so a multi-NIC host can yield several entries for one machine.
+/// The other half of [`discover_blocking`], answering "is this host
+/// advertising, and with what?" without a packet capture. mDNS carries no
+/// subnet hint, so unlike the custom probe this returns whatever the record
+/// lists, and a multi-NIC host can yield several entries.
+///
+/// # Errors
+/// The mDNS daemon could not start, or the browse could not be registered.
 pub fn browse_mdns_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
     let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| format!("mDNS daemon: {e}"))?;
     let receiver = daemon
@@ -131,6 +135,9 @@ fn instance_of(fullname: &str) -> String {
 
 /// Blocking discovery: probe every interface and collect distinct replies until
 /// `timeout` elapses. Runs on the calling thread.
+///
+/// # Errors
+/// No interface accepted a discovery socket, or a receive failed.
 pub fn discover_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
     let ifaces = interface_ipv4s();
     // Best-effort per interface: a NIC that can't join the group (e.g. a
@@ -172,7 +179,7 @@ pub fn discover_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
     Ok(found)
 }
 
-/// Parse a `notify` reply into a discovered instance, if it is one.
+/// Parses a `notify` reply into a discovered instance, if it is one.
 fn parse_notify(bytes: &[u8]) -> Option<Discovered> {
     let v: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     if v.get("context")?.as_str()? != "notify" {

@@ -51,10 +51,8 @@ fn main() {
 fn generate_abi_bindings() {
     let out = PathBuf::from("../plugin/Ffi/Generated/NativeBridge.Generated.cs");
 
-    // csbindgen writes LF unconditionally. Emit to a scratch file in OUT_DIR,
-    // then route through write_if_changed so the checked-in file gets the same
-    // CRLF-normalized, only-write-on-change treatment as the syn-generated ones
-    // (no per-build EOL churn, no spurious mtime bump).
+    // csbindgen writes LF unconditionally, so route it through
+    // `write_if_changed` for the same CRLF, only-on-change treatment.
     let scratch = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR set by cargo"))
         .join("NativeBridge.Generated.cs");
     csbindgen::Builder::default()
@@ -74,7 +72,7 @@ fn generate_abi_bindings() {
     write_if_changed(&out, &generated);
 }
 
-/// Parse the canonical DTO structs and emit matching C# POCOs.
+/// Parses the canonical DTO structs and emits matching C# POCOs.
 fn generate_dtos() {
     // First pass across all sources: collect every canonical enum name. A field
     // of an enum type serializes as a variant-name string, so it maps to `string`.
@@ -178,7 +176,7 @@ fn generate_domain_enums() {
     write_if_changed(Path::new("../plugin/Models/DomainEnums.Generated.cs"), &out);
 }
 
-/// Emit a C# enum with bare variant names (no discriminants), for the
+/// Emits a C# enum with bare variant names (no discriminants), for the
 /// string-serialized domain enums.
 fn emit_plain_enum(out: &mut String, e: &ItemEnum) {
     let name = e.ident.to_string();
@@ -208,7 +206,7 @@ fn emit_enum(out: &mut String, e: &ItemEnum) {
     out.push_str("    }\n\n");
 }
 
-/// Render an integer enum discriminant (a literal or a negated literal) as C#.
+/// Renders an integer enum discriminant (a literal or a negated literal) as C#.
 fn discriminant_value(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Lit(lit) => match &lit.lit {
@@ -263,7 +261,7 @@ fn emit_struct(out: &mut String, s: &ItemStruct, enums: &HashSet<String>) {
     out.push_str("    }\n\n");
 }
 
-/// Map a Rust field type to its C# equivalent.
+/// Maps a Rust field type to its C# equivalent.
 fn map_type(ty: &Type, enums: &HashSet<String>) -> String {
     let Type::Path(tp) = ty else {
         return "object".to_string();
@@ -414,7 +412,7 @@ fn escape_ident(name: &str) -> String {
     }
 }
 
-/// Write only when the content changes, so an unchanged build doesn't churn the
+/// Writes only when the content changes, so an unchanged build doesn't churn the
 /// file's mtime (and the checked-in diff guard stays quiet).
 ///
 /// The output is normalized to CRLF: these are checked-in C# sources and

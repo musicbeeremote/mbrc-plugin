@@ -127,7 +127,7 @@ async fn run_async(
     ExitCode::SUCCESS
 }
 
-/// Serialize a record and append it as a line to the capture file.
+/// Serializes a record and appends it as a line to the capture file.
 async fn append_line<S: Serialize>(shared: &Shared, value: &S) {
     let Ok(mut line) = serde_json::to_vec(value) else {
         return;
@@ -261,7 +261,7 @@ async fn record_frame(session: &Arc<Session>, dir: &str, frame_bytes: &[u8]) {
     append_line(&session.shared, &record).await;
 }
 
-/// Sniff `player` (client type) and `protocol` (version) c2s frames, emitting a
+/// Sniffs `player` (client type) and `protocol` (version) c2s frames, emitting a
 /// `handshake` meta record once the protocol frame arrives.
 async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
     match record.context() {

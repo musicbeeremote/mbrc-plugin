@@ -39,7 +39,7 @@ impl Rng {
         self.next_u64() & 1 == 1
     }
 
-    /// Pick a reference to a random element (panics on empty slice, like index).
+    /// Picks a reference to a random element (panics on empty slice, like index).
     pub fn choice<'a, T>(&mut self, items: &'a [T]) -> &'a T {
         &items[self.below(items.len())]
     }

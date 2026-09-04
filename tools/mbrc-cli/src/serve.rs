@@ -54,7 +54,7 @@ pub fn run(args: &[String]) -> ExitCode {
     rt.block_on(run_async(listen, Arc::new(responses), seconds))
 }
 
-/// Map each `c2s` context to the distinct `s2c` frames that replied to it.
+/// Maps each `c2s` context to the distinct `s2c` frames that replied to it.
 fn build_responses(contents: &str) -> Responses {
     let frames: Vec<mbrc_capture::Frame> = contents
         .lines()

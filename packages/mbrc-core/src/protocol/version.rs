@@ -26,8 +26,12 @@ pub enum ProtocolVersion {
 pub const SUPPORTED_VERSIONS: &[u8] = &[4, 5];
 
 impl ProtocolVersion {
-    /// Map a negotiated handshake version number to a formatter version, or
+    /// Maps a negotiated handshake version number to a formatter version, or
     /// `None` if unsupported (the handshake already rejects pre-V4).
+    ///
+    /// Callers pass the negotiated version capped at `MAX_PROTOCOL`, mirroring
+    /// the handshake reply: a client told MAX must be dispatched as MAX, or the
+    /// MAX-gated commands it then sends would be silently dropped.
     pub fn from_negotiated(version: u8) -> Option<Self> {
         match version {
             4 => Some(Self::V4),

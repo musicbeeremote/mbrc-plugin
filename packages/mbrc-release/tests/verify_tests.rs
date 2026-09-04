@@ -107,9 +107,8 @@ fn bundled_file_must_be_in_the_allowlist() {
 
 #[test]
 fn one_unusable_key_does_not_disable_the_others() {
-    // A corrupt entry in the compiled-in list must not take the working keys
-    // down with it: that would fail closed, but it would fail *completely*, and
-    // a trust list exists precisely so that losing one member is survivable.
+    // Failing completely rather than merely closed: a trust list exists
+    // precisely so that losing one member is survivable.
     const MIXED: &[TrustedKey] = &[
         TrustedKey {
             name: "corrupt",

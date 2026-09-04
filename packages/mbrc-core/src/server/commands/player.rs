@@ -1,7 +1,9 @@
-//! Player-control handlers. Transport commands echo `true`; getters/setters
-//! reply the current value read back from `player_state`. Handlers hold the
-//! strictly-typed canonical state; the V4 wire spelling (stringified volume,
-//! enum spellings) is applied by `ctx.wire()` (the `wire::v4` formatter).
+//! Player-control handlers.
+//!
+//! Transport commands echo `true`; getters/setters reply the current value read
+//! back from `player_state`. Handlers hold the strictly-typed canonical state;
+//! the V4 wire spelling (stringified volume, enum spellings) is applied by
+//! `ctx.wire()` (the `wire::v4` formatter).
 
 use serde_json::{json, Value};
 
@@ -43,8 +45,11 @@ pub fn previous(ctx: &Ctx) -> HandlerResult {
     ack("playerprevious")
 }
 
-/// Set (int, or a stringified int) or query (null); always reply the current
+/// Sets (int, or a stringified int) or queries (null); always replies the current
 /// volume as an int.
+///
+/// # Errors
+/// The provider call failed.
 pub fn volume(data: &Value, ctx: &Ctx) -> HandlerResult {
     let p = ctx.providers;
     if let Some(v) = as_int_lenient(data) {
@@ -54,8 +59,11 @@ pub fn volume(data: &Value, ctx: &Ctx) -> HandlerResult {
     Ok(vec![("playervolume".to_string(), json!(volume))])
 }
 
-/// Set (bool, or `"true"`/`1`), toggle (`"toggle"`), or query (null); reply the
+/// Sets (bool, or `"true"`/`1`), toggles, or queries (null); replies with the
 /// current mute.
+///
+/// # Errors
+/// The provider call failed.
 pub fn mute(data: &Value, ctx: &Ctx) -> HandlerResult {
     let p = ctx.providers;
     if data.as_str() == Some("toggle") {
@@ -68,10 +76,15 @@ pub fn mute(data: &Value, ctx: &Ctx) -> HandlerResult {
     Ok(vec![("playermute".to_string(), json!(mute))])
 }
 
-/// Set (`"off"`/`"shuffle"`/`"autodj"`), toggle, or query; reply the current
-/// shuffle state. AutoDJ-aware, mirroring the shipped C# `HandleAutoDjShuffle`
-/// (every V4 client negotiates AutoDJ shuffle): the toggle cycles
-/// Off -> Shuffle -> AutoDj -> Off, and AutoDJ is a real settable state.
+/// Sets (`"off"`/`"shuffle"`/`"autodj"`), toggles, or queries; replies with the
+/// shuffle state.
+///
+/// AutoDJ-aware, mirroring the shipped C# `HandleAutoDjShuffle` (every V4
+/// client negotiates AutoDJ shuffle): the toggle cycles Off -> Shuffle ->
+/// AutoDj -> Off, and AutoDJ is a real settable state.
+///
+/// # Errors
+/// The provider call failed.
 pub fn shuffle(data: &Value, ctx: &Ctx) -> HandlerResult {
     let p = ctx.providers;
     match data.as_str() {
@@ -102,8 +115,11 @@ pub fn shuffle(data: &Value, ctx: &Ctx) -> HandlerResult {
     )])
 }
 
-/// Set (`"None"`/`"All"`/`"One"`), toggle (cycles), or query; reply the current
+/// Sets (`"None"`/`"All"`/`"One"`), toggles (cycling), or queries; replies with the
 /// repeat mode.
+///
+/// # Errors
+/// The provider call failed.
 pub fn repeat(data: &Value, ctx: &Ctx) -> HandlerResult {
     let p = ctx.providers;
     match data.as_str() {
@@ -130,8 +146,11 @@ pub fn repeat(data: &Value, ctx: &Ctx) -> HandlerResult {
     )])
 }
 
-/// Set (bool, or `"true"`/`1`), toggle, or query; reply the current scrobbler
+/// Sets (bool, or `"true"`/`1`), toggles, or queries; replies with the scrobbler
 /// state as a bool.
+///
+/// # Errors
+/// The provider call failed.
 pub fn scrobble(data: &Value, ctx: &Ctx) -> HandlerResult {
     let p = ctx.providers;
     if data.as_str() == Some("toggle") {
@@ -144,7 +163,10 @@ pub fn scrobble(data: &Value, ctx: &Ctx) -> HandlerResult {
     Ok(vec![("scrobbler".to_string(), json!(scrobble))])
 }
 
-/// Reply the full `playerstatus` object (volume stringified per V4).
+/// Replies the full `playerstatus` object (volume stringified per V4).
+///
+/// # Errors
+/// The provider call failed.
 pub fn status(ctx: &Ctx) -> HandlerResult {
     // Pure query -> served from the now-playing cache (no FFI).
     let state = ctx.now_player()?;
@@ -157,6 +179,9 @@ pub fn status(ctx: &Ctx) -> HandlerResult {
 /// `playeroutput`: pure query of the device list. The client sends `data: ""`
 /// here, so this must NOT switch (the shipped `HandleOutputDevices` doesn't) -
 /// switching lives in `output_switch`.
+///
+/// # Errors
+/// The provider call failed.
 pub fn output(_data: &Value, ctx: &Ctx) -> HandlerResult {
     let devices = ctx.providers.output_devices()?;
     Ok(vec![(
@@ -168,6 +193,9 @@ pub fn output(_data: &Value, ctx: &Ctx) -> HandlerResult {
 /// `playeroutputswitch`: switch to the named device (ignoring an empty name),
 /// then reply the updated device list on the `playeroutput` context (matching
 /// the shipped `HandleOutputDeviceSwitch`).
+///
+/// # Errors
+/// The provider call failed.
 pub fn output_switch(data: &Value, ctx: &Ctx) -> HandlerResult {
     if let Some(device) = data.as_str() {
         if !device.is_empty() {
@@ -260,7 +288,6 @@ mod tests {
 
     #[test]
     fn output_query_does_not_switch_but_switch_does() {
-        // `playeroutput` query (empty-string data) must not switch devices.
         let m = mock();
         let out = output(&json!(""), &ctx(&m)).unwrap();
         assert_eq!(out[0].0, "playeroutput");

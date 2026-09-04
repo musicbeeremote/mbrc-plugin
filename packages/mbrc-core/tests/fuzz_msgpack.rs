@@ -19,7 +19,7 @@ macro_rules! try_decode {
 }
 
 proptest! {
-    // Query-result DTOs (C# -> core) decoded from arbitrary bytes never panic.
+    /// Queries-result DTOs (C# -> core) decoded from arbitrary bytes never panic.
     #[test]
     fn result_dtos_decode_never_panic(bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
         try_decode!(&bytes,
@@ -30,8 +30,8 @@ proptest! {
         );
     }
 
-    // Param DTOs (the shapes crossing the boundary) decoded from arbitrary bytes
-    // never panic either.
+    /// Param DTOs (the shapes crossing the boundary) decoded from arbitrary bytes
+    /// never panic either.
     #[test]
     fn param_dtos_decode_never_panic(bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
         try_decode!(&bytes,
@@ -41,10 +41,10 @@ proptest! {
         );
     }
 
-    // Type confusion: a *valid* named-map msgpack encoding (the shape every DTO
-    // decodes from) with arbitrary keys/values, decoded as each DTO, must be a
-    // clean Err/Ok - never a panic. Mixes int and string values so both matching
-    // and mismatching field types are exercised.
+    /// Type confusion: a *valid* named-map msgpack encoding (the shape every DTO
+    /// decodes from) with arbitrary keys/values, decoded as each DTO, must be a
+    /// clean Err/Ok - never a panic. Mixes int and string values so both matching
+    /// and mismatching field types are exercised.
     #[test]
     fn cross_type_decode_never_panics(
         ints in prop::collection::btree_map("[a-z_]{1,12}", any::<i64>(), 0..6),

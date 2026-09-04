@@ -39,11 +39,15 @@ pub struct ComPolicy {
 
 impl ComPolicy {
     /// Initialises COM for this thread and binds the firewall policy object.
+    ///
+    /// # Errors
+    /// COM could not create the firewall policy object.
     pub fn new() -> Result<Self> {
+        // SAFETY: this is the documented way to bind the policy object, and both
+        // results are checked below.
         unsafe {
-            // A failure here is either "already initialised on this thread"
-            // (S_FALSE) or RPC_E_CHANGED_MODE, and neither prevents the calls
-            // below from working in this single-purpose process.
+            // Either S_FALSE or RPC_E_CHANGED_MODE, and neither stops the calls
+            // below working in this single-purpose process.
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
             let policy: INetFwPolicy2 =
@@ -68,6 +72,8 @@ impl FirewallPolicy for ComPolicy {
     /// one of them being enabled means the rule is needed.
     fn is_enabled(&self) -> Result<bool> {
         unsafe {
+            // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and every
+            // interface pointer here came from a checked call.
             let active = self.policy.CurrentProfileTypes().map_err(map_err)?;
 
             for profile in [
@@ -102,6 +108,8 @@ impl FirewallPolicy for ComPolicy {
     /// the user's firewall must not stop us finding ours.
     fn rules(&self) -> Result<Vec<(String, Self::Rule)>> {
         unsafe {
+            // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and every
+            // interface pointer here came from a checked call.
             let collection = self.policy.Rules().map_err(map_err)?;
             let enumerator: IEnumVARIANT = collection
                 ._NewEnum()
@@ -141,11 +149,15 @@ impl FirewallPolicy for ComPolicy {
     }
 
     fn set_local_ports(&self, rule: &Self::Rule, ports: &str) -> Result<()> {
+        // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and every
+        // interface pointer here came from a checked call.
         unsafe { rule.SetLocalPorts(&BSTR::from(ports)).map_err(map_err) }
     }
 
     fn add_rule(&self, name: &str, ports: &str) -> Result<()> {
         unsafe {
+            // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and every
+            // interface pointer here came from a checked call.
             let rule: INetFwRule =
                 CoCreateInstance(&NetFwRule, None, CLSCTX_INPROC_SERVER).map_err(map_err)?;
 

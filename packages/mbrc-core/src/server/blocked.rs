@@ -46,7 +46,7 @@ pub struct BlockedLog {
 }
 
 impl BlockedLog {
-    /// Record a rejected attempt. Newest is kept at the front; the oldest is
+    /// Records a rejected attempt. Newest is kept at the front; the oldest is
     /// evicted once the buffer is full.
     pub fn record(&self, ip: IpAddr, port: u16, reason: BlockReason) {
         let entry = BlockedConnection {
@@ -67,7 +67,7 @@ impl BlockedLog {
         self.lock().iter().cloned().collect()
     }
 
-    /// Drop all recorded entries (the panel's "Clear" button).
+    /// Drops all recorded entries (the panel's "Clear" button).
     pub fn clear(&self) {
         self.lock().clear();
     }
@@ -143,9 +143,8 @@ mod tests {
 
     #[test]
     fn recent_round_trips_as_named_msgpack() {
-        // Locks the exact serialization `state::recent_blocked_bytes` uses: named
-        // maps (to_vec_named) so the C# contractless resolver reads by field name.
-        // `to_vec` (positional) would silently break the C# side.
+        // Named maps, so the C# contractless resolver reads by field name;
+        // `to_vec` would write positionally and break it silently.
         let log = BlockedLog::default();
         log.record(ip(5), 5555, BlockReason::AddressNotAllowed);
         let bytes = rmp_serde::to_vec_named(&log.recent()).unwrap();

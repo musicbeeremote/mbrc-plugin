@@ -1,11 +1,11 @@
 //! The per-connection protocol state machine, kept pure (no IO) so it is
 //! unit-testable without sockets: feed it a wire line, get back the frames to
-//! send and whether to close. The IO layer (`connection.rs`) does the reading
-//! and writing.
+//! send and whether to close.
 //!
-//! Slice 1 handles the handshake (`player`, `protocol`) and keepalive/health
-//! (`ping`, `pong`, `verifyconnection`). Command dispatch for every other
-//! context lands in Slice 2.
+//! The IO layer (`connection.rs`) does the reading and writing.
+//!
+//! It handles the handshake (`player`, `protocol`), keepalive and health
+//! (`ping`, `pong`, `verifyconnection`), and dispatch for every other context.
 
 use serde_json::{json, Value};
 
@@ -18,10 +18,11 @@ use crate::nowplaying::NowPlayingCache;
 use crate::protocol::version::ProtocolVersion;
 use crate::providers::Providers;
 
-/// Highest protocol version this server speaks. The handshake reply echoes the
-/// client's negotiated version capped at this, so a V4 client is still told 4
-/// (unchanged) while a V5 iOS client is told 5 - which is what gates it into
-/// sending `nowplayingcurrentposition`.
+/// Highest protocol version this server speaks.
+///
+/// The handshake reply echoes the client's negotiated version capped at this,
+/// so a V4 client is still told 4 (unchanged) while a V5 iOS client is told 5 -
+/// which is what gates it into sending `nowplayingcurrentposition`.
 pub const MAX_PROTOCOL: u8 = 5;
 /// Minimum client protocol accepted; older clients are rejected at handshake.
 pub const MIN_PROTOCOL: u8 = 4;
@@ -75,7 +76,7 @@ impl Outcome {
             close: true,
         }
     }
-    /// Close the connection without sending a frame.
+    /// Closes the connection without sending a frame.
     fn close() -> Self {
         Self {
             replies: Vec::new(),
@@ -85,7 +86,7 @@ impl Outcome {
 }
 
 impl Session {
-    /// Process one inbound wire line. Handshake/keepalive contexts are handled
+    /// Processes one inbound wire line. Handshake/keepalive contexts are handled
     /// here; other contexts are dispatched to command handlers (once the
     /// handshake is complete). Unparseable frames (including the iOS
     /// bare-identifier quirk lenient parsing can't recover) are dropped without
@@ -116,9 +117,8 @@ impl Session {
         };
         let context = value.get("context").and_then(Value::as_str).unwrap_or("");
         let data = value.get("data").cloned().unwrap_or(Value::Null);
-        // DEBUG caps list bodies to a sample + schema summary; TRACE keeps the
-        // full body. Only one fires (TRACE implies DEBUG), so a busy list frame
-        // isn't logged twice.
+        // Only one fires, since TRACE implies DEBUG, so a busy list frame is
+        // never logged twice.
         if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
             tracing::trace!(
                 target: "mbrc::wire",
@@ -167,8 +167,13 @@ impl Session {
         }
     }
 
-    /// Route a command context to its handler and frame the replies. Commands
-    /// received before the handshake completes are ignored.
+    /// Routes a command context to its handler and frame the replies.
+    ///
+    /// A command arriving before the handshake completes force-closes the
+    /// socket, matching the shipped C# `ProtocolHandler`. iOS reuses a command
+    /// socket and, after a server-side restart, reconnects without
+    /// re-handshaking; dropping its controls silently left the app stuck, while
+    /// closing kicks it back into a handshake.
     #[allow(clippy::too_many_arguments)]
     fn dispatch_command(
         &mut self,
@@ -182,16 +187,8 @@ impl Session {
     ) -> Outcome {
         let Some(negotiated) = self.protocol_version else {
             self.dropped_pre_handshake += 1;
-            // A command before the handshake completed: force-close the socket so
-            // the client re-establishes with a proper `player`/`protocol` sequence.
-            // This matches the shipped C# `ProtocolHandler` (which
-            // `ForceClientDisconnect`s any socket whose first frame isn't `player`).
-            // iOS reuses a command socket and, after a server-side close/restart,
-            // reconnects WITHOUT re-handshaking - silently dropping its controls
-            // left the app stuck; closing kicks it back into a handshake.
-            // platform tells the two failure modes apart: "iOS"/"Android" means
-            // the socket sent `player` but never a valid `protocol`; "none" means a
-            // command-only socket that skipped the handshake entirely.
+            // `platform` tells the two failure modes apart: a named one sent
+            // `player` but never a valid `protocol`, `none` skipped the handshake.
             tracing::debug!(
                 seq,
                 context,
@@ -200,12 +197,6 @@ impl Session {
             );
             return Outcome::close();
         };
-        // Effective version = negotiated capped at what we support (mirrors the
-        // handshake reply, which reports `min(version, MAX_PROTOCOL)`). A client
-        // that negotiates >MAX is told MAX and must be dispatched as MAX too, or
-        // it would send MAX-gated commands (e.g. `nowplayingcurrentposition`)
-        // that we'd silently drop. Default to V4 defensively if the lookup ever
-        // misses, so a command is never dropped over a version lookup.
         let version = ProtocolVersion::from_negotiated(negotiated.min(MAX_PROTOCOL))
             .unwrap_or(ProtocolVersion::V4);
         let platform = commands::Platform::from_name(self.platform.as_deref());
@@ -291,7 +282,7 @@ struct Handshake {
     client_id: Option<String>,
 }
 
-/// Parse the `protocol` handshake payload, tolerating the legacy bare-int and
+/// Parses the `protocol` handshake payload, tolerating the legacy bare-int and
 /// bare-string forms as well as the V3+ object form. `client_id` and
 /// `no_broadcast` only exist in the object form (Android v4); the bare forms
 /// (iOS, legacy) yield `None`/`false`.
@@ -330,7 +321,7 @@ fn parse_handshake(data: &Value) -> Handshake {
     }
 }
 
-/// Build a raw `{"context":..,"data":..}` frame (the IO layer adds CRLF).
+/// Builds a raw `{"context":..,"data":..}` frame (the IO layer adds CRLF).
 fn frame(context: &str, data: Value) -> String {
     serde_json::to_string(&json!({ "context": context, "data": data }))
         .expect("serializing a server frame cannot fail")
@@ -416,9 +407,8 @@ mod tests {
 
     #[test]
     fn future_version_is_capped_to_max_and_dispatched_as_max() {
-        // A client negotiating > MAX_PROTOCOL is told MAX in the reply, so it
-        // must also be dispatched as MAX - otherwise it sends MAX-gated commands
-        // (currentposition) that we'd drop, breaking effective = min(client, max).
+        // Otherwise it sends MAX-gated commands (currentposition) that we drop,
+        // breaking effective = min(client, max).
         let mut s = Session::default();
         let out = s.handle_frame(
             r#"{"context":"protocol","data":6}"#,

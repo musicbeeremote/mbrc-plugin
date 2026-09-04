@@ -68,7 +68,7 @@ fn info_for(path: &Path) -> Option<SessionInfo> {
     })
 }
 
-/// Sanitize a user-supplied session name into a safe file stem.
+/// Sanitizes a user-supplied session name into a safe file stem.
 fn sanitize(name: &str) -> String {
     let base: String = name
         .trim()

@@ -107,7 +107,7 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
-/// Group golden `c2s` frames by connection and derive each one's replay plan.
+/// Groups golden `c2s` frames by connection and derive each one's replay plan.
 fn plan_connections(golden: &str) -> Vec<ReplayConn> {
     let mut order: Vec<u32> = Vec::new();
     let mut by_conn: BTreeMap<u32, Vec<Frame>> = BTreeMap::new();
@@ -166,7 +166,7 @@ fn plan_connections(golden: &str) -> Vec<ReplayConn> {
         .collect()
 }
 
-/// Replay every connection in sequence, accumulating one capture (JSONL string).
+/// Replays every connection in sequence, accumulating one capture (JSONL string).
 async fn drive_all(
     host: &str,
     port: u16,

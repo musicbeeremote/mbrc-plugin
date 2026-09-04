@@ -29,12 +29,12 @@ pub use crate::protocol::Platform;
 
 /// Per-dispatch context handed to handlers: the provider boundary, the
 /// negotiated protocol version (which selects the wire formatter), the client
-/// platform, and (in production) the now-playing cache. Handlers format through
-/// `ctx.wire()` and never name a version, so adding V6 is purely a new formatter.
+/// platform, and (in production) the now-playing cache.
 ///
-/// Now-playing reads go through the `now_*` helpers: when the cache is present
-/// they serve from it (no FFI), otherwise they fall back to the provider - so
-/// handler unit tests keep exercising the provider path with a bare `Ctx::new`.
+/// Handlers format through `ctx.wire()` and never name a version, so adding V6
+/// is purely a new formatter. Now-playing reads go through the `now_*` helpers,
+/// which serve from the cache when it is present (no FFI) and fall back to the
+/// provider otherwise, so unit tests still exercise the provider path.
 pub struct Ctx<'a> {
     pub providers: &'a dyn Providers,
     pub version: ProtocolVersion,
@@ -60,26 +60,26 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Set the client platform (from the handshake). Builder-style so existing
+    /// Sets the client platform (from the handshake). Builder-style so existing
     /// two-arg `Ctx::new` call sites (tests) are unaffected.
     pub fn with_platform(mut self, platform: Platform) -> Self {
         self.platform = platform;
         self
     }
 
-    /// Attach the now-playing cache (production wiring). Builder-style.
+    /// Attaches the now-playing cache (production wiring). Builder-style.
     pub fn with_now_playing(mut self, cache: &'a NowPlayingCache) -> Self {
         self.now_playing = Some(cache);
         self
     }
 
-    /// Attach the album cover cache (production wiring). Builder-style.
+    /// Attaches the album cover cache (production wiring). Builder-style.
     pub fn with_cover_store(mut self, store: &'a CoverStore) -> Self {
         self.cover_store = Some(store);
         self
     }
 
-    /// Attach the library metadata cache (production wiring). Builder-style.
+    /// Attaches the library metadata cache (production wiring). Builder-style.
     pub fn with_metadata_cache(mut self, cache: &'a MetadataCache) -> Self {
         self.metadata_cache = Some(cache);
         self
@@ -90,7 +90,10 @@ impl<'a> Ctx<'a> {
         self.version.codec()
     }
 
-    // ── Cached now-playing reads (fall back to the provider when uncached) ──
+    /// ── Cached now-playing reads (fall back to the provider when uncached) ──
+    ///
+    /// # Errors
+    /// The provider could not read the current track.
     pub fn now_track_info(&self) -> Result<TrackInfo, String> {
         match self.now_playing {
             Some(c) => Ok(c.track_info()),
@@ -149,17 +152,14 @@ pub fn pagination(data: &Value) -> (i32, i32) {
 
 // ── Lenient value coercion (C# parity) ──
 //
-// The shipped C# plugin read command payloads with `JToken.ToObject<T>()`, which
-// coerces across JSON types: a bare number `5` deserializes to the string "5", a
-// numeric string "50" to the int 50, and "true"/1 to a bool. The V4 clients rely
-// on this - iOS, for one, sends the now-playing rating as a bare number. The Rust
-// rewrite's exact-type accessors (`as_str`/`as_i64`/`as_bool`) reject the other
-// representation, silently dropping the set. These helpers restore the coercion
-// at the handful of settable-value handlers so V4 stays byte-for-byte compatible.
+// `JToken.ToObject<T>()` coerced across JSON types and V4 clients rely on it:
+// iOS sends the rating as a bare number, which exact accessors would drop.
 
-/// A settable string: a JSON string, or a number rendered to its text form
-/// (C# `GetDataOrDefault<string>()` coerced `5` -> "5"). `null`/absent -> `None`,
-/// which the handlers treat as a query rather than a set.
+/// A settable string: a JSON string, or a number rendered to its text form (C#
+/// `GetDataOrDefault<string>()` coerced `5` -> "5").
+///
+/// `null`/absent -> `None`, which the handlers treat as a query rather than a
+/// set.
 pub fn as_set_string(data: &Value) -> Option<String> {
     match data {
         Value::String(s) => Some(s.clone()),
@@ -190,7 +190,10 @@ pub fn as_bool_lenient(data: &Value) -> Option<bool> {
     }
 }
 
-/// Serialize a DTO as the reply on `context`.
+/// Serializes a DTO as the reply on `context`.
+///
+/// # Errors
+/// The DTO could not be serialized to JSON.
 pub fn reply_dto<T: serde::Serialize>(context: &str, dto: &T) -> HandlerResult {
     let data = serde_json::to_value(dto).map_err(|e| e.to_string())?;
     Ok(vec![(context.to_string(), data)])
@@ -249,7 +252,7 @@ pub const DISPATCHED_CONTEXTS: &[&str] = &[
     "init",
 ];
 
-/// Dispatch a command to its handler. Returns `None` if no handler is
+/// Dispatches a command to its handler. Returns `None` if no handler is
 /// registered for `context` (so the caller can tell "unknown" from "handled,
 /// no reply").
 pub fn dispatch(ctx: &Ctx, context: &str, data: &Value) -> Option<HandlerResult> {
@@ -278,9 +281,8 @@ pub fn dispatch(ctx: &Ctx, context: &str, data: &Value) -> Option<HandlerResult>
         "nowplayingrating" => track::rating(data, ctx),
         "nowplayinglfmrating" => track::lfm_rating(data, ctx),
         "nowplayingtagchange" => track::tag_change(data, p),
-        // V5-only iOS alias. Deliberately NOT in DISPATCHED_CONTEXTS (the V4
-        // surface): it never fires in a V4 session, replies on the existing
-        // `nowplayingposition` context.
+        // A V5-only iOS alias, deliberately outside DISPATCHED_CONTEXTS: it
+        // replies on the existing `nowplayingposition` context.
         "nowplayingcurrentposition" if ctx.version.accepts_current_position() => {
             track::current_position(p)
         }

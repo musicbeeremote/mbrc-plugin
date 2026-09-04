@@ -1,7 +1,8 @@
 //! The broadcast registry: connected clients that opted into broadcasts (i.e.
-//! did not set `no_broadcast`) register an outbound channel here. When a
-//! MusicBee notification fires, the built frames are pushed to every registered
-//! client.
+//! did not set `no_broadcast`) register an outbound channel here.
+//!
+//! When a MusicBee notification fires, the built frames are pushed to every
+//! registered client.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,31 +14,31 @@ use tokio::sync::mpsc::UnboundedSender;
 #[derive(Default)]
 pub struct Broadcaster {
     clients: Mutex<HashMap<u64, UnboundedSender<String>>>,
-    /// Monotonic counter for the wire log. A broadcast has no connection, so it
-    /// can't borrow `Session::frames_in`; without a sequence the pushed lines
-    /// would be timestamp-only and hard to interleave against the inbound side.
+    /// Monotonic counter for the wire log. A broadcast has no connection to
+    /// borrow `Session::frames_in` from, and without a sequence the pushed lines
+    /// are timestamp-only and hard to interleave against the inbound side.
     seq: AtomicU64,
 }
 
 impl Broadcaster {
-    /// Lock the client map, recovering from a poisoned mutex. A panic elsewhere
-    /// while the lock is held must not permanently disable every broadcast;
-    /// mirrors `ConnectionRegistry::lock`.
+    /// Locks the client map, recovering from a poisoned mutex: a panic elsewhere
+    /// must not permanently disable every broadcast. Mirrors
+    /// `ConnectionRegistry::lock`.
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<u64, UnboundedSender<String>>> {
         self.clients.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Register a connection's outbound sender for broadcasts.
+    /// Registers a connection's outbound sender for broadcasts.
     pub fn register(&self, conn_id: u64, sender: UnboundedSender<String>) {
         self.lock().insert(conn_id, sender);
     }
 
-    /// Remove a connection (on disconnect).
+    /// Removes a connection (on disconnect).
     pub fn unregister(&self, conn_id: u64) {
         self.lock().remove(&conn_id);
     }
 
-    /// Push raw frames to every registered client. Closed channels are pruned.
+    /// Pushes raw frames to every registered client. Closed channels are pruned.
     pub fn broadcast(&self, frames: &[String]) {
         if frames.is_empty() {
             return;
@@ -56,14 +57,12 @@ impl Broadcaster {
         self.log_frames(frames, subscribers, pruned);
     }
 
-    /// Emit one wire line per pushed frame. Broadcasts are logged here rather
-    /// than per subscriber so the volume tracks events, not connections, and
-    /// they sit outside the `conn` span (they belong to no connection) - which
-    /// is what tells them apart from `session.rs`'s per-connection `s2c` lines.
+    /// Emits one wire line per pushed frame, not per subscriber, so the volume
+    /// tracks events rather than connections. These sit outside the `conn` span,
+    /// which is what tells them apart from the per-connection `s2c` lines.
     fn log_frames(&self, frames: &[String], subscribers: usize, pruned: usize) {
-        // The whole path is DEBUG, not TRACE: a diagnostics capture only raises
-        // the level to DEBUG, so a TRACE-only push path would never reach a bug
-        // report - which is the point of logging it at all.
+        // DEBUG, not TRACE: a diagnostics capture only raises the level to
+        // DEBUG, so a TRACE-only push path would never reach a bug report.
         if !tracing::enabled!(target: "mbrc::wire", tracing::Level::DEBUG) {
             return;
         }
@@ -71,8 +70,7 @@ impl Broadcaster {
             let seq = self.seq.fetch_add(1, Ordering::Relaxed);
             let context = crate::logging::frame_context(frame);
             // DEBUG caps list bodies to a sample + schema summary, TRACE keeps
-            // the whole body. Mandatory here: `nowplayingcover` and
-            // `nowplayinglyrics` push base64 blobs.
+            // the whole body - `nowplayingcover`/`nowplayinglyrics` push blobs.
             if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
                 tracing::trace!(
                     target: "mbrc::wire",

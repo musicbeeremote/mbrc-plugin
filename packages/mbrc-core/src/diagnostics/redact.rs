@@ -22,7 +22,7 @@ const MASK: &str = "<redacted>";
 /// Settings keys dropped from the bundle entirely.
 const DROPPED_KEYS: &[&str] = &["allowed_addresses"];
 
-/// Apply the bundle policy to a serialized [`crate::config::Config`].
+/// Applies the bundle policy to a serialized [`crate::config::Config`].
 ///
 /// Takes and returns JSON rather than a `Config` so the policy lives in one
 /// place regardless of who is serializing: today that is `report.json`'s
@@ -42,7 +42,7 @@ pub fn settings(mut value: Value) -> Value {
     value
 }
 
-/// Record what the policy removed, so a reader of the bundle is never left
+/// Records what the policy removed, so a reader of the bundle is never left
 /// wondering whether a missing key means "unset" or "withheld".
 fn note_dropped(object: &mut Map<String, Value>) {
     let dropped: Vec<Value> = DROPPED_KEYS

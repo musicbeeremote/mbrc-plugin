@@ -35,15 +35,13 @@ pub fn parse_context(line: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Parse a wire line, tolerating the known iOS-client malformations.
+/// Parses a wire line, tolerating the known iOS-client malformations.
 ///
-/// Tries strict JSON first; on failure, retries after rewriting the iOS `\'`
-/// escape (see [`sanitize_ios_quotes`]) and then after quoting a bare-identifier
-/// `data` value (see [`sanitize_ios_bare_data`]) - the iOS v4 bug where it emits
-/// e.g. `{"context":"nowplayingposition","data":status}` instead of
-/// `"data":"status"`. Both are known v4 iOS quirks and must be parsed, not
-/// dropped, or the frame (a control command or a position poll) silently
-/// vanishes. Genuinely unrecoverable frames still return `None`.
+/// Strict JSON first; on failure, retries after rewriting the iOS `\'` escape
+/// and again after quoting a bare-identifier `data` value, as in
+/// `{"context":"nowplayingposition","data":status}`. Both are v4 iOS quirks
+/// that must be parsed rather than dropped, or a control command or position
+/// poll silently vanishes. Unrecoverable frames still return `None`.
 pub fn parse_lenient(line: &str) -> Option<serde_json::Value> {
     if let Ok(v) = serde_json::from_str(line) {
         return Some(v);
@@ -55,7 +53,7 @@ pub fn parse_lenient(line: &str) -> Option<serde_json::Value> {
     serde_json::from_str(&sanitize_ios_bare_data(&quoted)?).ok()
 }
 
-/// Quote a bare-identifier `data` value - the iOS v4 bug where it emits
+/// Quotes a bare-identifier `data` value - the iOS v4 bug where it emits
 /// `{"data":status}` instead of `{"data":"status"}`. Rewrites the value only when
 /// it is an unquoted identifier that is NOT a JSON literal (`true`/`false`/`null`),
 /// number, string, object, or array, so already-valid frames are never touched.
@@ -90,7 +88,7 @@ fn sanitize_ios_bare_data(s: &str) -> Option<String> {
     ))
 }
 
-/// Rewrite the iOS `\'` escape (invalid JSON) to a bare `'`. Escaped
+/// Rewrites the iOS `\'` escape (invalid JSON) to a bare `'`. Escaped
 /// backslashes (`\\`) are consumed atomically so a real `\\` before a quote is
 /// never mangled - lossless for already-valid JSON.
 pub fn sanitize_ios_quotes(s: &str) -> String {
@@ -117,7 +115,7 @@ pub fn sanitize_ios_quotes(s: &str) -> String {
     out
 }
 
-/// Append the line terminator to an outbound frame.
+/// Appends the line terminator to an outbound frame.
 pub fn frame_line(line: &str) -> String {
     format!("{line}{TERMINATOR}")
 }
@@ -178,20 +176,21 @@ impl ClientHandshake {
     }
 }
 
-/// Maximum bytes the accumulator buffers while waiting for a terminator. A
-/// legitimate frame is at most a couple MiB (an inline base64 cover), so 16 MiB
-/// leaves a large margin - it never truncates a valid frame, it only bounds a
-/// peer that streams bytes without ever sending a terminator (issue #138).
+/// Maximum bytes the accumulator buffers while waiting for a terminator.
+///
+/// A legitimate frame is at most a couple MiB (an inline base64 cover), so 16
+/// MiB leaves a large margin - it never truncates a valid frame, it only bounds
+/// a peer that streams bytes without ever sending a terminator (issue #138).
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 
-/// Splits a byte stream into CRLF-delimited frames, matching the legacy client's
-/// strict `\r\n` framing. Bytes are appended with [`push_bytes`](Self::push_bytes)
-/// and complete frames drained with [`next_frame`](Self::next_frame).
+/// Splits a byte stream into CRLF-delimited frames, matching the legacy
+/// client's strict `\r\n` framing.
 ///
-/// Buffering is bounded by a max-frame cap (default [`DEFAULT_MAX_FRAME_BYTES`]):
-/// bytes accumulated past the cap with no terminator are dropped and
-/// [`overflowed`](Self::overflowed) latches true, so an unauthenticated peer
-/// cannot exhaust memory by never sending a terminator.
+/// Bytes go in with [`push_bytes`](Self::push_bytes), frames come out of
+/// [`next_frame`](Self::next_frame). A max-frame cap (default
+/// [`DEFAULT_MAX_FRAME_BYTES`]) bounds buffering: bytes past it with no
+/// terminator are dropped and [`overflowed`](Self::overflowed) latches, so an
+/// unauthenticated peer cannot exhaust memory.
 pub struct FrameAccumulator {
     acc: String,
     max_frame: usize,
@@ -220,7 +219,7 @@ impl FrameAccumulator {
         self.acc.push_str(&String::from_utf8_lossy(bytes));
     }
 
-    /// Pop the next complete frame (terminator stripped), or `None` if no full
+    /// Pops the next complete frame (terminator stripped), or `None` if no full
     /// frame has arrived yet. When the buffer grows past the cap with no
     /// terminator, the accumulated bytes are dropped and
     /// [`overflowed`](Self::overflowed) latches true so the caller can close the
@@ -231,9 +230,8 @@ impl FrameAccumulator {
             self.acc = self.acc[idx + TERMINATOR.len()..].to_string();
             return Some(line);
         }
-        // No complete frame. A buffer past the cap with no terminator in sight is
-        // an unbounded-buffer attack (or a badly broken peer): drop it and latch
-        // overflow so the caller closes the socket.
+        // Past the cap with no terminator is an unbounded-buffer attack: drop it
+        // and latch overflow so the caller closes the socket.
         if self.acc.len() > self.max_frame {
             self.acc.clear();
             self.overflow = true;

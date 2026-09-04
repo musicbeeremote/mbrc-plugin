@@ -66,12 +66,10 @@ impl<'a> CheckOptions<'a> {
     /// The GitHub API endpoint for the channel.
     ///
     /// Stable follows `releases/latest`, which GitHub resolves to the newest
-    /// release that is neither a draft nor a pre-release - so a pre-release can
-    /// never reach a stable user, by GitHub's own rule rather than by ours.
-    ///
-    /// Testing has to list instead: there is no "latest including pre-releases"
-    /// endpoint. The list comes back newest first and includes both kinds, which
-    /// is exactly the superset that channel means.
+    /// release that is neither draft nor pre-release, so a pre-release cannot
+    /// reach a stable user by GitHub's own rule. Testing must list instead,
+    /// since there is no "latest including pre-releases" endpoint; the list is
+    /// newest first and holds both kinds, which is the superset it means.
     pub fn endpoint(&self) -> String {
         let repo = self.repo;
         match self.channel {
@@ -122,17 +120,17 @@ pub enum CheckOutcome {
     Available(Box<AvailableUpdate>),
 }
 
-/// Runs a check, updating `state` with the outcome. The caller persists `state`
-/// (including after an error, so a failing check backs off instead of retrying on
-/// every tick) and decides what to do with the result.
+/// Runs a check, updating `state` with the outcome.
 ///
-/// Note what is deliberately *not* gated here: the manifest's `abi_version` and
-/// `min_musicbee_build`. A bundle ships `mb_remote.dll` and `mbrc_core.dll`
-/// together, so its ABI is internally consistent by construction, and refusing an
-/// update because it bumped the ABI would block exactly the updates that need to
-/// ship. The MusicBee build gate belongs where the MusicBee version is known,
-/// which is the panel, not here: it reads the build from `MusicBee.exe`'s file
-/// version and greys out the download when the release needs a newer one.
+/// The caller persists `state`, including after an error, so a failing check
+/// backs off instead of retrying on every tick. Not gated here: `abi_version`
+/// (a bundle ships both DLLs together, so its ABI is consistent by
+/// construction) and `min_musicbee_build` (the panel knows the running
+/// version).
+///
+/// # Errors
+/// The release document could not be fetched or parsed, or its manifest is
+/// not accepted by the subscribed channel.
 pub fn check(
     client: &dyn HttpClient,
     options: &CheckOptions<'_>,
@@ -185,10 +183,8 @@ fn run(
     .map_err(|e| UpdateError::MalformedSignature(e.to_string()))?;
     let (manifest, key_name) = verify_manifest_with(&manifest_bytes, &signature, options.keys)?;
 
-    // A manifest the subscribed channel does not accept means the release and
-    // its assets disagree, which is refused rather than quietly accepted. Note
-    // this is not equality: `testing` is a superset that takes stable releases
-    // too, so a tester is not stranded on pre-releases once the final ships.
+    // Not equality: `testing` is a superset that takes stable releases too, so
+    // a tester is not stranded on pre-releases once the final ships.
     if !manifest.channel.accepted_by(options.channel) {
         return Err(UpdateError::Invalid(format!(
             "{endpoint} carries a {:?} manifest but the {:?} channel was checked",

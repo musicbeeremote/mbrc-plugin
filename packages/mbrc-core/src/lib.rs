@@ -2,8 +2,7 @@
 //!
 //! Owns all networking, the V4 wire protocol, and server state; reaches back
 //! into the C# plugin (for MusicBee data) through the frozen C ABI in
-//! [`ffi::types`]. This file holds the `#[no_mangle]` exports C# calls; the
-//! bodies are wired up slice by slice (Slice 0 = FFI boundary only).
+//! [`ffi::types`]. This file holds the `#[no_mangle]` exports C# calls.
 
 pub mod config;
 pub mod cover;
@@ -33,7 +32,7 @@ use crate::ffi::types::{
 };
 use crate::providers::{FfiProviders, Providers};
 
-/// Read a C string pointer into an owned `String`; null becomes empty.
+/// Reads a C string pointer into an owned `String`; null becomes empty.
 ///
 /// # Safety
 /// `ptr` must be null or point to a valid NUL-terminated C string.
@@ -41,13 +40,14 @@ unsafe fn cstr(ptr: *const c_char) -> String {
     if ptr.is_null() {
         String::new()
     } else {
+        // SAFETY: the null case returned above, and the caller's contract covers the rest.
         unsafe { CStr::from_ptr(ptr) }
             .to_string_lossy()
             .into_owned()
     }
 }
 
-/// Run an FFI export body, catching any Rust panic and turning it into an error
+/// Runs an FFI export body, catching any Rust panic and turning it into an error
 /// code instead of unwinding across the C ABI (undefined behavior) or aborting
 /// the MusicBee host process. Effective when the build unwinds; a no-op under
 /// `panic = "abort"`, but the guard is written once so it works either way.
@@ -61,7 +61,7 @@ fn ffi_guard(export: &'static str, body: impl FnOnce() -> c_int) -> c_int {
     }
 }
 
-/// Initialize the core with the C# callback table and a storage directory.
+/// Initializes the core with the C# callback table and a storage directory.
 /// Call exactly once. The callback struct is copied; the caller may free it.
 ///
 /// `abi_version` is the contract version C# was compiled against; it must equal
@@ -88,6 +88,8 @@ pub unsafe extern "C" fn mbrc_initialize(
         if storage_path.is_null() {
             return MbrcResult::NullPointer as c_int;
         }
+        // SAFETY: null-checked above, and the caller's contract says it is a valid
+        // NUL-terminated C string.
         let storage_path = unsafe { cstr(storage_path) };
         logging::init(&storage_path);
 
@@ -102,10 +104,8 @@ pub unsafe extern "C" fn mbrc_initialize(
             Arc::new(FfiProviders::new(SafeCallbacks::new(callbacks)));
         let result = state::initialize(providers, config);
         if result == MbrcResult::Ok {
-            // A capture MusicBee restarted through carries on: the log file is
-            // appended rather than truncated, so the window it recorded is still
-            // there, and a bug that only happens at startup is exactly the one
-            // worth capturing.
+            // The log is appended rather than truncated, so a capture MusicBee
+            // restarted through still has the window it recorded.
             if let Some(core) = state::core_handle() {
                 diagnostics::capture::resume_after_restart(&core);
             }
@@ -114,13 +114,13 @@ pub unsafe extern "C" fn mbrc_initialize(
     })
 }
 
-/// Stop networking and release the core (a later `mbrc_initialize` may re-init).
+/// Stops networking and releases the core; a later `mbrc_initialize` may re-init.
 #[no_mangle]
 pub extern "C" fn mbrc_shutdown() -> c_int {
     ffi_guard("mbrc_shutdown", || state::shutdown() as c_int)
 }
 
-/// Start the TCP command server + UDP discovery responder.
+/// Starts the TCP command server + UDP discovery responder.
 #[no_mangle]
 pub extern "C" fn mbrc_start_networking() -> c_int {
     ffi_guard("mbrc_start_networking", || {
@@ -134,31 +134,32 @@ pub extern "C" fn mbrc_stop_networking() -> c_int {
     ffi_guard("mbrc_stop_networking", || state::stop_networking() as c_int)
 }
 
-/// Tell the long-running background work to wind down. Stops nothing by itself.
+/// Tells the long-running background work to wind down. Stops nothing by itself.
 ///
-/// Notice, not an order to shut down: the cover build is minutes of blocking
-/// work on a first run, and teardown waits for it. A host that knows it is about
-/// to tear down - an uninstall, say, which first closes a window and removes a
-/// menu entry - can call this and hand those milliseconds to the build as a head
-/// start, so the wait in `mbrc_stop_networking` is usually already over.
-///
-/// Cleared by the next `mbrc_start_networking`, so a stop/start (a port change)
-/// is unaffected. Idempotent.
+/// Notice, not an order: a first cover build is minutes of blocking work and
+/// teardown waits for it, so a host that knows it is about to tear down can
+/// hand those milliseconds over as a head start and find the wait in
+/// `mbrc_stop_networking` already over. Cleared by the next
+/// `mbrc_start_networking`, so a port change is unaffected. Idempotent.
 #[no_mangle]
 pub extern "C" fn mbrc_begin_stopping() -> c_int {
     ffi_guard("mbrc_begin_stopping", || state::begin_stopping() as c_int)
 }
 
-/// Read the core's current settings as a MessagePack buffer for the settings
-/// panel. Writes the byte length to `out_len` and returns a Rust-owned pointer
-/// that C# must release via [`mbrc_free_bytes`]. Returns null (and leaves
-/// `out_len` at 0) if the core is not initialized or on error.
+/// Reads the core's current settings as a MessagePack buffer for the settings
+/// panel.
+///
+/// Writes the byte length to `out_len` and returns a Rust-owned pointer that C#
+/// must release via [`mbrc_free_bytes`]. Returns null (and leaves `out_len` at
+/// 0) if the core is not initialized or on error.
 ///
 /// # Safety
 /// `out_len` must be null or point to a writable `u32`.
 #[no_mangle]
 pub unsafe extern "C" fn mbrc_read_settings(out_len: *mut u32) -> *mut u8 {
     if !out_len.is_null() {
+        // SAFETY: `out_len` is null-checked above and the contract says it points to a
+        // writable `u32`.
         unsafe { *out_len = 0 };
     }
     let bytes = match std::panic::catch_unwind(state::read_settings_bytes) {
@@ -172,15 +173,18 @@ pub unsafe extern "C" fn mbrc_read_settings(out_len: *mut u32) -> *mut u8 {
     let len = boxed.len() as u32;
     std::mem::forget(boxed);
     if !out_len.is_null() {
+        // SAFETY: `out_len` is null-checked above and the contract says it points to a
+        // writable `u32`.
         unsafe { *out_len = len };
     }
     ptr
 }
 
-/// Validate and persist new settings from a MessagePack buffer (Rust owns
-/// `core_settings.json`, written as JSON). Does NOT reload the running core; the
-/// host re-inits when the change needs it. On invalid input the write is refused
-/// and an error status returned.
+/// Validates and persists new settings from a MessagePack buffer (Rust owns
+/// `core_settings.json`, written as JSON).
+///
+/// Does NOT reload the running core; the host re-inits when the change needs
+/// it. On invalid input the write is refused and an error status returned.
 ///
 /// # Safety
 /// `buf` must be null or point to `len` readable bytes.
@@ -190,6 +194,8 @@ pub unsafe extern "C" fn mbrc_write_settings(buf: *const u8, len: u32) -> c_int 
         if buf.is_null() {
             return MbrcResult::NullPointer as c_int;
         }
+        // SAFETY: the pointer is null-checked above and the contract says it covers that
+        // many readable bytes.
         let bytes = unsafe { std::slice::from_raw_parts(buf, len as usize) };
         match state::write_settings_bytes(bytes) {
             Ok(()) => MbrcResult::Ok as c_int,
@@ -201,11 +207,13 @@ pub unsafe extern "C" fn mbrc_write_settings(buf: *const u8, len: u32) -> c_int 
     })
 }
 
-/// Generic host -> core query (request/response). Dispatches on the
-/// [`HostQueryType`] discriminant and returns a Rust-owned MessagePack buffer
-/// (released via [`mbrc_free_bytes`]) with its byte length in `out_len`. Returns
-/// null (and leaves `out_len` at 0) on an unknown query, a not-initialized core,
-/// or a handler with no answer. Params are an optional MessagePack buffer.
+/// Generic host -> core query (request/response).
+///
+/// Dispatches on the [`HostQueryType`] discriminant and returns a Rust-owned
+/// MessagePack buffer (released via [`mbrc_free_bytes`]) with its byte length
+/// in `out_len`. Returns null (and leaves `out_len` at 0) on an unknown query,
+/// a not-initialized core, or a handler with no answer. Params are an optional
+/// MessagePack buffer.
 ///
 /// # Safety
 /// `params_buf` must be null or point to `params_len` readable bytes; `out_len`
@@ -218,6 +226,8 @@ pub unsafe extern "C" fn mbrc_query(
     out_len: *mut u32,
 ) -> *mut u8 {
     if !out_len.is_null() {
+        // SAFETY: `out_len` is null-checked above and the contract says it points to a
+        // writable `u32`.
         unsafe { *out_len = 0 };
     }
     let Some(kind) = HostQueryType::from_i32(query_type) else {
@@ -226,6 +236,8 @@ pub unsafe extern "C" fn mbrc_query(
     let params: &[u8] = if params_buf.is_null() {
         &[]
     } else {
+        // SAFETY: the pointer is null-checked above and the contract says it covers that
+        // many readable bytes.
         unsafe { std::slice::from_raw_parts(params_buf, params_len as usize) }
     };
     let call = std::panic::AssertUnwindSafe(|| state::host_query(kind, params));
@@ -240,6 +252,8 @@ pub unsafe extern "C" fn mbrc_query(
     let len = boxed.len() as u32;
     std::mem::forget(boxed);
     if !out_len.is_null() {
+        // SAFETY: `out_len` is null-checked above and the contract says it points to a
+        // writable `u32`.
         unsafe { *out_len = len };
     }
     ptr
@@ -264,13 +278,15 @@ pub unsafe extern "C" fn mbrc_command(
         let params: &[u8] = if params_buf.is_null() {
             &[]
         } else {
+            // SAFETY: the pointer is null-checked above and the contract says it covers that
+            // many readable bytes.
             unsafe { std::slice::from_raw_parts(params_buf, params_len as usize) }
         };
         state::host_command(kind, params) as c_int
     })
 }
 
-/// Free a byte buffer returned by [`mbrc_read_settings`]. `len` must be the
+/// Frees a byte buffer returned by [`mbrc_read_settings`]. `len` must be the
 /// length that call reported. A null pointer is ignored; never free twice.
 ///
 /// # Safety
@@ -280,14 +296,18 @@ pub unsafe extern "C" fn mbrc_free_bytes(ptr: *mut u8, len: u32) {
     if ptr.is_null() {
         return;
     }
+    // SAFETY: the contract says the pointer and length are a pair this core
+    // handed out, which it only ever does from a boxed slice of that length.
     unsafe {
         drop(Vec::from_raw_parts(ptr, len as usize, len as usize));
     }
 }
 
-/// Forward a MusicBee notification. Carries an optional MessagePack payload
-/// (`params_buf`/`params_len`, e.g. the added/changed file URL) so the fan-out
-/// in Slice 3 can build the right broadcast. Empty payload = null/0.
+/// Forwards a MusicBee notification.
+///
+/// Carries an optional MessagePack payload (`params_buf`/`params_len`, e.g. the
+/// added/changed file URL) so the broadcast fan-out can build the right
+/// broadcast. Empty payload = null/0.
 #[no_mangle]
 pub extern "C" fn mbrc_handle_notification(
     notification_type: c_int,
@@ -296,16 +316,15 @@ pub extern "C" fn mbrc_handle_notification(
 ) -> c_int {
     ffi_guard("mbrc_handle_notification", || {
         match NotificationType::from_i32(notification_type) {
-            // The V4 broadcast set re-queries current state, so the optional
-            // params payload is unused here (reserved for future targeted
-            // notifications like tags-changed).
+            // The V4 broadcast set re-queries current state, so the params payload is
+            // unused here and reserved for targeted notifications.
             Some(notification) => state::handle_notification(notification) as c_int,
             None => MbrcResult::InvalidArgument as c_int,
         }
     })
 }
 
-/// Emit a log line from C# through the core's logger. `level`: 0=trace..4=error.
+/// Emits a log line from C# through the core's logger. `level`: 0=trace..4=error.
 ///
 /// # Safety
 /// `target` and `message` must be null or valid NUL-terminated C strings.
@@ -316,20 +335,26 @@ pub unsafe extern "C" fn mbrc_log(
     message: *const c_char,
 ) -> c_int {
     ffi_guard("mbrc_log", || {
+        // SAFETY: null-checked above, and the caller's contract says it is a valid
+        // NUL-terminated C string.
         let target = unsafe { cstr(target) };
+        // SAFETY: null-checked above, and the caller's contract says it is a valid
+        // NUL-terminated C string.
         let message = unsafe { cstr(message) };
         logging::log(level, &target, &message);
         MbrcResult::Ok as c_int
     })
 }
 
-/// Set the log-filter directive (e.g. `"mbrc_core=debug,info"`).
+/// Sets the log-filter directive (e.g. `"mbrc_core=debug,info"`).
 ///
 /// # Safety
 /// `directive` must be null or a valid NUL-terminated C string.
 #[no_mangle]
 pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
     ffi_guard("mbrc_set_log_level", || {
+        // SAFETY: null-checked above, and the caller's contract says it is a valid
+        // NUL-terminated C string.
         let directive = unsafe { cstr(directive) };
         match logging::set_level(&directive) {
             Ok(()) => MbrcResult::Ok as c_int,
@@ -338,22 +363,14 @@ pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
     })
 }
 
-/// Apply the staged update: verify the staged helper, elevate if the plugins
+/// Applies the staged update: verify the staged helper, elevate if the plugins
 /// directory needs it, and start the helper.
 ///
-/// Takes nothing, deliberately. The storage directory comes from the initialized
-/// core, the plugins directory is where this DLL was loaded from, MusicBee is
-/// this process, and the pid is our own. A caller that could name the directory
-/// to overwrite would be a caller worth attacking; there is nothing to pass, so
-/// there is nothing to tamper with.
-///
-/// Returns an [`UpdateLaunch`] value. `Launched` means the helper is up and
-/// waiting for MusicBee to exit - the caller is expected to shut MusicBee down
-/// next. `Cancelled` (the user declined elevation) is a normal outcome and
-/// leaves the staged update in place for a retry. `NotAnUpgrade` means the
-/// staged bundle verified but is not newer than the running plugin, which is a
-/// refusal rather than a failure: a valid signature does not make a stale
-/// release the right one to install.
+/// Takes nothing on purpose: every path is derived here, so a caller cannot
+/// name the directory to overwrite. `Launched` means the helper is up and
+/// waiting for MusicBee to exit, so the caller shuts it down next. `Cancelled`
+/// leaves the staged update in place for a retry, and `NotAnUpgrade` means the
+/// bundle verified but is not newer - a refusal rather than a failure.
 #[no_mangle]
 pub extern "C" fn mbrc_apply_staged_update() -> c_int {
     ffi_guard(
@@ -368,7 +385,7 @@ pub extern "C" fn mbrc_apply_staged_update() -> c_int {
     )
 }
 
-/// Free a string previously returned to C# by the core. Null-safe. This is the
+/// Frees a string previously returned to C# by the core. Null-safe. This is the
 /// only Rust-owned allocation the C# side frees through us.
 ///
 /// # Safety
@@ -382,6 +399,8 @@ pub unsafe extern "C" fn mbrc_free_string(ptr: *mut c_char) {
             return;
         }
         unsafe {
+            // SAFETY: the contract says `ptr` came from this core, which only ever
+            // hands out pointers from `CString::into_raw`.
             let _ = CString::from_raw(ptr);
         }
     }));
@@ -410,8 +429,11 @@ mod ffi_smoke_tests {
     }
     fn c_alloc(data: &[u8]) -> (*mut u8, u32) {
         let layout = Layout::from_size_align(data.len().max(1), 1).unwrap();
+        // SAFETY: the layout is built with `max(1)`, so its size is never zero.
         let ptr = unsafe { alloc(layout) };
         unsafe {
+            // SAFETY: `ptr` was just allocated for at least this many bytes, and a
+            // fresh allocation cannot overlap the source.
             std::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
         }
         ALLOCS.with(|m| m.borrow_mut().insert(ptr as usize, layout));
@@ -423,6 +445,7 @@ mod ffi_smoke_tests {
         }
         ALLOCS.with(|m| {
             if let Some(layout) = m.borrow_mut().remove(&(ptr as usize)) {
+                // SAFETY: the pointer and layout are the pair `c_alloc` recorded.
                 unsafe { dealloc(ptr, layout) };
             }
         });
@@ -453,6 +476,8 @@ mod ffi_smoke_tests {
             .unwrap()
         } else if query_type == QueryType::NowPlayingList as i32 {
             // with-params query: prove Rust->C# named-map params decode on C#'s side
+            // SAFETY: standing in for the C# side, this reads the buffer the core
+            // just passed, which outlives the call.
             let slice = unsafe { std::slice::from_raw_parts(params_buf, params_len as usize) };
             let p: PaginationParams = rmp_serde::from_slice(slice).unwrap();
             rmp_serde::to_vec_named(&PlaybackPositionResponse {
@@ -463,6 +488,8 @@ mod ffi_smoke_tests {
         } else if query_type == QueryType::Lyrics as i32 {
             // Non-null but zero-length result: exercises the leak-free error path.
             let (ptr, _len) = c_alloc(&[]);
+            // SAFETY: both out-pointers come from the core, which passes writable
+            // locals for them.
             unsafe {
                 *out_result_buf = ptr;
                 *out_result_len = 0;
@@ -472,6 +499,8 @@ mod ffi_smoke_tests {
             return -1;
         };
         let (ptr, len) = c_alloc(&response);
+        // SAFETY: both out-pointers come from the core, which passes writable
+        // locals for them.
         unsafe {
             *out_result_buf = ptr;
             *out_result_len = len;
@@ -484,6 +513,8 @@ mod ffi_smoke_tests {
         let value = if command_type == CommandType::SetVolume as i32
             || command_type == CommandType::SetPosition as i32
         {
+            // SAFETY: standing in for the C# side, this reads the buffer the core
+            // just passed, which outlives the call.
             let slice = unsafe { std::slice::from_raw_parts(params_buf, params_len as usize) };
             rmp_serde::from_slice::<SetIntParams>(slice)
                 .ok()
@@ -583,6 +614,8 @@ mod ffi_smoke_tests {
             free_buffer: None,
             on_event: None,
         };
+        // SAFETY: the ABI check happens before anything reads the table, which is
+        // the behaviour under test.
         let code = unsafe { mbrc_initialize(MBRC_ABI_VERSION + 1, null_cbs, std::ptr::null()) };
         assert_eq!(code, MbrcResult::AbiVersionMismatch as c_int);
     }

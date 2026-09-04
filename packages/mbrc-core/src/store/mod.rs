@@ -1,7 +1,9 @@
 //! The shared embedded key-value store (`redb`) backing the core's durable
 //! caches: the album-cover index (formerly `state.json`) and the library
-//! metadata cache. One `<storage>/mbrc.redb` file holds several typed tables,
-//! opened once and shared (via `Arc`) by both `CoverStore` and `MetadataCache`.
+//! metadata cache.
+//!
+//! One `<storage>/mbrc.redb` file holds several typed tables, opened once and
+//! shared (via `Arc`) by both `CoverStore` and `MetadataCache`.
 //!
 //! [`Db`] wraps the database in `Option<Arc<..>>` so an absent or unopenable
 //! store degrades to a no-op - the caches are always rebuildable, so
@@ -22,7 +24,7 @@ use redb::{
 /// small deterministic cap rather than let redb's default grow opportunistically
 /// into the ~2 GB address space. redb 4.x reads pages off disk through this
 /// cache (no mmap), and our access is O(page), so the working set stays far
-/// under this - it is a ceiling, not a reservation. See MBRCIP-0001 §9.
+/// under this - it is a ceiling, not a reservation.
 const CACHE_SIZE: usize = 64 * 1024 * 1024;
 
 /// album_key -> content_hash (the resized cover's SHA1). Replaces the `covers`
@@ -37,16 +39,21 @@ pub const COVER_META: TableDefinition<&str, i64> = TableDefinition::new("cover_m
 pub const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
 /// Library metadata cache: a canonical query key -> the rmp-serialized response.
 pub const METADATA_CACHE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata_cache");
-/// Ordinal track path index (MBRCIP-0001): `u32` position (browse order) -> path.
-/// A redb range over this key IS the O(page) browse pagination - no full-library
-/// list ever materializes. Rewritten wholesale by the Scanner on add/delete/
-/// reorder; the tag cache below survives because it is keyed by path, not order.
+/// Ordinal track path index: `u32` position (browse order) ->
+/// path.
+///
+/// A redb range over this key IS the O(page) browse pagination - no
+/// full-library list ever materializes. Rewritten wholesale by the Scanner on
+/// add/delete/ reorder; the tag cache below survives because it is keyed by
+/// path, not order.
 pub const TRACK_PATHS: TableDefinition<u32, &str> = TableDefinition::new("track_paths");
-/// Path-keyed track tag cache (MBRCIP-0001): path -> rmp-serialized `Track` (the
-/// 7 browse fields). Keyed by the raw path (exact, order-independent) rather than
-/// a hash - redb takes variable-length keys, so hashing buys only a smaller key
-/// and a collision risk we don't need. A page's misses are filled lazily via one
-/// FFI batch and written here.
+/// Path-keyed track tag cache: path -> rmp-serialized `Track`
+/// (the 7 browse fields).
+///
+/// Keyed by the raw path (exact, order-independent) rather than a hash - redb
+/// takes variable-length keys, so hashing buys only a smaller key and a
+/// collision risk we don't need. A page's misses are filled lazily via one FFI
+/// batch and written here.
 pub const TRACK_TAGS: TableDefinition<&str, &[u8]> = TableDefinition::new("track_tags");
 
 /// [`COVER_META`] key holding the last cache-check time (unix seconds).
@@ -70,25 +77,24 @@ struct LegacyState {
     last_check: i64,
 }
 
-/// A shared handle to the core's redb database. Clones share the same file via
-/// `Arc`. `None` means persistence is disabled (no storage path, or the file
-/// could not be opened) and every operation is a best-effort no-op.
+/// A shared handle to the core's redb database.
+///
+/// Clones share the same file via `Arc`. `None` means persistence is disabled
+/// (no storage path, or the file could not be opened) and every operation is a
+/// best-effort no-op.
 #[derive(Clone)]
 pub struct Db(Option<Arc<Database>>);
 
 impl Db {
-    /// Open (or create) `<storage_path>/mbrc.redb`. An empty path disables
+    /// Opens (or creates) `<storage_path>/mbrc.redb`. An empty path disables
     /// persistence. A corrupt file is deleted and recreated once; a still-failing
     /// open also degrades to `Db(None)` (logged, never fatal).
     pub fn open(storage_path: &str) -> Self {
         if storage_path.is_empty() {
             return Db(None);
         }
-        // Ensure the storage directory exists before redb tries to create the
-        // file in it. MusicBee's persistent-storage path normally exists, but on
-        // a portable install pointed at a not-yet-created path this turns a
-        // silent "persistence disabled" into a working cache. Best-effort: a
-        // failure here just falls through to the graceful degrade below.
+        // Created first, so a portable install pointed at a path that does not
+        // exist yet gets a working cache instead of silent degradation.
         if let Err(e) = std::fs::create_dir_all(storage_path) {
             tracing::warn!(error = %e, path = storage_path, "could not create storage dir");
         }
@@ -109,7 +115,7 @@ impl Db {
         }
     }
 
-    /// Open/create the database with the [`CACHE_SIZE`] page-cache cap applied.
+    /// Opens/create the database with the [`CACHE_SIZE`] page-cache cap applied.
     fn create_db(path: &Path) -> Result<Database, DatabaseError> {
         Builder::new().set_cache_size(CACHE_SIZE).create(path)
     }
@@ -125,7 +131,7 @@ impl Db {
         self.0.is_some()
     }
 
-    /// Run a read transaction, returning the closure's value, or `None` when
+    /// Runs a read transaction, returning the closure's value, or `None` when
     /// persistence is off or any redb step fails (treated as a cache miss).
     pub fn read<T>(&self, f: impl FnOnce(&ReadTransaction) -> Result<T, redb::Error>) -> Option<T> {
         let db = self.0.as_deref()?;
@@ -144,7 +150,7 @@ impl Db {
         }
     }
 
-    /// Run a write transaction at the given durability and commit it. A no-op
+    /// Runs a write transaction at the given durability and commit it. A no-op
     /// when persistence is off; any failure is logged and swallowed (the cache
     /// stays rebuildable). redb 4.x offers only `None`/`Immediate` durability;
     /// these caches must survive a restart, so callers pass `Immediate`.
@@ -231,7 +237,7 @@ impl Db {
         .unwrap_or(false)
     }
 
-    /// Set a 1-byte marker key in [`META`].
+    /// Sets a 1-byte marker key in [`META`].
     fn set_marker(&self, key: &str) {
         self.write(Durability::Immediate, |txn| {
             let mut m = txn.open_table(META)?;
@@ -283,9 +289,8 @@ mod tests {
 
     #[test]
     fn open_creates_missing_storage_dir() {
-        // A storage path whose (nested) directory does not exist yet must be
-        // created, not silently degrade to persistence-disabled - the robustness
-        // side of issue #123 (portable install, missing cache dir).
+        // A nested path that does not exist yet must be created rather than
+        // degrade to persistence-disabled (#123).
         let base = temp_dir("missing-parent");
         let nested = base.join("deep").join("not-there");
         assert!(!nested.exists());

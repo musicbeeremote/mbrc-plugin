@@ -23,6 +23,7 @@ use time::OffsetDateTime;
 use crate::config::Config;
 
 /// The product version this core was built as, from `Directory.Build.props`.
+///
 /// The update check compares against the version the *plugin* reports over FFI;
 /// this is what the core says about itself in the log.
 pub const CORE_VERSION: &str = env!("MBRC_VERSION");
@@ -33,6 +34,9 @@ pub const CORE_VERSION: &str = env!("MBRC_VERSION");
 /// carrying the version means a rate-limit complaint can be traced to a build
 /// rather than to "some plugin". `proxy_override` is passed straight through -
 /// empty means WinHTTP auto-detects, which is what almost everyone gets.
+///
+/// # Errors
+/// The WinHTTP session could not be opened.
 #[cfg(windows)]
 pub fn http_client(config: &Config) -> Result<mbrc_release::WinHttpClient> {
     mbrc_release::WinHttpClient::new(
@@ -48,6 +52,9 @@ pub fn http_client(config: &Config) -> Result<mbrc_release::WinHttpClient> {
 ///
 /// The state file is written on the way out whatever the outcome, including
 /// after a failure: that is what makes the backoff work.
+///
+/// # Errors
+/// The release document could not be fetched, or did not parse.
 pub fn check_for_update(
     client: &dyn HttpClient,
     config: &Config,
@@ -76,7 +83,11 @@ pub fn check_for_update(
 }
 
 /// Downloads and stages a verified update under the storage directory. See
-/// [`mbrc_release::stage`] for what staging is and is not allowed to touch.
+/// [`mod@mbrc_release::stage`] for what staging is and is not allowed to touch.
+///
+/// # Errors
+/// The download failed, the bundle did not verify, or the staging directory
+/// could not be written.
 pub fn stage_update(
     client: &dyn HttpClient,
     config: &Config,
@@ -98,21 +109,12 @@ pub fn stage_update(
 
 /// Removes a staged bundle that has already been applied.
 ///
-/// The helper cannot do this for itself. It runs from inside
-/// `<storage>/updates/<version>/mbrc-helper.exe`, and Windows will not unlink a
-/// running image, so the `remove_dir_all` in its own `clear_staged` fails on
-/// *every* successful update - silently, because the helper is launched with no
-/// console and the failure only reaches `eprintln!`. It does manage to delete
-/// `pending.json`, which lives one directory up, so the marker goes and the
-/// bundle stays.
+/// The helper cannot do it: it runs from inside the bundle, and Windows will not
+/// unlink a running image, so its own `clear_staged` fails every time. By the
+/// time the core is up again the directory is pure residue.
 ///
-/// By the time the core is running again the helper has exited and the directory
-/// is nothing but residue, so this is the right place to sweep it. The whole
-/// `updates/` root goes, not just one version: `stage` only clears the directory
-/// for the version it is about to write, so earlier versions accumulate too.
-///
-/// A pending marker means a bundle is staged and waiting to be applied - that is
-/// live state, and it is left alone.
+/// The whole `updates/` root goes, since `stage` only clears the version it is
+/// about to write. A pending marker means a bundle is still waiting, so it stays.
 pub fn sweep_applied_staging(storage_path: &str) {
     if storage_path.is_empty() {
         return;

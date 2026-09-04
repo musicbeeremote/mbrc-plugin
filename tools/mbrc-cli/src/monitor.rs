@@ -1,24 +1,17 @@
-//! `mbrc monitor` - read-only validation client for the MBRCIP-0001 library
-//! cache + now-playing paging work (see the pre-merge validation plan).
+//! `mbrc monitor` - read-only validation client for the library cache and
+//! now-playing paging.
 //!
-//! It points at a LIVE plugin instance backed by a real library and must NEVER
-//! mutate it. Every command it sends is checked against a strict read-only
-//! allow-list (see `ALLOWED`); any playback / queue / rating / tag / search
-//! mutation is a hard refusal, not just an omission.
+//! It points at a LIVE plugin with a real library and must NEVER mutate it.
+//! Every command is checked against a read-only allow-list (see `ALLOWED`); a
+//! playback, queue, rating, tag or search mutation is a hard refusal.
 //!
-//! Per instance (`--concurrency N` runs N of these) it holds two connections:
-//!   1. an active paging sweep that walks `browsetracks` end to end and asserts
-//!      the paging invariants (stable total, no gaps/dupes, monotonic order),
-//!      then cross-checks now-playing full-vs-stitched windowing;
-//!   2. a mostly-idle broadcast subscriber held open for the whole run to prove
-//!      the keepalive path never idle-reaps a handshaked socket.
-//!
-//! Both survive plugin restarts via reconnect-with-backoff, counting the drops.
-//!
-//! Output: one JSONL line per sweep iteration `{ts,iter,latency_ms,total,ok,
-//! err,sig,...}` to `--out` (or stdout), plus a rolling summary line every
-//! `--summary-secs`. A stable `sig` across a reconnect (correlated with the
-//! Windows core's `rebuilt=false`) is the redb-persistence proof.
+//! Per instance (`--concurrency N` runs N of these) it holds two connections: a
+//! paging sweep walking `browsetracks` end to end asserting the paging
+//! invariants, and a mostly-idle subscriber held open to prove the keepalive
+//! path never reaps a handshaked socket. Both reconnect with backoff across
+//! plugin restarts, counting the drops. Output is one JSONL line per sweep to
+//! `--out` plus a rolling summary every `--summary-secs`; a stable `sig` across
+//! a reconnect is the redb-persistence proof.
 //!
 //! Usage:
 //!   mbrc monitor [--host H] [--port P] [--client-type Android|iOS]
@@ -94,7 +87,7 @@ struct Stats {
 }
 
 impl Stats {
-    /// Record the first-seen signature or flag drift from it. Returns true when
+    /// Records the first-seen signature or flag drift from it. Returns true when
     /// the value differs from the established baseline.
     fn note_sig(&self, sig: u64) -> bool {
         // 0 is used as the "unset" sentinel; a real 0 signature (empty library)
@@ -165,7 +158,7 @@ struct Conn {
 }
 
 impl Conn {
-    /// Connect and drive the client handshake to completion (`player` echo ->
+    /// Connects and drives the client handshake to completion (`player` echo ->
     /// `protocol`). `no_broadcast=true` for the paging sweep (quiet channel),
     /// false for the idle subscriber (wants the broadcast stream).
     async fn connect(cfg: &Cfg, no_broadcast: bool) -> io::Result<Conn> {
@@ -206,7 +199,7 @@ impl Conn {
         self.wr.flush().await
     }
 
-    /// Pop the next complete frame, reading from the socket as needed until
+    /// Pops the next complete frame, reading from the socket as needed until
     /// `deadline`. `Ok(None)` on timeout; `Err` on a closed/broken connection.
     async fn recv_frame(&mut self, deadline: Instant) -> io::Result<Option<String>> {
         loop {
@@ -229,8 +222,8 @@ impl Conn {
         }
     }
 
-    /// Handle one raw frame: auto-answer handshake/ping (returns `None`), or hand
-    /// back a real reply's `(context, data)` for the caller.
+    /// Handles one raw frame: answers handshake and ping itself (returning
+    /// `None`), and passes a real reply's `(context, data)` back to the caller.
     async fn handle_frame(&mut self, line: &str) -> io::Result<Option<(String, Value)>> {
         if line.trim().is_empty() {
             return Ok(None);
@@ -247,7 +240,7 @@ impl Conn {
         Ok(Some((ctx, data)))
     }
 
-    /// Send a read-only command and return the `data` of the reply that comes
+    /// Sends a read-only command and return the `data` of the reply that comes
     /// back on the same context. Pings/handshake and any interleaved broadcast
     /// frames are handled/skipped meanwhile. Refuses non-allow-listed contexts.
     async fn request(
@@ -295,7 +288,7 @@ struct SweepResult {
     errors: Vec<String>,
 }
 
-/// Walk `browsetracks` from 0 to `total` in `page_size` windows and assert the
+/// Walks `browsetracks` from 0 to `total` in `page_size` windows and assert the
 /// paging invariants: total stable across pages, echoed offset matches, no
 /// gaps/dupes in `src`, and the union size equals `total`.
 async fn sweep_browsetracks(

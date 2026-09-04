@@ -4,8 +4,8 @@
 //! *schema* covers the golden's for every context. This is the capstone proving
 //! the Rust core's wire shapes match the shipped C# plugin.
 //!
-//! Schema (field names + types), not values - value parity (Layer 3) is out of
-//! scope for this milestone. The check is directional: every field the golden
+//! Schema (field names and types), not values: value parity is out of scope
+//! here. The check is directional: every field the golden
 //! shows must appear in the core's output with the same type (the core may add
 //! optional fields the golden happened not to exercise).
 
@@ -404,7 +404,7 @@ fn golden_c2s(contents: &str) -> (String, Vec<String>) {
     (client_type, commands)
 }
 
-/// Replay a golden's c2s + all notifications at the core, returning the collected
+/// Replays a golden's c2s + all notifications at the core, returning the collected
 /// s2c frames as an `mbrc-capture/2` JSONL string for schema extraction.
 fn replay(core: Arc<Core>, port: u16, client_type: &str, commands: &[String]) -> String {
     let mut writer = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -470,7 +470,7 @@ fn replay(core: Arc<Core>, port: u16, client_type: &str, commands: &[String]) ->
         .join("\n")
 }
 
-/// Read one CRLF-terminated frame, or `None` on timeout/EOF.
+/// Reads one CRLF-terminated frame, or `None` on timeout/EOF.
 fn read_frame(reader: &mut BufReader<TcpStream>) -> Option<String> {
     let mut line = String::new();
     match reader.read_line(&mut line) {
@@ -490,9 +490,8 @@ fn assert_golden_covered(golden_path: &str, client_type_hint: &str) {
         Arc::new(FixtureProviders),
         Config::for_test(port),
     ));
-    // The paginated `libraryalbumcover` is served from the CoverStore. The test
-    // Config has no storage path, so the background build is skipped; pre-warm
-    // one album so the page yields an item (all fields present) deterministically.
+    // The test Config has no storage path, so the background build is skipped:
+    // pre-warm one album so the page deterministically yields an item.
     core.cover_store
         .warm_up(&[mbrc_core::cover::store::AlbumIdentity {
             key: mbrc_core::cover::cover_identifier("AlbumArtist", "Album"),

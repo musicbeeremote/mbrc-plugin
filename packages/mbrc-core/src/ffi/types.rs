@@ -3,16 +3,17 @@
 //! The `QueryType` / `CommandType` / `NotificationType` numeric values and the
 //! `MbrcCallbacks` layout are the contract; the matching `Query*` / `Cmd*`
 //! constants and the `MbrcCallbacks` struct on the C# side
-//! (`plugin/Services/NativeBridge.cs`) must stay identical. The contract is
-//! being *finalized* pre-cutover (no live C# consumer yet). After cutover it is
+//! (`plugin/Ffi/NativeBridge.cs`) must stay identical. The contract is
 //! additive-only: append enum variants, never renumber; and bump
 //! [`MBRC_ABI_VERSION`] on any incompatible change so a stale DLL is rejected at
 //! `mbrc_initialize` instead of decoding garbage.
 
 /// The ABI contract version C# is compiled against and passes to
-/// `mbrc_initialize`. Bump this on ANY incompatible change to the exports,
-/// `MbrcCallbacks`, or the enum numbering, so a mismatched `mbrc_core.dll`
-/// next to the shim (or a dev build skew) is rejected up front.
+/// `mbrc_initialize`.
+///
+/// Bump this on ANY incompatible change to the exports, `MbrcCallbacks`, or the
+/// enum numbering, so a mismatched `mbrc_core.dll` next to the shim (or a dev
+/// build skew) is rejected up front.
 pub const MBRC_ABI_VERSION: i32 = 1;
 
 /// Result codes for all FFI functions. `0` = success, negative = error.
@@ -81,7 +82,7 @@ pub enum NotificationType {
 }
 
 impl NotificationType {
-    /// Map the raw i32 from the FFI boundary to a known notification.
+    /// Maps the raw i32 from the FFI boundary to a known notification.
     pub fn from_i32(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::TrackChanged),
@@ -101,7 +102,7 @@ impl NotificationType {
 /// Query types for the fat `query_data` callback (C# reads MusicBee data).
 ///
 /// Numeric values are part of the FFI contract and must match the `Query*`
-/// constants in `plugin/Services/NativeBridge.cs`. Never renumber or reuse a
+/// constants in `plugin/Ffi/NativeBridge.cs`. Never renumber or reuse a
 /// value. Some variants (library search/queue) are reserved for the C# side
 /// and are not issued by the maintained V4 wire surface.
 #[repr(i32)]
@@ -137,25 +138,14 @@ pub enum QueryType {
     NowPlayingListOrdered = 27,
     // The plugin version string (C# `IUserSettings.CurrentVersion`).
     PluginVersion = 28,
-    // Cover-cache leaf providers: the host supplies raw ingredients, the core
-    // owns resize/hash/cache/serve. These replace the old resized-cover queries
-    // (`AlbumCover = 21`, `CoverCacheBuildStatus = 22`, `AlbumCoverBatch = 24`),
-    // which stay RESERVED above (the core stops issuing them once the rewire in
-    // stage 3 lands). `AlbumIdentifiers` is ONE library scan folded into
-    // per-album identities (no more 2-3 passes); `ArtworkRawForPath` returns a
-    // track's raw MusicBee artwork (base64); `BatchMetadata` resolves paths to
-    // {artist, album} for the paginated cover grid.
+    // Cover-cache leaves: the host supplies raw ingredients, the core owns
+    // resize, hash, cache and serve. They replace the resized-cover queries kept
+    // RESERVED above.
     AlbumIdentifiers = 29,
     ArtworkRawForPath = 30,
     BatchMetadata = 31,
-    // Library cache (MBRCIP-0001): the core owns an on-disk ordinal path index +
-    // path-keyed tag cache, so browse pages are served O(page) without ever
-    // materializing the whole library. `LibraryTrackPaths` returns every track
-    // path in browse order in one `Library_QueryFilesEx(null)` call (the ordinal
-    // index, source of truth). `LibraryTracksForPaths` batch-reads the 7 browse
-    // tags for just a page's paths (one `Library_GetFileTags` per path), filling
-    // the path-keyed tag cache lazily. `LibrarySyncDelta` lists paths changed
-    // since a watermark, for incremental refresh by the background Scanner.
+    // Library cache: the core owns an ordinal path index plus a path-keyed tag
+    // cache, so a browse page costs O(page) and never materializes the library.
     LibraryTrackPaths = 32,
     LibraryTracksForPaths = 33,
     LibrarySyncDelta = 34,
@@ -164,7 +154,7 @@ pub enum QueryType {
 /// Command types for the fat `execute_command` callback (C# mutates state).
 ///
 /// Numeric values are part of the FFI contract and must match the `Cmd*`
-/// constants in `plugin/Services/NativeBridge.cs`. Never renumber or reuse a
+/// constants in `plugin/Ffi/NativeBridge.cs`. Never renumber or reuse a
 /// value.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,10 +200,12 @@ pub enum CommandType {
 
 /// Host -> core queries (request/response), the mirror of [`QueryType`] in the
 /// opposite direction: the C# host asks the core for data it owns and gets a
-/// MessagePack buffer back (via `mbrc_query`). Use this for app-level reads the
-/// UI needs - cache health, denied-client history, diagnostics - instead of a
-/// bespoke export per call. Numeric values are contract: additive, never
-/// renumbered; bump [`MBRC_ABI_VERSION`] on an incompatible change.
+/// MessagePack buffer back (via `mbrc_query`).
+///
+/// Use this for app-level reads the UI needs - cache health, denied-client
+/// history, diagnostics - instead of a bespoke export per call. Numeric values
+/// are contract: additive, never renumbered; bump [`MBRC_ABI_VERSION`] on an
+/// incompatible change.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -254,7 +246,9 @@ impl HostQueryType {
 
 /// Host -> core commands (fire-and-forget), the mirror of [`CommandType`]: the
 /// C# host asks the core to perform an action, getting only a status back (via
-/// `mbrc_command`). Same numbering discipline as [`HostQueryType`].
+/// `mbrc_command`).
+///
+/// Same numbering discipline as [`HostQueryType`].
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -313,12 +307,13 @@ impl HostCommandType {
     }
 }
 
-/// Core -> host push events, delivered through the `on_event` callback. The core
-/// invokes it (from a background thread) when host-relevant state changes so an
-/// open UI can refresh without polling. The payload is an optional MessagePack
-/// buffer (empty when the host should just re-query). Same numbering discipline
-/// as the other enums. Distinct from [`NotificationType`], which flows the other
-/// way (MusicBee -> core).
+/// Core -> host push events, delivered through the `on_event` callback.
+///
+/// The core invokes it (from a background thread) when host-relevant state
+/// changes so an open UI can refresh without polling. The payload is an
+/// optional MessagePack buffer (empty when the host should just re-query). Same
+/// numbering discipline as the other enums. Distinct from [`NotificationType`],
+/// which flows the other way (MusicBee -> core).
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -338,27 +333,22 @@ pub enum HostEventType {
 
 /// Callback table handed from C# to Rust at `mbrc_initialize`.
 ///
-/// Two callbacks carry the in-process RPC, with distinct shapes matching their
-/// roles:
-/// - **`query_data` (get, request/response)**: reads MusicBee data (see
-///   [`QueryType`]) and returns a MessagePack result buffer via the out-params.
-/// - **`execute_command` (update, one-way)**: mutates state fire-and-forget (see
-///   [`CommandType`]); returns *only* a status - no result buffer. Handlers that
-///   need to report new state re-query afterward.
+/// Two callbacks carry the in-process RPC: `query_data` reads MusicBee data
+/// (see [`QueryType`]) and returns a MessagePack buffer through its out-params,
+/// while `execute_command` mutates state one-way (see [`CommandType`]) and
+/// returns only a status. `free_buffer` releases what `query_data` allocated.
 ///
-/// `free_buffer` releases the C#-allocated result buffer from a `query_data`
-/// call. Transport controls are ordinary `CommandType` variants (no special
-/// player path).
+/// # Status contract
 ///
-/// **Callback status contract (C# -> Rust):** `0` = success. For `query_data`,
-/// success MUST return a valid, non-empty MessagePack buffer; a domain "not
-/// found" is encoded *inside* the payload (e.g. `Cover{status:404}`), never as
-/// an empty buffer. A non-zero status means the C# provider threw - the core
-/// logs it and sends no reply. `query_data` returning `status 0` with a null or
-/// empty buffer is a contract violation and is treated as an error.
+/// `0` is success, and for `query_data` success must carry a non-empty
+/// MessagePack buffer: a domain "not found" is encoded inside the payload
+/// (`Cover{status:404}`), never as an empty one. A non-zero status means the C#
+/// provider threw, and the core logs it and sends no reply. Success with a null
+/// or empty buffer is a contract violation, treated as an error.
 ///
-/// Layout is 4 pointers (16 bytes on i686); the C# `MbrcCallbacks` struct must
-/// match. Being finalized pre-cutover; afterward, extend through the enums.
+/// # Layout
+///
+/// Four pointers, 16 bytes on i686; the C# `MbrcCallbacks` must match.
 #[repr(C)]
 pub struct MbrcCallbacks {
     /// Read MusicBee data (request/response). See [`QueryType`].
@@ -384,9 +374,10 @@ pub struct MbrcCallbacks {
     pub on_event: Option<extern "C" fn(event_type: i32, payload_buf: *const u8, payload_len: u32)>,
 }
 
-// Function pointers are inherently Send + Sync (they are just addresses); the
-// C# side guarantees thread-safe implementations.
+// SAFETY: function pointers are just addresses, and the C# side guarantees the
+// implementations behind them are thread-safe.
 unsafe impl Send for MbrcCallbacks {}
+// SAFETY: as above, and the table is read-only once handed over.
 unsafe impl Sync for MbrcCallbacks {}
 
 #[cfg(test)]

@@ -139,8 +139,7 @@ fn a_nightly_is_never_offered_an_older_stable() {
 #[test]
 fn each_channel_asks_the_right_endpoint() {
     // Stable takes GitHub's own "latest", which excludes pre-releases by its
-    // rule rather than ours. Testing has to list, because there is no "latest
-    // including pre-releases" endpoint.
+    // rule. Testing must list, as there is no combined endpoint.
     assert_eq!(
         options("1.5.0").endpoint(),
         "https://api.github.com/repos/test/repo/releases/latest"

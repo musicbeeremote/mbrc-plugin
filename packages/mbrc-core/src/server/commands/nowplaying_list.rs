@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use super::{as_int_lenient, as_set_string, pagination, Ctx, HandlerResult, Platform};
 use crate::providers::Providers;
 
-/// Read an index from either a bare int (or stringified int) or an
+/// Reads an index from either a bare int (or stringified int) or an
 /// `{ "index": n }` object. The lenient int coercion matches the C#
 /// `TryGetData<int>()`, so an index a client sends as `"5"` still lands.
 fn index_of(data: &Value) -> i32 {

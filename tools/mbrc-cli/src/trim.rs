@@ -3,7 +3,7 @@
 //! cover PNG the replay harness seeds. All the trimming logic lives in
 //! `mbrc-capture`; this is the file I/O around it.
 //!
-//! Usage: mbrc trim --in <file|dir> [--out <dir>]   (default out: tests/golden)
+//! Usage: `mbrc trim --in <file|dir> [--out <dir>]` (default out: `tests/golden`)
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -46,7 +46,7 @@ pub fn run(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Read a single `.jsonl` file, or concatenate every `.jsonl` in a directory
+/// Reads a single `.jsonl` file, or concatenate every `.jsonl` in a directory
 /// (sorted, so output is deterministic).
 pub(crate) fn read_all(input: &str) -> std::io::Result<String> {
     let path = Path::new(input);

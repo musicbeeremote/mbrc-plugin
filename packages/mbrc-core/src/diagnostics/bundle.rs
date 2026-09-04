@@ -37,7 +37,11 @@ const ROTATED_NOTE: &[u8] = b"The active log rotated during this capture, so cap
 the whole current log file rather than only the captured window. The earlier part of the \
 window is in the rolled generations under logs/.\r\n";
 
-/// Build the bundle and return the path written.
+/// Builds the bundle and return the path written.
+///
+/// # Errors
+/// The destination cannot be created, the report cannot be serialized, or a
+/// zip entry cannot be written.
 pub fn write(inputs: Inputs<'_>) -> Result<PathBuf, String> {
     let dir = Path::new(inputs.destination_dir);
     std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
@@ -112,17 +116,11 @@ fn capture_window(storage: &str, offset: u64) -> (Vec<u8>, bool) {
 /// The other log files that overlap the capture window: rolled generations, and
 /// the host-side bootstrap logs.
 ///
-/// Bounded by modification time rather than taken wholesale. A rolled generation
-/// only belongs here if the roll happened *during* the capture - then part of the
-/// window really is inside it, which is what `capture.log.note.txt` points at.
-/// One untouched since before the capture is the user's back catalogue: it
-/// predates the reproduction, it was written at the normal log level so it holds
-/// no wire detail anyway, and it is the one part of the bundle nobody can review
-/// before sending it (a gzip inside a zip is not something you can eyeball).
-/// Shipping it by default would undo the slicing `capture.log` exists to do.
-///
-/// The same rule picks up `mbrc-bootstrap.log` exactly when the capture spanned a
-/// restart - which is the case a startup bug needs and no other case does.
+/// Bounded by modification time, not taken wholesale: a generation that rolled
+/// during the capture holds part of the window, while an older one is the user's
+/// back catalogue and the part of a bundle nobody can eyeball before sending.
+/// The same rule picks up `mbrc-bootstrap.log` exactly when the capture spanned
+/// a restart, which is the case a startup bug needs.
 fn extra_logs(storage: &str, started_unix_ms: i64) -> Vec<PathBuf> {
     let active = crate::logging::active_log_path(storage);
     let mut paths: Vec<PathBuf> = crate::logging::log_files(storage)

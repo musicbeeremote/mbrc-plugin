@@ -33,8 +33,8 @@ fn json_value() -> impl Strategy<Value = Value> {
 }
 
 proptest! {
-    // The parser and sanitizers must never panic, whatever text arrives. `(?s).*`
-    // spans arbitrary Unicode including newlines.
+    /// The parser and sanitizers must never panic, whatever text arrives. `(?s).*`
+    /// spans arbitrary Unicode including newlines.
     #[test]
     fn parser_never_panics_on_arbitrary_text(s in "(?s).*") {
         let _ = parse_lenient(&s);
@@ -42,8 +42,8 @@ proptest! {
         let _ = sanitize_ios_quotes(&s);
     }
 
-    // Framing must never panic on arbitrary byte chunks, and every frame it
-    // yields must be terminator-free (the terminator is stripped).
+    /// Framing must never panic on arbitrary byte chunks, and every frame it
+    /// yields must be terminator-free (the terminator is stripped).
     #[test]
     fn accumulator_never_panics_and_strips_terminator(chunks in prop::collection::vec(any::<Vec<u8>>(), 0..8)) {
         let mut acc = FrameAccumulator::default();
@@ -55,25 +55,25 @@ proptest! {
         }
     }
 
-    // Valid JSON is a fixed point of the lenient path: parsing it leniently
-    // yields exactly the strict parse (the `\'`/bare-identifier repairs only
-    // ever fire on input that was already broken).
+    /// Valid JSON is a fixed point of the lenient path: parsing it leniently
+    /// yields exactly the strict parse (the `\'`/bare-identifier repairs only
+    /// ever fire on input that was already broken).
     #[test]
     fn lenient_equals_strict_on_valid_json(v in json_value()) {
         let text = serde_json::to_string(&v).unwrap();
         prop_assert_eq!(parse_lenient(&text), Some(v));
     }
 
-    // The iOS quote sanitizer is lossless on valid JSON: serde_json never emits
-    // the `\'` escape it rewrites, so valid JSON round-trips unchanged.
+    /// The iOS quote sanitizer is lossless on valid JSON: serde_json never emits
+    /// the `\'` escape it rewrites, so valid JSON round-trips unchanged.
     #[test]
     fn quote_sanitizer_is_identity_on_valid_json(v in json_value()) {
         let text = serde_json::to_string(&v).unwrap();
         prop_assert_eq!(sanitize_ios_quotes(&text), text);
     }
 
-    // A frame built from a value, terminated and fed back through the
-    // accumulator, comes back out with its context intact.
+    /// A frame built from a value, terminated and fed back through the
+    /// accumulator, comes back out with its context intact.
     #[test]
     fn framed_context_round_trips(ctx in "[a-z]+", data in json_value()) {
         let line = serde_json::json!({ "context": ctx, "data": data }).to_string();

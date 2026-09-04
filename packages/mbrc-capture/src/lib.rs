@@ -70,7 +70,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Build a frame record from the exact bytes seen on the wire, parsing a
+    /// Builds a frame record from the exact bytes seen on the wire, parsing a
     /// convenience `frame` copy when they are valid JSON.
     pub fn new(conn_id: u32, seq: u64, dir: &str, elapsed_ms: u128, frame_bytes: &[u8]) -> Self {
         let raw = String::from_utf8_lossy(frame_bytes).into_owned();
@@ -154,7 +154,7 @@ pub enum Record {
     Meta(Value),
 }
 
-/// Parse one capture line into a [`Record`]. Returns `None` for blank lines,
+/// Parses one capture line into a [`Record`]. Returns `None` for blank lines,
 /// malformed JSON, or an unknown/absent `type`.
 pub fn parse_line(line: &str) -> Option<Record> {
     let line = line.trim();
@@ -171,7 +171,7 @@ pub fn parse_line(line: &str) -> Option<Record> {
     }
 }
 
-/// Count frame records cheaply, without a full JSON parse: non-empty lines
+/// Counts frame records cheaply, without a full JSON parse: non-empty lines
 /// carrying a `"dir"` field (meta/lifecycle lines have none).
 pub fn count_frames(contents: &str) -> usize {
     contents.lines().filter(|l| l.contains("\"dir\"")).count()

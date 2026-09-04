@@ -1,6 +1,8 @@
 //! Library handlers: flat paginated browse, iOS hierarchical navigation, album
 //! covers (single + paginated), cover-cache status, radio stations, and
-//! play-all. Response DTOs match the wire shapes, so handlers just serialize.
+//! play-all.
+//!
+//! Response DTOs match the wire shapes, so handlers just serialize.
 
 use std::collections::HashMap;
 
@@ -14,12 +16,13 @@ use crate::metadata_cache::MetadataCache;
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
 use crate::providers::Providers;
 
-// Metadata-cache keys for the small flat browse lists (genres/artists/albums).
-// Shared by the handlers and the eager prewarm so the two can't drift. Tracks is
-// NOT here: it is the one list large enough to OOM the 32-bit core as a blob, so
-// it lives in the ordinal index + path-keyed tag cache (MBRCIP-0001), not the
-// generic metadata cache.
+/// Metadata-cache key for the flat genre list.
+///
+/// Shared by the handler and the eager prewarm so the two cannot drift. Tracks
+/// has no key here: it is the one list large enough to OOM the 32-bit core as a
+/// blob, so it lives in the ordinal index instead.
 const KEY_BROWSE_GENRES: &str = "browse_genres";
+/// Metadata-cache key for the flat album list. See [`KEY_BROWSE_GENRES`].
 const KEY_BROWSE_ALBUMS: &str = "browse_albums";
 fn key_browse_artists(album_artists: bool) -> String {
     format!("browse_artists:aa={album_artists}")
@@ -27,10 +30,8 @@ fn key_browse_artists(album_artists: bool) -> String {
 
 // ── Flat browse (paginated, served from the eager metadata cache) ──
 //
-// The metadata cache holds the FULL browse list; a request's page is sliced
-// locally (matching the C# `Paginate` the host used to do per request). The
-// full list is fetched from the provider with offset 0 / limit 0 (which returns
-// everything), then cached when the cache is validated.
+// The cache holds the FULL list and a page is sliced locally, matching the C#
+// `Paginate`. Offset 0 / limit 0 fetches everything from the provider.
 
 pub fn browse_genres(data: &Value, ctx: &Ctx) -> HandlerResult {
     let (offset, limit) = pagination(data);
@@ -63,12 +64,8 @@ pub fn browse_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
 
 pub fn browse_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
     let (offset, limit) = pagination(data);
-    // Fast path: once the reconcile has built the ordinal index, serve the page
-    // straight from the store - one redb range + one FFI batch for the page's
-    // cache misses, never the whole library (MBRCIP-0001). Until the index exists
-    // (store disabled, not yet validated, or pre-build window), fall back to
-    // fetching the full list and slicing - correct, just O(library), and NOT
-    // cached as a blob (that eager blob is exactly the 32-bit OOM we're removing).
+    // Fast path: one redb range plus one FFI batch for the page misses. With
+    // no index yet, fall back to the whole list, sliced and left uncached.
     let page = match ctx.metadata_cache {
         Some(cache) if cache.track_count() > 0 => {
             serve_tracks_from_store(cache, ctx.providers, offset, limit)
@@ -78,7 +75,7 @@ pub fn browse_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
     reply_dto("browsetracks", &page)
 }
 
-/// Serve a browse-tracks page from the store: read the page's paths from the
+/// Serves a browse-tracks page from the store: read the page's paths from the
 /// ordinal index (O(page) range), resolve each path's `Track` from the path-keyed
 /// tag cache, fill the misses with ONE `tracks_for_paths` FFI batch (cached for
 /// next time), and assemble in index order. Nothing full-library ever loads.
@@ -135,14 +132,14 @@ fn serve_tracks_from_store(
     }
 }
 
-/// Eager-prewarm the small flat browse lists (genres/artists/albums) into the
-/// metadata cache: fetch each full list from the provider once and cache it under
-/// the handler's key, so the first client browse is already warm. These are
-/// ~1-2 MB each (from `Library_QueryLookupTable`), so caching them whole is fine.
-/// Tracks is deliberately excluded - it uses the ordinal index instead (see
-/// [`build_track_index`]). Called by the reconcile once the cache is validated. A
-/// provider error just leaves that list unwarmed (the handler lazily fills it on
-/// first request). Returns the item count per list for the caller's log.
+/// Eager-prewarm the flat browse lists (genres/artists/albums) into the cache.
+///
+/// Each full list is fetched from the provider once and cached under the
+/// handler's key, so the first client browse is already warm. At ~1-2 MB each
+/// (from `Library_QueryLookupTable`), caching them whole is fine. Tracks is
+/// excluded: it uses the ordinal index instead (see [`build_track_index`]). A
+/// provider error leaves that list unwarmed for the handler to fill lazily.
+/// Returns the item count per list for the caller's log.
 pub fn prewarm_browse_lists(
     cache: &MetadataCache,
     p: &dyn Providers,
@@ -172,13 +169,14 @@ pub fn prewarm_browse_lists(
     counts
 }
 
-/// Build the ordinal track index from the provider's browse-ordered path list
-/// (`Library_QueryFilesEx(null)` - one call, paths only, ~20 MB @ 200k), then
-/// stamp the sync watermark to now so the first delta scan only picks up later
-/// changes. NO eager tag prewarm: a page's tags are read lazily on first browse
-/// and cached path-keyed. Bounds the reconcile's memory to the path list, never
-/// the full-tag library. Returns the track count for the caller's log. A provider
-/// error leaves the index empty (the handler falls back to a full fetch).
+/// Builds the ordinal track index from the provider's browse-ordered path list.
+///
+/// One `Library_QueryFilesEx(null)` call, paths only (~20 MB at 200k tracks),
+/// then the sync watermark is stamped to now so the first delta scan only picks
+/// up later changes. No eager tag prewarm: a page's tags are read lazily on
+/// first browse and cached path-keyed, which bounds the reconcile's memory to
+/// the path list rather than the full-tag library. Returns the track count; a
+/// provider error leaves the index empty and the handler does a full fetch.
 pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
     match p.track_paths() {
         Ok(paths) => {
@@ -194,13 +192,14 @@ pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
     }
 }
 
-/// Refresh the library caches incrementally (the Scanner's delta pass). Rebuilds
-/// the ordinal index from the current path list (catches add / delete / reorder),
-/// drops the cached tags of tracks the host reports changed since the watermark
-/// (they re-read lazily), re-prewarms the small lists (an add / tag edit shifts
-/// their counts), and advances the watermark. No-op until the cache is validated
-/// (the init reconcile owns the first build). Best-effort: a failed provider call
-/// leaves that piece stale for the next pass.
+/// Refreshes the library caches incrementally (the Scanner's delta pass).
+///
+/// Rebuilds the ordinal index from the current path list (catches add / delete
+/// / reorder), drops the cached tags of tracks the host reports changed since
+/// the watermark (they re-read lazily), re-prewarms the small lists (an add /
+/// tag edit shifts their counts), and advances the watermark. No-op until the
+/// cache is validated (the init reconcile owns the first build). Best-effort: a
+/// failed provider call leaves that piece stale for the next pass.
 pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
     if !cache.is_validated() {
         return;
@@ -213,9 +212,8 @@ pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
         Err(e) => tracing::warn!(error = %e, "scanner: track path refetch failed"),
     }
 
-    // Drop changed tracks' cached tags so the next serve re-reads them. `added`
-    // are not cached yet (no-op); `updated` are the ones that matter; `deleted`
-    // clears any orphaned tag rows the index rebuild left behind.
+    // `added` are not cached yet, `updated` are the ones that matter, and
+    // `deleted` clears tag rows the index rebuild orphaned.
     match p.sync_delta(since) {
         Ok(delta) => {
             let mut changed = delta.updated;
@@ -246,9 +244,11 @@ pub fn cached_tracks_count(cache: &MetadataCache) -> usize {
 }
 
 /// Whether the browse cache is already warm from a previous run on the same
-/// library. Keyed on the ordinal track index, which the reconcile builds last, so
-/// its presence implies the small lists were prewarmed too. Lets the reconcile
-/// skip the re-fetch when the library is unchanged and the persisted cache still
+/// library.
+///
+/// Keyed on the ordinal track index, which the reconcile builds last, so its
+/// presence implies the small lists were prewarmed too. Lets the reconcile skip
+/// the re-fetch when the library is unchanged and the persisted cache still
 /// holds the index.
 pub fn browse_lists_cached(cache: &MetadataCache) -> bool {
     cache.track_count() > 0
@@ -256,9 +256,14 @@ pub fn browse_lists_cached(cache: &MetadataCache) -> bool {
 
 // ── Hierarchical navigation (iOS; name-keyed, non-paginated, lazily cached) ──
 
-// The name key is coerced with `as_set_string` so an all-digit genre/artist/
-// album name a client emits as a bare number (e.g. Adele "21", Taylor "1989")
-// is still matched, exactly as the C# `GetDataOrDefault<string>()` did.
+/// The name key is coerced with `as_set_string`.
+///
+/// An all-digit genre, artist or album name that a client emits as a bare
+/// number (Adele "21", Taylor "1989") is still matched, exactly as the C#
+/// `GetDataOrDefault<string>()` did.
+///
+/// # Errors
+/// The provider call failed.
 pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
     let genre = as_set_string(data).unwrap_or_default();
     let list = nav_cached(ctx, &format!("genre_artists:{genre}"), || {
@@ -285,7 +290,7 @@ pub fn album_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
 
 // ── Metadata-cache helpers ──
 
-/// Serve a flat browse list. On a cache hit the stored FULL list is sliced to
+/// Serves a flat browse list. On a cache hit the stored FULL list is sliced to
 /// the requested page; on a miss (cache disabled, not yet validated, or first
 /// fetch) `fetch_full` pulls the whole list from the provider once, caches it
 /// (when validated), and slices. The slice mirrors C# `Paginate`.
@@ -315,7 +320,7 @@ where
     Ok(slice_page(full, offset, limit))
 }
 
-/// Slice a full list into the requested page, byte-for-byte as C# `Paginate`:
+/// Slices a full list into the requested page, byte-for-byte as C# `Paginate`:
 /// `total` = the full list count, `data` = `skip(offset).take(limit)`, where a
 /// non-positive `limit` means "the rest from offset".
 fn slice_page<T>(full: Page<T>, offset: i32, limit: i32) -> Page<T> {
@@ -335,7 +340,7 @@ fn slice_page<T>(full: Page<T>, offset: i32, limit: i32) -> Page<T> {
     }
 }
 
-/// Serve a hierarchical (name-keyed) nav list, lazily cached on first request.
+/// Serves a hierarchical (name-keyed) nav list, lazily cached on first request.
 fn nav_cached<T, F>(ctx: &Ctx, key: &str, fetch: F) -> Result<Vec<T>, String>
 where
     T: Serialize + DeserializeOwned,
@@ -360,6 +365,9 @@ where
 /// Covers are served from the core's `CoverStore` (resize/hash/cache all live in
 /// the core now). When the store isn't wired - handler unit tests use a bare
 /// `Ctx` - it falls back to the provider methods, so those tests are unchanged.
+///
+/// # Errors
+/// The provider call failed, or the cover could not be read from the store.
 pub fn album_cover(data: &Value, ctx: &Ctx) -> HandlerResult {
     if data.get("offset").is_some() || data.get("limit").is_some() {
         let (offset, limit) = pagination(data);
@@ -486,7 +494,7 @@ fn store_cover_page(
     }
 }
 
-/// Serve a cached cover by content hash, or a 304 when the client already holds
+/// Serves a cached cover by content hash, or a 304 when the client already holds
 /// it (mirrors C# `GetAlbumCoverFromCache`).
 fn serve_cover(store: &CoverStore, client_hash: &str, hash: &str) -> AlbumCover {
     if hash.is_empty() {
@@ -503,7 +511,7 @@ fn serve_cover(store: &CoverStore, client_hash: &str, hash: &str) -> AlbumCover 
     }
 }
 
-/// Fetch a track's raw artwork through the host (base64) and decode it. `None`
+/// Fetches a track's raw artwork through the host (base64) and decodes it. `None`
 /// when there is no artwork or the payload is unusable.
 fn fetch_raw_artwork(p: &dyn Providers, path: &str) -> Option<Vec<u8>> {
     let b64 = p.artwork_raw(path).ok()?;
@@ -813,8 +821,8 @@ mod tests {
         assert!(item.get("genre").is_none());
     }
 
-    // With no cover store wired (bare Ctx), the handlers delegate to the
-    // provider - the path handler unit tests take.
+    /// With no cover store wired (bare Ctx), the handlers delegate to the
+    /// provider - the path handler unit tests take.
     #[test]
     fn album_cover_falls_back_to_provider_without_store() {
         let m = MockProviders {

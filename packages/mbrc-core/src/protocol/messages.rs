@@ -1,8 +1,10 @@
 //! FFI query response DTOs: the shapes the C# side returns over `query_data`
-//! (Rust deserializes these). Field names are the MessagePack keys and match
-//! the C# `NativeBridgeDtos`; the wire shapes sent to clients are built from
-//! these by the `legacy_v4` formatter (which applies the V4 quirks). Slices 2/3
-//! grow this with the full response surface.
+//! (Rust deserializes these).
+//!
+//! Field names are the MessagePack keys and match the C# `NativeBridgeDtos`;
+//! the wire shapes sent to clients are built from these by the `legacy_v4`
+//! formatter (which applies the V4 quirks). Slices 2/3 grow this with the full
+//! response surface.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,9 +16,11 @@ pub struct PlaybackPositionResponse {
     pub total: i32,
 }
 
-/// Canonical playback state. Serde uses the variant names as the FFI/RPC tokens
-/// (C# sends `"Playing"` etc.); the V4 *wire* spelling is a separate concern
-/// owned by the `wire::v4` formatter (a future V6 formatter renders differently).
+/// Canonical playback state.
+///
+/// Serde uses the variant names as the FFI/RPC tokens (C# sends `"Playing"`
+/// etc.); the V4 *wire* spelling is a separate concern owned by the `wire::v4`
+/// formatter (a future V6 formatter renders differently).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayState {
     #[default]
@@ -167,7 +171,9 @@ pub struct Lyrics {
 }
 
 /// Paginated envelope shared by every list endpoint (now playing, browse,
-/// playlists, radio). Field order matches the shipped C# plugin exactly:
+/// playlists, radio).
+///
+/// Field order matches the shipped C# plugin exactly:
 /// `{total,offset,limit,data}` (with preserve_order, declaration order is the
 /// wire order).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,9 +197,11 @@ impl<T> Default for Page<T> {
     }
 }
 
-/// A now-playing-list item. Canonical shape carries every field; the V4 wire
-/// codec decides per platform whether `album`/`album_artist` are emitted (iOS
-/// yes even when empty, Android no) - see `wire::v4::now_playing_list`.
+/// A now-playing-list item.
+///
+/// Canonical shape carries every field; the V4 wire codec decides per platform
+/// whether `album`/`album_artist` are emitted (iOS yes even when empty, Android
+/// no) - see `wire::v4::now_playing_list`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NowPlayingListTrack {
     #[serde(default)]
@@ -259,10 +267,12 @@ pub struct Track {
     pub genre: String,
 }
 
-/// Single-cover response (`libraryalbumcover`). Field order matches the shipped
-/// C# `AlbumCoverPayload` (album, artist, cover, status, hash); everything but
-/// `status` is omitted when empty, so a typical single-cover reply is
-/// `{cover, status, hash}` and a miss is `{status:404}`.
+/// Single-cover response (`libraryalbumcover`).
+///
+/// Field order matches the shipped C# `AlbumCoverPayload` (album, artist,
+/// cover, status, hash); everything but `status` is omitted when empty, so a
+/// typical single-cover reply is `{cover, status, hash}` and a miss is
+/// `{status:404}`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AlbumCover {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -278,10 +288,12 @@ pub struct AlbumCover {
 }
 
 /// One album's cache identity from the host's single-pass library scan
-/// (`AlbumIdentifiers`): the representative track `path` (artwork source), its
-/// `artist`/`album` tags, and the file's modification time as unix seconds. The
-/// core derives the cache key via `cover_identifier(artist, album)` - the host
-/// does no hashing, keeping identity in one place.
+/// (`AlbumIdentifiers`).
+///
+/// The representative track `path` (artwork source), its `artist`/`album` tags,
+/// and the file's modification time as unix seconds. The core derives the cache
+/// key via `cover_identifier(artist, album)`, so the host does no hashing and
+/// identity stays in one place.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AlbumIdentifier {
     #[serde(default)]
@@ -306,13 +318,14 @@ pub struct TrackMetadata {
     pub album: String,
 }
 
-/// Library changes since a watermark (`LibrarySyncDelta`, MBRCIP-0001). Each
-/// list holds track paths. The background Scanner drops `added`/`updated` paths
-/// from the path-keyed tag cache (they are re-read lazily on next serve) and can
-/// use `deleted` directly; adds/reorders are also caught by re-fetching the
-/// ordinal path index, so `deleted` is a convenience, not the sole delete source.
-/// Not wire-visible - an internal FFI DTO, so field names are chosen for clarity
-/// (Rust cannot name a field `new`), not protocol compat.
+/// Library changes since a watermark (`LibrarySyncDelta`).
+///
+/// Each list holds track paths. The background Scanner drops `added`/`updated`
+/// paths from the path-keyed tag cache (they are re-read lazily on next serve)
+/// and can use `deleted` directly; adds/reorders are also caught by re-fetching
+/// the ordinal path index, so `deleted` is a convenience, not the sole delete
+/// source. Not wire-visible - an internal FFI DTO, so field names are chosen
+/// for clarity (Rust cannot name a field `new`), not protocol compat.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SyncDelta {
     #[serde(default)]

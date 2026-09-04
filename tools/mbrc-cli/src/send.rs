@@ -5,8 +5,11 @@
 //! `player`/`protocol`/`ping` handshake automation, and `context` parsing.
 //!
 //! Usage:
-//!   mbrc send [--host H] [--port P] [--client-type T] [--protocol V]
-//!             [--no-broadcast] [--json '<command>'] [--wait-ms N]
+//!
+//! ```text
+//! mbrc send [--host H] [--port P] [--client-type T] [--protocol V]
+//!           [--no-broadcast] [--json '<command>'] [--wait-ms N]
+//! ```
 
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
@@ -132,9 +135,8 @@ async fn run_async(
                 let _ = wr.write_all(frame_line(&reply).as_bytes()).await;
                 let _ = wr.flush().await;
                 println!("> {reply}");
-                // Handshake is complete once we answer the server's `player`
-                // echo with `protocol`; the plugin only accepts commands after
-                // that, so send the queued command now.
+                // The plugin only accepts commands once we answer the `player` echo with
+                // `protocol`, so the queued command goes now.
                 if ctx == mbrc_wire::CTX_PLAYER {
                     if let Some(cmd) = command.take() {
                         let _ = wr.write_all(frame_line(&cmd).as_bytes()).await;

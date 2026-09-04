@@ -55,6 +55,9 @@ impl UpdateState {
 
     /// [`load`](Self::load), but reporting a corrupt file so the core can log it.
     /// A missing file is not a failure - it is simply the first run.
+    ///
+    /// # Errors
+    /// The state file exists but does not parse.
     pub fn load_checked(dir: &str) -> Result<Self> {
         let path = Self::path(dir);
         let Ok(contents) = std::fs::read_to_string(&path) else {

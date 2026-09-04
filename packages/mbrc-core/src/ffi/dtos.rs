@@ -2,7 +2,8 @@
 //!
 //! Field names ARE the MessagePack keys (the C# side uses a contractless
 //! resolver). Every field name here must match the matching C# property name
-//! in `core/Services/NativeBridgeDtos.cs`; the `schema_drift` tests fail if
+//! in `plugin/Ffi/Generated/NativeBridgeDtos.Generated.cs`; the `schema_drift`
+//! tests fail if
 //! either side renames a field. Serialize with `rmp_serde::to_vec_named` so
 //! these become name-keyed maps, not positional arrays.
 
@@ -80,7 +81,9 @@ pub struct BrowseParams {
     pub album_artists: bool,
 }
 
-/// `NowPlayingQueue`. `queue_type` is the canonical `QueueType` (the client's
+/// `NowPlayingQueue`.
+///
+/// `queue_type` is the canonical `QueueType` (the client's
 /// `"now"`/`"next"`/`"last"`/`"add-all"` is parsed to it by the codec); `files`
 /// are the URLs to enqueue; `play` is the file to start from for `AddAndPlay`
 /// (empty otherwise).
@@ -124,29 +127,33 @@ pub struct BatchMetadataParams {
     pub paths: Vec<String>,
 }
 
-/// `LibraryTracksForPaths` query (MBRCIP-0001): the track paths - a single browse
-/// page's slice of the ordinal index - whose 7 browse tags the host reads in one
-/// batch, so the core fills its path-keyed tag cache for just that page and never
-/// materializes the whole library. One `Library_GetFileTags` per path on the C#
-/// side. (Distinct from `BatchMetadataParams` despite the identical shape: that
-/// resolves 2 cover fields, this resolves the full 7 browse fields.)
+/// `LibraryTracksForPaths` query: one browse page's track paths.
+///
+/// The host reads the slice's 7 browse tags in one batch, so the core fills its
+/// path-keyed tag cache for that page and never materializes the whole library.
+/// One `Library_GetFileTags` per path on the C# side. Distinct from
+/// `BatchMetadataParams` despite the identical shape: that resolves 2 cover
+/// fields, this the full 7.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PathsParams {
     pub paths: Vec<String>,
 }
 
-/// `LibrarySyncDelta` query (MBRCIP-0001): the watermark (unix seconds) the host
-/// lists library changes after. C# maps it to a `DateTime` for
-/// `Library_GetSyncDelta`. The core stores this as `tracks:synced_at` and passes
-/// it back each scan to pull only what changed.
+/// `LibrarySyncDelta` query: the watermark (unix seconds) the
+/// host lists library changes after.
+///
+/// C# maps it to a `DateTime` for `Library_GetSyncDelta`. The core stores this
+/// as `tracks:synced_at` and passes it back each scan to pull only what
+/// changed.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncDeltaParams {
     pub updated_since: i64,
 }
 
 /// A rejected inbound connection attempt, surfaced to the settings panel's
-/// "Blocked connections" view (result of the `RecentBlocked` host query). Unlike
-/// the params above this is a Rust -> C# *result*; the C# side reads a
+/// "Blocked connections" view (result of the `RecentBlocked` host query).
+///
+/// Unlike the params above this is a Rust -> C# *result*; the C# side reads a
 /// `List<BlockedConnection>`. In-memory only (see [`crate::server::blocked`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockedConnection {
@@ -163,10 +170,11 @@ pub struct BlockedConnection {
 }
 
 /// Where the update flow stands, surfaced to the settings panel's Updates group
-/// (result of the `UpdateStatus` host query). A Rust -> C# *result*; the C# side
-/// reads an `UpdateStatus`. The state machine that produces it, and the
-/// `STATE_*` spellings `state` carries, live in
-/// [`crate::updates::service`].
+/// (result of the `UpdateStatus` host query).
+///
+/// A Rust -> C# *result*; the C# side reads an `UpdateStatus`. The state
+/// machine that produces it, and the `STATE_*` spellings `state` carries, live
+/// in [`crate::updates::service`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateStatus {
     /// One of the `STATE_*` constants: `unknown`, `checking`, `up_to_date`,
@@ -188,10 +196,11 @@ pub struct UpdateStatus {
     pub checked_at: String,
 }
 
-/// The addresses a client can reach the server on, surfaced to the settings
-/// panel (result of the `ListeningAddresses` host query) so the user knows what
-/// to point the phone client at - the way the shipped C# 1.4.1 panel listed the
-/// candidate IPs. A Rust -> C# *result*; the C# side reads a `ListeningInfo`.
+/// The addresses a client can reach the server on (`ListeningAddresses`).
+///
+/// Surfaced to the settings panel so the user knows what to point the phone at,
+/// the way the shipped C# 1.4.1 panel listed the candidate IPs. A Rust -> C#
+/// *result*; the C# side reads a `ListeningInfo`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListeningInfo {
     /// The TCP port the command server is bound to (the configured port; the
@@ -203,9 +212,11 @@ pub struct ListeningInfo {
 }
 
 /// Where the diagnostics capture stands, surfaced to the settings panel's
-/// Diagnostics group (result of the `CaptureStatus` host query). A Rust -> C#
-/// *result*. The state machine that produces it, and the `CAPTURE_*` spellings
-/// `state` carries, live in [`crate::diagnostics::capture`].
+/// Diagnostics group (result of the `CaptureStatus` host query).
+///
+/// A Rust -> C# *result*. The state machine that produces it, and the
+/// `CAPTURE_*` spellings `state` carries, live in
+/// [`crate::diagnostics::capture`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CaptureStatus {
     /// One of the `CAPTURE_*` constants: `idle`, `capturing`, `writing`,
@@ -226,9 +237,11 @@ pub struct CaptureStatus {
     pub message: String,
 }
 
-/// What the host passes with a capture command (`StartCapture` / `StopCapture`).
-/// A C# -> Rust *params* payload; both fields are optional in the sense that the
-/// command that does not need one sends it empty.
+/// What the host passes with a capture command (`StartCapture` /
+/// `StopCapture`).
+///
+/// A C# -> Rust *params* payload; both fields are optional in the sense that
+/// the command that does not need one sends it empty.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CaptureRequest {
     /// Where `StopCapture` writes the zip. The host resolves it (the CLR's

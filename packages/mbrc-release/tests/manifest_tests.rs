@@ -37,7 +37,7 @@ fn expected_hash_is_the_allowlist_lookup() {
     assert!(m.expected_hash("mb_remote.dll").is_some());
     assert!(m.expected_hash("mbrc_core.dll").is_some());
     assert!(m.expected_hash("mbrc-helper.exe").is_some());
-    // Not in the bundle, so not applyable.
+    // Not in the bundle, so not applicable.
     assert!(m.expected_hash("msvcp140.dll").is_none());
 }
 

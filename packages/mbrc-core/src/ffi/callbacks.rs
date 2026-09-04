@@ -16,9 +16,10 @@ pub struct SafeCallbacks {
     raw: MbrcCallbacks,
 }
 
-// The raw callbacks are Send + Sync (function pointers are just addresses),
-// so the wrapper is too.
+// SAFETY: the raw callbacks are function pointers, which are just addresses, so
+// the wrapper carries nothing that is unsafe to move between threads.
 unsafe impl Send for SafeCallbacks {}
+// SAFETY: as above, and there is no interior mutability to share.
 unsafe impl Sync for SafeCallbacks {}
 
 impl SafeCallbacks {
@@ -28,8 +29,12 @@ impl SafeCallbacks {
 
     // ── Fat callbacks (MessagePack) ──────────────────────────────────
 
-    /// Run a query via `query_data`: serialize `params` to a named-map
+    /// Runs a query via `query_data`: serialize `params` to a named-map
     /// MessagePack payload, hand it to C#, copy and deserialize the reply.
+    ///
+    /// # Errors
+    /// The callback table is missing an entry, the parameters fail to serialize,
+    /// the host returned a non-zero status, or it reported success with no payload.
     pub fn query<P: Serialize, R: DeserializeOwned>(
         &self,
         query_type: QueryType,
@@ -44,21 +49,14 @@ impl SafeCallbacks {
             .free_buffer
             .ok_or_else(|| "free_buffer callback is null".to_string())?;
 
-        // Named map, NOT positional array: C#'s ContractlessStandardResolver
-        // reads structs as name-keyed maps. Plain `to_vec` writes arrays and
-        // fails on the C# read with "Unexpected msgpack code 147 (fixarray)".
+        // Named map: `to_vec` would write a fixarray the C# side cannot read.
         let params_buf = rmp_serde::to_vec_named(params)
             .map_err(|e| format!("failed to serialize query params: {e}"))?;
 
         let mut result_buf: *mut u8 = std::ptr::null_mut();
         let mut result_len: u32 = 0;
 
-        // Perf tracing: time only the FFI crossing (the C# + MusicBee work);
-        // Rust-side (de)serialization is negligible. Off by default - logs at
-        // `trace` on the `mbrc_core::ffi::timing` target, which the Debug
-        // fallback filter (`mbrc_core=debug`) does NOT enable. Turn it on for a
-        // measurement pass by adding `mbrc_core::ffi::timing=trace` to the
-        // filter in `logging::init`.
+        // Off unless `mbrc_core::ffi::timing=trace` is in the filter.
         let start = std::time::Instant::now();
         let status = query_fn(
             query_type as i32,
@@ -76,7 +74,6 @@ impl SafeCallbacks {
         );
 
         if status != 0 {
-            // Per the contract, a non-zero status means the C# provider threw.
             if !result_buf.is_null() {
                 free_fn(result_buf);
             }
@@ -85,18 +82,16 @@ impl SafeCallbacks {
             ));
         }
         if result_buf.is_null() {
-            // Contract violation: success must carry a buffer.
             return Err("query_data: success status but null result buffer".to_string());
         }
         if result_len == 0 {
-            // Contract violation: success must carry a non-empty payload (domain
-            // "not found" is encoded inside the payload). Free it so the C#
-            // allocation (AllocHGlobal(0) is non-null on Windows) does not leak.
+            // Freed anyway: `AllocHGlobal(0)` is still non-null on Windows.
             free_fn(result_buf);
             return Err("query_data: success status but empty result buffer".to_string());
         }
 
-        // Copy the C#-owned buffer into Rust memory, then free it via C#.
+        // SAFETY: the pointer is null-checked above and the contract says it covers that
+        // many readable bytes.
         let result_slice = unsafe { std::slice::from_raw_parts(result_buf, result_len as usize) };
         let result_vec = result_slice.to_vec();
         free_fn(result_buf);
@@ -106,6 +101,9 @@ impl SafeCallbacks {
     }
 
     /// A query that takes no parameters (sends an empty msgpack payload).
+    ///
+    /// # Errors
+    /// As [`SafeCallbacks::query`], minus the parameter serialization.
     pub fn query_no_params<R: DeserializeOwned>(&self, query_type: QueryType) -> Result<R, String> {
         self.query(query_type, &())
     }
@@ -147,7 +145,7 @@ impl SafeCallbacks {
         Ok(())
     }
 
-    /// Push a core -> host event via `on_event` (one-way). No-op when the host
+    /// Pushes a core -> host event via `on_event` (one-way). No-op when the host
     /// registered no `on_event` callback. Safe to call from any thread; the C#
     /// side marshals to its UI thread. `payload` is an optional MessagePack
     /// buffer (empty = "the host should re-query").

@@ -34,10 +34,11 @@ pub fn verify_manifest(manifest_bytes: &[u8], signature: &str) -> Result<(Manife
     verify_manifest_with(manifest_bytes, signature, TRUSTED_KEYS)
 }
 
-/// [`verify_manifest`] against an explicit trust list, for the same reason
-/// [`verify_signature_with`] exists: the tests above the network seam drive the
-/// whole check against the committed test keypair, and the release keys stay
-/// unreachable from a test build.
+/// [`verify_manifest`] against an explicit trust list.
+///
+/// Exists for the same reason [`verify_signature_with`] does: the tests above
+/// the network seam drive the whole check against the committed test keypair,
+/// and the release keys stay unreachable from a test build.
 pub fn verify_manifest_with(
     manifest_bytes: &[u8],
     signature: &str,
@@ -54,6 +55,9 @@ pub fn verify_manifest_with(
 /// Any trusted key is accepted. Per-key revocation is deliberately not modelled:
 /// it would only ever protect installs new enough to have received the
 /// revocation, which are the installs least at risk.
+///
+/// # Errors
+/// As [`verify_signature_with`], against the compiled-in release keys.
 pub fn verify_signature(bytes: &[u8], signature: &str) -> Result<&'static str> {
     verify_signature_with(bytes, signature, TRUSTED_KEYS)
 }
@@ -63,6 +67,10 @@ pub fn verify_signature(bytes: &[u8], signature: &str) -> Result<&'static str> {
 /// Exists so tests can verify against the committed test keypair without the
 /// release keys being reachable from a test build, and so the trust list is one
 /// visible parameter rather than an ambient global.
+///
+/// # Errors
+/// The signature is malformed, no key in the list parses, or no key in it
+/// verifies the signature.
 pub fn verify_signature_with(
     bytes: &[u8],
     signature: &str,
@@ -75,11 +83,8 @@ pub fn verify_signature_with(
     let signature =
         Signature::decode(signature).map_err(|e| UpdateError::MalformedSignature(e.to_string()))?;
 
-    // A key that will not parse is skipped, not fatal. One corrupt entry in the
-    // compiled-in list would otherwise disable verification against every other
-    // key - failing closed, but failing *completely*, and the whole point of a
-    // list is that it survives losing one of them. If none parse there is no
-    // trust list to speak of, so the first failure is reported.
+    // One corrupt entry must not disable verification against every other key.
+    // If none parse there is no trust list, so the first failure is reported.
     let mut malformed: Option<UpdateError> = None;
     let mut usable = 0usize;
     for key in keys {
@@ -110,9 +115,8 @@ pub fn verify_signature_with(
 pub fn verify_sha512(bytes: &[u8], expected_hex: &str, path: &str) -> Result<()> {
     let actual = hex::encode(Sha512::digest(bytes));
 
-    // The digest is not a secret and the comparison is not attacker-timeable in
-    // any way that matters here, but the manifest signature is the real gate;
-    // this only catches corruption and truncated downloads.
+    // The manifest signature is the real gate; this only catches corruption
+    // and truncated downloads.
     if !actual.eq_ignore_ascii_case(expected_hex) {
         return Err(UpdateError::HashMismatch {
             path: path.to_owned(),

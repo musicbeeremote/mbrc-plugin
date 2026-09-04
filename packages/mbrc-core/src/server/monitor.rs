@@ -1,8 +1,9 @@
-//! Poll-driven broadcasts (the C# `StateMonitor` port). Some state changes fire
-//! no MusicBee event: playback position advances continuously, and a user can
-//! change shuffle/repeat/scrobble in MusicBee's own UI. A timer task polls the
-//! provider RPC, broadcasts `nowplayingposition` while playing, and broadcasts
-//! shuffle/repeat/scrobble only when they change.
+//! Poll-driven broadcasts (the C# `StateMonitor` port).
+//!
+//! Some state changes fire no MusicBee event: playback position advances
+//! continuously, and a user can change shuffle/repeat/scrobble in MusicBee's
+//! own UI. A timer task polls the provider RPC, broadcasts `nowplayingposition`
+//! while playing, and broadcasts shuffle/repeat/scrobble only when they change.
 //!
 //! Only polls while at least one client is connected, so an idle core makes no
 //! FFI calls.
@@ -34,7 +35,7 @@ struct Cached {
     scrobble: Option<bool>,
 }
 
-/// Run the poll loop until `shutdown` fires.
+/// Runs the poll loop until `shutdown` fires.
 pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
     let mut interval = tokio::time::interval(Duration::from_millis(POLL_INTERVAL_MS));
     let mut cached = Cached::default();
@@ -56,7 +57,7 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
     }
 }
 
-/// Query state and produce the frames that changed since the last tick. The
+/// Queries state and produce the frames that changed since the last tick. The
 /// first observation of each diffed value seeds the change-detection cache
 /// without broadcasting. The full player state is also written to the shared
 /// now-playing cache: the poll is the sole update path for shuffle/repeat/
@@ -95,7 +96,7 @@ fn poll(
     frames
 }
 
-/// Seed the cache on first observation (no broadcast), then report changes.
+/// Seeds the cache on first observation (no broadcast), then report changes.
 fn seed_or_changed<T: PartialEq + Copy>(cached: &mut Option<T>, current: T) -> bool {
     let changed = cached.is_some_and(|c| c != current);
     *cached = Some(current);

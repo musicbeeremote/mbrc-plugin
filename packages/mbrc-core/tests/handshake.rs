@@ -13,7 +13,7 @@ use mbrc_core::providers::NullProviders;
 use mbrc_core::server;
 use mbrc_core::state::Core;
 
-/// Grab a currently-free port by binding an ephemeral socket and releasing it.
+/// Grabs a currently-free port by binding an ephemeral socket and releasing it.
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -107,10 +107,8 @@ fn server_rejects_pre_v4_client() {
 
 #[test]
 fn reaps_idle_connection_that_never_handshakes() {
-    // Model a socket that connects but never completes the handshake (negotiates
-    // nothing). It is NOT a broadcast subscriber, so it gets no server pings; the
-    // server must reap it once it stays silent past the un-handshaked window,
-    // instead of leaking the socket forever.
+    // Not a broadcast subscriber, so it gets no server pings: the reaper is
+    // the only thing that can stop it leaking.
     let port = free_port();
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
@@ -158,10 +156,8 @@ fn reaps_idle_connection_that_never_handshakes() {
 
 #[test]
 fn broadcast_subscriber_is_not_reaped_while_silent() {
-    // A receive-only broadcast channel (handshaked, broadcasts enabled) that
-    // never sends inbound frames must stay alive: iOS subscribes for live state
-    // and never sends anything back (not even a pong). The reaper must exempt
-    // subscribers - reaping them is what made iOS churn hundreds of connections.
+    // iOS subscribes for live state and never sends anything back, not even
+    // a pong. Reaping subscribers is what made it churn connections.
     let port = free_port();
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),
@@ -225,16 +221,8 @@ fn broadcast_subscriber_is_not_reaped_while_silent() {
 
 #[test]
 fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
-    // An auxiliary request/response socket (no_broadcast=true) must NOT be pinged
-    // (matching C#: only broadcast subscribers are pushed to), and must survive
-    // the *un-handshaked* window - a real client (iOS especially) keeps its
-    // command sockets open for reuse, and reaping them mid-idle is what left the
-    // app non-responsive.
-    //
-    // An aux socket is not immortal: `aux_idle_timeout_secs` closes one that has
-    // been abandoned (see `reaps_idle_auxiliary_connection_after_the_handshake`).
-    // This test leaves that setting at its default 300s, so the window here is
-    // far too short to reach it and the reuse guarantee is what is under test.
+    // Left at the default 300s aux window, far longer than this test runs,
+    // so reuse rather than eventual reaping is what is under test.
     let port = free_port();
     let core = Arc::new(Core::new(
         Arc::new(NullProviders),

@@ -49,14 +49,14 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
-/// Parse `--ignore f1,f2` into a field list.
+/// Parses `--ignore f1,f2` into a field list.
 pub(crate) fn parse_ignore(args: &[String]) -> Vec<String> {
     flag_value(args, "--ignore")
         .map(|s| s.split(',').map(|f| f.trim().to_string()).collect())
         .unwrap_or_default()
 }
 
-/// Print a per-endpoint diff of two captures (schema or value mode) and return
+/// Prints a per-endpoint diff of two captures (schema or value mode) and return
 /// the number of differing endpoints (0 == the captures match).
 pub(crate) fn diff_report(a: &str, b: &str, values_mode: bool, ignore: &[String]) -> usize {
     if values_mode {

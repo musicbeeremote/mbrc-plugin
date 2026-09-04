@@ -15,17 +15,13 @@ use crate::error::{Result, UpdateError};
 
 /// Parses a product version into comparable semver.
 ///
-/// Accepts what the various producers actually emit:
+/// Accepts what the producers emit: four components from .NET (the revision is
+/// dropped), fewer than three (the rest are zero), an optional `v` prefix as
+/// the git tags carry, and a prerelease or build suffix kept intact so ordering
+/// stays semver's job.
 ///
-/// - four components from .NET (`"1.5.0.0"`); the revision is dropped
-/// - fewer than three (`"1.5"`); the missing components are zero
-/// - an optional `v` prefix, as the git tags carry
-/// - a prerelease or build suffix (`"1.6.0-nightly.20260804"`), kept intact, so
-///   nightly ordering stays semver's problem rather than ours
-///
-/// A component that is not a number, or a fifth component, is an error: those
-/// mean the caller handed over something that is not a version at all, and
-/// guessing would put the updater on the wrong side of a comparison.
+/// # Errors
+/// The string is not a version this can compare.
 pub fn parse(raw: &str) -> Result<Version> {
     let trimmed = raw.trim();
     let trimmed = trimmed.strip_prefix(['v', 'V']).unwrap_or(trimmed);

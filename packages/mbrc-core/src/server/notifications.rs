@@ -21,7 +21,7 @@ use crate::protocol::version::ProtocolVersion;
 use crate::state::Core;
 use crate::wire::WireCodec;
 
-/// Refresh the cache for `ntype`, then build the broadcast frames from the
+/// Refreshes the cache for `ntype`, then builds the broadcast frames from the
 /// refreshed snapshot. The single entry point used by `state::handle_notification`.
 pub fn on_notification(core: &Core, ntype: NotificationType) -> Vec<String> {
     // Write side: refresh only the slice this notification touches. Position is
@@ -33,9 +33,8 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> Vec<String> {
         | NotificationType::VolumeMuteChanged => core.now_playing.refresh_player(),
         NotificationType::NowPlayingLyricsReady => core.now_playing.refresh_lyrics(),
         NotificationType::NowPlayingArtworkReady => core.now_playing.refresh_cover(),
-        // ListChanged/FileAdded/LibrarySwitched touch no now-playing slice.
-        // Library changes maintain the metadata cache in `state::handle_notification`
-        // (which needs the owned `Arc<Core>` to spawn the reconcile).
+        // These touch no now-playing slice. The metadata cache is maintained in
+        // `state::handle_notification`, which owns the `Arc<Core>`.
         NotificationType::NowPlayingListChanged
         | NotificationType::FileAddedToLibrary
         | NotificationType::LibrarySwitched => {}
@@ -56,7 +55,7 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> Vec<String> {
     build(ntype, &snapshot, position)
 }
 
-/// Build the raw broadcast frames from a cache snapshot (empty = nothing to
+/// Builds the raw broadcast frames from a cache snapshot (empty = nothing to
 /// send). Pure - no FFI - so it is unit-tested against a `NowPlaying` literal.
 fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) -> Vec<String> {
     let mut out: Vec<(String, Value)> = Vec::new();
@@ -109,7 +108,7 @@ fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) ->
         .collect()
 }
 
-/// Broadcast the cover as a `{status:1}` readiness marker when artwork is
+/// Broadcasts the cover as a `{status:1}` readiness marker when artwork is
 /// present (status 200), so the client re-requests the image. No art -> no
 /// frame (the client keeps showing nothing new), matching the shipped plugin.
 fn push_cover(out: &mut Vec<(String, Value)>, wire: &dyn WireCodec, cover: &Cover) {
@@ -123,7 +122,7 @@ fn push_cover(out: &mut Vec<(String, Value)>, wire: &dyn WireCodec, cover: &Cove
     }
 }
 
-/// Build a raw `{"context":..,"data":..}` frame (shared with the monitor).
+/// Builds a raw `{"context":..,"data":..}` frame (shared with the monitor).
 pub(crate) fn frame(context: &str, data: Value) -> String {
     serde_json::to_string(&json!({ "context": context, "data": data }))
         .expect("serializing a broadcast frame cannot fail")

@@ -103,16 +103,14 @@ pub trait Providers: Send + Sync {
     fn album_cover_page(&self, offset: i32, limit: i32) -> Result<Page<AlbumCoverItem>, String>;
     fn cover_cache_status(&self) -> Result<bool, String>;
 
-    // Cover-cache leaf providers (single-pass host queries feeding the core's
-    // `CoverStore`; the core owns resize/hash/cache). `album_identifiers` is ONE
-    // library scan folded into per-album identities (the host used to make 2-3
-    // passes); `artwork_raw` returns a track's raw MusicBee artwork as base64;
-    // `batch_metadata` resolves paths to `{artist, album}` for the cover grid.
+    // Cover-cache leaves feeding the core's `CoverStore`, which owns resize,
+    // hash and cache. `album_identifiers` folds one library scan into per-album
+    // identities.
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String>;
     fn artwork_raw(&self, path: &str) -> Result<String, String>;
     fn batch_metadata(&self, paths: Vec<String>) -> Result<Vec<TrackMetadata>, String>;
 
-    // Library cache (MBRCIP-0001). `track_paths` returns every track path in
+    // Library cache. `track_paths` returns every track path in
     // browse order (the ordinal index, source of truth). `tracks_for_paths`
     // batch-reads the 7 browse tags for just a page's paths (bounded to O(page)).
     // `sync_delta` lists library changes since a watermark for the Scanner.
@@ -129,11 +127,11 @@ pub trait Providers: Send + Sync {
 
     // System.
     fn plugin_version(&self) -> Result<String, String>;
-    /// Set MusicBee's status-bar background-task message (host-only UI). Used to
+    /// Sets MusicBee's status-bar background-task message (host-only UI). Used to
     /// surface cover-cache build progress. Fire-and-forget.
     fn set_background_task_message(&self, message: &str) -> Result<(), String>;
 
-    /// Push a core -> host UI event (fire-and-forget) so an open panel can
+    /// Pushes a core -> host UI event (fire-and-forget) so an open panel can
     /// refresh. Defaults to a no-op; only the FFI provider forwards it to the
     /// host's `on_event` callback. See [`HostEventType`](crate::ffi::types::HostEventType).
     fn emit_event(&self, _event_type: crate::ffi::types::HostEventType, _payload: &[u8]) {}
@@ -456,9 +454,10 @@ impl Providers for FfiProviders {
     }
 }
 
-/// A no-op provider: queries return defaults, commands succeed. A benign
-/// placeholder for contexts that don't drive MusicBee (handshake-only tests,
-/// future stand-ins). Grows with the trait so callers don't have to.
+/// A no-op provider: queries return defaults, commands succeed.
+///
+/// A benign placeholder for contexts that don't drive MusicBee (handshake-only
+/// tests, future stand-ins). Grows with the trait so callers don't have to.
 pub struct NullProviders;
 
 impl Providers for NullProviders {

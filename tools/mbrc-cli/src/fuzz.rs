@@ -8,15 +8,11 @@
 //!   * **malformed**  - invalid JSON, bad framing, oversized, iOS quirks;
 //!   * **mutation**   - `--corpus <golden>` frames with their `data` mutated.
 //!
-//! **Read-only by default**: structural/mutation only target query-shaped
-//! contexts, so it's safe against a real library. `--destructive` adds the
-//! reversible player state (volume/mute/scrobbler), snapshotting it via
-//! `playerstatus` before the run and restoring it after; other state-changing
-//! commands stay excluded until a scratch library + fingerprint (Phase 2b).
-//!
-//! `--diff-host H2` runs the same inputs against a second target and diffs the
-//! responses (the parity oracle; against `mbrc-core` in Milestone B).
-//! `--save-script F` freezes the generated inputs as a replayable c2s script.
+//! **Read-only by default**: structural and mutation inputs only target
+//! query-shaped contexts, so it is safe against a real library. `--destructive`
+//! adds the reversible player state, snapshotted before the run and restored
+//! after. `--diff-host H2` diffs the same inputs against a second target, and
+//! `--save-script F` freezes them as a replayable c2s script.
 //!
 //! Usage:
 //!   mbrc fuzz [--host H] [--port P] [--seed N] [--iterations K] [--wait-ms N]
@@ -71,7 +67,7 @@ const READONLY_CONTEXTS: &[&str] = &[
 /// values read back from `playerstatus` and set with the same type. Only fuzzed
 /// under `--destructive`, wrapped in a snapshot/restore. Other commands
 /// (playback nav, queue, tag writes, playlists) are excluded until a scratch
-/// library + fingerprint land (Phase 2b).
+/// library and fingerprint exist.
 const REVERSIBLE_CONTEXTS: &[&str] = &["playervolume", "playermute", "scrobbler"];
 
 /// Cap oversized payloads so we stress buffers without risking an OOM on the
@@ -219,7 +215,7 @@ fn parse_port(v: Option<String>, default: u16) -> u16 {
     v.and_then(|s| s.parse().ok()).unwrap_or(default)
 }
 
-/// Drop ping/pong keepalive frames (timing noise) before a differential diff.
+/// Drops ping/pong keepalive frames (timing noise) before a differential diff.
 fn strip_keepalive(lines: &[String]) -> String {
     lines
         .iter()
@@ -408,7 +404,7 @@ fn random_key(rng: &mut Rng) -> String {
     (*rng.choice(KEYS)).to_string()
 }
 
-/// Mutate a value in place: drop a field, swap a type, or set an extreme.
+/// Mutates a value in place: drop a field, swap a type, or set an extreme.
 fn mutate_value(rng: &mut Rng, v: &mut Value) {
     match v {
         Value::Object(o) if !o.is_empty() => {
@@ -432,7 +428,7 @@ fn mutate_value(rng: &mut Rng, v: &mut Value) {
 
 // -- Execution -------------------------------------------------------------
 
-/// Drive the inputs at one target, returning the recorded capture lines and any
+/// Drives the inputs at one target, returning the recorded capture lines and any
 /// anomalies observed.
 async fn drive(
     host: &str,
@@ -537,7 +533,7 @@ async fn drive(
     Ok((lines, anomalies))
 }
 
-/// Send `playerstatus` and confirm a well-formed `playerstatus` reply comes back.
+/// Sends `playerstatus` and confirm a well-formed `playerstatus` reply comes back.
 async fn probe<R, W>(
     wr: &mut W,
     rd: &mut R,
@@ -599,7 +595,7 @@ fn snippet(s: &str) -> String {
     }
 }
 
-// -- Snapshot / restore (Phase 2, --destructive) ---------------------------
+// -- Snapshot / restore (--destructive) ------------------------------------
 
 /// Reversible player state read from `playerstatus`.
 #[derive(Debug)]
@@ -609,7 +605,7 @@ struct PlayerSnapshot {
     scrobbler: Option<bool>,
 }
 
-/// Connect and complete the V4 handshake, returning the split stream + the
+/// Connects and complete the V4 handshake, returning the split stream + the
 /// accumulator (which may hold already-buffered post-handshake frames).
 async fn handshake_conn(
     host: &str,
@@ -655,7 +651,7 @@ fn parse_int(v: &Value) -> Option<i64> {
         .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
-/// Snapshot reversible player state via one `playerstatus`.
+/// Snapshots reversible player state via one `playerstatus`.
 async fn snapshot_player(
     host: &str,
     port: u16,
@@ -691,7 +687,7 @@ async fn snapshot_player(
     }
 }
 
-/// Restore the snapshot with the matching set commands.
+/// Restores the snapshot with the matching set commands.
 async fn restore_player(
     host: &str,
     port: u16,

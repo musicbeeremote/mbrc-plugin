@@ -63,7 +63,7 @@ pub fn endpoint_values(contents: &str, ignore: &[String]) -> EndpointValues {
     out
 }
 
-/// Remove every `ignore` key at any depth.
+/// Removes every `ignore` key at any depth.
 fn strip_keys(v: &mut Value, ignore: &[String]) {
     match v {
         Value::Object(o) => {

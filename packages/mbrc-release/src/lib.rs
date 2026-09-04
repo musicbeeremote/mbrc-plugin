@@ -5,23 +5,20 @@
 //! same trusted keys, so the check performed before download and the one
 //! performed before an elevated file copy cannot drift apart.
 //!
-//! The signing half deliberately lives nowhere in this crate: releases are
-//! signed in CI with the `minisign` CLI, and only public keys are compiled in.
+//! No signing lives here: releases are signed in CI with the `minisign` CLI and
+//! only public keys are compiled in.
 //!
 //! # Layout
 //!
 //! - [`manifest`] / [`verify`] - the schema and its signature. Always compiled.
-//! - [`check`] / [`stage`] / [`state`] / [`http`] / [`version`] - deciding there
-//!   is an update and putting it somewhere the helper can find it. Behind the
-//!   `client` feature, which is on by default but off for the helper: an
-//!   elevated process should carry as little as it can get away with.
+//! - [`mod@check`] / [`mod@stage`] / [`state`] / [`http`] / [`version`] - finding an
+//!   update and putting it where the helper can find it. Behind the `client`
+//!   feature, off for the helper so an elevated process carries less.
+//! - `winhttp` - the one production `HttpClient`, and the only Windows-bound
+//!   thing here.
 //!
-//! - `winhttp` - the one production `HttpClient`. Windows-only, and the only
-//!   thing here that is.
-//!
-//! Everything in the client half sits above the [`http::HttpClient`] trait, so
-//! all of it is tested against a stub on any host. Only the WinHTTP
-//! implementation of that one trait is Windows-bound.
+//! The client half sits above the [`http::HttpClient`] trait, so it is all
+//! tested against a stub on any host.
 
 pub mod error;
 pub mod manifest;

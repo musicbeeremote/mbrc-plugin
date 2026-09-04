@@ -1,7 +1,9 @@
 //! On-disk album cover cache (the Rust port of C# `CoverCache` + the cache half
-//! of `CoverService`). The core owns identities, resizing, storage, and serving;
-//! the C# host only provides raw ingredients (album list, track paths, mod
-//! times, raw artwork bytes).
+//! of `CoverService`).
+//!
+//! The core owns identities, resizing, storage, and serving; the C# host only
+//! provides raw ingredients (album list, track paths, mod times, raw artwork
+//! bytes).
 //!
 //! Layout:
 //! - `<storage>/cache/covers/<content_hash>` - the resized JPEG, filename = its
@@ -27,9 +29,11 @@ use redb::{Durability, ReadableTable};
 use super::{resize_to_jpeg, sha1_hex, CACHE_SIZE};
 use crate::store::{Db, COVER_COVERS, COVER_META, LAST_CHECK};
 
-/// One album's identity ingredients, provided by the host: the album key, a
-/// representative track path (source of the artwork), and that file's mod time
-/// (unix seconds) used to decide whether a cached cover is still valid.
+/// One album's identity ingredients, provided by the host.
+///
+/// The album key, a representative track path (the artwork source), and that
+/// file's mod time in unix seconds, which decides whether a cached cover is
+/// still valid.
 #[derive(Debug, Clone)]
 pub struct AlbumIdentity {
     pub key: String,
@@ -39,9 +43,11 @@ pub struct AlbumIdentity {
 
 /// Per-cover timing breakdown for a from-scratch build, so the fetch (FFI round
 /// trip to the host for raw artwork) can be told apart from the store (decode +
-/// resize + JPEG encode + write). Milliseconds throughout. Filled by
-/// [`CoverStore::build`] and logged as a summary by the caller; the slowest
-/// single cover is kept for a quick "what stalled" pointer.
+/// resize + JPEG encode + write).
+///
+/// Milliseconds throughout. Filled by [`CoverStore::build`] and logged as a
+/// summary by the caller; the slowest single cover is kept for a quick "what
+/// stalled" pointer.
 #[derive(Debug, Default, Clone)]
 pub struct BuildStats {
     /// Albums that had no cached cover at the start of the build.
@@ -142,27 +148,30 @@ impl CoverStore {
         keys
     }
 
-    /// Read a cached cover's JPEG bytes by content hash.
+    /// Reads a cached cover's JPEG bytes by content hash.
     pub fn read_cover_bytes(&self, content_hash: &str) -> Option<Vec<u8>> {
         std::fs::read(self.cover_file(content_hash)).ok()
     }
 
-    /// Read a cached cover as base64 (the wire `cover` field), by content hash.
+    /// Reads a cached cover as base64 (the wire `cover` field), by content hash.
     pub fn read_cover_base64(&self, content_hash: &str) -> Option<String> {
         self.read_cover_bytes(content_hash)
             .map(|bytes| super::to_base64(&bytes))
     }
 
-    /// Cache one album's cover on demand: resize+hash+store the raw artwork, map
+    /// Caches one album's cover on demand: resize+hash+store the raw artwork, map
     /// `key -> hash`, and return the hash. Used to fill a single-cover request
     /// that missed the pre-built cache (mirrors C# `GetAlbumCover`'s lazy path).
+    ///
+    /// # Errors
+    /// The artwork does not resize, or the cover file cannot be written.
     pub fn cache_cover(&self, key: &str, raw: &[u8]) -> Result<String, String> {
         let hash = self.store_cover(raw)?;
         self.write_covers().insert(key.to_string(), hash.clone());
         Ok(hash)
     }
 
-    /// Resize raw artwork to the cache thumbnail, hash it, write the file, and
+    /// Resizes raw artwork to the cache thumbnail, hash it, write the file, and
     /// return the content hash. The file name IS the hash (content-addressed).
     fn store_cover(&self, raw: &[u8]) -> Result<String, String> {
         let jpeg = resize_to_jpeg(raw, CACHE_SIZE, CACHE_SIZE)?;
@@ -173,10 +182,13 @@ impl CoverStore {
         Ok(hash)
     }
 
-    /// Warm the cache from the host's album list: record the key->path map, then
-    /// load `state.json` and keep each cached cover whose track file has NOT been
-    /// modified since the last check (mirrors C# `WarmUpCache`). Covers for
-    /// modified or unknown tracks are dropped so `build` refetches them.
+    /// Warms the cache from the host's album list: record the key->path map, then
+    /// keep each cached cover whose track file has NOT been modified since the
+    /// last check (mirrors C# `WarmUpCache`). Covers for modified, unknown, or
+    /// removed albums are dropped so `build` refetches them.
+    ///
+    /// A key survives while any track still carries it, and `prune_orphans` only
+    /// deletes a content-hashed file once no key references it.
     pub fn warm_up(&self, albums: &[AlbumIdentity]) {
         let path_map: HashMap<String, String> = albums
             .iter()
@@ -197,16 +209,13 @@ impl CoverStore {
         }
     }
 
-    /// Build missing covers: for every known album without a cached cover, fetch
-    /// its raw artwork via `fetch_raw`, resize+hash+store it, and map it. Then
-    /// prune orphaned files (on disk but unreferenced) and persist. Single-flight:
-    /// concurrent calls return immediately while one build runs.
+    /// Builds missing covers: fetch each album's artwork, resize+hash+store it,
+    /// then prune orphaned files and persist.
     ///
-    /// Returns a [`BuildStats`] breaking the wall-clock into fetch (FFI) vs store
-    /// (decode/resize/encode/write) so the caller can log where the time went.
-    /// When `verbose` is set, each cover's timing is logged at info as it is
-    /// built (opt-in: 1400+ lines), otherwise only the caller's summary is emitted.
-    /// A skipped concurrent call returns the default (all-zero) stats.
+    /// Single-flight, so a concurrent call returns the default all-zero stats
+    /// immediately rather than building twice. `verbose` logs a timing line per
+    /// cover at info, which is opt-in because a full library is 1400+ lines. The
+    /// returned [`BuildStats`] splits the wall-clock into fetch and store.
     pub fn build<F>(&self, fetch_raw: F, verbose: bool) -> BuildStats
     where
         F: Fn(&str) -> Option<Vec<u8>>,
@@ -233,15 +242,17 @@ impl CoverStore {
         stats
     }
 
+    /// The build itself, split across a producer and a pool of workers.
+    ///
+    /// Fetching is an FFI callback whose thread-safety the host controls, so it
+    /// stays on this thread as the producer; storing (decode, resize, encode,
+    /// write) is CPU-bound and ~90% of per-cover time, so it fans out. The queue
+    /// is bounded, which caps how many decoded images are in memory at once.
     fn build_inner<F>(&self, fetch_raw: F, verbose: bool, stop: &dyn Fn() -> bool) -> BuildStats
     where
         F: Fn(&str) -> Option<Vec<u8>>,
     {
-        // Snapshot the (key, path) pairs that still need a cover. An album needs
-        // one when it has no state entry OR its recorded cover file is gone from
-        // disk - so the cache self-heals after a file is lost (manual delete,
-        // crash mid-build, partial clear) instead of trusting state.json forever
-        // and leaving that album permanently blank.
+        // Self-healing: an entry whose file is gone still counts as missing.
         let missing: Vec<(String, String)> = {
             let covers = self.read_covers();
             self.read_paths()
@@ -259,12 +270,6 @@ impl CoverStore {
             ..BuildStats::default()
         };
 
-        // The store step (decode + resize + JPEG encode + write) is CPU-bound and
-        // ~90% of per-cover time, so it parallelizes across cores. The fetch step
-        // is an FFI callback into the host's MusicBee API, whose thread-safety we
-        // don't control - so it stays on this single thread (the producer) and
-        // only the CPU work fans out to workers. A bounded queue caps how many
-        // decoded images sit in memory at once.
         let workers = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4)
@@ -282,8 +287,7 @@ impl CoverStore {
                     scope.spawn(move || {
                         let mut local = BuildStats::default();
                         loop {
-                            // Take the receiver lock only long enough to pull one
-                            // item; the store work runs without holding it.
+                            // Held only to pull one item, never across the store.
                             let item = rx.lock().unwrap().recv();
                             let Ok((key, path, raw, fetch_ms)) = item else {
                                 break; // producer dropped the sender: queue drained
@@ -311,9 +315,7 @@ impl CoverStore {
                                 local.slowest_path = path.clone();
                             }
                             if verbose {
-                                // Info level so the trace shows regardless of build
-                                // profile once the operator turns on debug logging -
-                                // it is already gated here.
+                                // INFO, not DEBUG: `verbose` is already the gate.
                                 tracing::info!(
                                     %path,
                                     fetch_ms,
@@ -328,9 +330,8 @@ impl CoverStore {
                 })
                 .collect();
 
-            // Producer: fetch each cover's raw artwork sequentially (single FFI
-            // thread) and feed the queue. `send` blocks when the bound is hit,
-            // giving back-pressure so memory stays bounded.
+            // Producer: sequential FFI fetches feed the queue, and `send`
+            // blocking at the bound is the back-pressure.
             for (key, path) in missing {
                 if stop() {
                     stats.stopped = true;
@@ -366,7 +367,7 @@ impl CoverStore {
         stats
     }
 
-    /// Delete cover files that are no longer referenced by any album key.
+    /// Deletes cover files that are no longer referenced by any album key.
     fn prune_orphans(&self) {
         let referenced: std::collections::HashSet<String> =
             self.read_covers().values().cloned().collect();
@@ -385,7 +386,7 @@ impl CoverStore {
         }
     }
 
-    /// Load the persisted album_key -> content_hash index and last-check time
+    /// Loads the persisted album_key -> content_hash index and last-check time
     /// from redb. A missing table (fresh store) or disabled `Db` yields an empty
     /// map and a zero timestamp.
     fn load_state(&self) -> (HashMap<String, String>, i64) {
@@ -419,7 +420,7 @@ impl CoverStore {
         (covers, last_check)
     }
 
-    /// Persist the in-memory covers map + LastCheck=now to redb in one durable
+    /// Persists the in-memory covers map + LastCheck=now to redb in one durable
     /// transaction. The covers table is rebuilt wholesale (delete + reinsert) so
     /// keys dropped by warm-up/prune don't linger - the same whole-map semantics
     /// the old `state.json` rewrite had, but crash-safe via redb's commit.
@@ -541,9 +542,7 @@ mod tests {
 
     #[test]
     fn build_regenerates_a_cover_whose_file_was_deleted() {
-        // A state entry alone must not be trusted: if the cover file is gone, the
-        // next build re-fetches and re-writes it (self-healing cache), instead of
-        // skipping the album and leaving it permanently blank.
+        // Otherwise a lost file leaves that album permanently blank.
         let (db, dir) = temp_storage("selfheal");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[AlbumIdentity {
@@ -602,9 +601,8 @@ mod tests {
 
     #[test]
     fn build_stops_when_asked_and_keeps_what_it_built() {
-        // Teardown waits for this build, so it has to be able to give up between
-        // albums - and what it managed has to survive, because the next build
-        // recomputes what is missing rather than starting over.
+        // Teardown waits for this build, and the next one recomputes what is
+        // missing rather than starting over.
         let (db, dir) = temp_storage("build-stops");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[
@@ -667,11 +665,8 @@ mod tests {
 
     #[test]
     fn deleting_one_album_keeps_a_cover_another_album_still_uses() {
-        // Two albums whose artwork resizes to identical bytes share ONE
-        // content-hashed file. Removing one album (its last track deleted, so it
-        // drops out of the album list) must NOT delete that file while the other
-        // album still references it - and must delete it once nothing does. This
-        // is the deletion-safety the Scanner's nudge-path cover delta relies on.
+        // Identical artwork means one content-hashed file for both albums, so
+        // this is the deletion safety the nudge-path cover delta relies on.
         let (db, dir) = temp_storage("shared-delete");
         let store = CoverStore::new(db.clone(), &dir);
         let art = jpeg_bytes(200, 200);

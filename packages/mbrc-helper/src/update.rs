@@ -3,24 +3,21 @@
 //! This runs elevated, with every path in its argv supplied by an unelevated
 //! process. That shapes the whole module:
 //!
-//! - **The signature is the gate on contents.** The staged bundle sits in a
-//!   directory any user process can write, so nothing in it is trusted because
-//!   the core staged it. The manifest is re-verified against the compiled-in
-//!   release keys and every file re-hashed before a single byte is copied, which
-//!   is the same check the core did and deliberately not the same *evidence*.
+//! - **The signature is the gate on contents.** The staged bundle sits where any
+//!   user process can write, so the manifest is re-verified against the
+//!   compiled-in keys and every file re-hashed before a byte is copied - the same
+//!   check the core did, deliberately not the same *evidence*.
 //! - **The bytes that are verified are the bytes that are written.** Files are
 //!   read into memory, verified there, and that buffer is what lands in the
-//!   plugins directory. Re-reading from disk after verifying would leave a window
-//!   for someone to swap the file in between.
+//!   plugins directory; re-reading after verifying would leave a swap window.
 //! - **Paths are gates on destination.** Canonicalized, absolute, no UNC, no
 //!   reparse points, and every filename written must appear in the verified
 //!   manifest. The signature says *what* may be written; these say *where*.
 //!
-//! Why `--staged` is taken from argv at all, when an elevated process should not
-//! accept paths from an unelevated one: elevation can run this as a *different*
-//! administrator account, so `%APPDATA%` here is not the user's `%APPDATA%` and a
-//! derived path would point at the wrong profile or nowhere. The path is
-//! therefore an input, hardened as above, and the signature carries the trust.
+//! `--staged` is an argv input despite the rule against that because elevation
+//! can run this as a different administrator account, where a derived
+//! `%APPDATA%` would point at the wrong profile. It is hardened as above and the
+//! signature carries the trust.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -147,12 +144,15 @@ type Result<T> = std::result::Result<T, Error>;
 ///
 /// Every rejection here is a refusal to act, not a repair: an elevated process
 /// given an argv it does not fully understand should stop.
+///
+/// # Errors
+/// A path is missing, relative, a UNC path, or the staged and target
+/// directories overlap.
 pub fn plan(request: &Request<'_>) -> Result<Plan> {
     let staged = checked_dir(request.staged, "--staged")?;
     let target = checked_dir(request.target, "--target")?;
-    // A packaged install wins when one is named. Its executable exists and would
-    // pass `checked_file`, so validating the path would prove nothing useful -
-    // launching it is what fails.
+    // A named package wins: its executable would pass `checked_file` anyway, so
+    // only launching it proves anything.
     let relaunch = match request.relaunch_aumid {
         Some(aumid) => RelaunchTarget::Packaged(checked_aumid(aumid)?),
         None => RelaunchTarget::Exe(checked_file(request.relaunch, "--relaunch")?),
@@ -163,9 +163,8 @@ pub fn plan(request: &Request<'_>) -> Result<Plan> {
             "--staged and --target are the same directory".into(),
         ));
     }
-    // The staged tree is user-writable by design. If the plugins directory were
-    // inside it, "verified bundle" and "install" would be the same bytes and the
-    // check above would be the only thing between them.
+    // The staged tree is user-writable by design, so an overlap would make the
+    // verified bundle and the install the same bytes.
     if target.starts_with(&staged) || staged.starts_with(&target) {
         return Err(Error::Rejected(
             "--staged and --target must not contain one another".into(),
@@ -182,6 +181,9 @@ pub fn plan(request: &Request<'_>) -> Result<Plan> {
 
 /// Re-verifies the staged bundle, waits for MusicBee to exit, and swaps the
 /// files, restoring the previous ones if anything goes wrong part way.
+///
+/// # Errors
+/// As [`apply_with`].
 pub fn apply(plan: &Plan) -> Result<Applied> {
     apply_with(plan, TRUSTED_KEYS, wait_for_exit)
 }
@@ -189,6 +191,11 @@ pub fn apply(plan: &Plan) -> Result<Applied> {
 /// The seam the tests drive: the trust list and the wait are injected so an
 /// apply can be exercised end to end without the release keys and without a
 /// process to wait for. Everything else is the production path.
+///
+/// # Errors
+/// MusicBee is still running, the staged bundle does not verify, or a file
+/// could not be replaced - in which case the previous files are restored first
+/// and the restore outcome is part of the error.
 pub fn apply_with(
     plan: &Plan,
     keys: &'static [TrustedKey],
@@ -196,9 +203,8 @@ pub fn apply_with(
 ) -> Result<Applied> {
     let bundle = verify_staged(&plan.staged, keys)?;
 
-    // After verification, before anything is touched. A DLL that is still mapped
-    // cannot be replaced, and finding that out half way through the swap is the
-    // situation the rollback exists for - no reason to walk into it.
+    // After verification, before anything is touched: a mapped DLL cannot be
+    // replaced, and discovering that mid-swap is what the rollback is for.
     if !wait(plan.pid, EXIT_TIMEOUT) {
         return Err(Error::StillRunning { pid: plan.pid });
     }
@@ -354,10 +360,6 @@ fn restore(backup: &Backup, target: &Path, cause: String) -> Error {
             continue;
         }
         if let Err(e) = std::fs::write(&to, bytes) {
-            // The file that could not be *written* is usually the one that
-            // cannot be written back either - read-only, locked, out of space.
-            // That is not a failed restore if the installed file was never
-            // replaced: it is already what the backup holds.
             if already_restored(bytes, &to) {
                 continue;
             }
@@ -410,14 +412,13 @@ fn prune_backups(plan: &Plan, keep: &str) {
 ///
 /// Best effort and deliberately not fatal: the update is already installed, and
 /// the marker being left behind costs a redundant offer, not a broken install.
+/// Windows will not unlink a running image, so when the helper runs from inside
+/// the bundle this cannot succeed at all and the core sweeps the directory on
+/// its next start instead.
 pub fn clear_staged(plan: &Plan) {
     // `<storage>/updates/<version>` -> remove the version directory and the
     // marker beside it, which is what tells the core something is pending.
     if running_from(&plan.staged) {
-        // Windows will not unlink a running image, so this delete cannot succeed
-        // from here and used to log an access-denied error on every successful
-        // apply - a failure line in a log people only open when something broke.
-        // The core sweeps the directory on the next start instead.
         crate::log::line(
             "left the staged bundle for the core to sweep: the helper is running from it",
         );
@@ -582,10 +583,8 @@ fn relaunch_with(target: &RelaunchTarget, launch: fn(&str) -> std::io::Result<()
     let argument = target.shell_argument();
     match launch(&argument) {
         Ok(()) => crate::log::line(&format!("relaunched {argument}")),
-        // Recorded but not fatal: the update is installed either way, and the
-        // user can start MusicBee themselves. Note Explorer reports success even
-        // when it activates nothing, so this only catches a failure to start
-        // Explorer at all.
+        // Not fatal: the update is installed either way. Explorer reports
+        // success even when it activates nothing, so this catches little.
         Err(e) => crate::log::line(&format!("could not relaunch {argument}: {e}")),
     }
 }
@@ -853,10 +852,8 @@ mod tests {
     #[cfg(windows)]
     fn a_restore_that_cannot_put_a_replaced_file_back_says_so() {
         let fixture = Fixture::new("rollback-failed").with_installed(b"old");
-        // The *first* file is replaced successfully, then made unwritable, so
-        // the restore of a genuinely changed file fails. This is the outcome
-        // that tells the user to reinstall, and it must not be confused with the
-        // read-only-but-untouched case above.
+        // Replaced first, then made unwritable, so a genuinely changed file
+        // fails to restore - not the read-only-but-untouched case above.
         let plan = fixture.plan();
         let bundle = verify_staged(&plan.staged, TEST_KEYS).unwrap();
         let backup = back_up(&plan, &bundle).unwrap();
@@ -871,11 +868,8 @@ mod tests {
 
     #[test]
     fn the_restore_ignores_a_rewritten_backup_directory() {
-        // The backup directory is under the user's profile, so an unelevated
-        // process can rewrite it while the elevated apply is running. If the
-        // restore read from there, that write would land in the plugins
-        // directory as administrator. It restores from the bytes it read, so
-        // this rewrite is inert.
+        // An unelevated process can rewrite the backup mid-apply; restoring the
+        // bytes already read is what makes that rewrite inert.
         let fixture = Fixture::new("backup-tampered").with_installed(b"old");
         let plan = fixture.plan();
         let bundle = verify_staged(&plan.staged, TEST_KEYS).unwrap();

@@ -91,12 +91,10 @@ pub struct ConnChange {
 /// Lifecycle / status notices for the proxy, surfaced to the UI.
 ///
 /// Two kinds, distinguished by `conn`:
-/// * **server-state** (`conn` = None) - drives the listening flag: `start`
-///   (listening true), `stop` (listening false), and non-fatal notices
-///   (accept/capture errors, still listening).
-/// * **connection** (`conn` = Some) - a client connect/disconnect; updates the
-///   active-connection set *without* touching the listening flag, so a late
-///   disconnect emitted while the proxy is stopping can't flip listening back on.
+/// * **server-state** (`None`) drives the listening flag: start, stop, and
+///   non-fatal notices that leave it listening.
+/// * **connection** (`Some`) updates the active set without touching that flag,
+///   so a late disconnect cannot flip listening back on during a stop.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProxyStateEvent {
     pub listening: bool,
@@ -137,7 +135,7 @@ pub struct ProxyState {
 }
 
 impl ProxyState {
-    /// Install a new proxy, tearing down any previous one (signal shutdown so
+    /// Installs a new proxy, tearing down any previous one (signal shutdown so
     /// live sessions unwind, then abort the accept loop).
     fn replace(&self, handle: Option<ProxyHandle>) {
         let mut guard = self.inner.lock().unwrap();
@@ -173,7 +171,7 @@ struct Session {
     closed_by: Mutex<Option<&'static str>>,
 }
 
-/// Serialize one record and append it as a line to the capture file, if one is
+/// Serializes one record and appends it as a line to the capture file, if one is
 /// configured. A write failure is surfaced to the UI but never stalls the wire.
 async fn append_line<S: Serialize>(shared: &Shared, value: &S) {
     let Some(logfile) = &shared.logfile else {
@@ -204,9 +202,8 @@ pub async fn start_proxy(
 
     let logfile = match &options.output {
         Some(path) => {
-            // Truncate, don't append: each capture owns a fresh `seq` sequence
-            // starting at 0, so appending onto a prior trace would produce a file
-            // with duplicate/rewound `seq` values - invalid as a golden fixture.
+            // Truncate, not append: each capture starts `seq` at 0, so appending would
+            // produce rewound values and an invalid fixture.
             let mut file = OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -267,7 +264,7 @@ pub fn stop_proxy(app: AppHandle, state: State<'_, ProxyState>) {
     );
 }
 
-/// Accept connections until shutdown is signalled or the accept task is aborted.
+/// Accepts connections until shutdown is signalled or the accept task is aborted.
 async fn accept_loop(
     listener: TcpListener,
     shared: Arc<Shared>,
@@ -406,9 +403,8 @@ where
             read = src.read_until(b'\n', &mut buf) => read?,
         };
         if n == 0 {
-            // EOF - record which side hung up first, then half-close the
-            // destination so the peer observes it too. Scope the guard so it is
-            // released before the await below (a MutexGuard isn't Send).
+            // EOF: record which side hung up, then half-close so the peer sees it.
+            // Scoped because a `MutexGuard` is not Send across the await below.
             {
                 let mut cb = session.closed_by.lock().unwrap();
                 if cb.is_none() {
@@ -439,7 +435,7 @@ fn trim_line_terminator(buf: &[u8]) -> &[u8] {
     &buf[..end]
 }
 
-/// Build a frame record, emit it to the UI (with connection identity), append
+/// Builds a frame record, emit it to the UI (with connection identity), append
 /// it to the capture file, and maintain handshake/correlation state.
 async fn record_frame(session: &Arc<Session>, dir: &str, frame_bytes: &[u8]) {
     let seq = session.shared.seq.fetch_add(1, Ordering::Relaxed);
@@ -471,7 +467,7 @@ async fn record_frame(session: &Arc<Session>, dir: &str, frame_bytes: &[u8]) {
     append_line(&session.shared, &record).await;
 }
 
-/// Sniff the two handshake frames (`player` → client type, `protocol` →
+/// Sniffs the two handshake frames (`player` → client type, `protocol` →
 /// negotiated version) and, on the `protocol` frame, emit a `handshake` meta
 /// record capturing what was negotiated on this connection.
 async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {

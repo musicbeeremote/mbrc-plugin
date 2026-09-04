@@ -2,27 +2,21 @@
 //!
 //! # What this is allowed to touch
 //!
-//! Staging runs unelevated, but everything it writes is later read by a process
-//! running as administrator, so the boundaries are part of the design rather than
-//! an implementation detail:
+//! Staging runs unelevated, but an administrator process later reads everything
+//! it writes, so the boundaries are part of the design:
 //!
 //! - **One directory, derived not supplied.** Everything lands under
-//!   `<storage>/updates/<version>/`, where `<storage>` is the directory MusicBee
-//!   handed the core at init. No caller passes a destination path in, and no
-//!   value out of the archive or the manifest ever contributes a path segment
-//!   that has not been checked to be a bare filename
+//!   `<storage>/updates/<version>/`, and no value from the archive or manifest
+//!   contributes a path segment that is not a bare filename
 //!   ([`crate::manifest::is_bare_filename`]).
-//! - **Nothing is followed.** The staging root and the per-version directory are
-//!   refused if they exist as symlinks or junctions. Otherwise anyone who can
-//!   create a reparse point in `%APPDATA%` could aim an unelevated write, and
-//!   later an elevated copy, at a directory neither of us chose.
-//! - **`pending.json` holds no paths.** It names a version, and the helper joins
-//!   that to a storage directory it derives for itself (#151). An elevated
-//!   process must never be handed a path by an unelevated one.
-//! - **Staging-time verification is not apply-time verification.** These files
-//!   sit somewhere a non-elevated process can write, so the helper re-verifies
-//!   from the staged `manifest.json` + `.minisig` before it copies anything. That
-//!   is why both are staged alongside the payload.
+//! - **Nothing is followed.** The staging root and per-version directory are
+//!   refused if they are symlinks or junctions, so a reparse point in
+//!   `%APPDATA%` cannot aim the later elevated copy elsewhere.
+//! - **`pending.json` holds no paths.** It names a version and the helper
+//!   derives the storage directory itself (#151).
+//! - **Staging-time verification is not apply-time verification.** The staged
+//!   files sit somewhere unelevated code can write, so `manifest.json` and its
+//!   `.minisig` are staged alongside the payload for the helper to re-verify.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -84,6 +78,10 @@ pub struct StagedUpdate {
 /// The archive is held in memory and never written to disk as a whole: a
 /// half-extracted, unverified zip lying next to the staged files is one more
 /// thing that has to be reasoned about.
+///
+/// # Errors
+/// An archive entry is not a bare filename, a file does not match the
+/// manifest, or the staging directory could not be written.
 pub fn stage(
     client: &dyn HttpClient,
     update: &AvailableUpdate,
@@ -141,6 +139,10 @@ pub fn stage(
 /// Reads [`PENDING_FILE`], if there is one. A corrupt or unknown-schema marker is
 /// an error rather than "nothing staged": something wrote it, and silently
 /// ignoring it would hide that.
+///
+/// # Errors
+/// The marker exists but does not parse, or names a version that is not a
+/// bare directory name.
 pub fn read_pending(storage_dir: &str) -> Result<Option<Pending>> {
     let path = Path::new(storage_dir).join(STAGING_DIR).join(PENDING_FILE);
     let Ok(contents) = std::fs::read_to_string(&path) else {
@@ -200,9 +202,8 @@ fn extract_verified(zip_bytes: &[u8], manifest: &Manifest) -> Result<Vec<(String
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes))
         .map_err(|e| UpdateError::Archive(e.to_string()))?;
 
-    // Refuse the whole archive over one unsafe name rather than skipping it. CI
-    // produces a flat zip of bare filenames; anything else means the bytes are
-    // not what the manifest describes, and the safe move is to stop.
+    // Refuse the whole archive over one unsafe name: CI produces a flat zip,
+    // so anything else means the bytes are not what the manifest describes.
     for index in 0..archive.len() {
         let entry = archive
             .by_index_raw(index)

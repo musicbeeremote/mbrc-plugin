@@ -1,9 +1,11 @@
-//! The V4 wire codec. Owns every legacy-V4 spelling in one place: the
-//! stringified `playervolume` inside `playerstatus`, the enum wire spellings
-//! (`ShuffleMode::Off -> "off"`, PascalCase play/repeat), and the client input
-//! value mappings (`"add-all" -> QueueType::AddAndPlay`). Isolating them here
-//! keeps the canonical model clean and lets a V6 codec render/parse the same
-//! data differently without touching handlers.
+//! The V4 wire codec.
+//!
+//! Owns every legacy-V4 spelling in one place: the stringified `playervolume`
+//! inside `playerstatus`, the enum wire spellings (`ShuffleMode::Off -> "off"`,
+//! PascalCase play/repeat), and the client input value mappings (`"add-all" ->
+//! QueueType::AddAndPlay`). Isolating them here keeps the canonical model clean
+//! and lets a V6 codec render/parse the same data differently without touching
+//! handlers.
 
 use serde_json::{json, Value};
 
@@ -68,9 +70,8 @@ impl V4Codec {
 
 impl WireCodec for V4Codec {
     fn player_status(&self, state: &PlayerState) -> Value {
-        // Field order matches the shipped C# plugin exactly (with preserve_order
-        // on, `json!` key order is the wire order): repeat, mute, shuffle,
-        // scrobbler, state, volume.
+        // With preserve_order on, `json!` key order is the wire order, and this
+        // matches the shipped C# exactly.
         json!({
             "playerrepeat": Self::repeat_str(state.repeat),
             "playermute": state.mute,

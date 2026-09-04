@@ -18,11 +18,6 @@
 //! the user. The old utility printed to a console nobody saw and always exited
 //! 0, so a declined elevation prompt was indistinguishable from success.
 
-// Off Windows nothing in here is reachable from `main` - the COM implementation
-// is `cfg(windows)` and `run_firewall` becomes a stub - so every item reads as
-// dead code. The module still compiles and its unit tests still run on Linux,
-// which is the point: the create-or-update logic is platform-independent and CI
-// exercises it on both runners.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod firewall;
 mod log;
@@ -126,9 +121,7 @@ fn run(args: &[String]) -> Result<u8, String> {
             Ok(run_firewall(port))
         }
         "update" => {
-            // `relaunch-aumid` is accepted but not required: only a packaged
-            // (Store) MusicBee has one, and an ordinary install is relaunched by
-            // path exactly as before.
+            // Accepted but not required: only a packaged (Store) MusicBee has one.
             let flags = parse_flags(
                 &args[1..],
                 &["pid", "staged", "target", "relaunch", "relaunch-aumid"],
@@ -160,9 +153,8 @@ fn run(args: &[String]) -> Result<u8, String> {
 /// [`EXIT_ROLLED_BACK`] means the install is intact but the update did not
 /// happen, and [`EXIT_ROLLBACK_FAILED`] is the one that needs the user told.
 fn run_update(request: &update::Request<'_>) -> u8 {
-    // Before `plan()`, so that plan()'s own refusals are recorded - one of them
-    // ("--staged cannot be resolved") is how a packaged install fails, and it
-    // used to vanish into a console that does not exist.
+    // Before `plan()`, so that plan()'s own refusals are recorded - one of
+    // them is how a packaged install fails.
     log::direct_to_storage(std::path::Path::new(request.staged));
     log::note_environment();
     log::line(&format!(
@@ -356,9 +348,8 @@ mod tests {
 
     #[test]
     fn update_refuses_paths_it_cannot_vouch_for() {
-        // Well-formed argv, unusable paths: the argv parser is happy and the
-        // path checks are what stop it. Nothing is touched, and the exit code
-        // says "bad arguments" rather than "failed".
+        // Well-formed argv, unusable paths: the parser is happy and the path
+        // checks are what stop it, so the exit code says "bad arguments".
         let code = run(&argv(
             "update --pid 1234 --staged a --target b --relaunch c",
         ))

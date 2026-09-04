@@ -31,8 +31,8 @@ fn json_value() -> impl Strategy<Value = Value> {
 }
 
 proptest! {
-    // Any raw wire line: exercises lenient parse + context routing + the
-    // pre-handshake force-close path. Must never panic.
+    /// Any raw wire line: exercises lenient parse + context routing + the
+    /// pre-handshake force-close path. Must never panic.
     #[test]
     fn handle_frame_never_panics_on_arbitrary_line(line in "(?s).*") {
         let providers = NullProviders;
@@ -40,9 +40,9 @@ proptest! {
         let _ = session.handle_frame(&line, &providers, None, None, None);
     }
 
-    // A handshaked session dispatching an arbitrary `{context, data}` frame: this
-    // drives the command handlers' `data` parsing across every registered
-    // context. Must never panic on malformed args.
+    /// A handshaked session dispatching an arbitrary `{context, data}` frame: this
+    /// drives the command handlers' `data` parsing across every registered
+    /// context. Must never panic on malformed args.
     #[test]
     fn dispatch_never_panics_on_arbitrary_command(
         ctx in "[a-z0-9_]{0,24}",
@@ -60,9 +60,9 @@ proptest! {
         let _ = session.handle_frame(&line, &providers, None, None, None);
     }
 
-    // Real command contexts with arbitrary data - concentrates fuzzing on the
-    // handlers that actually parse structured args (pagination, indices, queries)
-    // rather than spending most cases on unknown contexts.
+    /// Real command contexts with arbitrary data - concentrates fuzzing on the
+    /// handlers that actually parse structured args (pagination, indices, queries)
+    /// rather than spending most cases on unknown contexts.
     #[test]
     fn known_commands_never_panic_on_arbitrary_data(
         ctx in prop::sample::select(KNOWN_CONTEXTS),

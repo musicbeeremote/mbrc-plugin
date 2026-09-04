@@ -1,6 +1,8 @@
-//! UDP multicast discovery responder. Clients probe the group and we answer
-//! with a `notify` frame carrying this host's address, machine name, and the
-//! command port, so they can connect without manual configuration.
+//! UDP multicast discovery responder.
+//!
+//! Clients probe the group and we answer with a `notify` frame carrying this
+//! host's address, machine name, and the command port, so they can connect
+//! without manual configuration.
 //!
 //! Robustness matters here: a MusicBee host commonly has several NICs (Wi-Fi
 //! plus Hyper-V / WSL / VirtualBox / Docker virtual adapters, plus APIPA
@@ -24,7 +26,7 @@ use tokio::sync::Notify;
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(239, 1, 5, 10);
 const DISCOVERY_PORT: u16 = 45345;
 
-/// Answer discovery probes until `shutdown` is signalled.
+/// Answers discovery probes until `shutdown` is signalled.
 pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
     let socket = match bind() {
         Ok(socket) => socket,
@@ -68,9 +70,8 @@ fn bind() -> std::io::Result<UdpSocket> {
     let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT).into();
     socket.bind(&addr.into())?;
 
-    // Join the multicast group on every usable interface, not just whichever
-    // one the OS picks for INADDR_ANY (on this kind of host that is often a
-    // virtual adapter, so the probe arriving on Wi-Fi would never be heard).
+    // Every usable interface, not just the one INADDR_ANY picks: on this kind
+    // of host that is often a virtual adapter.
     let mut joined = 0usize;
     for (ip, _netmask) in usable_ipv4_ifaces() {
         match socket.join_multicast_v4(&MULTICAST_ADDR, &ip) {
@@ -93,9 +94,8 @@ fn bind() -> std::io::Result<UdpSocket> {
 }
 
 async fn respond(socket: &UdpSocket, src: SocketAddr, req: &[u8], tcp_port: u16, name: &str) {
-    // The probe carries the client's own address; prefer it, but fall back to
-    // the UDP source IP if the payload is missing/garbled (older or lenient
-    // clients), so a malformed probe still gets a usable reply.
+    // Prefer the address the probe carries, falling back to the UDP source so
+    // a malformed probe still gets a usable reply.
     let client_ip = client_address(req).or_else(|| match src.ip() {
         std::net::IpAddr::V4(ip) => Some(ip),
         _ => None,
@@ -122,13 +122,13 @@ async fn respond(socket: &UdpSocket, src: SocketAddr, req: &[u8], tcp_port: u16,
     }
 }
 
-/// Parse the client's advertised IPv4 from a probe payload (`{"address": ...}`).
+/// Parses the client's advertised IPv4 from a probe payload (`{"address": ...}`).
 fn client_address(req: &[u8]) -> Option<Ipv4Addr> {
     let value: Value = serde_json::from_slice(req).ok()?;
     value.get("address")?.as_str()?.trim().parse().ok()
 }
 
-/// Choose which of this host's addresses to advertise. Mirrors the shipped C#
+/// Chooses which of this host's addresses to advertise. Mirrors the shipped C#
 /// plugin: return the interface on the same subnet as the client, so a
 /// multi-NIC host hands back the address the client can actually reach. Falls
 /// back to a best-guess private address when there is no client hint or no
@@ -152,7 +152,7 @@ fn same_subnet(a: Ipv4Addr, b: Ipv4Addr, mask: Ipv4Addr) -> bool {
     a & m == b & m
 }
 
-/// Enumerate advertisable IPv4 interfaces as `(ip, netmask)`, dropping the ones
+/// Enumerates advertisable IPv4 interfaces as `(ip, netmask)`, dropping the ones
 /// a client can never reach: loopback, unspecified, and `169.254.x`
 /// link-local (APIPA). Virtual-adapter subnets are left in - the subnet match
 /// against the client sorts those out; they only surface as a fallback.

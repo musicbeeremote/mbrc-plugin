@@ -17,20 +17,14 @@ use crate::protocol::messages::{
 };
 use crate::protocol::Platform;
 
-/// Remove synchronized-lyrics (LRC) tags from a lyrics blob. Legacy clients
+/// Removes synchronized-lyrics (LRC) tags from a lyrics blob. Legacy clients
 /// (V4, V5) cannot render them, so their codecs strip; V6+ receives the LRC
 /// untouched.
 ///
-/// The shipped C# regex (`\[\d:\d{2}.\d{3}\] `) only caught single-digit
-/// minutes, exactly-3-digit fractions, and required a trailing space - so
-/// real-world tags (`[01:23.45]`, `[00:12]`, no trailing space, several per
-/// line) slipped through. This matches the full LRC grammar:
-///   - time tags: `[mm:ss]`, `[mm:ss.xx]`, `[mm:ss.xxx]`, `[m:ss]`, ... (1-3
-///     minute digits, 2 second digits, optional `.`/`:` + 1-3 fraction digits);
-///   - metadata tags: `[ti:...]`, `[ar:...]`, `[al:...]`, `[offset:...]`, etc.
-///     (a known key before the colon, so lyric text like `[Verse: 1]` is kept).
-///
-/// One space immediately after a stripped tag is also consumed.
+/// Matches the full LRC grammar rather than the narrow shape the C# regex
+/// caught: time tags with 1-3 minute digits, 2 second digits and an optional
+/// 1-3 digit fraction, and metadata tags keyed on a known prefix, so lyric text
+/// like `[Verse: 1]` survives. One space after a stripped tag goes with it.
 pub fn strip_lrc(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(input.len());
@@ -58,8 +52,10 @@ pub fn strip_lrc(input: &str) -> String {
 
 /// Wire-safe lyrics text for legacy codecs (V4/V5): trim, normalize the doubled
 /// CRLF paragraph breaks the shipped plugin produced, drop NULs, and XML-escape
-/// (the old `SecurityElement.Escape`). LRC stripping is separate (`strip_lrc`),
-/// applied before this. V6+ does not use this (JSON-native, no XML escaping).
+/// (the old `SecurityElement.Escape`).
+///
+/// LRC stripping is separate (`strip_lrc`), applied before this. V6+ does not
+/// use this (JSON-native, no XML escaping).
 pub fn sanitize_lyrics(raw: &str) -> String {
     let mut s = raw.trim().to_string();
     if s.contains("\r\r\n\r\r\n") {
@@ -71,7 +67,7 @@ pub fn sanitize_lyrics(raw: &str) -> String {
     xml_escape(&s)
 }
 
-/// Escape the five XML entities, matching .NET `SecurityElement.Escape`
+/// Escapes the five XML entities, matching .NET `SecurityElement.Escape`
 /// (ampersand first so the others are not double-escaped).
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -153,21 +149,21 @@ pub trait WireCodec: Send + Sync {
     /// will surface album/album_artist on Android too - see issues #329/#196).
     fn now_playing_list(&self, page: &Page<NowPlayingListTrack>, platform: Platform) -> Value;
     /// The `nowplayingtrack` object. V4 fills empty display fields (`artist` ->
-    /// `Unknown Artist`, `album` -> `Unknown Album`, `title` -> the file name) -
-    /// a wire-presentation quirk that used to live in the C# host.
+    /// `Unknown Artist`, `album` -> `Unknown Album`, `title` -> the file name),
+    /// which is a wire-presentation quirk rather than a property of the track.
     fn track_info(&self, info: &TrackInfo) -> Value;
     /// The `nowplayingdetails` object. V4 fills an empty `albumArtist` with
     /// `Unknown Artist` (same host-side quirk).
     fn track_details(&self, details: &TrackDetails) -> Value;
 
     // --- Input: wire -> canonical ---
-    /// Parse a `playerrepeat` set value (`None` for an unrecognized/query value;
+    /// Parses a `playerrepeat` set value (`None` for an unrecognized/query value;
     /// the `"toggle"` action is handled by the handler, not here).
     fn parse_repeat(&self, value: &str) -> Option<RepeatMode>;
-    /// Parse a `nowplayinglfmrating` set value (`"love"`/`"ban"`; `"toggle"` is
+    /// Parses a `nowplayinglfmrating` set value (`"love"`/`"ban"`; `"toggle"` is
     /// handled by the handler).
     fn parse_lfm(&self, value: &str) -> Option<LastfmStatus>;
-    /// Parse a `nowplayingqueue` placement (defaults to `Next`, matching C#).
+    /// Parses a `nowplayingqueue` placement (defaults to `Next`, matching C#).
     fn parse_queue_type(&self, value: &str) -> QueueType;
 }
 
