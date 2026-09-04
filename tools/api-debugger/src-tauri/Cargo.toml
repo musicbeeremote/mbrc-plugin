@@ -30,8 +30,6 @@ tauri-plugin-dialog = "=2.7.2"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 tokio = { version = "=1.53.1", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "fs"] }
-time = { version = "=0.3.55", features = ["formatting"] }
-if-addrs = "=0.15.0"
 
 # Shared crates from the root workspace. This app stays its own workspace (the
 # [workspace] table below) and reaches them by path, so the root workspace's
