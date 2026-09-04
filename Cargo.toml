@@ -22,7 +22,7 @@ members = [
 exclude = ["tools/api-debugger/src-tauri"]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 # The floor every member is built against, and the one rustc the toolchain file
 # pins. Declaring it is what makes cargo name the crate that wants a newer
 # compiler, rather than failing inside its source; with resolver 3 cargo picks

@@ -9,7 +9,7 @@
 //! ```
 
 use mbrc_release::{
-    verify_bundled_file, verify_sha512, verify_signature_with, Manifest, TrustedKey, TRUSTED_KEYS,
+    Manifest, TRUSTED_KEYS, TrustedKey, verify_bundled_file, verify_sha512, verify_signature_with,
 };
 
 const GOLDEN: &str = include_str!("fixtures/manifest.json");

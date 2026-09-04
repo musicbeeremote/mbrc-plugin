@@ -12,9 +12,9 @@
 
 mod support;
 
-use mbrc_release::{check, Channel, CheckOptions, CheckOutcome, UpdateError, UpdateState};
+use mbrc_release::{Channel, CheckOptions, CheckOutcome, UpdateError, UpdateState, check};
 use support::{OfflineHttp, StubHttp, TEST_KEYS};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const MANIFEST: &str = include_str!("fixtures/manifest.json");
 const SIGNATURE: &str = include_str!("fixtures/manifest.json.minisig");
@@ -353,13 +353,15 @@ fn a_failing_check_backs_off_instead_of_retrying_on_every_tick() {
     .unwrap();
     assert!(matches!(outcome, CheckOutcome::NotDue), "{outcome:?}");
 
-    assert!(check(
-        &OfflineHttp,
-        &options("1.4.0.0"),
-        &mut state,
-        at("2026-08-04T10:20:00Z")
-    )
-    .is_err());
+    assert!(
+        check(
+            &OfflineHttp,
+            &options("1.4.0.0"),
+            &mut state,
+            at("2026-08-04T10:20:00Z")
+        )
+        .is_err()
+    );
     assert_eq!(state.consecutive_failures, 2);
 
     // A check that works clears the streak.

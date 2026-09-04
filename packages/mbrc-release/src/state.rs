@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+use time::{Duration, OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::error::{Result, UpdateError};
 

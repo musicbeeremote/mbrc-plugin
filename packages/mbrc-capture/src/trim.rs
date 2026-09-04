@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use serde_json::{Map, Value};
 
-use crate::{parse_line, Record};
+use crate::{Record, parse_line};
 
 /// 1x1 transparent PNG, base64. Small enough to be a non-event in fixtures but
 /// still a valid decodable image for anyone debugging by hand.
@@ -262,22 +262,24 @@ fn classify(
     if hs.client_type.is_none() {
         for &i in idxs {
             let fr = &frames[i];
-            if fr.context() == Some("player") && fr.dir() == "c2s" {
-                if let Some(Value::String(s)) = fr.frame_data() {
-                    hs.client_type = Some(s.clone());
-                    break;
-                }
+            if fr.context() == Some("player")
+                && fr.dir() == "c2s"
+                && let Some(Value::String(s)) = fr.frame_data()
+            {
+                hs.client_type = Some(s.clone());
+                break;
             }
         }
     }
     if hs.protocol_version.is_none() {
         for &i in idxs {
             let fr = &frames[i];
-            if fr.context() == Some("protocol") && fr.dir() == "c2s" {
-                if let Some(data) = fr.frame_data() {
-                    hs.protocol_version = extract_protocol_version(data);
-                    break;
-                }
+            if fr.context() == Some("protocol")
+                && fr.dir() == "c2s"
+                && let Some(data) = fr.frame_data()
+            {
+                hs.protocol_version = extract_protocol_version(data);
+                break;
             }
         }
     }
@@ -335,12 +337,10 @@ fn rewrite_placeholders(rec: &Value, scrub: &mut Scrubber) -> Value {
 
     // A rewritten frame's `raw` (exact wire bytes) no longer matches the parsed
     // frame, so re-derive it. preserve_order keeps the key order faithful.
-    if changed {
-        if let Some(frame) = out.get("frame") {
-            let raw = serde_json::to_string(frame).unwrap_or_default();
-            if let Some(obj) = out.as_object_mut() {
-                obj.insert("raw".into(), Value::from(raw));
-            }
+    if changed && let Some(frame) = out.get("frame") {
+        let raw = serde_json::to_string(frame).unwrap_or_default();
+        if let Some(obj) = out.as_object_mut() {
+            obj.insert("raw".into(), Value::from(raw));
         }
     }
     out
@@ -510,10 +510,10 @@ fn rewrite_long_string_field(
     replacement: &str,
     threshold: usize,
 ) {
-    if let Some(Value::String(s)) = obj.get_mut(field) {
-        if s.len() > threshold {
-            *s = replacement.to_string();
-        }
+    if let Some(Value::String(s)) = obj.get_mut(field)
+        && s.len() > threshold
+    {
+        *s = replacement.to_string();
     }
 }
 
@@ -786,10 +786,12 @@ mod tests {
         // Same original path -> same token (referential consistency).
         let arr = q["frame"]["data"]["data"].as_array().unwrap();
         assert_eq!(arr[0], arr[1]);
-        assert!(arr[0]
-            .as_str()
-            .unwrap()
-            .starts_with("\\\\host\\media\\item-"));
+        assert!(
+            arr[0]
+                .as_str()
+                .unwrap()
+                .starts_with("\\\\host\\media\\item-")
+        );
     }
 
     #[test]

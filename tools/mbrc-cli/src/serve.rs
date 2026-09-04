@@ -13,8 +13,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use mbrc_capture::{parse_line, Record};
-use mbrc_wire::{frame_line, parse_context, FrameAccumulator};
+use mbrc_capture::{Record, parse_line};
+use mbrc_wire::{FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -66,21 +66,21 @@ fn build_responses(contents: &str) -> Responses {
 
     let mut seq_ctx: BTreeMap<u64, String> = BTreeMap::new();
     for f in &frames {
-        if f.dir == "c2s" {
-            if let Some(c) = f.context() {
-                seq_ctx.insert(f.seq, c.to_string());
-            }
+        if f.dir == "c2s"
+            && let Some(c) = f.context()
+        {
+            seq_ctx.insert(f.seq, c.to_string());
         }
     }
 
     let mut out: Responses = BTreeMap::new();
     for f in &frames {
-        if f.dir == "s2c" {
-            if let Some(ctx) = f.reply_to.and_then(|r| seq_ctx.get(&r)) {
-                let bucket = out.entry(ctx.clone()).or_default();
-                if !bucket.contains(&f.raw) {
-                    bucket.push(f.raw.clone());
-                }
+        if f.dir == "s2c"
+            && let Some(ctx) = f.reply_to.and_then(|r| seq_ctx.get(&r))
+        {
+            let bucket = out.entry(ctx.clone()).or_default();
+            if !bucket.contains(&f.raw) {
+                bucket.push(f.raw.clone());
             }
         }
     }

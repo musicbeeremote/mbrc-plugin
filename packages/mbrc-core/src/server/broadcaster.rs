@@ -5,8 +5,8 @@
 //! registered client.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -117,7 +117,7 @@ impl Broadcaster {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::test_support::{capture_wire_lines, WireLine};
+    use crate::logging::test_support::{WireLine, capture_wire_lines};
     use tokio::sync::mpsc;
 
     #[test]

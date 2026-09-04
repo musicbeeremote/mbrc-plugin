@@ -19,7 +19,7 @@ use crate::providers::Providers;
 use crate::server::blocked::BlockedLog;
 use crate::server::broadcaster::Broadcaster;
 use crate::server::registry::ConnectionRegistry;
-use crate::server::{self, notifications, NetHandle, RebuildScope};
+use crate::server::{self, NetHandle, RebuildScope, notifications};
 use crate::store::Db;
 
 /// The initialized core: the provider boundary, config, the broadcast registry,
@@ -736,11 +736,13 @@ mod tests {
     #[test]
     fn merge_rejects_a_non_map_payload_and_bad_field_types() {
         assert!(merge_settings(Config::default(), &serde_json::json!([1, 2])).is_err());
-        assert!(merge_settings(
-            Config::default(),
-            &serde_json::json!({"port": "not a number"})
-        )
-        .is_err());
+        assert!(
+            merge_settings(
+                Config::default(),
+                &serde_json::json!({"port": "not a number"})
+            )
+            .is_err()
+        );
     }
 
     #[test]

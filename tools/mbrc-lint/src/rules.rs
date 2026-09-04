@@ -261,37 +261,37 @@ fn content_rules(
         });
     }
 
-    if let Some(hit) = BANNED.iter().find(|p| text.contains(**p)) {
-        if !scan.allowed("banned-phrase", line) {
-            out.push(Finding {
-                line,
-                end,
-                rule: "banned-phrase",
-                message: format!("filler: \"{hit}\""),
-            });
-        }
+    if let Some(hit) = BANNED.iter().find(|p| text.contains(**p))
+        && !scan.allowed("banned-phrase", line)
+    {
+        out.push(Finding {
+            line,
+            end,
+            rule: "banned-phrase",
+            message: format!("filler: \"{hit}\""),
+        });
     }
 
-    if let Some(hit) = HISTORY.iter().find(|p| text.contains(**p)) {
-        if !scan.allowed("history-narration", line) {
-            out.push(Finding {
-                line,
-                end,
-                rule: "history-narration",
-                message: format!("history narration: \"{hit}\". Git holds that"),
-            });
-        }
+    if let Some(hit) = HISTORY.iter().find(|p| text.contains(**p))
+        && !scan.allowed("history-narration", line)
+    {
+        out.push(Finding {
+            line,
+            end,
+            rule: "history-narration",
+            message: format!("history narration: \"{hit}\". Git holds that"),
+        });
     }
 
-    if let Some(hit) = HEDGING.iter().find(|p| text.contains(**p)) {
-        if !scan.allowed("hedging", line) {
-            out.push(Finding {
-                line,
-                end,
-                rule: "hedging",
-                message: format!("hedging: \"{hit}\". Say what is true, or find out"),
-            });
-        }
+    if let Some(hit) = HEDGING.iter().find(|p| text.contains(**p))
+        && !scan.allowed("hedging", line)
+    {
+        out.push(Finding {
+            line,
+            end,
+            rule: "hedging",
+            message: format!("hedging: \"{hit}\". Say what is true, or find out"),
+        });
     }
 
     // Whole word and upper case, or a time format like mm:ss.xxx reads as one.
@@ -299,15 +299,14 @@ fn content_rules(
         original
             .split(|c: char| !c.is_ascii_alphanumeric())
             .any(|w| w == **p)
-    }) {
-        if !scan.allowed("placeholder", line) {
-            out.push(Finding {
-                line,
-                end,
-                rule: "placeholder",
-                message: format!("{hit} marker. Open an issue, or do it"),
-            });
-        }
+    }) && !scan.allowed("placeholder", line)
+    {
+        out.push(Finding {
+            line,
+            end,
+            rule: "placeholder",
+            message: format!("{hit} marker. Open an issue, or do it"),
+        });
     }
 
     let planning = PLANNING.iter().find(|p| contains_word(text, p));
@@ -318,24 +317,25 @@ fn content_rules(
                 .starts_with(|c: char| c.is_ascii_digit())
         })
     });
-    if let Some(hit) = planning.or(numbered) {
-        if !scan.allowed("planning-leftover", line) {
-            out.push(Finding {
-                line,
-                end,
-                rule: "planning-leftover",
-                message: format!(
-                    "plan vocabulary: \"{hit}\". Describe the code, not the schedule it arrived on"
-                ),
-            });
-        }
+    if let Some(hit) = planning.or(numbered)
+        && !scan.allowed("planning-leftover", line)
+    {
+        out.push(Finding {
+            line,
+            end,
+            rule: "planning-leftover",
+            message: format!(
+                "plan vocabulary: \"{hit}\". Describe the code, not the schedule it arrived on"
+            ),
+        });
     }
 
     let dated = ANECDOTE.iter().find(|p| text.contains(**p)).copied();
     let dated = dated.or_else(|| iso_date(text).map(|_| "a date"));
-    if let Some(hit) = dated {
-        if !scan.allowed("dated-anecdote", line) {
-            out.push(Finding {
+    if let Some(hit) = dated
+        && !scan.allowed("dated-anecdote", line)
+    {
+        out.push(Finding {
                 line,
                 end,
                 rule: "dated-anecdote",
@@ -343,7 +343,6 @@ fn content_rules(
                     "dated anecdote ({hit}). Keep the finding, move the measurement to the commit message"
                 ),
             });
-        }
     }
 }
 

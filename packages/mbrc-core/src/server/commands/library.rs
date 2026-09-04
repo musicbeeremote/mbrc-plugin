@@ -6,11 +6,11 @@
 
 use std::collections::HashMap;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 
-use super::{as_bool_lenient, as_set_string, pagination, reply_dto, Ctx, HandlerResult};
+use super::{Ctx, HandlerResult, as_bool_lenient, as_set_string, pagination, reply_dto};
 use crate::cover::{cover_identifier, from_base64, store::CoverStore};
 use crate::metadata_cache::MetadataCache;
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
@@ -97,16 +97,16 @@ fn serve_tracks_from_store(
         .map(|(path, _)| path.clone())
         .collect();
 
-    if !misses.is_empty() {
-        if let Ok(fetched) = p.tracks_for_paths(misses) {
-            cache.put_track_tags(&fetched);
-            // Fill the holes from the batch we just fetched (no second DB read).
-            let mut by_path: HashMap<&str, &Track> =
-                fetched.iter().map(|t| (t.src.as_str(), t)).collect();
-            for (slot, path) in resolved.iter_mut().zip(&paths) {
-                if slot.is_none() {
-                    *slot = by_path.remove(path.as_str()).cloned();
-                }
+    if !misses.is_empty()
+        && let Ok(fetched) = p.tracks_for_paths(misses)
+    {
+        cache.put_track_tags(&fetched);
+        // Fill the holes from the batch we just fetched (no second DB read).
+        let mut by_path: HashMap<&str, &Track> =
+            fetched.iter().map(|t| (t.src.as_str(), t)).collect();
+        for (slot, path) in resolved.iter_mut().zip(&paths) {
+            if slot.is_none() {
+                *slot = by_path.remove(path.as_str()).cloned();
             }
         }
     }
@@ -308,10 +308,10 @@ where
     T: Serialize + DeserializeOwned + Default,
     F: FnOnce() -> Result<Page<T>, String>,
 {
-    if let Some(cache) = ctx.metadata_cache {
-        if let Some(cached) = cache.get::<Page<T>>(key) {
-            return Ok(slice_page(cached, offset, limit));
-        }
+    if let Some(cache) = ctx.metadata_cache
+        && let Some(cached) = cache.get::<Page<T>>(key)
+    {
+        return Ok(slice_page(cached, offset, limit));
     }
     let full = fetch_full()?;
     if let Some(cache) = ctx.metadata_cache {
@@ -346,10 +346,10 @@ where
     T: Serialize + DeserializeOwned,
     F: FnOnce() -> Result<Vec<T>, String>,
 {
-    if let Some(cache) = ctx.metadata_cache {
-        if let Some(list) = cache.get::<Vec<T>>(key) {
-            return Ok(list);
-        }
+    if let Some(cache) = ctx.metadata_cache
+        && let Some(list) = cache.get::<Vec<T>>(key)
+    {
+        return Ok(list);
     }
     let list = fetch()?;
     if let Some(cache) = ctx.metadata_cache {

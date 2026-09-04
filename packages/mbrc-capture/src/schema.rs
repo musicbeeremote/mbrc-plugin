@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::{parse_line, Record};
+use crate::{Record, parse_line};
 
 /// Field path (dotted, `[]` for array element) -> JSON type. When a path shows
 /// more than one type across frames the types are unioned as `"a|b"`.

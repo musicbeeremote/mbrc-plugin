@@ -14,15 +14,14 @@ use std::io::Write;
 use std::path::Path;
 
 use mbrc_release::{
-    clear_staged,
+    AvailableUpdate, Channel, Manifest, UpdateError, clear_staged,
     manifest::{Artifact, Artifacts, FileEntry},
     read_pending, stage,
     stage::{PENDING_FILE, PENDING_SCHEMA, STAGING_DIR},
-    AvailableUpdate, Channel, Manifest, UpdateError,
 };
 use sha2::{Digest, Sha512};
 use support::StubHttp;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const ZIP_URL: &str = "https://assets.test/musicbee_remote_1.6.0.zip";
 const NOW: &str = "2026-08-04T10:00:00Z";

@@ -22,13 +22,13 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
     check::{AvailableUpdate, MANIFEST_ASSET, SIGNATURE_ASSET},
     error::{Result, UpdateError},
     http::HttpClient,
-    manifest::{is_bare_filename, Manifest},
+    manifest::{Manifest, is_bare_filename},
     verify::verify_sha512,
 };
 

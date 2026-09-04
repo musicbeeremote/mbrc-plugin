@@ -118,10 +118,12 @@ mod tests {
         // diagnosable from the bundle.
         let out = settings(settings_json());
         assert_eq!(out["port"], 3000);
-        assert!(out["storage_path"]
-            .as_str()
-            .expect("path stays a string")
-            .contains("mb_remote"));
+        assert!(
+            out["storage_path"]
+                .as_str()
+                .expect("path stays a string")
+                .contains("mb_remote")
+        );
     }
 
     #[test]

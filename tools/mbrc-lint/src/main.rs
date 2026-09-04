@@ -56,10 +56,10 @@ fn main() -> ExitCode {
         found.extend(rules::check_paths(&scanned, &repo));
         found.sort_by_key(|f| (f.line, f.rule));
         for f in found {
-            if let Some(ranges) = &ranges {
-                if !ranges.iter().any(|(a, b)| f.line <= *b && f.end >= *a) {
-                    continue;
-                }
+            if let Some(ranges) = &ranges
+                && !ranges.iter().any(|(a, b)| f.line <= *b && f.end >= *a)
+            {
+                continue;
             }
             findings += 1;
             println!("{}:{}: [{}] {}", path.display(), f.line, f.rule, f.message);

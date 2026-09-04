@@ -11,12 +11,12 @@ use std::time::Duration;
 
 use socket2::{SockRef, TcpKeepalive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::net::tcp::OwnedWriteHalf;
 use tokio::sync::Notify;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
-use mbrc_wire::{frame_line, FrameAccumulator};
+use mbrc_wire::{FrameAccumulator, frame_line};
 
 use crate::server::registry::{Admit, Role};
 use crate::server::session::Session;

@@ -18,7 +18,7 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::net::UdpSocket;
 use tokio::sync::Notify;
@@ -135,13 +135,12 @@ fn client_address(req: &[u8]) -> Option<Ipv4Addr> {
 /// subnet match.
 fn advertise_ip(client_ip: Option<Ipv4Addr>) -> Option<Ipv4Addr> {
     let ifaces = usable_ipv4_ifaces();
-    if let Some(client) = client_ip {
-        if let Some((ip, _)) = ifaces
+    if let Some(client) = client_ip
+        && let Some((ip, _)) = ifaces
             .iter()
             .find(|(ip, mask)| same_subnet(*ip, client, *mask))
-        {
-            return Some(*ip);
-        }
+    {
+        return Some(*ip);
     }
     best_private_ipv4(&ifaces)
 }

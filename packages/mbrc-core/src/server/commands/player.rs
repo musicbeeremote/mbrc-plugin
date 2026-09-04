@@ -5,9 +5,9 @@
 //! the V4 wire spelling (stringified volume, enum spellings) is applied by
 //! `ctx.wire()` (the `wire::v4` formatter).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{as_bool_lenient, as_int_lenient, Ctx, HandlerResult};
+use super::{Ctx, HandlerResult, as_bool_lenient, as_int_lenient};
 use crate::protocol::messages::{RepeatMode, ShuffleMode};
 
 /// One reply on the same context, echoing `true` for a fire-and-forget action.
@@ -197,10 +197,10 @@ pub fn output(_data: &Value, ctx: &Ctx) -> HandlerResult {
 /// # Errors
 /// The provider call failed.
 pub fn output_switch(data: &Value, ctx: &Ctx) -> HandlerResult {
-    if let Some(device) = data.as_str() {
-        if !device.is_empty() {
-            ctx.providers.switch_output(device)?;
-        }
+    if let Some(device) = data.as_str()
+        && !device.is_empty()
+    {
+        ctx.providers.switch_output(device)?;
     }
     let devices = ctx.providers.output_devices()?;
     Ok(vec![(
@@ -296,9 +296,10 @@ mod tests {
         // `playeroutputswitch` with a name switches; empty name is ignored.
         let m = mock();
         output_switch(&json!("Headphones"), &ctx(&m)).unwrap();
-        assert!(m
-            .recorded()
-            .contains(&"switch_output(Headphones)".to_string()));
+        assert!(
+            m.recorded()
+                .contains(&"switch_output(Headphones)".to_string())
+        );
 
         let m = mock();
         output_switch(&json!(""), &ctx(&m)).unwrap();

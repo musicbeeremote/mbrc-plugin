@@ -39,19 +39,19 @@ pub mod winhttp;
 
 pub use error::{Result, UpdateError};
 pub use manifest::{
-    is_bare_filename, Artifact, Artifacts, Channel, FileEntry, Manifest, SCHEMA_VERSION,
+    Artifact, Artifacts, Channel, FileEntry, Manifest, SCHEMA_VERSION, is_bare_filename,
 };
 pub use verify::{
-    verify_bundled_file, verify_manifest, verify_manifest_with, verify_sha512, verify_signature,
-    verify_signature_with, TrustedKey, TRUSTED_KEYS,
+    TRUSTED_KEYS, TrustedKey, verify_bundled_file, verify_manifest, verify_manifest_with,
+    verify_sha512, verify_signature, verify_signature_with,
 };
 
 #[cfg(feature = "client")]
-pub use check::{check, AvailableUpdate, CheckOptions, CheckOutcome};
+pub use check::{AvailableUpdate, CheckOptions, CheckOutcome, check};
 #[cfg(feature = "client")]
 pub use http::{HttpClient, HttpResponse};
 #[cfg(feature = "client")]
-pub use stage::{clear_staged, read_pending, stage, Pending, StagedUpdate};
+pub use stage::{Pending, StagedUpdate, clear_staged, read_pending, stage};
 #[cfg(feature = "client")]
 pub use state::UpdateState;
 #[cfg(all(feature = "client", windows))]

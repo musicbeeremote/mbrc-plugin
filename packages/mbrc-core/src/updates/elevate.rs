@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mbrc_release::{stage::STAGING_DIR, verify_bundled_file, verify_manifest, Manifest};
+use mbrc_release::{Manifest, stage::STAGING_DIR, verify_bundled_file, verify_manifest};
 
 use crate::ffi::types::UpdateLaunch;
 
@@ -301,8 +301,8 @@ pub(crate) fn plugins_dir() -> Option<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::HMODULE;
     use windows_sys::Win32::System::LibraryLoader::{
-        GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        GetModuleFileNameW, GetModuleHandleExW,
     };
 
     let mut module: HMODULE = std::ptr::null_mut();
@@ -427,9 +427,10 @@ const SETTLE: std::time::Duration = std::time::Duration::from_millis(750);
 fn spawn_in_container(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
-        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
-        UpdateProcThreadAttribute, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
-        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, STARTUPINFOEXW,
+        CreateProcessW, DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT,
+        InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
+        PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, PROCESS_INFORMATION, STARTUPINFOEXW,
+        UpdateProcThreadAttribute,
     };
     use windows_sys::Win32::System::WindowsProgramming::PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_OVERRIDE;
 
@@ -574,7 +575,7 @@ unsafe fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> 
 fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
     use windows_sys::Win32::UI::Shell::{
-        ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+        SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 

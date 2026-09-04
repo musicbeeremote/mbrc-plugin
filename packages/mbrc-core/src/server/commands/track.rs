@@ -4,9 +4,9 @@
 //! The response DTOs already match the wire shapes, so most handlers just
 //! serialize the provider result.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{as_int_lenient, as_set_string, Ctx, HandlerResult};
+use super::{Ctx, HandlerResult, as_int_lenient, as_set_string};
 use crate::protocol::messages::LastfmStatus;
 use crate::providers::Providers;
 

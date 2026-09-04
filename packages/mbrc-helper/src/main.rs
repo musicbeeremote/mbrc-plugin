@@ -199,7 +199,7 @@ fn run_update(request: &update::Request<'_>) -> u8 {
 
 #[cfg(windows)]
 fn run_firewall(port: u16) -> u8 {
-    use firewall::{ensure_rule, RULE_NAME};
+    use firewall::{RULE_NAME, ensure_rule};
 
     let policy = match firewall::com::ComPolicy::new() {
         Ok(policy) => policy,

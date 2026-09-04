@@ -7,7 +7,7 @@
 //! cases under `cargo test` (and in CI/coverage) instead.
 
 use mbrc_wire::{
-    frame_line, parse_context, parse_lenient, sanitize_ios_quotes, FrameAccumulator, TERMINATOR,
+    FrameAccumulator, TERMINATOR, frame_line, parse_context, parse_lenient, sanitize_ios_quotes,
 };
 use proptest::prelude::*;
 use serde_json::Value;

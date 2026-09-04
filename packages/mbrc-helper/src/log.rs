@@ -69,9 +69,9 @@ pub fn note_environment() {
 /// identity - the ordinary desktop install, and by far the common case.
 #[cfg(windows)]
 fn package_family_name() -> Option<String> {
-    use windows::core::PWSTR;
     use windows::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
     use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFamilyName;
+    use windows::core::PWSTR;
 
     let mut length: u32 = 0;
     // SAFETY: the documented probe - a null buffer with a zero length asks for

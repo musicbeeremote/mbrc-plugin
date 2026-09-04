@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use mbrc_capture::{meta_capture_start, meta_close, meta_handshake, meta_open, Frame};
+use mbrc_capture::{Frame, meta_capture_start, meta_close, meta_handshake, meta_open};
 use serde::Serialize;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};

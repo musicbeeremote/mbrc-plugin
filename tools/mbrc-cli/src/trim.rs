@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use mbrc_capture::{trim_capture, PLACEHOLDER_PNG_B64};
+use mbrc_capture::{PLACEHOLDER_PNG_B64, trim_capture};
 
 use crate::args::flag_value;
 

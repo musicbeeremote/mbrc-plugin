@@ -124,10 +124,10 @@ fn generate_enums() {
 
     let mut body = String::new();
     for item in &file.items {
-        if let Item::Enum(e) = item {
-            if is_repr_i32(&e.attrs) {
-                emit_enum(&mut body, e);
-            }
+        if let Item::Enum(e) = item
+            && is_repr_i32(&e.attrs)
+        {
+            emit_enum(&mut body, e);
         }
     }
 
@@ -285,10 +285,10 @@ fn map_type(ty: &Type, enums: &HashSet<String>) -> String {
 }
 
 fn first_type_arg(seg: &syn::PathSegment, enums: &HashSet<String>) -> String {
-    if let PathArguments::AngleBracketed(ab) = &seg.arguments {
-        if let Some(GenericArgument::Type(t)) = ab.args.first() {
-            return map_type(t, enums);
-        }
+    if let PathArguments::AngleBracketed(ab) = &seg.arguments
+        && let Some(GenericArgument::Type(t)) = ab.args.first()
+    {
+        return map_type(t, enums);
     }
     "object".to_string()
 }
@@ -423,10 +423,10 @@ fn escape_ident(name: &str) -> String {
 fn write_if_changed(path: &Path, content: &str) {
     // Normalize any mix to LF first, then to CRLF, so we never emit `\r\r\n`.
     let crlf = content.replace("\r\n", "\n").replace('\n', "\r\n");
-    if let Ok(existing) = std::fs::read_to_string(path) {
-        if existing == crlf {
-            return;
-        }
+    if let Ok(existing) = std::fs::read_to_string(path)
+        && existing == crlf
+    {
+        return;
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create the generated-bindings directory");

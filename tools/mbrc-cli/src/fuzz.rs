@@ -22,8 +22,8 @@
 use std::process::ExitCode;
 use std::time::Duration;
 
-use mbrc_capture::{parse_line, Frame, Record};
-use mbrc_wire::{frame_line, parse_context, ClientHandshake, FrameAccumulator, CTX_PLAYER};
+use mbrc_capture::{Frame, Record, parse_line};
+use mbrc_wire::{CTX_PLAYER, ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use serde_json::{Map, Value};
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;

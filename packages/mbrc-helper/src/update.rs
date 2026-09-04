@@ -23,7 +23,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use mbrc_release::{is_bare_filename, verify_manifest_with, Manifest, TrustedKey, TRUSTED_KEYS};
+use mbrc_release::{Manifest, TRUSTED_KEYS, TrustedKey, is_bare_filename, verify_manifest_with};
 
 /// Asset names the core stages alongside the payload.
 const MANIFEST_ASSET: &str = "manifest.json";
@@ -400,10 +400,10 @@ fn prune_backups(plan: &Plan, keep: &str) {
             continue;
         }
         let path = entry.path();
-        if path.is_dir() {
-            if let Err(e) = std::fs::remove_dir_all(&path) {
-                crate::log::line(&format!("could not remove {}: {e}", path.display()));
-            }
+        if path.is_dir()
+            && let Err(e) = std::fs::remove_dir_all(&path)
+        {
+            crate::log::line(&format!("could not remove {}: {e}", path.display()));
         }
     }
 }
@@ -427,10 +427,10 @@ pub fn clear_staged(plan: &Plan) {
     }
     if let Some(updates) = plan.staged.parent() {
         let marker = updates.join("pending.json");
-        if marker.exists() {
-            if let Err(e) = std::fs::remove_file(&marker) {
-                crate::log::line(&format!("could not remove {}: {e}", marker.display()));
-            }
+        if marker.exists()
+            && let Err(e) = std::fs::remove_file(&marker)
+        {
+            crate::log::line(&format!("could not remove {}: {e}", marker.display()));
         }
     }
 }
@@ -543,7 +543,7 @@ fn failed(path: &Path, e: std::io::Error) -> Error {
 fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{
-        OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
     };
 
     // SAFETY: a pid is a value, not a pointer; the handle is closed on both

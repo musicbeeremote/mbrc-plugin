@@ -7,8 +7,8 @@
 //! The typed, per-`QueryType`/`CommandType` wrappers live in the `Providers`
 //! layer (`crate::providers`) so this stays a thin, generic boundary.
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::ffi::types::{CommandType, HostEventType, MbrcCallbacks, QueryType};
 

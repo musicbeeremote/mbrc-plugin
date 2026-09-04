@@ -302,10 +302,10 @@ impl ConnectionRegistry {
 
         // Wake the superseded main's task so it closes. `notify_one` stores a
         // permit if the task isn't awaiting yet, so there is no lost-wakeup race.
-        if let Some(old) = superseded.filter(|&old| old != conn_id) {
-            if let Some(notify) = inner.shutdown.get(&old) {
-                notify.notify_one();
-            }
+        if let Some(old) = superseded.filter(|&old| old != conn_id)
+            && let Some(notify) = inner.shutdown.get(&old)
+        {
+            notify.notify_one();
         }
         Admit::Admitted
     }

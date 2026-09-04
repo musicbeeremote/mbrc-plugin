@@ -159,13 +159,12 @@ pub fn discover_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
         for (_ip, socket) in &sockets {
             match socket.recv_from(&mut buf) {
                 Ok((n, _src)) => {
-                    if let Some(d) = parse_notify(&buf[..n]) {
-                        if !found
+                    if let Some(d) = parse_notify(&buf[..n])
+                        && !found
                             .iter()
                             .any(|e| e.address == d.address && e.port == d.port)
-                        {
-                            found.push(d);
-                        }
+                    {
+                        found.push(d);
                     }
                 }
                 Err(ref e)

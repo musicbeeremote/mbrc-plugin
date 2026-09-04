@@ -13,7 +13,7 @@ use proptest::prelude::*;
 /// Decode `bytes` as each listed type, discarding the result. The only assertion
 /// is the absence of a panic (a control-flow property, not a value one).
 macro_rules! try_decode {
-    ($bytes:expr, $($t:ty),+ $(,)?) => {
+    ($bytes:expr_2021, $($t:ty),+ $(,)?) => {
         $( let _ = rmp_serde::from_slice::<$t>($bytes); )+
     };
 }

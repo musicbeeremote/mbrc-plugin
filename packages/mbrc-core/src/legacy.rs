@@ -67,19 +67,19 @@ pub fn sweep(storage_path: &str, plugins_dir: Option<&Path>) {
         }
     }
 
-    if migrated_settings_are_present(storage) {
-        if let Some(size) = remove_file(storage, "settings.xml") {
-            removed += 1;
-            freed += size;
-        }
+    if migrated_settings_are_present(storage)
+        && let Some(size) = remove_file(storage, "settings.xml")
+    {
+        removed += 1;
+        freed += size;
     }
 
     let cache = storage.join("cache");
-    if is_real_directory(&cache) {
-        if let Some(size) = remove_file(&cache, MIGRATED_COVER_STATE) {
-            removed += 1;
-            freed += size;
-        }
+    if is_real_directory(&cache)
+        && let Some(size) = remove_file(&cache, MIGRATED_COVER_STATE)
+    {
+        removed += 1;
+        freed += size;
     }
 
     if let Some(plugins) = plugins_dir {
@@ -188,7 +188,7 @@ fn is_multiply_linked(path: &Path, _meta: &std::fs::Metadata) -> bool {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
     };
 
     let Ok(file) = std::fs::File::open(path) else {

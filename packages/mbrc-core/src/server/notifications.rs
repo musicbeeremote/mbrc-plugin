@@ -12,7 +12,7 @@
 //! - LyricsReady/ArtworkReady -> lyrics/cover; ListChanged -> nowplayinglistchanged
 //! - FileAddedToLibrary -> no broadcast (caches the cover, C#-side)
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::ffi::types::NotificationType;
 use crate::nowplaying::NowPlaying;

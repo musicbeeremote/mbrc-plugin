@@ -22,14 +22,14 @@
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use time::format_description::well_known::Rfc3339;
+use serde_json::{Value, json};
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 pub mod schema;
 pub mod trim;
-pub use schema::{endpoint_schemas, endpoint_values, EndpointSchemas, EndpointValues, FieldMap};
-pub use trim::{trim_capture, TrimOutput, PLACEHOLDER_LYRICS, PLACEHOLDER_PNG_B64};
+pub use schema::{EndpointSchemas, EndpointValues, FieldMap, endpoint_schemas, endpoint_values};
+pub use trim::{PLACEHOLDER_LYRICS, PLACEHOLDER_PNG_B64, TrimOutput, trim_capture};
 
 /// Capture format version, written into the file header.
 pub const CAPTURE_FORMAT: &str = "mbrc-capture/2";

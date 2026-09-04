@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use mbrc_capture::{endpoint_schemas, Frame};
+use mbrc_capture::{Frame, endpoint_schemas};
 use mbrc_core::config::Config;
 use mbrc_core::ffi::types::NotificationType;
 use mbrc_core::protocol::messages::*;

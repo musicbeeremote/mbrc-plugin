@@ -77,12 +77,12 @@ fn poll(
     let wire = ProtocolVersion::V4.codec();
 
     // Position is throttled to every 20s (emit_position); only query it then.
-    if emit_position && state.play_state == PlayState::Playing {
-        if let Ok(position) = providers.playback_position() {
-            if let Ok(value) = serde_json::to_value(&position) {
-                frames.push(frame("nowplayingposition", value));
-            }
-        }
+    if emit_position
+        && state.play_state == PlayState::Playing
+        && let Ok(position) = providers.playback_position()
+        && let Ok(value) = serde_json::to_value(&position)
+    {
+        frames.push(frame("nowplayingposition", value));
     }
     if seed_or_changed(&mut cached.shuffle, state.shuffle) {
         frames.push(frame("playershuffle", wire.shuffle(state.shuffle)));

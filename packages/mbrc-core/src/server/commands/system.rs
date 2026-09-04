@@ -4,9 +4,9 @@
 //! The handshake contexts themselves (player, protocol, ping, pong,
 //! verifyconnection) are handled in `session`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{reply_dto, Ctx, HandlerResult};
+use super::{Ctx, HandlerResult, reply_dto};
 use crate::providers::Providers;
 
 /// The version advertised to V4 legacy clients.

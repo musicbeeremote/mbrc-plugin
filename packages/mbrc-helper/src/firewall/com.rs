@@ -6,18 +6,18 @@
 
 use super::{Error, FirewallPolicy, Result};
 
-use windows::core::{Interface, BSTR};
 use windows::Win32::Foundation::{E_ACCESSDENIED, VARIANT_TRUE};
 use windows::Win32::NetworkManagement::WindowsFirewall::{
-    INetFwPolicy2, INetFwRule, NetFwPolicy2, NetFwRule, NET_FW_ACTION_ALLOW,
-    NET_FW_IP_PROTOCOL_TCP, NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE,
-    NET_FW_PROFILE2_PUBLIC, NET_FW_PROFILE_TYPE2, NET_FW_RULE_DIR_IN,
+    INetFwPolicy2, INetFwRule, NET_FW_ACTION_ALLOW, NET_FW_IP_PROTOCOL_TCP, NET_FW_PROFILE_TYPE2,
+    NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC, NET_FW_RULE_DIR_IN,
+    NetFwPolicy2, NetFwRule,
 };
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, IDispatch, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IDispatch,
 };
 use windows::Win32::System::Ole::IEnumVARIANT;
 use windows::Win32::System::Variant::VARIANT;
+use windows::core::{BSTR, Interface};
 
 /// Maps a COM failure onto the two cases the caller distinguishes.
 fn map_err(e: windows::core::Error) -> Error {

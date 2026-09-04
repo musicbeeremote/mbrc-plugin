@@ -273,14 +273,12 @@ impl Config {
             });
             // Migrate a pre-`log_level` file: an old `debug:true` (and no
             // `log_level` key) maps to Debug. The new file drops `debug` on save.
-            if config.log_level == LogLevel::Info {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&contents) {
-                    if v.get("log_level").is_none()
-                        && v.get("debug").and_then(serde_json::Value::as_bool) == Some(true)
-                    {
-                        config.log_level = LogLevel::Debug;
-                    }
-                }
+            if config.log_level == LogLevel::Info
+                && let Ok(v) = serde_json::from_str::<serde_json::Value>(&contents)
+                && v.get("log_level").is_none()
+                && v.get("debug").and_then(serde_json::Value::as_bool) == Some(true)
+            {
+                config.log_level = LogLevel::Debug;
             }
         } else {
             tracing::info!("no core_settings.json found; using default config");

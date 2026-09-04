@@ -19,7 +19,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use mbrc_release::{check::CheckOutcome, AvailableUpdate, HttpClient, Result, UpdateState};
+use mbrc_release::{AvailableUpdate, HttpClient, Result, UpdateState, check::CheckOutcome};
 
 use crate::ffi::types::{HostEventType, MbrcResult};
 use crate::state::Core;
@@ -461,8 +461,8 @@ fn client(_core: &Core) -> std::result::Result<Box<dyn HttpClient>, String> {
 mod tests {
     use super::*;
     use mbrc_release::{
-        manifest::{Artifact, Artifacts},
         Channel, Manifest, UpdateError,
+        manifest::{Artifact, Artifacts},
     };
 
     fn manifest(version: &str) -> Manifest {

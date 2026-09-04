@@ -22,13 +22,13 @@ pub mod store;
 pub mod updates;
 pub mod wire;
 
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_int};
 use std::sync::Arc;
 
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::types::{
-    HostCommandType, HostQueryType, MbrcCallbacks, MbrcResult, NotificationType, UpdateLaunch,
-    MBRC_ABI_VERSION,
+    HostCommandType, HostQueryType, MBRC_ABI_VERSION, MbrcCallbacks, MbrcResult, NotificationType,
+    UpdateLaunch,
 };
 use crate::providers::{FfiProviders, Providers};
 
@@ -70,7 +70,7 @@ fn ffi_guard(export: &'static str, body: impl FnOnce() -> c_int) -> c_int {
 ///
 /// # Safety
 /// `storage_path` must be a valid, NUL-terminated C string (or null).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_initialize(
     abi_version: c_int,
     callbacks: MbrcCallbacks,
@@ -115,13 +115,13 @@ pub unsafe extern "C" fn mbrc_initialize(
 }
 
 /// Stops networking and releases the core; a later `mbrc_initialize` may re-init.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_shutdown() -> c_int {
     ffi_guard("mbrc_shutdown", || state::shutdown() as c_int)
 }
 
 /// Starts the TCP command server + UDP discovery responder.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_start_networking() -> c_int {
     ffi_guard("mbrc_start_networking", || {
         state::start_networking() as c_int
@@ -129,7 +129,7 @@ pub extern "C" fn mbrc_start_networking() -> c_int {
 }
 
 /// Gracefully stop networking (leaves the core initialized).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_stop_networking() -> c_int {
     ffi_guard("mbrc_stop_networking", || state::stop_networking() as c_int)
 }
@@ -141,7 +141,7 @@ pub extern "C" fn mbrc_stop_networking() -> c_int {
 /// hand those milliseconds over as a head start and find the wait in
 /// `mbrc_stop_networking` already over. Cleared by the next
 /// `mbrc_start_networking`, so a port change is unaffected. Idempotent.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_begin_stopping() -> c_int {
     ffi_guard("mbrc_begin_stopping", || state::begin_stopping() as c_int)
 }
@@ -155,7 +155,7 @@ pub extern "C" fn mbrc_begin_stopping() -> c_int {
 ///
 /// # Safety
 /// `out_len` must be null or point to a writable `u32`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_read_settings(out_len: *mut u32) -> *mut u8 {
     if !out_len.is_null() {
         // SAFETY: `out_len` is null-checked above and the contract says it points to a
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn mbrc_read_settings(out_len: *mut u32) -> *mut u8 {
 ///
 /// # Safety
 /// `buf` must be null or point to `len` readable bytes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_write_settings(buf: *const u8, len: u32) -> c_int {
     ffi_guard("mbrc_write_settings", || {
         if buf.is_null() {
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn mbrc_write_settings(buf: *const u8, len: u32) -> c_int 
 /// # Safety
 /// `params_buf` must be null or point to `params_len` readable bytes; `out_len`
 /// must be null or point to a writable `u32`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_query(
     query_type: c_int,
     params_buf: *const u8,
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn mbrc_query(
 ///
 /// # Safety
 /// `params_buf` must be null or point to `params_len` readable bytes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_command(
     command_type: c_int,
     params_buf: *const u8,
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn mbrc_command(
 ///
 /// # Safety
 /// `ptr`/`len` must come from `mbrc_read_settings` and be freed exactly once.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_free_bytes(ptr: *mut u8, len: u32) {
     if ptr.is_null() {
         return;
@@ -308,7 +308,7 @@ pub unsafe extern "C" fn mbrc_free_bytes(ptr: *mut u8, len: u32) {
 /// Carries an optional MessagePack payload (`params_buf`/`params_len`, e.g. the
 /// added/changed file URL) so the broadcast fan-out can build the right
 /// broadcast. Empty payload = null/0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_handle_notification(
     notification_type: c_int,
     _params_buf: *const u8,
@@ -328,7 +328,7 @@ pub extern "C" fn mbrc_handle_notification(
 ///
 /// # Safety
 /// `target` and `message` must be null or valid NUL-terminated C strings.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_log(
     level: c_int,
     target: *const c_char,
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn mbrc_log(
 ///
 /// # Safety
 /// `directive` must be null or a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
     ffi_guard("mbrc_set_log_level", || {
         // SAFETY: null-checked above, and the caller's contract says it is a valid
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn mbrc_set_log_level(directive: *const c_char) -> c_int {
 /// waiting for MusicBee to exit, so the caller shuts it down next. `Cancelled`
 /// leaves the staged update in place for a retry, and `NotAnUpgrade` means the
 /// bundle verified but is not newer - a refusal rather than a failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mbrc_apply_staged_update() -> c_int {
     ffi_guard(
         "mbrc_apply_staged_update",
@@ -391,7 +391,7 @@ pub extern "C" fn mbrc_apply_staged_update() -> c_int {
 /// # Safety
 /// `ptr` must be null or a pointer previously returned by this core (from
 /// `CString::into_raw`); it must not be freed twice.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbrc_free_string(ptr: *mut c_char) {
     // Void return, so guard inline rather than via `ffi_guard`.
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -417,7 +417,7 @@ mod ffi_smoke_tests {
     use crate::ffi::types::{CommandType, QueryType};
     use crate::protocol::messages::PlaybackPositionResponse;
     use crate::providers::Providers;
-    use std::alloc::{alloc, dealloc, Layout};
+    use std::alloc::{Layout, alloc, dealloc};
     use std::cell::RefCell;
     use std::collections::HashMap;
 

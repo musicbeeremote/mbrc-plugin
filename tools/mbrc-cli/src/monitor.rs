@@ -25,11 +25,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use mbrc_wire::{frame_line, parse_context, ClientHandshake, FrameAccumulator};
-use serde_json::{json, Value};
+use mbrc_wire::{ClientHandshake, FrameAccumulator, frame_line, parse_context};
+use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use crate::args::flag_value;
 
@@ -214,7 +214,7 @@ impl Conn {
             match tokio::time::timeout(remaining, self.rd.read(&mut buf)).await {
                 Err(_) => return Ok(None),
                 Ok(Ok(0)) => {
-                    return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "peer closed"))
+                    return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "peer closed"));
                 }
                 Ok(Ok(n)) => self.acc.push_bytes(&buf[..n]),
                 Ok(Err(e)) => return Err(e),
@@ -264,15 +264,15 @@ impl Conn {
                     return Err(io::Error::new(
                         io::ErrorKind::TimedOut,
                         format!("no reply for {context}"),
-                    ))
+                    ));
                 }
                 Some(line) => {
-                    if let Some((ctx, payload)) = self.handle_frame(&line).await? {
-                        if ctx == context {
-                            return Ok(payload);
-                        }
-                        // A broadcast slipped in while we waited; ignore it.
+                    if let Some((ctx, payload)) = self.handle_frame(&line).await?
+                        && ctx == context
+                    {
+                        return Ok(payload);
                     }
+                    // A broadcast slipped in while we waited; ignore it.
                 }
             }
         }
@@ -359,10 +359,11 @@ async fn sweep_browsetracks(
         }
 
         offset += items.len() as i32;
-        if let Some(t) = total {
-            if t >= 0 && offset >= t {
-                break;
-            }
+        if let Some(t) = total
+            && t >= 0
+            && offset >= t
+        {
+            break;
         }
     }
 
@@ -479,10 +480,10 @@ async fn pager_loop(
     let mut conn: Option<Conn> = None;
 
     loop {
-        if let Some(t) = until {
-            if Instant::now() >= t {
-                return;
-            }
+        if let Some(t) = until
+            && Instant::now() >= t
+        {
+            return;
         }
 
         // Ensure a live connection.
@@ -570,10 +571,10 @@ async fn subscriber_loop(
 ) {
     let mut backoff = Duration::from_millis(500);
     loop {
-        if let Some(t) = until {
-            if Instant::now() >= t {
-                return;
-            }
+        if let Some(t) = until
+            && Instant::now() >= t
+        {
+            return;
         }
 
         let mut conn = match Conn::connect(&cfg, false).await {

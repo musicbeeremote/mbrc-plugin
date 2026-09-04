@@ -11,11 +11,11 @@ pub mod v4;
 
 use serde_json::Value;
 
+use crate::protocol::Platform;
 use crate::protocol::messages::{
     Cover, LastfmStatus, Lyrics, NowPlayingListTrack, OutputDevices, Page, PlayState, PlayerState,
     QueueType, RepeatMode, ShuffleMode, TrackDetails, TrackInfo,
 };
-use crate::protocol::Platform;
 
 /// Removes synchronized-lyrics (LRC) tags from a lyrics blob. Legacy clients
 /// (V4, V5) cannot render them, so their codecs strip; V6+ receives the LRC
@@ -30,16 +30,16 @@ pub fn strip_lrc(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'[' {
-            if let Some(rel) = bytes[i + 1..].iter().position(|&b| b == b']') {
-                let content = &input[i + 1..i + 1 + rel];
-                if is_lrc_tag(content) {
-                    i += rel + 2; // past the closing ']'
-                    if i < bytes.len() && bytes[i] == b' ' {
-                        i += 1; // consume one trailing space
-                    }
-                    continue;
+        if bytes[i] == b'['
+            && let Some(rel) = bytes[i + 1..].iter().position(|&b| b == b']')
+        {
+            let content = &input[i + 1..i + 1 + rel];
+            if is_lrc_tag(content) {
+                i += rel + 2; // past the closing ']'
+                if i < bytes.len() && bytes[i] == b' ' {
+                    i += 1; // consume one trailing space
                 }
+                continue;
             }
         }
         // Copy one whole UTF-8 char so multibyte lyrics stay intact.

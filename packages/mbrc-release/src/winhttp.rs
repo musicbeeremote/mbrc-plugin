@@ -22,17 +22,17 @@
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 
-use windows_sys::Win32::Foundation::{GetLastError, ERROR_INSUFFICIENT_BUFFER};
+use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, GetLastError};
 use windows_sys::Win32::Networking::WinHttp::{
-    WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect, WinHttpCrackUrl, WinHttpOpen,
-    WinHttpOpenRequest, WinHttpQueryDataAvailable, WinHttpQueryHeaders, WinHttpReadData,
-    WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
     URL_COMPONENTS, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
     WINHTTP_ACCESS_TYPE_NAMED_PROXY, WINHTTP_ADDREQ_FLAG_ADD, WINHTTP_ADDREQ_FLAG_REPLACE,
     WINHTTP_FLAG_SECURE, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3,
     WINHTTP_INTERNET_SCHEME_HTTPS, WINHTTP_OPTION_REDIRECT_POLICY,
     WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP, WINHTTP_OPTION_SECURE_PROTOCOLS,
     WINHTTP_QUERY_ETAG, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
+    WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect, WinHttpCrackUrl, WinHttpOpen,
+    WinHttpOpenRequest, WinHttpQueryDataAvailable, WinHttpQueryHeaders, WinHttpReadData,
+    WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
 };
 
 use crate::error::{Result, UpdateError};
@@ -676,12 +676,14 @@ mod tests {
             "an unknown protocol bit was accepted"
         );
         // And the mask the fallback uses is one it does know.
-        assert!(set_option(
-            &client.session,
-            WINHTTP_OPTION_SECURE_PROTOCOLS,
-            WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2
-        )
-        .is_ok());
+        assert!(
+            set_option(
+                &client.session,
+                WINHTTP_OPTION_SECURE_PROTOCOLS,
+                WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2
+            )
+            .is_ok()
+        );
     }
 
     #[test]

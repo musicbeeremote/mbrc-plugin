@@ -18,12 +18,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use redb::{Durability, ReadableTableMetadata};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::protocol::messages::Track;
 use crate::store::{
-    Db, LIBRARY_FINGERPRINT, META, METADATA_CACHE, TRACKS_SYNCED_AT, TRACK_PATHS, TRACK_TAGS,
+    Db, LIBRARY_FINGERPRINT, META, METADATA_CACHE, TRACK_PATHS, TRACK_TAGS, TRACKS_SYNCED_AT,
 };
 
 pub struct MetadataCache {

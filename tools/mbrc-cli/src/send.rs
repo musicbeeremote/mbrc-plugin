@@ -14,7 +14,7 @@
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use mbrc_wire::{frame_line, parse_context, ClientHandshake, FrameAccumulator};
+use mbrc_wire::{ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -137,12 +137,12 @@ async fn run_async(
                 println!("> {reply}");
                 // The plugin only accepts commands once we answer the `player` echo with
                 // `protocol`, so the queued command goes now.
-                if ctx == mbrc_wire::CTX_PLAYER {
-                    if let Some(cmd) = command.take() {
-                        let _ = wr.write_all(frame_line(&cmd).as_bytes()).await;
-                        let _ = wr.flush().await;
-                        println!("> {cmd}");
-                    }
+                if ctx == mbrc_wire::CTX_PLAYER
+                    && let Some(cmd) = command.take()
+                {
+                    let _ = wr.write_all(frame_line(&cmd).as_bytes()).await;
+                    let _ = wr.flush().await;
+                    println!("> {cmd}");
                 }
             }
         }

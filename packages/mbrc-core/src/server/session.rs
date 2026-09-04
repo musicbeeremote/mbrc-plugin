@@ -7,7 +7,7 @@
 //! It handles the handshake (`player`, `protocol`), keepalive and health
 //! (`ping`, `pong`, `verifyconnection`), and dispatch for every other context.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use mbrc_wire::parse_lenient;
 

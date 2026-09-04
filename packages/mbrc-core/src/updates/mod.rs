@@ -15,8 +15,9 @@ pub mod elevate;
 pub mod service;
 
 use mbrc_release::{
+    AvailableUpdate, HttpClient, Result, StagedUpdate, UpdateState,
     check::{self, CheckOptions, CheckOutcome},
-    stage, AvailableUpdate, HttpClient, Result, StagedUpdate, UpdateState,
+    stage,
 };
 use time::OffsetDateTime;
 

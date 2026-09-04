@@ -7,14 +7,14 @@
 //! and lets a V6 codec render/parse the same data differently without touching
 //! handlers.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{sanitize_lyrics, strip_lrc, WireCodec};
+use super::{WireCodec, sanitize_lyrics, strip_lrc};
+use crate::protocol::Platform;
 use crate::protocol::messages::{
     Cover, LastfmStatus, Lyrics, NowPlayingListTrack, OutputDevices, Page, PlayState, PlayerState,
     QueueType, RepeatMode, ShuffleMode, TrackDetails, TrackInfo,
 };
-use crate::protocol::Platform;
 
 /// The V4 wire codec (stateless).
 pub struct V4Codec;
@@ -184,10 +184,10 @@ impl WireCodec for V4Codec {
 
     fn track_details(&self, details: &TrackDetails) -> Value {
         let mut value = serde_json::to_value(details).unwrap_or_else(|_| json!({}));
-        if details.album_artist.is_empty() {
-            if let Some(obj) = value.as_object_mut() {
-                obj.insert("albumArtist".into(), Value::from("Unknown Artist"));
-            }
+        if details.album_artist.is_empty()
+            && let Some(obj) = value.as_object_mut()
+        {
+            obj.insert("albumArtist".into(), Value::from("Unknown Artist"));
         }
         value
     }

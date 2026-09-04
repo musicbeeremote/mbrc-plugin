@@ -20,14 +20,14 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
-use super::{resize_to_jpeg, sha1_hex, CACHE_SIZE};
-use crate::store::{Db, COVER_COVERS, COVER_META, LAST_CHECK};
+use super::{CACHE_SIZE, resize_to_jpeg, sha1_hex};
+use crate::store::{COVER_COVERS, COVER_META, Db, LAST_CHECK};
 
 /// One album's identity ingredients, provided by the host.
 ///

@@ -16,7 +16,7 @@ use crate::{
     http::HttpClient,
     manifest::{Channel, Manifest},
     state::UpdateState,
-    verify::{verify_manifest_with, TrustedKey, TRUSTED_KEYS},
+    verify::{TRUSTED_KEYS, TrustedKey, verify_manifest_with},
     version,
 };
 

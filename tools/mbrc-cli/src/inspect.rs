@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
-use mbrc_capture::{parse_line, Record};
+use mbrc_capture::{Record, parse_line};
 
 /// Frame/meta tallies for a capture file.
 #[derive(Debug, Default, PartialEq, Eq)]

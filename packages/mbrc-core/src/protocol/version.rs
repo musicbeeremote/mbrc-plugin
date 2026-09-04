@@ -4,7 +4,7 @@
 //! variant here plus a `wire` formatter is the entire change - handlers select
 //! their formatter via `ProtocolVersion::formatter()` and never name a version.
 
-use crate::wire::{WireCodec, V4_CODEC};
+use crate::wire::{V4_CODEC, WireCodec};
 
 /// A protocol version the core can format wire frames for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

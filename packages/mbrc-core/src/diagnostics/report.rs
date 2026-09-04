@@ -4,8 +4,8 @@
 //! Nothing here is new state - it is the values the settings panel, update flow
 //! and caches already hold, gathered so a maintainer never has to ask for them.
 
-use serde_json::{json, Value};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use serde_json::{Value, json};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::diagnostics::redact;
 use crate::ffi::dtos::CaptureEnvEntry;

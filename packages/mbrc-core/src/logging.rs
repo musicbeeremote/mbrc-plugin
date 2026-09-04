@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use serde_json::Value;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::{fmt, reload, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, fmt, reload};
 
 static INIT: OnceLock<()> = OnceLock::new();
 
@@ -355,17 +355,17 @@ fn redact_value(v: &mut Value, key: Option<&str>, max_array: Option<usize>) {
             }
         }
         Value::Array(items) => {
-            if let Some(max) = max_array {
-                if items.len() > max {
-                    let extra = items.len() - max;
-                    let schema = array_schema(&items[max]);
-                    items.truncate(max);
-                    for it in items.iter_mut() {
-                        redact_value(it, key, max_array);
-                    }
-                    items.push(Value::String(format!("<+{extra} more items{schema}>")));
-                    return;
+            if let Some(max) = max_array
+                && items.len() > max
+            {
+                let extra = items.len() - max;
+                let schema = array_schema(&items[max]);
+                items.truncate(max);
+                for it in items.iter_mut() {
+                    redact_value(it, key, max_array);
                 }
+                items.push(Value::String(format!("<+{extra} more items{schema}>")));
+                return;
             }
             items
                 .iter_mut()
@@ -435,11 +435,11 @@ pub mod test_support {
     use std::fmt::Debug;
     use std::sync::{Arc, Mutex};
 
-    use tracing::field::{Field, Visit};
     use tracing::Subscriber;
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::Registry;
     use tracing_subscriber::layer::{Context, Layer};
     use tracing_subscriber::prelude::*;
-    use tracing_subscriber::Registry;
 
     /// The subset of a `mbrc::wire` event that the broadcast/ping tests assert on.
     #[derive(Debug, Default, Clone)]

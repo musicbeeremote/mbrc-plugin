@@ -13,7 +13,7 @@
 use std::collections::BTreeSet;
 use std::process::ExitCode;
 
-use mbrc_capture::{endpoint_schemas, endpoint_values, FieldMap};
+use mbrc_capture::{FieldMap, endpoint_schemas, endpoint_values};
 
 use crate::args::{flag_value, has_flag};
 use crate::trim::read_all;

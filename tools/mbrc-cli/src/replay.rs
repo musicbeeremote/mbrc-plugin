@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use mbrc_capture::{parse_line, Frame, Record};
-use mbrc_wire::{frame_line, parse_context, ClientHandshake, FrameAccumulator, CTX_PLAYER};
+use mbrc_capture::{Frame, Record, parse_line};
+use mbrc_wire::{CTX_PLAYER, ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -90,10 +90,10 @@ pub fn run(args: &[String]) -> ExitCode {
         }
     };
 
-    if let Some(path) = &out_path {
-        if let Err(e) = std::fs::write(path, &replay_contents) {
-            eprintln!("write {path} failed: {e}");
-        }
+    if let Some(path) = &out_path
+        && let Err(e) = std::fs::write(path, &replay_contents)
+    {
+        eprintln!("write {path} failed: {e}");
     }
 
     println!(
@@ -112,16 +112,16 @@ fn plan_connections(golden: &str) -> Vec<ReplayConn> {
     let mut order: Vec<u32> = Vec::new();
     let mut by_conn: BTreeMap<u32, Vec<Frame>> = BTreeMap::new();
     for line in golden.lines() {
-        if let Some(Record::Frame(f)) = parse_line(line) {
-            if f.dir == "c2s" {
-                by_conn
-                    .entry(f.conn_id)
-                    .or_insert_with(|| {
-                        order.push(f.conn_id);
-                        Vec::new()
-                    })
-                    .push(*f);
-            }
+        if let Some(Record::Frame(f)) = parse_line(line)
+            && f.dir == "c2s"
+        {
+            by_conn
+                .entry(f.conn_id)
+                .or_insert_with(|| {
+                    order.push(f.conn_id);
+                    Vec::new()
+                })
+                .push(*f);
         }
     }
 

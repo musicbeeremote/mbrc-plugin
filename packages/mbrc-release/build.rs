@@ -47,7 +47,10 @@ fn main() {
     if keys.is_empty() {
         // Not fatal: the crate must still build in a fresh checkout before the
         // keys are dropped in. Verification fails closed at runtime instead.
-        println!("cargo:warning=no release public keys in {} — signature verification will reject every manifest", keys_dir.display());
+        println!(
+            "cargo:warning=no release public keys in {} — signature verification will reject every manifest",
+            keys_dir.display()
+        );
     }
 
     // A local testing key is supported and gitignored, but a build carrying

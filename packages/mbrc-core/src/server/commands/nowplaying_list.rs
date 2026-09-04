@@ -2,9 +2,9 @@
 //! search, and queue. Mutations echo a small success object; the client
 //! typically re-requests the list afterward.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{as_int_lenient, as_set_string, pagination, Ctx, HandlerResult, Platform};
+use super::{Ctx, HandlerResult, Platform, as_int_lenient, as_set_string, pagination};
 use crate::providers::Providers;
 
 /// Reads an index from either a bare int (or stringified int) or an
@@ -161,9 +161,10 @@ mod tests {
         let track = &out[0].1["data"][0];
         assert_eq!(track["album"], json!("Album"));
         assert_eq!(track["album_artist"], json!("AlbumArtist"));
-        assert!(m
-            .recorded()
-            .contains(&"now_playing_list_ordered".to_string()));
+        assert!(
+            m.recorded()
+                .contains(&"now_playing_list_ordered".to_string())
+        );
 
         // iOS index is used as-is.
         play(&json!(3), &ctx).unwrap();

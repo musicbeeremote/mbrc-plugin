@@ -1,8 +1,8 @@
 //! Playlist handlers: list (paginated) and play by URL.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{pagination, reply_dto, HandlerResult};
+use super::{HandlerResult, pagination, reply_dto};
 use crate::providers::Providers;
 
 pub fn list(data: &Value, p: &dyn Providers) -> HandlerResult {
@@ -46,8 +46,9 @@ mod tests {
             play(&json!("playlist://x"), &m).unwrap()[0],
             ("playlistplay".into(), json!(true))
         );
-        assert!(m
-            .recorded()
-            .contains(&"play_playlist(playlist://x)".to_string()));
+        assert!(
+            m.recorded()
+                .contains(&"play_playlist(playlist://x)".to_string())
+        );
     }
 }
