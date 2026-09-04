@@ -3,6 +3,8 @@ name = "mbrc-lint"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
+publish = false
 authors.workspace = true
 description = "Enforces the repository's comment rules over Rust and C# sources."
 

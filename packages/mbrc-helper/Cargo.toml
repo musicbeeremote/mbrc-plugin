@@ -3,6 +3,8 @@ name = "mbrc-helper"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
+publish = false
 authors.workspace = true
 description = "Elevated helper for MusicBee Remote: firewall rule creation and staged-update application."
 

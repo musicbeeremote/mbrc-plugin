@@ -3,6 +3,8 @@ name = "mbrc-capture"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
+publish = false
 authors.workspace = true
 description = "mbrc-capture/2 golden-trace format: frame + meta records, reader/writer helpers."
 

@@ -3,6 +3,8 @@ name = "mbrc-wire"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
+publish = false
 authors.workspace = true
 description = "MusicBee Remote legacy wire protocol: CRLF-JSON framing, {context,data} messages, client handshake."
 

@@ -29,6 +29,9 @@ edition = "2021"
 # an older compatible version of a transitive dependency instead of erroring.
 rust-version = "1.97"
 authors = ["Konstantinos Paparas"]
+# GPL-3.0 plus a linking exception for MusicBee itself, which SPDX cannot
+# express, so the file is the licence rather than an expression naming it.
+license-file = "LICENSE"
 
 # A doc comment opens with a summary, not a paragraph of rationale. See the
 # "Comments and documentation" section of CLAUDE.md.

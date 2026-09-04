@@ -3,6 +3,8 @@ name = "mbrc-discovery"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
+publish = false
 authors.workspace = true
 description = "Client-side UDP-multicast discovery of MusicBee Remote plugin instances."
 

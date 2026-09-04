@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "MusicBee Remote API Debugger"
 authors = ["Konstantinos Paparas"]
 edition = "2021"
+rust-version = "1.97"
+license-file = "../../../LICENSE"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
