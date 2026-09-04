@@ -94,6 +94,13 @@ jobs:
           rustup target add i686-pc-windows-msvc
           cargo build -p mbrc-core -p mbrc-helper --target i686-pc-windows-msvc --profile plugin --locked
 
+      # Building 32-bit catches what fails to compile there; running the suite
+      # catches what compiles and then behaves differently, which is where the
+      # redb store, the paging index and pointer-width arithmetic live.
+      - name: test on i686 (the ship target)
+        if: matrix.os == 'windows-latest'
+        run: cargo test -p mbrc-core -p mbrc-wire --target i686-pc-windows-msvc --locked
+
   coverage:
     name: coverage
     # Windows: mbrc-core is the Windows plugin cdylib, and this matches where the
