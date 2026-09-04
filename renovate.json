@@ -23,12 +23,10 @@
     {
       "description": "Group test/dev dependencies",
       "matchPackageNames": [
-        "xunit",
-        "xunit.runner.visualstudio",
-        "Microsoft.NET.Test.Sdk",
-        "Moq",
-        "FluentAssertions",
-        "coverlet.collector"
+        "xunit.v3",
+        "Microsoft.Testing.Extensions.CodeCoverage",
+        "NSubstitute",
+        "AwesomeAssertions"
       ],
       "groupName": "test dependencies",
       "addLabels": ["test"]
