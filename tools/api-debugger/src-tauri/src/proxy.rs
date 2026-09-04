@@ -138,7 +138,7 @@ impl ProxyState {
     /// Installs a new proxy, tearing down any previous one (signal shutdown so
     /// live sessions unwind, then abort the accept loop).
     fn replace(&self, handle: Option<ProxyHandle>) {
-        let mut guard = self.inner.lock().unwrap();
+        let mut guard = self.inner.lock().expect("proxy handle mutex poisoned");
         if let Some(old) = guard.take() {
             let _ = old.shutdown.send(true);
             old.accept.abort();
@@ -352,7 +352,11 @@ async fn handle_session(
     // Either direction closing (or shutdown) ends the session.
     let result = tokio::try_join!(flatten(c2s), flatten(s2c));
 
-    let by = session.closed_by.lock().unwrap().unwrap_or("proxy");
+    let by = session
+        .closed_by
+        .lock()
+        .expect("closed_by mutex poisoned")
+        .unwrap_or("proxy");
     let reason = match &result {
         Ok(_) => "eof".to_string(),
         Err(e) => format!("error:{e}"),
@@ -406,7 +410,7 @@ where
             // EOF: record which side hung up, then half-close so the peer sees it.
             // Scoped because a `MutexGuard` is not Send across the await below.
             {
-                let mut cb = session.closed_by.lock().unwrap();
+                let mut cb = session.closed_by.lock().expect("closed_by mutex poisoned");
                 if cb.is_none() {
                     *cb = Some(if dir == "c2s" { "client" } else { "server" });
                 }
@@ -479,7 +483,10 @@ async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
                 .and_then(|f| f.get("data"))
                 .and_then(|d| d.as_str())
             {
-                *session.client_type.lock().unwrap() = Some(ct.to_string());
+                *session
+                    .client_type
+                    .lock()
+                    .expect("client_type mutex poisoned") = Some(ct.to_string());
             }
         }
         Some("protocol") => {
@@ -489,7 +496,11 @@ async fn maybe_handshake(session: &Arc<Session>, record: &Frame) {
                 .and_then(|f| f.get("data"))
                 .and_then(|d| d.get("protocol_version"))
                 .and_then(|v| v.as_i64());
-            let client_type = session.client_type.lock().unwrap().clone();
+            let client_type = session
+                .client_type
+                .lock()
+                .expect("client_type mutex poisoned")
+                .clone();
             append_line(
                 &session.shared,
                 &meta_handshake(session.conn_id, client_type.as_deref(), protocol_version),

@@ -47,3 +47,6 @@ mbrc-capture = { path = "../../../packages/mbrc-capture" }
 [lints.clippy]
 too_long_first_doc_paragraph = "warn"
 undocumented_unsafe_blocks = "warn"
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+unwrap_used = "warn"

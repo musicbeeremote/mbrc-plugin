@@ -85,7 +85,7 @@ pub struct ConnectionState {
 impl ConnectionState {
     /// Installs (or clears) the connection for a slot, tearing down any previous.
     fn replace(&self, slot: &str, conn: Option<Connection>) {
-        let mut guard = self.slots.lock().unwrap();
+        let mut guard = self.slots.lock().expect("slots mutex poisoned");
         if let Some(old) = guard.remove(slot) {
             old.reader.abort();
             old.writer.abort();
@@ -98,7 +98,7 @@ impl ConnectionState {
     fn sender(&self, slot: &str) -> Option<mpsc::UnboundedSender<String>> {
         self.slots
             .lock()
-            .unwrap()
+            .expect("slots mutex poisoned")
             .get(slot)
             .map(|c| c.outbound.clone())
     }
