@@ -6,6 +6,8 @@
 //!
 //! Usage: `mbrc-lint --staged | --diff <range> | --all | <path>...`
 
+#![forbid(unsafe_code)]
+
 mod rules;
 mod scan;
 

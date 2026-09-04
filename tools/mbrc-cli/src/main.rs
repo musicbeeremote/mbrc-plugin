@@ -3,6 +3,8 @@
 //! Subcommands: `discover`, `inspect`, `send`, `monitor`, `capture`, `trim`,
 //! `replay`, `fuzz`.
 
+#![forbid(unsafe_code)]
+
 use std::process::ExitCode;
 use std::time::Duration;
 

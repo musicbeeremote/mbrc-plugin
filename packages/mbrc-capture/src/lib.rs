@@ -19,6 +19,8 @@
 //! producer (the api-debugger proxy), the CLI (`trim`/`inspect`), and the
 //! replay harness, so a producer and a consumer can never drift.
 
+#![forbid(unsafe_code)]
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use time::format_description::well_known::Rfc3339;

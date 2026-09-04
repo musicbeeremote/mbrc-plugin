@@ -6,6 +6,8 @@
 //! server side - so the framing, message shape, and handshake automation have a
 //! single definition instead of a copy per tool.
 
+#![forbid(unsafe_code)]
+
 use serde::{Deserialize, Serialize};
 
 /// Line terminator for the legacy CRLF-JSON protocol.

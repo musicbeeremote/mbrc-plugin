@@ -11,6 +11,8 @@
 //! Crate `version` fields in this workspace all stay at 0.1.0. They are
 //! workspace-internal numbers and nothing publishes them.
 
+#![forbid(unsafe_code)]
+
 use std::path::{Path, PathBuf};
 
 /// The props file every version comes from.

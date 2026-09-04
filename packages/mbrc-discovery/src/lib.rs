@@ -12,6 +12,8 @@
 //! reachable only on a non-default interface - the original C# tool enumerated
 //! interfaces for the same reason.
 
+#![forbid(unsafe_code)]
+
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 use std::time::{Duration, Instant};
 
