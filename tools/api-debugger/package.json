@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@11.23.0",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
@@ -18,7 +18,7 @@
     "@tauri-apps/plugin-opener": "2.5.4",
     "@vueuse/core": "14.4.0",
     "pinia": "4.0.3",
-    "vue": "3.5.41"
+    "vue": "3.5.42"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
