@@ -17,12 +17,22 @@ members = [
     "packages/mbrc-wire",
     "packages/mbrc-capture",
     "tools/mbrc-cli",
+    "tools/mbrc-lint",
 ]
 exclude = ["tools/api-debugger/src-tauri"]
 
 [workspace.package]
 edition = "2021"
 authors = ["Konstantinos Paparas"]
+
+# A doc comment opens with a summary, not a paragraph of rationale. See the
+# "Comments and documentation" section of CLAUDE.md.
+[workspace.lints.clippy]
+too_long_first_doc_paragraph = "warn"
+# Every unsafe block states why it is sound. The FFI boundary is most of the
+# unsafe in this workspace, and "the caller's contract" is only a real answer
+# when it is written down next to the block that relies on it.
+undocumented_unsafe_blocks = "warn"
 
 # Exact-version pins match the api-debugger's supply-chain hardening so both
 # workspaces resolve the shared crates against identical dependency versions.

@@ -460,6 +460,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbrc-lint"
+version = "0.1.0"
+
+[[package]]
 name = "mbrc-release"
 version = "0.1.0"
 dependencies = [
