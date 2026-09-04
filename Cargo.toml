@@ -27,7 +27,7 @@ edition = "2021"
 # pins. Declaring it is what makes cargo name the crate that wants a newer
 # compiler, rather than failing inside its source; with resolver 3 cargo picks
 # an older compatible version of a transitive dependency instead of erroring.
-rust-version = "1.97"
+rust-version = "1.98"
 authors = ["Konstantinos Paparas"]
 # GPL-3.0 plus a linking exception for MusicBee itself, which SPDX cannot
 # express, so the file is the licence rather than an expression naming it.

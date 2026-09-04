@@ -31,7 +31,7 @@ base64 = "=0.23.1"
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
 # toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
 # - a good fit for the 32-bit i686 target (no mmap address-space ceiling).
-redb = "=4.1.0"
+redb = "=4.2.0"
 # SHA1 for cover cache identities (album key + content hash). Not cryptographic;
 # must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
 sha1 = "=0.11.0"
