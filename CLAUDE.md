@@ -139,3 +139,56 @@ cargo test -p mbrc-core --target i686-pc-windows-msvc   # Rust core + integratio
 5. **Wire compatibility is sacred**: V4 frames must stay byte-identical to the shipped plugin
    (field order included). Validate changes against `tests/golden/` and the `mbrc monitor` harness.
 6. **Generated FFI code**: never hand-edit `packages/plugin/Ffi/Generated/*`; regenerate from Rust.
+
+## Comments and documentation
+
+Comments earn their space or go. The rules below are enforced by
+`tools/mbrc-lint` (pre-commit hook and the `comments` workflow); they exist
+because unchecked rationale prose had grown to a third of some files.
+
+**Where knowledge goes, in order of preference:**
+
+1. **A test.** A named test that fails when the rule is broken beats any
+   sentence describing the rule. Reach for this first.
+2. **A name.** A well-named function or constant that makes the behaviour
+   obvious removes the need to explain it.
+3. **A rustdoc / C# XML doc** on the item, when the constraint cannot be
+   expressed as a test or a name.
+4. **An in-body comment**, last resort. An explanation in the middle of a
+   function is a sign the code above it needed a name or a test instead.
+
+**Length caps.** Module doc (`//!`) <= 20 lines, item doc (`///`) <= 8, `//`
+between items <= 4, and **`//` inside a function body <= 2**. The caps are the
+p95 of the tree; a module doc gets more room because it is where a design
+rationale belongs and is read once, not between statements.
+
+The tight in-function cap is rule 4 above with teeth: three lines of prose in the
+middle of a function means the code needed a name, a test, or a paragraph on the
+item's own doc. Moving it up to the item doc is usually the right fix.
+
+A block that genuinely earns more takes an explicit `// mbrc-lint: allow <rule> -
+<reason>` on the line above, but check first whether a test name or an item doc
+already carries it: both blocks initially exempted this way turned out to be
+duplicating something that already existed. The tree currently has zero allows.
+
+**First paragraph is a summary.** One or two lines saying what the item is, then
+a blank `///` line before any rationale. Enforced by
+`clippy::too_long_first_doc_paragraph`.
+
+**Say why, not what.** A doc that restates the signature is noise. Describe the
+constraint a reader would otherwise violate.
+
+**Not in comments, ever:**
+
+| out | because |
+| --- | --- |
+| dated anecdotes ("observed 2026-08-30", "105 pings in 30 minutes") | the finding belongs in the comment, the measurement in the commit message |
+| history narration ("previously named", "used to return", "the old C#") | that is what git is for |
+| em-dashes | house style: hyphen, comma, colon, or two sentences |
+| filler ("it's worth noting", "deliberately" three times a file) | says nothing |
+| plan vocabulary ("Slice 2", "Phase 3", "pre-cutover") | a fact about a schedule, false the moment it ships |
+| hedging ("should work", "for now", "hopefully") | uncertainty stated instead of resolved |
+| TODO / FIXME / HACK / XXX | open an issue, or do it |
+
+**C#** takes the same caps as XML docs: a single-line `/// <summary>` where one
+line does, and no `<summary>` that repeats the method name.

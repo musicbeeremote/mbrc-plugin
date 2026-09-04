@@ -3,10 +3,10 @@ This licence applies to all the source code except MusicBeeInterface.cs.
 Linking Exception
 
 In order to avoid a GPL violation the user of this plugin is hereby granted
-permission to dynamically link and use this piece of software in conjuction
+permission to dynamically link and use this piece of software in conjunction
 with MusicBee player by Steven Mayall.
 
-This exeception is added according to the following answer:
+This exception is added according to the following answer:
 <https://www.gnu.org/licenses/gpl-faq.html#GPLPluginsInNF>
 
 
