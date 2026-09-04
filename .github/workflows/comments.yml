@@ -1,0 +1,42 @@
+name: comments
+
+# The comment rules from CLAUDE.md, over the whole tree.
+#
+# Its own workflow rather than a step in rust.yml because the rules cover C# as
+# well as Rust, and rust.yml is behind a path filter that a C#-only change does
+# not match.
+#
+# Whole-tree rather than diff-scoped: the tree is clean, so anything this finds
+# is new, and a rule that only looked at changed lines would let a file drift
+# the moment nobody touched it. It runs `tools/mbrc-lint` - the same tool the
+# pre-commit hook runs - so a local pass and a remote pass cannot disagree.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comments-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: comment rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: comment rules
+        run: cargo run -q -p mbrc-lint --locked -- --all
+
+      # A curated misspellings list rather than a dictionary, so it is safe to
+      # fail a PR on. `_typos.toml` records the few places it is wrong here.
+      - name: spelling
+        uses: crate-ci/typos@d43b6c087ac471e2ea7b8af622ff15f05c0c365b # v1.50.1

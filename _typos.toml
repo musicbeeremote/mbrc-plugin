@@ -1,0 +1,20 @@
+# Configuration for `typos` (crate-ci/typos), run in the `comments` workflow.
+#
+# The tool works from a curated list of misspellings rather than a dictionary,
+# so this file should stay short: every entry is a place where the curated list
+# is wrong about this repository, not a place where we disagree with English.
+
+[files]
+# Steven Mayall's plugin API header, vendored verbatim. Its typos are part of
+# the published interface (`Uninistall`), so correcting them would break the
+# contract with MusicBee.
+extend-exclude = ["packages/plugin/MusicBeeInterface.cs"]
+
+[default.extend-identifiers]
+# NSIS built-in, not a shortening of "copy".
+StrCpy = "StrCpy"
+
+[default.extend-words]
+# Both spellings are current English. This one is used consistently in thirteen
+# places, and a rename would be churn over a preference.
+unparseable = "unparseable"

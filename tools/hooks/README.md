@@ -12,8 +12,8 @@ One command per clone. Until it is run, no hooks fire.
 | Hook | Runs | Cost |
 | --- | --- | --- |
 | `commit-msg` | Conventional Commits, matching `@commitlint/config-conventional` | instant |
-| `pre-commit` | `cargo fmt --check`, root workspace **and** `tools/api-debugger/src-tauri` | ~2s |
-| `pre-push` | working tree vs pushed range, clippy (`-D warnings`), the test suites, generated-FFI-bindings drift, `dotnet format --verify-no-changes` | ~2-4 min |
+| `pre-commit` | `cargo fmt --check`, root workspace **and** `tools/api-debugger/src-tauri`; `mbrc-lint` comment rules over the staged lines | ~2s |
+| `pre-push` | working tree vs pushed range, clippy (`-D warnings`), rustdoc links, the test suites, generated-FFI-bindings drift, `dotnet format --verify-no-changes` | ~2-4 min |
 
 The split is the point. A pre-commit hook that takes a minute gets bypassed, and
 a bypassed hook is worse than none because it still looks like a safety net. So

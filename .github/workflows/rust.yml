@@ -18,6 +18,7 @@ on:
       - 'packages/mbrc-helper/**'
       - 'packages/mbrc-buildinfo/**'
       - 'tools/mbrc-cli/**'
+      - 'tools/mbrc-lint/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/rust.yml'
@@ -32,6 +33,7 @@ on:
       - 'packages/mbrc-helper/**'
       - 'packages/mbrc-buildinfo/**'
       - 'tools/mbrc-cli/**'
+      - 'tools/mbrc-lint/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/rust.yml'
@@ -70,6 +72,13 @@ jobs:
 
       - name: clippy (warnings as errors)
         run: cargo clippy --all-targets --locked -- -D warnings
+
+      # A doc link to a renamed item is invisible until someone reads the docs.
+      # Ambiguity (`stage` the module vs the function) is caught here too.
+      - name: rustdoc (broken links as errors)
+        env:
+          RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links -D rustdoc::invalid_html_tags
+        run: cargo doc --no-deps --workspace --locked
 
       - name: test
         run: cargo test --locked

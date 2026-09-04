@@ -12,3 +12,6 @@ if-addrs = { workspace = true }
 # DNS-SD browsing for the mDNS advertisement (#160). Same crate the plugin
 # advertises with, so what this sees is what it publishes.
 mdns-sd = { version = "=0.21.0", default-features = false }
+
+[lints]
+workspace = true

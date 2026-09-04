@@ -41,3 +41,8 @@ mbrc-capture = { path = "../../../packages/mbrc-capture" }
 # Cargo.toml. Keeps the Tauri/webview dependency graph out of the root workspace.
 [workspace]
 
+# Mirrors the root workspace: a doc comment opens with a summary, not a
+# paragraph of rationale. This crate is its own workspace, so it cannot inherit.
+[lints.clippy]
+too_long_first_doc_paragraph = "warn"
+undocumented_unsafe_blocks = "warn"

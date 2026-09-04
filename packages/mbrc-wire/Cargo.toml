@@ -13,3 +13,6 @@ serde_json = { workspace = true }
 # Property-based fuzzing of the parser/sanitizers on stable (cargo-fuzz needs
 # nightly; the toolchain is pinned to stable). Runs under `cargo test` + CI.
 proptest = "=1.11.0"
+
+[lints]
+workspace = true

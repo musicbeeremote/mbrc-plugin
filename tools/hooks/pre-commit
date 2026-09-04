@@ -39,4 +39,13 @@ if [ -d tools/api-debugger/src-tauri ]; then
     fi
 fi
 
+# Comment rules (CLAUDE.md). Scoped to the staged lines to stay fast; CI runs
+# the same tool over the whole tree, which is the gate that actually decides.
+echo "pre-commit: comment rules"
+if ! cargo run -q -p mbrc-lint -- --staged; then
+    echo
+    echo "  Comment rules. Cut the block, or add: // mbrc-lint: allow <rule>" >&2
+    exit 1
+fi
+
 echo "pre-commit: ok"

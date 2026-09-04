@@ -96,7 +96,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// The slice of the firewall API this port needs, behind a trait so the
 /// create-or-update decision can be tested without a live COM apartment. The
-/// real implementation is [`com::ComPolicy`]; the tests use a fake.
+/// real implementation is `com::ComPolicy`; the tests use a fake.
 pub trait FirewallPolicy {
     /// An opaque handle to an existing rule, as yielded by [`Self::rules`].
     type Rule;

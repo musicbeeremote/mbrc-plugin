@@ -7,3 +7,6 @@ publish = false
 description = "Build-script helper: stamps the product version from Directory.Build.props into a Rust crate."
 
 [dependencies]
+
+[lints]
+workspace = true

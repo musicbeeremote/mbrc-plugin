@@ -91,6 +91,12 @@ echo "pre-push: cargo clippy ($target)"
 cargo clippy --workspace --all-targets --target "$target" -- -D warnings \
     || fail "Clippy warnings are errors in CI. Fix them or re-run with MBRC_SKIP_HOOKS=1."
 
+# A doc link to a renamed item is invisible until someone reads the docs.
+echo "pre-push: rustdoc links ($target)"
+RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D rustdoc::invalid_html_tags" \
+    cargo doc --no-deps --workspace --target "$target" \
+    || fail "Broken doc links. CI denies these too."
+
 echo "pre-push: cargo test ($target)"
 cargo test --workspace --target "$target" \
     || fail "Tests failed."

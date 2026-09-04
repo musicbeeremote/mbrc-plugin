@@ -16,3 +16,6 @@ mbrc-discovery = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

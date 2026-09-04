@@ -16,7 +16,7 @@
 //!   `client` feature, which is on by default but off for the helper: an
 //!   elevated process should carry as little as it can get away with.
 //!
-//! - [`winhttp`] - the one production `HttpClient`. Windows-only, and the only
+//! - `winhttp` - the one production `HttpClient`. Windows-only, and the only
 //!   thing here that is.
 //!
 //! Everything in the client half sits above the [`http::HttpClient`] trait, so
