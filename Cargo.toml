@@ -7,7 +7,7 @@
 # workspace and is excluded here: it path-depends into the shared crates but
 # keeps the heavy webview toolchain out of this workspace's cargo test / CI.
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "packages/mbrc-buildinfo",
     "packages/mbrc-core",
@@ -23,6 +23,11 @@ exclude = ["tools/api-debugger/src-tauri"]
 
 [workspace.package]
 edition = "2021"
+# The floor every member is built against, and the one rustc the toolchain file
+# pins. Declaring it is what makes cargo name the crate that wants a newer
+# compiler, rather than failing inside its source; with resolver 3 cargo picks
+# an older compatible version of a transitive dependency instead of erroring.
+rust-version = "1.97"
 authors = ["Konstantinos Paparas"]
 
 # A doc comment opens with a summary, not a paragraph of rationale. See the

@@ -2,6 +2,7 @@
 name = "mbrc-release"
 version = "0.1.0"
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 description = "Signed release manifest parsing and verification shared by the core and the updater."
 
