@@ -34,6 +34,19 @@ pub const SUPPORTED_VERSIONS: &[u8] = &[4, 5];
 /// plus V6, which the port serves through a different door entirely.
 pub const ADVERTISED_PROTOCOLS: &[u8] = &[4, 5, mbrc_wire::v6::PROTOCOL_VERSION as u8];
 
+/// [`ADVERTISED_PROTOCOLS`] as a client reads it: `"4,5,6"`.
+///
+/// Both discovery channels publish this exact string - the mDNS TXT record
+/// always, the UDP responder only when a probe asks - so a client writes one
+/// parser rather than one per channel.
+pub fn advertised_protocols_csv() -> String {
+    ADVERTISED_PROTOCOLS
+        .iter()
+        .map(u8::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 impl ProtocolVersion {
     /// Maps a negotiated handshake version number to a formatter version, or
     /// `None` if unsupported (the handshake already rejects pre-V4).

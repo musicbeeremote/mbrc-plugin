@@ -28,6 +28,12 @@ pub struct Discovered {
     pub address: String,
     pub port: u16,
     pub name: String,
+    /// The protocols the port serves (`"4,5,6"`), when the server said.
+    ///
+    /// `None` means it did not: an mDNS record without the TXT key, or a UDP
+    /// probe that did not ask - and, either way, a server predating V6, which
+    /// has no way to say. Absence is the negative answer, not missing data.
+    pub protocols: Option<String>,
 }
 
 /// Non-loopback IPv4 addresses of the local interfaces. One multicast socket is
@@ -53,16 +59,28 @@ fn interface_ipv4s() -> Vec<Ipv4Addr> {
     addrs
 }
 
+/// The probe payload. `ask_protocols` adds the opt-in flag that makes the
+/// server append its protocol list; without it the probe is byte-identical to
+/// what every shipped client sends, which is what a discovery test wants by
+/// default.
+fn probe_request(iface: Ipv4Addr, ask_protocols: bool) -> String {
+    if ask_protocols {
+        format!(r#"{{"context":"discovery","address":"{iface}","protocol":true}}"#)
+    } else {
+        format!(r#"{{"context":"discovery","address":"{iface}"}}"#)
+    }
+}
+
 /// Binds a multicast socket to `iface`, joins the group on it, and sends the
 /// discovery request advertising `iface` as the reply-to address.
-fn open_and_send(iface: Ipv4Addr) -> std::io::Result<UdpSocket> {
+fn open_and_send(iface: Ipv4Addr, ask_protocols: bool) -> std::io::Result<UdpSocket> {
     // Binding to the interface's own IP makes the OS route outgoing multicast
     // out that interface (std has no `set_multicast_if_v4`).
     let socket = UdpSocket::bind((iface, 0))?;
     socket.join_multicast_v4(&MULTICAST, &iface)?;
     // Poll in short slices so the overall timeout is honored without blocking long.
     socket.set_read_timeout(Some(Duration::from_millis(250)))?;
-    let request = format!(r#"{{"context":"discovery","address":"{iface}"}}"#);
+    let request = probe_request(iface, ask_protocols);
     socket.send_to(
         request.as_bytes(),
         SocketAddrV4::new(MULTICAST, DISCOVERY_PORT),
@@ -103,11 +121,16 @@ pub fn browse_mdns_blocking(timeout: Duration) -> Result<Vec<Discovered>, String
                     .get_property_val_str("name")
                     .map(str::to_owned)
                     .unwrap_or_else(|| instance_of(info.get_fullname()));
+                let protocols = info
+                    .get_property_val_str("protocol")
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned);
                 for address in info.get_addresses() {
                     let entry = Discovered {
                         address: address.to_string(),
                         port: info.get_port(),
                         name: name.clone(),
+                        protocols: protocols.clone(),
                     };
                     if !found
                         .iter()
@@ -141,12 +164,28 @@ fn instance_of(fullname: &str) -> String {
 /// # Errors
 /// No interface accepted a discovery socket, or a receive failed.
 pub fn discover_blocking(timeout: Duration) -> Result<Vec<Discovered>, String> {
+    discover(timeout, false)
+}
+
+/// Discovery that also asks each server which protocols its port serves, so a
+/// V6-capable client can tell a V6 server from a legacy one without connecting.
+///
+/// The flag is opt-in precisely so [`discover_blocking`] stays the probe a
+/// shipped client sends; use that one to reproduce what a phone sees.
+///
+/// # Errors
+/// No interface accepted a discovery socket, or a receive failed.
+pub fn discover_blocking_with_protocols(timeout: Duration) -> Result<Vec<Discovered>, String> {
+    discover(timeout, true)
+}
+
+fn discover(timeout: Duration, ask_protocols: bool) -> Result<Vec<Discovered>, String> {
     let ifaces = interface_ipv4s();
     // Best-effort per interface: a NIC that can't join the group (e.g. a
     // point-to-point VPN) shouldn't abort discovery on the others.
     let sockets: Vec<(Ipv4Addr, UdpSocket)> = ifaces
         .iter()
-        .filter_map(|&ip| open_and_send(ip).ok().map(|s| (ip, s)))
+        .filter_map(|&ip| open_and_send(ip, ask_protocols).ok().map(|s| (ip, s)))
         .collect();
     if sockets.is_empty() {
         return Err("could not open a discovery socket on any interface".into());
@@ -200,10 +239,16 @@ fn parse_notify(bytes: &[u8]) -> Option<Discovered> {
         .filter(|s| !s.is_empty())
         .unwrap_or("MusicBee Remote")
         .to_string();
+    let protocols = v
+        .get("protocol")
+        .and_then(|p| p.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
     Some(Discovered {
         address,
         port,
         name,
+        protocols,
     })
 }
 
@@ -220,6 +265,32 @@ mod tests {
         assert_eq!(d.address, "192.168.1.5");
         assert_eq!(d.port, 3000);
         assert_eq!(d.name, "Den PC");
+        // A reply with no list is a server that was not asked, or cannot answer.
+        assert_eq!(d.protocols, None);
+    }
+
+    #[test]
+    fn reads_the_protocol_list_when_the_server_sent_one() {
+        let d = parse_notify(
+            br#"{"context":"notify","address":"192.168.1.5","name":"Den PC","port":3000,"protocol":"4,5,6"}"#,
+        )
+        .expect("should parse");
+        assert_eq!(d.protocols.as_deref(), Some("4,5,6"));
+    }
+
+    /// The default probe has to stay what a shipped client sends, or a discovery
+    /// test stops reproducing what a phone actually sees.
+    #[test]
+    fn only_an_asking_probe_carries_the_flag() {
+        let iface = "192.168.1.5".parse().unwrap();
+        assert_eq!(
+            probe_request(iface, false),
+            r#"{"context":"discovery","address":"192.168.1.5"}"#
+        );
+        assert_eq!(
+            probe_request(iface, true),
+            r#"{"context":"discovery","address":"192.168.1.5","protocol":true}"#
+        );
     }
 
     #[test]

@@ -2092,6 +2092,47 @@ The probe carries the client's own address, and the reply names the server inter
 *same subnet* - which is what makes a multi-NIC host (Hyper-V, WSL, VirtualBox, Docker) hand
 back an address the phone can actually reach.
 
+Probe:
+
+```json
+{"address":"192.168.1.5"}
+```
+
+Reply:
+
+```json
+{"context":"notify","address":"192.168.1.10","name":"LIVING-ROOM-PC","port":3000}
+```
+
+Those four keys, in that order, are what every shipped client parses, and they never change.
+
+#### Asking which protocols the port serves
+
+The responder is protocol-neutral: it hands back a port, not a protocol. A client that can
+read a protocol list opts in by setting `"protocol": true` on its probe, and only then does
+the reply carry the list - a probe without the flag gets the byte-identical four-key reply
+above, which is what keeps shipped clients safe.
+
+Probe:
+
+```json
+{"address":"192.168.1.5","protocol":true}
+```
+
+Reply:
+
+```json
+{"context":"notify","address":"192.168.1.10","name":"LIVING-ROOM-PC","port":3000,"protocol":"4,5,6"}
+```
+
+`protocol` is the same comma-separated string the mDNS TXT record carries, so one parser
+serves both channels, and it is advisory in exactly the same way. `mbrc discover --protocol`
+sends the opt-in probe and prints what came back (`not reported` for a server that did not
+answer with a list); plain `mbrc discover` sends what a shipped client sends. Only the literal `true`
+opts in: `6`, `"6"` and `false` are all read as "did not ask". A server older than V6 ignores
+the flag and answers with the four keys, which is itself the answer - no list means legacy
+only.
+
 ### mDNS / DNS-SD
 
 The plugin **also** advertises itself over mDNS, additive to the above. Nothing about the
@@ -2113,13 +2154,16 @@ TXT records:
 
 | key | example | meaning |
 |---|---|---|
-| `protocol` | `4,5` | handshake versions this server accepts, comma-separated |
+| `protocol` | `4,5,6` | protocols reachable on the command port, comma-separated |
 | `version` | `1.5.0` | the plugin's release version |
 | `name` | `LIVING-ROOM-PC` | friendly name; the instance name is DNS-escaped, this is not |
 
-**`protocol` is advisory.** It lets a client that speaks only one version filter before
+**`protocol` is advisory.** It lets a client that speaks only one protocol filter before
 connecting, but the handshake remains authoritative - never refuse a server because its TXT
-looked wrong.
+looked wrong. Note that the list is what the *port* serves, not what the legacy handshake
+negotiates: `6` appearing here means V6 is reachable on that port, not that
+`{"context":"protocol","data":6}` will be accepted (it will not - see
+[protocol-v6.md](protocol-v6.md) for how a V6 session opens).
 
 Unlike the custom probe, mDNS carries no client-subnet hint, so the record lists every usable
 address and the client picks. On a host with virtual adapters that may include an address

@@ -26,7 +26,7 @@ use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tokio::sync::Notify;
 
 use crate::discovery::usable_ipv4_ifaces;
-use crate::protocol::version::ADVERTISED_PROTOCOLS;
+use crate::protocol::version::advertised_protocols_csv;
 
 /// The service type clients browse for.
 ///
@@ -120,7 +120,7 @@ pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
 /// able to talk a client out of a server it could have used.
 fn services(tcp_port: u16) -> Vec<Service> {
     let mut txt = HashMap::new();
-    txt.insert("protocol".to_owned(), advertised_protocols());
+    txt.insert("protocol".to_owned(), advertised_protocols_csv());
     txt.insert(
         "version".to_owned(),
         crate::updates::CORE_VERSION.to_owned(),
@@ -132,15 +132,6 @@ fn services(tcp_port: u16) -> Vec<Service> {
         port: tcp_port,
         txt,
     }]
-}
-
-/// The protocols reachable on the command port, comma-separated (`"4,5,6"`).
-fn advertised_protocols() -> String {
-    ADVERTISED_PROTOCOLS
-        .iter()
-        .map(|v| v.to_string())
-        .collect::<Vec<_>>()
-        .join(",")
 }
 
 /// Registers everything, returning the full names of what actually took. A
@@ -280,11 +271,11 @@ mod tests {
 
     #[test]
     fn the_advertised_protocols_are_the_ones_the_port_serves() {
-        let advertised: Vec<u8> = advertised_protocols()
+        let advertised: Vec<u8> = advertised_protocols_csv()
             .split(',')
             .map(|v| v.parse().expect("a numeric version"))
             .collect();
-        assert_eq!(advertised, ADVERTISED_PROTOCOLS);
+        assert_eq!(advertised, crate::protocol::version::ADVERTISED_PROTOCOLS);
     }
 
     #[test]

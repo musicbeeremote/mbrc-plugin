@@ -39,6 +39,26 @@ Rules:
   frame (bad `kind`, missing `op`, not an object) gets a typed error.
 - Events have **no `id`** and are best-effort broadcasts to subscribed connections.
 
+## Discovery
+
+Both discovery channels are shared with the legacy protocol and documented in full under
+[protocol-v4.md](protocol-v4.md#discovery). What matters for a V6 client is how to tell, before
+connecting, whether a server speaks V6:
+
+| channel | how to ask | answer |
+|---|---|---|
+| mDNS / DNS-SD | browse `_mbrc._tcp.local.` | TXT `protocol` includes `6` |
+| UDP multicast (`239.1.5.10:45345`) | send `{"address":"<your ip>","protocol":true}` | reply carries `"protocol":"4,5,6"` |
+
+Both are advisory, and both answer without opening a TCP connection. A server that predates V6
+answers the UDP probe with no `protocol` key at all and advertises `4,5` over mDNS, so its
+absence is the negative answer.
+
+**Do not probe by opening a connection.** A pre-V6 server parses a V6 handshake frame as JSON,
+finds no `context`, and drops it *silently* while holding the socket open - so a TCP probe
+cannot distinguish "does not speak V6" from "slow", and it spends a connection against a
+server whose per-IP cap you may be approaching. Ask discovery instead.
+
 ## Handshake
 
 The first frame must be the handshake, `id:0`:

@@ -94,9 +94,10 @@ fn bind() -> std::io::Result<UdpSocket> {
 }
 
 async fn respond(socket: &UdpSocket, src: SocketAddr, req: &[u8], tcp_port: u16, name: &str) {
+    let probe = Probe::parse(req);
     // Prefer the address the probe carries, falling back to the UDP source so
     // a malformed probe still gets a usable reply.
-    let client_ip = client_address(req).or_else(|| match src.ip() {
+    let client_ip = probe.client_ip.or_else(|| match src.ip() {
         std::net::IpAddr::V4(ip) => Some(ip),
         _ => None,
     });
@@ -108,8 +109,7 @@ async fn respond(socket: &UdpSocket, src: SocketAddr, req: &[u8], tcp_port: u16,
     if address.is_empty() {
         tracing::debug!(?client_ip, "discovery: no reachable interface to advertise");
     }
-    let reply = json!({ "context": "notify", "address": address, "name": name, "port": tcp_port })
-        .to_string();
+    let reply = notify(&address, name, tcp_port, probe.wants_protocols).to_string();
     match socket.send_to(reply.as_bytes(), src).await {
         Ok(_) => tracing::debug!(
             %src,
@@ -122,10 +122,48 @@ async fn respond(socket: &UdpSocket, src: SocketAddr, req: &[u8], tcp_port: u16,
     }
 }
 
-/// Parses the client's advertised IPv4 from a probe payload (`{"address": ...}`).
-fn client_address(req: &[u8]) -> Option<Ipv4Addr> {
-    let value: Value = serde_json::from_slice(req).ok()?;
-    value.get("address")?.as_str()?.trim().parse().ok()
+/// What a probe asked for.
+///
+/// Shipped clients send `{"address": "..."}` and read four fixed keys out of the
+/// reply, so nothing new may appear in it unasked. A client that also wants to
+/// know which protocols the port serves sets `"protocol": true`, and only that
+/// probe is answered with the list.
+struct Probe {
+    client_ip: Option<Ipv4Addr>,
+    wants_protocols: bool,
+}
+
+impl Probe {
+    fn parse(req: &[u8]) -> Self {
+        let Ok(value) = serde_json::from_slice::<Value>(req) else {
+            return Self {
+                client_ip: None,
+                wants_protocols: false,
+            };
+        };
+        Self {
+            client_ip: value
+                .get("address")
+                .and_then(Value::as_str)
+                .and_then(|a| a.trim().parse().ok()),
+            wants_protocols: value.get("protocol").and_then(Value::as_bool) == Some(true),
+        }
+    }
+}
+
+/// The reply frame. The four original keys keep their order and their spelling;
+/// `protocol` is appended only for a probe that asked, so a shipped client's
+/// reply stays byte-identical to what the C# plugin sent.
+fn notify(address: &str, name: &str, tcp_port: u16, with_protocols: bool) -> Value {
+    let mut reply =
+        json!({ "context": "notify", "address": address, "name": name, "port": tcp_port });
+    if with_protocols && let Some(obj) = reply.as_object_mut() {
+        obj.insert(
+            "protocol".to_owned(),
+            json!(crate::protocol::version::advertised_protocols_csv()),
+        );
+    }
+    reply
 }
 
 /// Chooses which of this host's addresses to advertise. Mirrors the shipped C#
@@ -188,6 +226,67 @@ fn best_private_ipv4(ifaces: &[(Ipv4Addr, Ipv4Addr)]) -> Option<Ipv4Addr> {
 mod tests {
     use super::*;
 
+    /// The reply a shipped client gets must stay exactly what the C# plugin
+    /// sent - same keys, same order, nothing extra - because those clients are
+    /// frozen and this payload has never changed under them.
+    #[test]
+    fn a_plain_probe_is_answered_with_the_four_original_keys() {
+        let probe = Probe::parse(br#"{"address":"192.168.1.5"}"#);
+        assert!(!probe.wants_protocols);
+
+        let reply = notify("192.168.1.10", "LIVING-ROOM", 3000, probe.wants_protocols);
+        assert_eq!(
+            reply.to_string(),
+            r#"{"context":"notify","address":"192.168.1.10","name":"LIVING-ROOM","port":3000}"#
+        );
+    }
+
+    /// The opt-in: a client that says it can read the list gets it, appended
+    /// after the original keys so the prefix a shipped client parses is
+    /// unchanged even if it ever sees this reply.
+    #[test]
+    fn a_probe_that_asks_is_told_which_protocols_the_port_serves() {
+        let probe = Probe::parse(br#"{"address":"192.168.1.5","protocol":true}"#);
+        assert!(probe.wants_protocols);
+
+        let reply = notify("192.168.1.10", "LIVING-ROOM", 3000, probe.wants_protocols);
+        assert_eq!(
+            reply["protocol"],
+            json!(crate::protocol::version::advertised_protocols_csv())
+        );
+        assert!(reply.to_string().starts_with(
+            r#"{"context":"notify","address":"192.168.1.10","name":"LIVING-ROOM","port":3000,"#
+        ));
+    }
+
+    /// Anything but `true` is not an opt-in: a client that sends the key with a
+    /// version number or a string has not told us it can parse the list.
+    #[test]
+    fn only_a_true_flag_opts_in() {
+        for req in [
+            br#"{"protocol":6}"#.as_slice(),
+            br#"{"protocol":"6"}"#.as_slice(),
+            br#"{"protocol":false}"#.as_slice(),
+            b"not json at all",
+        ] {
+            assert!(!Probe::parse(req).wants_protocols, "{req:?}");
+        }
+    }
+
+    #[test]
+    fn a_probe_address_is_read_and_a_malformed_one_is_not_fatal() {
+        assert_eq!(
+            Probe::parse(br#"{"address":"192.168.188.20","port":45345}"#).client_ip,
+            Some("192.168.188.20".parse().unwrap())
+        );
+        assert_eq!(
+            Probe::parse(br#"{"address":" 192.168.1.5 "}"#).client_ip,
+            Some("192.168.1.5".parse().unwrap())
+        );
+        assert_eq!(Probe::parse(b"{}").client_ip, None);
+        assert_eq!(Probe::parse(b"garbage").client_ip, None);
+    }
+
     #[test]
     fn subnet_match_picks_the_reachable_interface() {
         // Wi-Fi on the client's /24, plus a Hyper-V and a link-local-style NIC.
@@ -208,14 +307,6 @@ mod tests {
             .find(|(ip, mask)| same_subnet(*ip, client, *mask))
             .map(|(ip, _)| *ip);
         assert_eq!(picked, Some("192.168.188.37".parse().unwrap()));
-    }
-
-    #[test]
-    fn client_address_parsed_from_probe() {
-        let req = br#"{"address":"192.168.188.20","port":45345}"#;
-        assert_eq!(client_address(req), Some("192.168.188.20".parse().unwrap()));
-        assert_eq!(client_address(b"not json"), None);
-        assert_eq!(client_address(br#"{"nope":1}"#), None);
     }
 
     #[test]

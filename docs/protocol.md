@@ -27,3 +27,9 @@ Both protocols are served from one accept loop. Routing is by first-frame shape:
 - anything else -> the connection is closed.
 
 Pre-V4 protocols (V2 / V2.1 / V3) are rejected at handshake and are not documented.
+
+Because routing happens on the first frame, the port itself looks identical either way. To
+find out which protocols a server speaks *before* connecting, ask discovery: the mDNS TXT
+record lists them always, and the UDP responder lists them for a probe that sets
+`"protocol": true`. See [Discovery](protocol-v4.md#discovery) for both, and
+[protocol-v6.md](protocol-v6.md#discovery) for the V6 client's view.

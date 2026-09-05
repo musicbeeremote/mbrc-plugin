@@ -67,6 +67,8 @@ fn cmd_discover(args: &[String]) -> ExitCode {
     // tell a plugin that is not running from one that is not being found.
     let result = if args::has_flag(args, "--mdns") {
         mbrc_discovery::browse_mdns_blocking(timeout)
+    } else if args::has_flag(args, "--protocol") {
+        mbrc_discovery::discover_blocking_with_protocols(timeout)
     } else {
         mbrc_discovery::discover_blocking(timeout)
     };
@@ -76,7 +78,10 @@ fn cmd_discover(args: &[String]) -> ExitCode {
                 println!("no instances found");
             }
             for d in found {
-                println!("{}\t{}:{}", d.name, d.address, d.port);
+                // A server that reported nothing predates V6 or was not asked;
+                // either way it is legacy-only, and saying so beats a blank.
+                let protocols = d.protocols.as_deref().unwrap_or("not reported");
+                println!("{}\t{}:{}\t{}", d.name, d.address, d.port, protocols);
             }
             ExitCode::SUCCESS
         }
@@ -96,7 +101,9 @@ fn print_usage() {
          \n\
          COMMANDS:\n\
          \x20 discover [--timeout-ms N] [--mdns]        find plugin instances on the LAN\n\
-         \x20                                           (--mdns browses DNS-SD instead)\n\
+         \x20          [--protocol]                     (--mdns browses DNS-SD instead;\n\
+         \x20                                           --protocol asks which protocols\n\
+         \x20                                           the port serves)\n\
          \x20 inspect  <capture.jsonl>                  summarise an mbrc-capture/2 trace\n\
          \x20 send     [--host H] [--port P] [--json C] connect, handshake, send a command\n\
          \x20          [--client-type T] [--protocol V] [--no-broadcast] [--wait-ms N]\n\
