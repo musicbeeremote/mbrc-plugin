@@ -9,9 +9,11 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 
 use mbrc_wire::v6::{self, ErrorCode};
@@ -71,18 +73,52 @@ fn handle_conn(stream: TcpStream) {
     }
 }
 
+/// The tokens this mock has issued, so it can refuse a second install claiming
+/// an id the way a real server does.
+fn issued_tokens() -> &'static Mutex<HashMap<String, String>> {
+    static TOKENS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn handle_handshake(req: &v6::IncomingRequest) -> String {
+    let client_id = req.data["client_id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let presented = req.data.get("client_token").and_then(Value::as_str);
+    let mut tokens = issued_tokens().lock().unwrap();
+    let issued = match tokens.get(&client_id) {
+        Some(known) if presented == Some(known.as_str()) => None,
+        Some(_) => {
+            return v6::response_error_field(
+                0,
+                ErrorCode::InvalidToken,
+                "client_id is held by another installation",
+                "client_token",
+            );
+        }
+        None => {
+            let token = format!("mock-token-{client_id}");
+            tokens.insert(client_id, token.clone());
+            Some(token)
+        }
+    };
+    let mut data = json!({
+        "server_version": 6,
+        "capabilities": {
+            "ops": ["handshake", "ping", "player_status", "library_genres", "now_playing_state"],
+            "events": ["play_state_changed"],
+        },
+    });
+    if let Some(token) = issued {
+        data["client_token"] = json!(token);
+    }
+    v6::response_ok(0, data)
+}
+
 fn handle_v6(req: &v6::IncomingRequest) -> String {
     match req.op.as_str() {
-        "handshake" => v6::response_ok(
-            0,
-            json!({
-                "server_version": 6,
-                "capabilities": {
-                    "ops": ["handshake", "ping", "player_status", "library_genres", "now_playing_state"],
-                    "events": ["play_state_changed"],
-                },
-            }),
-        ),
+        "handshake" => handle_handshake(req),
         "ping" => v6::response_ok(req.id, req.data.clone()),
         "player_status" => v6::response_ok(
             req.id,
@@ -90,7 +126,12 @@ fn handle_v6(req: &v6::IncomingRequest) -> String {
         ),
         "library_genres" => {
             if req.data.get("offset").is_some_and(Value::is_string) {
-                v6::response_error(req.id, ErrorCode::InvalidField, "offset must be an integer")
+                v6::response_error_field(
+                    req.id,
+                    ErrorCode::InvalidField,
+                    "offset must be an integer",
+                    "offset",
+                )
             } else {
                 v6::response_ok(
                     req.id,

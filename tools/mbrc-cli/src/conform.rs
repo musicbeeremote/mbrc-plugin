@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::{self, ClientType};
 use mbrc_wire::{ClientHandshake, frame_line, parse_context, pong_frame};
 
-use crate::args::{flag_value, has_flag};
+use crate::args::{flag_value, has_flag, run_client_id};
 
 /// Write ops (they mutate playback / tags / the queue) - skipped in the
 /// capability-honesty sweep unless `--allow-writes`, since sending them with no
@@ -59,6 +59,10 @@ const WRITE_OPS: &[&str] = &[
 ];
 
 /// Known list ops whose response must be a valid `Page`.
+/// The server's page size when a request names no `limit`; a page that came
+/// back larger means the default is not being applied.
+const DEFAULT_PAGE_LIMIT: usize = 1000;
+
 const PAGE_OPS: &[&str] = &[
     "library_genres",
     "library_artists",
@@ -217,6 +221,9 @@ fn run_checks(
         )
     });
 
+    protocol_surface(c, host, port, timeout, &ops, r);
+    list_contract(c, &ops, allow_writes, r);
+
     browse_differential(host, port, timeout, c, r);
 
     // Writes + events (opt-in), with state restored so the run is repeatable.
@@ -227,9 +234,155 @@ fn run_checks(
     }
 }
 
+/// The checks that are about the protocol's own contracts rather than the op
+/// catalog: which errors name a field, what an absent `limit` means, and the
+/// identity and versioning guards a client has to honour.
+fn protocol_surface(
+    c: &mut V6Client,
+    host: &str,
+    port: u16,
+    timeout: Duration,
+    ops: &[String],
+    r: &mut Report,
+) {
+    r.check("error names its field", || {
+        let op = PAGE_OPS
+            .iter()
+            .find(|o| ops.iter().any(|a| a == **o))
+            .ok_or("no page op advertised to probe")?;
+        let bad = c.request(op, json!({ "offset": "not-an-int" }))?;
+        expect(
+            bad.err_field()?.as_deref() == Some("offset"),
+            "invalid_field did not name `offset`",
+        )?;
+        let unknown = c.request("definitely_not_a_real_op", json!({}))?;
+        expect(
+            unknown.err_field()?.is_none(),
+            "unknown_op named a field it is not about",
+        )
+    });
+
+    r.check("absent limit is bounded", || {
+        for op in PAGE_OPS.iter().filter(|o| ops.iter().any(|a| a == *o)) {
+            let data = c.request(op, json!({}))?.ok()?;
+            let items = data["items"]
+                .as_array()
+                .ok_or_else(|| format!("{op}: items not an array"))?;
+            expect(
+                items.len() <= DEFAULT_PAGE_LIMIT,
+                &format!("{op}: {} items with no limit set", items.len()),
+            )?;
+        }
+        Ok(())
+    });
+
+    r.check("client_token issued then demanded", || {
+        let id = run_client_id("mbrc-conform-token");
+        let (_first, resp) = V6Client::open(host, port, timeout, &id, None)?;
+        let token = resp.ok()?["client_token"]
+            .as_str()
+            .ok_or("first contact was issued no client_token")?
+            .to_owned();
+
+        let (_known, resp) = V6Client::open(host, port, timeout, &id, Some(&token))?;
+        expect(
+            resp.ok()?.get("client_token").is_none(),
+            "a client that presented its token was issued another",
+        )?;
+
+        let (_clone, resp) = V6Client::open(host, port, timeout, &id, None)?;
+        expect(
+            resp.err_code()? == "invalid_token",
+            "a second install claiming the id was not refused",
+        )?;
+        expect(
+            resp.err_field()?.as_deref() == Some("client_token"),
+            "invalid_token did not name `client_token`",
+        )
+    });
+}
+
+/// The now-playing list's own contract: what an item carries, what a client
+/// has to ask for, and what happens to a mutation whose `version` has moved on.
+fn list_contract(c: &mut V6Client, ops: &[String], allow_writes: bool, r: &mut Report) {
+    if ops.iter().any(|o| o == "now_playing_list") {
+        r.check("list item keys", || {
+            let data = c
+                .request("now_playing_list", json!({ "offset": 0, "limit": 20 }))?
+                .ok()?;
+            expect(data["version"].is_i64(), "list carries no version")?;
+            for (rank, item) in data["items"].as_array().into_iter().flatten().enumerate() {
+                expect(item["order"].is_i64(), "item has no order")?;
+                expect(
+                    item["position"] == json!(rank as i64),
+                    "position is not the 0-based rank within the page",
+                )?;
+                expect(item["play_position"].is_i64(), "item has no play_position")?;
+            }
+            Ok(())
+        });
+    } else {
+        r.skip("list item keys", "now_playing_list not advertised");
+    }
+
+    if ops.iter().any(|o| o == "now_playing_state") {
+        r.check("list_order is opt-in", || {
+            let off = c.request("now_playing_state", json!({}))?.ok()?;
+            expect(
+                off["list_order"].is_null(),
+                "list_order was returned without being asked for",
+            )?;
+            let on = c
+                .request("now_playing_state", json!({ "include_list_order": true }))?
+                .ok()?;
+            expect(
+                on["list_order"].is_i64() || on["list_order"].is_null(),
+                "list_order is not an int",
+            )
+        });
+    } else {
+        r.skip("list_order is opt-in", "now_playing_state not advertised");
+    }
+
+    if allow_writes && ops.iter().any(|o| o == "now_playing_list_move") {
+        r.check("stale version rejected", || {
+            let before = c
+                .request("now_playing_list", json!({ "offset": 0, "limit": 2 }))?
+                .ok()?;
+            let version = before["version"]
+                .as_i64()
+                .ok_or("list carries no version")?;
+            let items = before["items"].as_array().cloned().unwrap_or_default();
+            if items.len() < 2 {
+                return Ok(());
+            }
+            let from = items[0]["order"].as_i64().ok_or("item has no order")?;
+            let to = items[1]["order"].as_i64().ok_or("item has no order")?;
+            let resp = c.request(
+                "now_playing_list_move",
+                json!({ "from": from, "to": to, "version": version - 1 }),
+            )?;
+            let code = resp.err_code()?;
+            expect(
+                code == "stale_list",
+                &format!("a move against a stale version answered {code}, not stale_list"),
+            )?;
+            let after = c
+                .request("now_playing_list", json!({ "offset": 0, "limit": 2 }))?
+                .ok()?;
+            expect(
+                after["version"] == json!(version),
+                "a rejected move still bumped the version",
+            )
+        });
+    } else {
+        r.skip("stale version rejected", "needs --allow-writes");
+    }
+}
+
 /// Compare V6 `library_*` browse values against the shipped V4 `browse*` baseline.
 /// Both hit the same library via the same FFI callbacks, so a mismatch means V6
-/// mis-reads or mis-maps the data. Compared as sorted `(name, count)` multisets so
+/// misreads or mismaps the data. Compared as sorted `(name, count)` multisets so
 /// ordering differences don't matter.
 fn browse_differential(
     host: &str,
@@ -663,24 +816,8 @@ struct V6Client {
 
 impl V6Client {
     fn connect(host: &str, port: u16, timeout: Duration) -> Result<Self, String> {
-        let writer = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
-        let rs = writer.try_clone().map_err(|e| e.to_string())?;
-        rs.set_read_timeout(Some(timeout)).ok();
-        let mut client = Self {
-            writer,
-            reader: BufReader::new(rs),
-            next_id: 1,
-            pending: HashMap::new(),
-            server_version: 0,
-            ops: Vec::new(),
-            events_advertised: Vec::new(),
-            events: Vec::new(),
-        };
-
-        // Handshake (id 0), then validate + capture the capabilities.
-        let hs = v6::handshake_request("mbrc-conform", ClientType::Cli, false);
-        client.write_line(&hs)?;
-        let resp = client.recv(0)?;
+        let (mut client, resp) =
+            Self::open(host, port, timeout, &run_client_id("mbrc-conform"), None)?;
         let data = resp.ok().map_err(|e| format!("handshake rejected: {e}"))?;
         client.server_version = data["server_version"].as_u64().unwrap_or(0);
         if client.server_version != 6 {
@@ -696,6 +833,44 @@ impl V6Client {
             return Err("handshake advertised no capabilities.ops".into());
         }
         Ok(client)
+    }
+
+    /// Connect and handshake as `client_id`, returning the raw response.
+    ///
+    /// Unlike [`V6Client::connect`] a refusal is not an error here, because the
+    /// token checks are about which handshakes the server turns away.
+    fn open(
+        host: &str,
+        port: u16,
+        timeout: Duration,
+        client_id: &str,
+        token: Option<&str>,
+    ) -> Result<(Self, v6::IncomingResponse), String> {
+        let writer = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
+        let rs = writer.try_clone().map_err(|e| e.to_string())?;
+        rs.set_read_timeout(Some(timeout)).ok();
+        let mut client = Self {
+            writer,
+            reader: BufReader::new(rs),
+            next_id: 1,
+            pending: HashMap::new(),
+            server_version: 0,
+            ops: Vec::new(),
+            events_advertised: Vec::new(),
+            events: Vec::new(),
+        };
+        let mut data = json!({
+            "protocol_version": 6,
+            "client_id": client_id,
+            "client_type": ClientType::Cli.as_str(),
+            "no_broadcast": false,
+        });
+        if let Some(token) = token {
+            data["client_token"] = json!(token);
+        }
+        client.write_line(&v6::request(0, "handshake", data))?;
+        let resp = client.recv(0)?;
+        Ok((client, resp))
     }
 
     fn write_line(&mut self, body: &str) -> Result<(), String> {
@@ -879,6 +1054,7 @@ impl V4Client {
 trait RespExt {
     fn ok(&self) -> Result<Value, String>;
     fn err_code(&self) -> Result<String, String>;
+    fn err_field(&self) -> Result<Option<String>, String>;
 }
 
 impl RespExt for v6::IncomingResponse {
@@ -891,6 +1067,12 @@ impl RespExt for v6::IncomingResponse {
     fn err_code(&self) -> Result<String, String> {
         match &self.result {
             Err(e) => Ok(e.code.clone()),
+            Ok(_) => Err("expected an error, got success".into()),
+        }
+    }
+    fn err_field(&self) -> Result<Option<String>, String> {
+        match &self.result {
+            Err(e) => Ok(e.field.clone()),
             Ok(_) => Err("expected an error, got success".into()),
         }
     }
