@@ -28,7 +28,7 @@ pub struct Inputs<'a> {
     /// carries the reproduction and not the user's whole history.
     pub log_offset: u64,
     /// When the capture began, Unix epoch milliseconds (UTC). Bounds which of
-    /// the other log files come along; see [`extra_logs`].
+    /// the other log files come along; see `extra_logs`.
     pub started_unix_ms: i64,
 }
 

@@ -178,7 +178,7 @@ impl ConnectionRegistry {
     /// sockets the newcomer carries the user's request and the held sockets are
     /// the abandoned ones, so refusing it made iOS lock itself out. The victim is
     /// the least recently active non-subscriber from that IP, silent for at least
-    /// [`MIN_EVICT_IDLE_MS`]; its slot frees when its task finishes, so the count
+    /// `MIN_EVICT_IDLE_MS`; its slot frees when its task finishes, so the count
     /// sits one over the cap until then.
     pub fn admit_ip(&self, ip: IpAddr) -> IpAdmit {
         if ip.is_loopback() {

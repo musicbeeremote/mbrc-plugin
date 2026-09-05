@@ -1,7 +1,7 @@
 //! In-memory log of recently rejected connection attempts, surfaced to the
 //! settings panel so a user can see why a device was blocked (issue #84).
 //!
-//! A bounded ring buffer of the last [`MAX_ENTRIES`] rejections, newest first.
+//! A bounded ring buffer of the last `MAX_ENTRIES` rejections, newest first.
 //! Not persisted - it resets when the plugin reloads (the reject reasons are a
 //! live-debugging aid, not an audit log). Populated at the accept-loop /
 //! connection reject sites (`server::accept_loop`, `connection::run`) and read

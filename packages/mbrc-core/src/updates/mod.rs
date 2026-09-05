@@ -6,7 +6,7 @@
 //! reports over FFI.
 //!
 //! Nothing here reaches the network on its own. It takes an
-//! [`HttpClient`](mbrc_release::HttpClient); `http_client` builds the
+//! [`HttpClient`]; `http_client` builds the
 //! production one (WinHTTP) from the user's settings, and [`service`] is what
 //! decides when to hand it one - the panel's buttons and the one check the core
 //! runs shortly after networking starts.

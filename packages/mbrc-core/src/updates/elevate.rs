@@ -4,7 +4,7 @@
 //! the helper it is about to run is the one the release signed, and launches it.
 //! What may be passed to the helper, what is verified before it runs, and what
 //! counts as an upgrade are pinned by the tests at the foot of this file; why
-//! the verification still holds at launch time is on [`VerifiedHelper`].
+//! the verification still holds at launch time is on `VerifiedHelper`.
 //!
 //! The one rule nothing else records: elevation is asked for **now**, not later.
 //! `runas` prompts while the user is still looking at the button they pressed. A

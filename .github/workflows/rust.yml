@@ -74,10 +74,13 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
 
       # A doc link to a renamed item is invisible until someone reads the docs.
-      # Ambiguity (`stage` the module vs the function) is caught here too.
+      # Ambiguity (`stage` the module vs the function) is caught here too, as is
+      # a public doc pointing at a private item, which renders as bare text.
       - name: rustdoc (broken links as errors)
         env:
-          RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links -D rustdoc::invalid_html_tags
+          RUSTDOCFLAGS: >-
+            -D rustdoc::broken_intra_doc_links -D rustdoc::invalid_html_tags
+            -D rustdoc::private_intra_doc_links -D rustdoc::redundant_explicit_links
         run: cargo doc --no-deps --workspace --locked
 
       - name: test

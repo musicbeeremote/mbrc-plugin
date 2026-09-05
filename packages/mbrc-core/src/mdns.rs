@@ -11,7 +11,7 @@
 //! - **A list of services, not one.** One daemon can hold several, so a second
 //!   endpoint later is another entry rather than a rewrite.
 //! - **The addresses are ours, not the crate's.** We hand `mdns-sd`
-//!   [`usable_ipv4_ifaces`], so it advertises what the panel's "Reachable at"
+//!   `usable_ipv4_ifaces`, so it advertises what the panel's "Reachable at"
 //!   row shows. mDNS carries no client-subnet hint, so we cannot pick *the*
 //!   reachable address, only avoid publishing loopback and APIPA.
 //! - **Goodbye on the way out.** A stale instance lingering in every browser on

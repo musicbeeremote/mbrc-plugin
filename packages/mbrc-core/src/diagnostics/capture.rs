@@ -12,7 +12,7 @@
 //! - **One capture at a time.** A second start while one runs is refused, not
 //!   queued - two overlapping windows would make the offset a lie.
 //! - **A capture always ends.** A safety auto-stop restores the level after
-//!   [`MAX_CAPTURE`], so a user who forgets does not leave the plugin writing
+//!   `MAX_CAPTURE`, so a user who forgets does not leave the plugin writing
 //!   debug logs until MusicBee closes.
 //!
 //! The session survives a MusicBee restart (it is recorded in `capture.json`),
@@ -243,7 +243,7 @@ pub fn status_bytes() -> Option<Vec<u8>> {
 /// Called once from init. The log is appended across restarts rather than
 /// truncated, so the original offset still points at the start of the window -
 /// which is the whole reason a startup bug can be captured at all. A record
-/// older than [`MAX_CAPTURE`] is dropped rather than resumed into an instant
+/// older than `MAX_CAPTURE` is dropped rather than resumed into an instant
 /// expiry, and a session that is already live is left alone: a port change
 /// re-inits the core without clearing this module's state.
 pub fn resume_after_restart(core: &Core) {

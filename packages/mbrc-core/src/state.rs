@@ -110,7 +110,7 @@ impl Core {
     }
 
     /// Whether teardown has started. Checked between items by work that would
-    /// otherwise hold MusicBee's shutdown - see [`Core::stopping`].
+    /// otherwise hold MusicBee's shutdown - see the `stopping` flag.
     pub fn is_stopping(&self) -> bool {
         self.stopping.load(Ordering::Acquire)
     }
