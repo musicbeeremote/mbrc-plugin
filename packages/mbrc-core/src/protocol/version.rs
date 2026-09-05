@@ -1,8 +1,10 @@
-//! The negotiated wire protocol version and its formatter selection.
+//! The negotiated legacy protocol version and its formatter selection.
 //!
-//! Only V4 is spoken today. The enum is the pre-wired seam for V6+: adding a
-//! variant here plus a `wire` formatter is the entire change - handlers select
-//! their formatter via `ProtocolVersion::formatter()` and never name a version.
+//! This enum covers the versions the legacy `protocol` handshake negotiates.
+//! V6 is not one of them: it is routed by its first frame's shape into
+//! [`session_v6`](crate::server::session_v6) and carries its own envelope, so it
+//! never reaches a [`WireCodec`]. What the port as a whole speaks is
+//! [`ADVERTISED_PROTOCOLS`]; what this enum accepts is [`SUPPORTED_VERSIONS`].
 
 use crate::wire::{V4_CODEC, WireCodec};
 
@@ -17,13 +19,20 @@ pub enum ProtocolVersion {
     // V6 is reserved: add the variant + a `wire::v6` formatter and map it below.
 }
 
-/// Every handshake version the core accepts, low to high.
+/// Every version the legacy `protocol` handshake accepts, low to high.
 ///
-/// Exists so anything that has to *state* what is supported - the mDNS TXT
-/// record, and whatever else advertises later - reads it from here instead of
-/// carrying its own list that quietly goes stale when a version is added. The
-/// test below pins it to what [`ProtocolVersion::from_negotiated`] will accept.
+/// The test below pins it to what [`ProtocolVersion::from_negotiated`] accepts,
+/// so the two cannot drift. This is the handshake's accept-list, not a claim
+/// about the port - to state what the port speaks, use [`ADVERTISED_PROTOCOLS`].
 pub const SUPPORTED_VERSIONS: &[u8] = &[4, 5];
+
+/// Every protocol a client may find on the command port, low to high.
+///
+/// Exists so anything that has to *state* what is reachable - the mDNS TXT
+/// record, the diagnostics report - reads it from here instead of carrying a
+/// list that goes stale when a protocol is added. It is the legacy accept-list
+/// plus V6, which the port serves through a different door entirely.
+pub const ADVERTISED_PROTOCOLS: &[u8] = &[4, 5, mbrc_wire::v6::PROTOCOL_VERSION as u8];
 
 impl ProtocolVersion {
     /// Maps a negotiated handshake version number to a formatter version, or
@@ -58,6 +67,32 @@ impl ProtocolVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Advertising V6 is the point of the list being separate: a client that
+    /// only speaks V6 must be able to tell, before connecting, that this port
+    /// will answer it.
+    #[test]
+    fn every_protocol_on_the_port_is_advertised() {
+        assert!(
+            ADVERTISED_PROTOCOLS.contains(&(mbrc_wire::v6::PROTOCOL_VERSION as u8)),
+            "V6 is served on the command port but not advertised"
+        );
+        for &version in SUPPORTED_VERSIONS {
+            assert!(
+                ADVERTISED_PROTOCOLS.contains(&version),
+                "legacy version {version} is accepted but not advertised"
+            );
+        }
+    }
+
+    /// The legacy list stays the handshake's accept-list. V6 must never leak
+    /// into it: `from_negotiated` would then be asked for a codec V6 has not
+    /// got, and the legacy handshake would start claiming to speak it.
+    #[test]
+    fn the_legacy_list_excludes_v6() {
+        assert!(!SUPPORTED_VERSIONS.contains(&(mbrc_wire::v6::PROTOCOL_VERSION as u8)));
+        assert!(ProtocolVersion::from_negotiated(mbrc_wire::v6::PROTOCOL_VERSION as u8).is_none());
+    }
 
     #[test]
     fn the_advertised_versions_are_the_accepted_ones() {

@@ -26,7 +26,7 @@ use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tokio::sync::Notify;
 
 use crate::discovery::usable_ipv4_ifaces;
-use crate::protocol::version::SUPPORTED_VERSIONS;
+use crate::protocol::version::ADVERTISED_PROTOCOLS;
 
 /// The service type clients browse for.
 ///
@@ -134,9 +134,9 @@ fn services(tcp_port: u16) -> Vec<Service> {
     }]
 }
 
-/// The handshake versions this core accepts, comma-separated (`"4,5"`).
+/// The protocols reachable on the command port, comma-separated (`"4,5,6"`).
 fn advertised_protocols() -> String {
-    SUPPORTED_VERSIONS
+    ADVERTISED_PROTOCOLS
         .iter()
         .map(|v| v.to_string())
         .collect::<Vec<_>>()
@@ -267,7 +267,10 @@ mod tests {
         let services = services(3000);
         let service = services.first().expect("one service today");
         assert_eq!(service.port, 3000);
-        assert_eq!(service.txt.get("protocol").map(String::as_str), Some("4,5"));
+        assert_eq!(
+            service.txt.get("protocol").map(String::as_str),
+            Some("4,5,6")
+        );
         assert!(service.txt.contains_key("version"));
         assert!(service.txt.contains_key("name"));
         // `path` is reserved by DNS-SD convention for HTTP-ish types; publishing
@@ -276,12 +279,12 @@ mod tests {
     }
 
     #[test]
-    fn the_advertised_protocols_are_the_supported_ones() {
+    fn the_advertised_protocols_are_the_ones_the_port_serves() {
         let advertised: Vec<u8> = advertised_protocols()
             .split(',')
             .map(|v| v.parse().expect("a numeric version"))
             .collect();
-        assert_eq!(advertised, SUPPORTED_VERSIONS);
+        assert_eq!(advertised, ADVERTISED_PROTOCOLS);
     }
 
     #[test]

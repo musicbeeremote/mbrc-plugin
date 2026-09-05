@@ -61,7 +61,7 @@ fn versions(core: &Core) -> Value {
         "core": crate::updates::CORE_VERSION,
         "plugin": core.providers.plugin_version().ok(),
         "abi": crate::ffi::types::MBRC_ABI_VERSION,
-        "protocol_supported": crate::protocol::version::SUPPORTED_VERSIONS,
+        "protocol_supported": crate::protocol::version::ADVERTISED_PROTOCOLS,
     })
 }
 
