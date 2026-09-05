@@ -100,8 +100,11 @@ LAN that is the trust model V4 had too, but two consequences are worth stating p
 
 ## Error codes
 
-Errors are `{"code":"<code>","message":"<human text>"}`. The `code` is a stable string enum;
-the `message` is informational and may change.
+Errors are `{"code":"<code>","message":"<human text>","field":"<name>"}`. The `code` is a
+stable string enum; the `message` is informational and may change. **`field` is present only
+when the failure is about one named `data` field** (`missing_field`, `invalid_field` and
+friends), so validation can be handled without parsing the message - a client can point at the
+offending input directly. Its absence means the error is not about a single field.
 
 | Code | Meaning |
 |------|---------|

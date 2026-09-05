@@ -134,10 +134,30 @@ pub fn response_ok(id: u64, data: Value) -> String {
 
 /// A failure response echoing the request `id` and carrying a typed `error`.
 pub fn response_error(id: u64, code: ErrorCode, message: &str) -> String {
+    error_frame(id, code, message, None)
+}
+
+/// A failure that names the offending `data` field.
+///
+/// `missing_field` and `invalid_field` already know which field failed, but a
+/// client reading only `message` has to parse English to find out. The name is a
+/// separate key so validation is machine-readable, and it is omitted rather than
+/// empty when the error is not about one field.
+pub fn response_error_field(id: u64, code: ErrorCode, message: &str, field: &str) -> String {
+    error_frame(id, code, message, Some(field))
+}
+
+fn error_frame(id: u64, code: ErrorCode, message: &str, field: Option<&str>) -> String {
+    let mut error = json!({ "code": code.as_str(), "message": message });
+    if let Some(field) = field
+        && let Some(obj) = error.as_object_mut()
+    {
+        obj.insert("field".to_owned(), json!(field));
+    }
     serde_json::to_string(&json!({
         "id": id,
         "kind": "response",
-        "error": { "code": code.as_str(), "message": message },
+        "error": error,
     }))
     .expect("serializing a V6 error cannot fail")
 }
@@ -256,6 +276,8 @@ pub fn parse_request(line: &str) -> Result<IncomingRequest, RequestError> {
 pub struct WireError {
     pub code: String,
     pub message: String,
+    /// The `data` field at fault, when the server named one.
+    pub field: Option<String>,
 }
 
 /// A parsed server response: the echoed `id` and either the success `data` or a
@@ -287,6 +309,7 @@ pub fn parse_response(line: &str) -> Option<IncomingResponse> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
+            field: err.get("field").and_then(Value::as_str).map(str::to_owned),
         }),
         None => Ok(obj.get("data").cloned().unwrap_or(Value::Null)),
     };

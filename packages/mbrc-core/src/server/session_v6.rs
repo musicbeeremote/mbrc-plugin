@@ -180,7 +180,12 @@ impl V6Session {
             RequestError::MissingField { field, .. } => format!("missing required field: {field}"),
             RequestError::InvalidField { field, .. } => format!("invalid field: {field}"),
         };
-        let frame = v6::response_error(err.id(), err.code(), &message);
+        let frame = match &err {
+            RequestError::Malformed => v6::response_error(err.id(), err.code(), &message),
+            RequestError::MissingField { field, .. } | RequestError::InvalidField { field, .. } => {
+                v6::response_error_field(err.id(), err.code(), &message, field)
+            }
+        };
         if self.handshaked {
             Outcome::reply(frame)
         } else {
@@ -343,6 +348,47 @@ mod tests {
 
     fn parse(frame: &str) -> Value {
         serde_json::from_str(frame).expect("reply is JSON")
+    }
+
+    /// A handshaked session, for the tests that are about what comes after one.
+    fn handshaked() -> V6Session {
+        let mut s = V6Session::default();
+        feed(&mut s, GOOD_HANDSHAKE);
+        s
+    }
+
+    /// A client cannot act on a validation failure it has to read as prose.
+    #[test]
+    fn a_field_error_names_the_field_that_failed() {
+        let mut s = handshaked();
+        let reply = feed(
+            &mut s,
+            r#"{"id":9,"kind":"request","op":"track_get","data":{}}"#,
+        );
+        let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
+        assert_eq!(v["error"]["code"], "missing_field");
+        assert_eq!(v["error"]["field"], "src");
+    }
+
+    /// An envelope-level rejection knows the field too, and says so the same way.
+    #[test]
+    fn an_envelope_error_names_its_field() {
+        let mut s = V6Session::default();
+        let reply = feed(&mut s, r#"{"id":1,"kind":"request","data":{}}"#);
+        let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
+        assert_eq!(v["error"]["code"], "missing_field");
+        assert_eq!(v["error"]["field"], "op");
+    }
+
+    /// An error that is not about one field carries no `field` key at all, rather
+    /// than an empty one a client would have to test for.
+    #[test]
+    fn an_error_with_no_field_omits_the_key() {
+        let mut s = handshaked();
+        let reply = feed(&mut s, r#"{"id":2,"kind":"request","op":"nope","data":{}}"#);
+        let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
+        assert_eq!(v["error"]["code"], "unknown_op");
+        assert!(v["error"].get("field").is_none());
     }
 
     /// Drives one frame through the session against a no-op provider context.

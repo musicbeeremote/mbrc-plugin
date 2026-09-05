@@ -66,6 +66,9 @@ pub fn capabilities() -> Value {
 pub struct V6Error {
     pub code: ErrorCode,
     pub message: String,
+    /// The `data` field at fault, when the error is about one. Reaches the client
+    /// as `error.field`, so validation does not have to be read out of prose.
+    pub field: Option<String>,
 }
 
 impl V6Error {
@@ -73,6 +76,16 @@ impl V6Error {
         Self {
             code,
             message: message.into(),
+            field: None,
+        }
+    }
+
+    /// A failure caused by one named `data` field.
+    pub fn field(code: ErrorCode, field: &str, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            field: Some(field.to_owned()),
         }
     }
 }
@@ -144,13 +157,15 @@ pub(crate) fn i32_saturating(v: i64) -> i32 {
 /// A required integer field (`missing_field` if absent, `invalid_field` if not an int).
 pub(crate) fn req_i64(data: &Value, field: &str) -> Result<i64, V6Error> {
     match data.get(field) {
-        None => Err(V6Error::new(
+        None => Err(V6Error::field(
             ErrorCode::MissingField,
+            field,
             format!("missing required field: {field}"),
         )),
         Some(v) => v.as_i64().ok_or_else(|| {
-            V6Error::new(
+            V6Error::field(
                 ErrorCode::InvalidField,
+                field,
                 format!("{field} must be an integer"),
             )
         }),
@@ -160,13 +175,15 @@ pub(crate) fn req_i64(data: &Value, field: &str) -> Result<i64, V6Error> {
 /// A required boolean field.
 pub(crate) fn req_bool(data: &Value, field: &str) -> Result<bool, V6Error> {
     match data.get(field) {
-        None => Err(V6Error::new(
+        None => Err(V6Error::field(
             ErrorCode::MissingField,
+            field,
             format!("missing required field: {field}"),
         )),
         Some(v) => v.as_bool().ok_or_else(|| {
-            V6Error::new(
+            V6Error::field(
                 ErrorCode::InvalidField,
+                field,
                 format!("{field} must be a boolean"),
             )
         }),
@@ -176,12 +193,17 @@ pub(crate) fn req_bool(data: &Value, field: &str) -> Result<bool, V6Error> {
 /// A required string field.
 pub(crate) fn req_str<'a>(data: &'a Value, field: &str) -> Result<&'a str, V6Error> {
     match data.get(field) {
-        None => Err(V6Error::new(
+        None => Err(V6Error::field(
             ErrorCode::MissingField,
+            field,
             format!("missing required field: {field}"),
         )),
         Some(v) => v.as_str().ok_or_else(|| {
-            V6Error::new(ErrorCode::InvalidField, format!("{field} must be a string"))
+            V6Error::field(
+                ErrorCode::InvalidField,
+                field,
+                format!("{field} must be a string"),
+            )
         }),
     }
 }
@@ -190,23 +212,26 @@ pub(crate) fn req_str<'a>(data: &'a Value, field: &str) -> Result<&'a str, V6Err
 /// if not an array of strings).
 pub(crate) fn req_str_array(data: &Value, field: &str) -> Result<Vec<String>, V6Error> {
     match data.get(field) {
-        None => Err(V6Error::new(
+        None => Err(V6Error::field(
             ErrorCode::MissingField,
+            field,
             format!("missing required field: {field}"),
         )),
         Some(Value::Array(arr)) => arr
             .iter()
             .map(|v| {
                 v.as_str().map(String::from).ok_or_else(|| {
-                    V6Error::new(
+                    V6Error::field(
                         ErrorCode::InvalidField,
+                        field,
                         format!("{field} must be an array of strings"),
                     )
                 })
             })
             .collect(),
-        Some(_) => Err(V6Error::new(
+        Some(_) => Err(V6Error::field(
             ErrorCode::InvalidField,
+            field,
             format!("{field} must be an array"),
         )),
     }
@@ -224,8 +249,9 @@ pub(crate) fn opt_i64(data: &Value, field: &str) -> Result<Option<i64>, V6Error>
     match data.get(field) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_i64().map(Some).ok_or_else(|| {
-            V6Error::new(
+            V6Error::field(
                 ErrorCode::InvalidField,
+                field,
                 format!("{field} must be an integer"),
             )
         }),
@@ -237,7 +263,11 @@ pub(crate) fn opt_str<'a>(data: &'a Value, field: &str) -> Result<Option<&'a str
     match data.get(field) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_str().map(Some).ok_or_else(|| {
-            V6Error::new(ErrorCode::InvalidField, format!("{field} must be a string"))
+            V6Error::field(
+                ErrorCode::InvalidField,
+                field,
+                format!("{field} must be a string"),
+            )
         }),
     }
 }
@@ -247,8 +277,9 @@ pub(crate) fn opt_bool(data: &Value, field: &str) -> Result<Option<bool>, V6Erro
     match data.get(field) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_bool().map(Some).ok_or_else(|| {
-            V6Error::new(
+            V6Error::field(
                 ErrorCode::InvalidField,
+                field,
                 format!("{field} must be a boolean"),
             )
         }),
