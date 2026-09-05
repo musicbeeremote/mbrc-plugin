@@ -206,13 +206,23 @@ pub async fn connect(
         }
     });
 
+    /// A per-connect V6 `client_id` when the user has not pinned one.
+    ///
+    /// The server issues a token to the first handshake for an id and refuses every
+    /// later one that arrives without it, and the debugger persists nothing, so a
+    /// fixed id would connect once and be locked out after.
+    fn run_client_id() -> String {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        format!("api-debugger-{}-{nanos}", std::process::id())
+    }
+
     // Legacy drives handshake and keepalive automation from the shared crate;
     // V6 sends its handshake once and never auto-replies.
     let (mut handshake, initial) = if is_v6 {
-        let client_id = options
-            .client_id
-            .clone()
-            .unwrap_or_else(|| "api-debugger-dev".to_string());
+        let client_id = options.client_id.clone().unwrap_or_else(run_client_id);
         let ct = v6::ClientType::parse(&options.client_type.to_lowercase())
             .unwrap_or(v6::ClientType::Desktop);
         (

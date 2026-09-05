@@ -35,6 +35,9 @@ redb = "=4.2.0"
 # SHA1 for cover cache identities (album key + content hash). Not cryptographic;
 # must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
 sha1 = "=0.11.0"
+# OS entropy for the V6 handshake token. A predictable token would be worse than
+# no token at all, so this is not a place for a hand-rolled generator.
+getrandom = "=0.3.4"
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so

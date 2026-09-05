@@ -73,10 +73,8 @@ pub fn run(args: &[String]) -> ExitCode {
     };
 
     if protocol == mbrc_wire::v6::PROTOCOL_VERSION as u8 {
-        // A fixed dev client_id unless overridden: the CLI is a test driver, not
-        // a persisted install.
-        let client_id =
-            flag_value(args, "--client-id").unwrap_or_else(|| "mbrc-cli-dev".to_string());
+        let client_id = flag_value(args, "--client-id")
+            .unwrap_or_else(|| crate::args::run_client_id("mbrc-cli"));
         let op = flag_value(args, "--op").unwrap_or_else(|| "ping".to_string());
         let data = match command.as_deref() {
             None => serde_json::json!({}),

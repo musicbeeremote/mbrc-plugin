@@ -417,6 +417,7 @@ dependencies = [
  "csbindgen",
  "fast_image_resize",
  "flate2",
+ "getrandom 0.3.4",
  "if-addrs",
  "image",
  "mbrc-buildinfo",

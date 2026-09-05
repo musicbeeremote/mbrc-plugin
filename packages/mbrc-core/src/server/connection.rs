@@ -137,6 +137,7 @@ impl Proto {
                 Some(&core.now_playing),
                 Some(core.cover_store.as_ref()),
                 Some(core.metadata_cache.as_ref()),
+                Some(core.clients.as_ref()),
             ),
             // Never reached: a frame routes Pending to Legacy or V6 before this.
             Proto::Pending => Outcome::nothing(),

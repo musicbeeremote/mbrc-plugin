@@ -88,6 +88,9 @@ pub enum ErrorCode {
     Unauthorized,
     /// The connection is not permitted (address filter / connection cap).
     NotAllowed,
+    /// The `client_id` is already held by an installation that presented a
+    /// different token, so this handshake cannot claim it.
+    InvalidToken,
     /// The now-playing list moved since the version the request carried, so the
     /// `order` it names may no longer hold what the client read.
     StaleList,
@@ -111,6 +114,7 @@ impl ErrorCode {
             Self::UnknownOp => "unknown_op",
             Self::Unauthorized => "unauthorized",
             Self::NotAllowed => "not_allowed",
+            Self::InvalidToken => "invalid_token",
             Self::StaleList => "stale_list",
             Self::Internal => "internal_error",
             Self::NotFound => "not_found",

@@ -47,6 +47,9 @@ pub struct Core {
     /// Bounds concurrent connections (per IP + per client_id) and supersedes a
     /// stale main socket on reconnect.
     pub registry: Arc<ConnectionRegistry>,
+    /// The tokens that settle which installation owns a duplicated V6
+    /// `client_id`. Not authentication: see `server::clients`.
+    pub clients: Arc<crate::server::clients::ClientIdentities>,
     /// Recent rejected connection attempts (address filter / caps), surfaced to
     /// the settings panel. In-memory ring buffer, not persisted.
     pub blocked: BlockedLog,
@@ -78,6 +81,7 @@ impl Core {
             config.max_conns_per_client,
             config.max_conns_per_ip,
         ));
+        let clients = Arc::new(crate::server::clients::ClientIdentities::new(db.clone()));
         Self {
             providers,
             config,
@@ -88,6 +92,7 @@ impl Core {
             metadata_cache,
             reconciling: AtomicBool::new(false),
             registry,
+            clients,
             blocked: BlockedLog::default(),
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),

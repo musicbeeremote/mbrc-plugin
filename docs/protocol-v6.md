@@ -70,7 +70,8 @@ The first frame must be the handshake, `id:0`:
 | Field | Required | Notes |
 |-------|----------|-------|
 | `protocol_version` | yes | must be exactly `6` |
-| `client_id` | yes | non-empty string; a **per-install UUID**, stable across relaunches |
+| `client_id` | yes | non-empty string, at most 128 chars; a **per-install UUID**, stable across relaunches |
+| `client_token` | after the first | the token this server issued for that `client_id` - see below |
 | `client_type` | yes | one of `android`, `ios`, `desktop`, `web`, `cli` |
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
 
@@ -85,18 +86,46 @@ than assume an op exists. A validation failure replies with a typed error (echoi
 closes the connection. A second handshake on an established connection is a protocol error
 (`not_allowed`); any non-handshake op *before* the handshake is `unauthorized` + close.
 
-### `client_id` is an identifier, not a credential
+### `client_token` - telling two installs with the same id apart
 
-Nothing authenticates a `client_id`. Any peer that can reach the port can present one and the
-registry will treat it as that installation, including superseding its main connection. On a
-LAN that is the trust model V4 had too, but two consequences are worth stating plainly:
+`client_id` is an identifier, not a credential. It exists so the server can tell one
+installation from another: supersede that install's stale main connection, count it against
+the per-client cap, label it in the log. Nothing is gated on it and nothing should be.
 
-- **Anything permission-bearing must not trust `client_id` alone.** If persistent per-install
-  state is ever hung off it (Party Mode, a known-clients list), that needs a real credential.
-- **A cloned id is a live hazard, not a theoretical one.** A device backup restored onto a
-  second device carries the same persisted UUID, and the two installs then supersede each
-  other's main connection in a loop. A client seeing repeated unexplained supersession should
-  regenerate its id.
+It only has to be *unique*. The case where it stops being unique is a **restored device
+backup**: the clone carries the same persisted UUID, both installs claim it, and the two evict
+each other's main connection in a loop. `client_token` is the tiebreaker that settles which of
+them is the original. The server issues one on first contact and remembers it.
+
+```json
+// first handshake for an unseen client_id - no client_token sent
+← {"id":0,"kind":"response","data":{"server_version":6,"capabilities":{...},
+                                    "client_token":"a3f1…"}}
+
+// every handshake after that
+→ {"id":0,"kind":"request","op":"handshake",
+   "data":{"protocol_version":6,"client_id":"<uuid>","client_type":"android","client_token":"a3f1…"}}
+← {"id":0,"kind":"response","data":{"server_version":6,"capabilities":{...}}}
+```
+
+**What the client must do**
+
+1. **Persist `client_token` alongside `client_id`, and persist whatever `client_token` any
+   response carries** - not only the first. The server's store is bounded: an entry is dropped
+   after 30 days unseen, or evicted once more than 200 are held (least-recently-seen first). A
+   returning client whose record has aged out is simply unknown again, and is issued a fresh
+   token to keep.
+2. **Send it on every handshake once you have one.** A response without `client_token` means
+   the server already knew you, which is the normal case.
+3. **On `invalid_token`, generate a new `client_id`, discard the token, and handshake again.**
+   The id you hold is already claimed by another installation - which, if you are a restored
+   backup, is exactly true. A new id is a new installation identity, which is what you are. Do
+   not retry the same id: it will be refused every time.
+
+**This is not authentication.** It protects nothing and nothing may be built on it: anyone who
+can reach the port can already control the player, token or no token. It resolves an identity
+collision, and that is the whole of its job. If something permission-bearing is ever added
+(Party Mode, a known-clients list), it needs a real credential of its own.
 
 ## Error codes
 
@@ -112,6 +141,7 @@ offending input directly. Its absence means the error is not about a single fiel
 | `unsupported_version` | handshake `protocol_version` is not 6 |
 | `missing_field` | a required `data` field is absent |
 | `invalid_field` | a field has the wrong type or an unaccepted value |
+| `invalid_token` | the `client_id` is held by an installation with a different `client_token` - generate a new `client_id` and retry |
 | `unknown_op` | no such op |
 | `unauthorized` | op sent before the handshake |
 | `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |

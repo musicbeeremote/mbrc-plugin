@@ -39,6 +39,13 @@ pub const COVER_META: TableDefinition<&str, i64> = TableDefinition::new("cover_m
 pub const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
 /// Library metadata cache: a canonical query key -> the rmp-serialized response.
 pub const METADATA_CACHE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata_cache");
+
+/// Per-installation client identities: `client_id -> msgpack record`.
+///
+/// The record carries the hashed handshake token and when the installation was
+/// first and last seen. Bounded by `server::clients`, which owns the rules.
+pub const CLIENT_IDENTITIES: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("client_identities");
 /// Ordinal track path index: `u32` position (browse order) ->
 /// path.
 ///

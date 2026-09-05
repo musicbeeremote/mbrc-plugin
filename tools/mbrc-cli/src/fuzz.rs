@@ -991,7 +991,11 @@ mod v6 {
         let mut seq: u64 = 0;
 
         // Handshake: quiet channel (no_broadcast) so only our replies come back.
-        let hs = v6::handshake_request("mbrc-fuzz", ClientType::Cli, true);
+        let hs = v6::handshake_request(
+            &crate::args::run_client_id("mbrc-fuzz"),
+            ClientType::Cli,
+            true,
+        );
         wr.write_all(v6::frame_line(&hs).as_bytes()).await?;
         wr.flush().await.ok();
         record(&mut lines, &mut seq, "c2s", &hs);

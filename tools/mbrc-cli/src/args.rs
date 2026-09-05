@@ -12,6 +12,19 @@ pub fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|a| a == flag)
 }
 
+/// A per-run V6 `client_id` for a dev client that does not persist its token.
+///
+/// The server issues a token to the first handshake for an id and refuses every
+/// later one that arrives without it, so a fixed id would work once and be
+/// locked out after. Each run really is a new installation, so it says so.
+pub fn run_client_id(tag: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    format!("{tag}-{}-{nanos}", std::process::id())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

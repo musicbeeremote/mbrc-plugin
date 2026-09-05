@@ -6,6 +6,7 @@
 
 pub mod blocked;
 pub mod broadcaster;
+pub mod clients;
 pub mod commands;
 pub mod commands_v6;
 pub mod connection;

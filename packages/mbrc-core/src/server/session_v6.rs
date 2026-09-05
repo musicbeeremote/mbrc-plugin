@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
 
+use super::clients::{ClientIdentities, Identity, MAX_CLIENT_ID_LEN};
 use super::commands_v6;
 use super::session::Outcome;
 use crate::cover::store::CoverStore;
@@ -109,6 +110,7 @@ impl V6Session {
         now_playing: Option<&NowPlayingCache>,
         cover_store: Option<&CoverStore>,
         metadata_cache: Option<&MetadataCache>,
+        clients: Option<&ClientIdentities>,
     ) -> Outcome {
         let seq = self.frames_in;
         self.frames_in += 1;
@@ -116,7 +118,14 @@ impl V6Session {
         let outcome = match v6::parse_request(line) {
             Ok(req) => {
                 log_c2s(seq, &req.op, line);
-                self.handle_request(req, providers, now_playing, cover_store, metadata_cache)
+                self.handle_request(
+                    req,
+                    providers,
+                    now_playing,
+                    cover_store,
+                    metadata_cache,
+                    clients,
+                )
             }
             Err(err) => {
                 // No op to name on an unparseable frame; unlike V4, which drops
@@ -201,6 +210,7 @@ impl V6Session {
         now_playing: Option<&NowPlayingCache>,
         cover_store: Option<&CoverStore>,
         metadata_cache: Option<&MetadataCache>,
+        clients: Option<&ClientIdentities>,
     ) -> Outcome {
         if req.op == v6::OP_HANDSHAKE {
             if self.handshaked {
@@ -212,7 +222,7 @@ impl V6Session {
                     "handshake already completed on this connection",
                 ));
             }
-            return self.handle_handshake(req);
+            return self.handle_handshake(req, clients);
         }
 
         if !self.handshaked {
@@ -253,7 +263,10 @@ impl V6Session {
             metadata_cache,
         ) {
             Some(Ok(data)) => Outcome::reply(v6::response_ok(req.id, data)),
-            Some(Err(e)) => Outcome::reply(v6::response_error(req.id, e.code, &e.message)),
+            Some(Err(e)) => Outcome::reply(match &e.field {
+                Some(field) => v6::response_error_field(req.id, e.code, &e.message, field),
+                None => v6::response_error(req.id, e.code, &e.message),
+            }),
             None => Outcome::reply(v6::response_error(
                 req.id,
                 ErrorCode::UnknownOp,
@@ -265,7 +278,11 @@ impl V6Session {
     /// Validates the three required handshake fields - `protocol_version` exactly
     /// the version we speak, a non-empty `client_id`, a known `client_type` - and
     /// records the negotiated session, or rejects and closes.
-    fn handle_handshake(&mut self, req: v6::IncomingRequest) -> Outcome {
+    fn handle_handshake(
+        &mut self,
+        req: v6::IncomingRequest,
+        clients: Option<&ClientIdentities>,
+    ) -> Outcome {
         let data = &req.data;
 
         match data.get("protocol_version") {
@@ -282,7 +299,7 @@ impl V6Session {
 
         let client_id = match data.get("client_id") {
             None => return self.reject_handshake(ErrorCode::MissingField, "client_id"),
-            Some(Value::String(s)) if !s.is_empty() => s.clone(),
+            Some(Value::String(s)) if !s.is_empty() && s.len() <= MAX_CLIENT_ID_LEN => s.clone(),
             Some(_) => return self.reject_handshake(ErrorCode::InvalidField, "client_id"),
         };
 
@@ -302,6 +319,19 @@ impl V6Session {
             .and_then(Value::as_bool)
             .unwrap_or(false);
 
+        let token = data.get("client_token").and_then(Value::as_str);
+        let issued = match clients.map(|c| c.identify(&client_id, token)) {
+            Some(Identity::Refused) => {
+                tracing::info!(
+                    client_id = %crate::logging::redact_frame(&client_id, None),
+                    "v6 handshake refused: client_id held by another installation"
+                );
+                return self.reject_handshake(ErrorCode::InvalidToken, "client_token");
+            }
+            Some(Identity::Issued(token)) => Some(token),
+            Some(Identity::Known) | None => None,
+        };
+
         self.handshaked = true;
         self.client_id = client_id;
         self.client_type = Some(client_type);
@@ -309,17 +339,19 @@ impl V6Session {
         tracing::debug!(
             client_type = client_type.as_str(),
             no_broadcast,
+            issued_token = issued.is_some(),
             "v6 handshake complete"
         );
         // Advertise the op/event surface so a client can degrade gracefully.
         // Additive (#118 §9 Q5); older clients ignore it.
-        Outcome::reply(v6::response_ok(
-            0,
-            json!({
-                "server_version": v6::PROTOCOL_VERSION,
-                "capabilities": commands_v6::capabilities(),
-            }),
-        ))
+        let mut reply = json!({
+            "server_version": v6::PROTOCOL_VERSION,
+            "capabilities": commands_v6::capabilities(),
+        });
+        if let Some(token) = issued {
+            reply["client_token"] = json!(token);
+        }
+        Outcome::reply(v6::response_ok(0, reply))
     }
 
     /// A handshake validation failure: reply a typed error (echoing id 0) and close,
@@ -333,10 +365,13 @@ impl V6Session {
                 )
             }
             ErrorCode::MissingField => format!("missing required field: {field}"),
+            ErrorCode::InvalidToken => format!(
+                "{field} does not match the one issued for this client_id;                  generate a new client_id and handshake again"
+            ),
             _ => format!("invalid field: {field}"),
         };
         tracing::info!(field, code = code.as_str(), "rejecting v6 handshake");
-        Outcome::reply_and_close(v6::response_error(0, code, &message))
+        Outcome::reply_and_close(v6::response_error_field(0, code, &message, field))
     }
 }
 
@@ -348,6 +383,89 @@ mod tests {
 
     fn parse(frame: &str) -> Value {
         serde_json::from_str(frame).expect("reply is JSON")
+    }
+
+    /// An identity store on a real (temporary) database, since the whole point of
+    /// the token is that it outlives the process.
+    ///
+    /// The directory carries the pid so two concurrent test runs cannot open the
+    /// same redb file and fail on its lock.
+    fn identities(name: &str) -> ClientIdentities {
+        let dir =
+            std::env::temp_dir().join(format!("mbrc-session-token-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        ClientIdentities::new(crate::store::Db::open(&dir.to_string_lossy()))
+    }
+
+    fn handshake_with(s: &mut V6Session, clients: &ClientIdentities, token: Option<&str>) -> Value {
+        let data = match token {
+            Some(token) => format!(
+                r#"{{"protocol_version":6,"client_id":"install-1","client_type":"android","client_token":"{token}"}}"#
+            ),
+            None => r#"{"protocol_version":6,"client_id":"install-1","client_type":"android"}"#
+                .to_string(),
+        };
+        let line = format!(r#"{{"id":0,"kind":"request","op":"handshake","data":{data}}}"#);
+        let out = s.handle_frame(&line, &NullProviders, None, None, None, Some(clients));
+        parse(&out.replies[0])
+    }
+
+    /// First contact is issued a token; presenting it is what makes the next
+    /// handshake the same installation rather than a claim to be it.
+    #[test]
+    fn the_first_handshake_is_issued_a_token_it_can_return_with() {
+        let clients = identities("issue");
+
+        let first = handshake_with(&mut V6Session::default(), &clients, None);
+        let token = first["data"]["client_token"]
+            .as_str()
+            .expect("first contact is issued a token")
+            .to_owned();
+
+        let again = handshake_with(&mut V6Session::default(), &clients, Some(&token));
+        assert_eq!(again["data"]["server_version"], 6);
+        // Only first contact is issued one; a client that has it keeps it.
+        assert!(again["data"].get("client_token").is_none());
+    }
+
+    /// The restored-backup case, which is what this is really for.
+    #[test]
+    fn a_second_install_claiming_the_same_id_is_refused() {
+        let clients = identities("refuse");
+        handshake_with(&mut V6Session::default(), &clients, None);
+
+        let mut clone = V6Session::default();
+        let refused = handshake_with(&mut clone, &clients, None);
+        assert_eq!(refused["error"]["code"], "invalid_token");
+        assert_eq!(refused["error"]["field"], "client_token");
+        assert!(!clone.handshaked, "a refused handshake establishes nothing");
+    }
+
+    /// Without a store there is nothing to remember a token with, so the check
+    /// cannot be enforced - and must not lock every client out instead.
+    #[test]
+    fn no_identity_store_means_no_token_is_demanded() {
+        let mut s = V6Session::default();
+        let out = feed(&mut s, GOOD_HANDSHAKE);
+        assert!(s.handshaked);
+        assert!(parse(&out.replies[0])["data"].get("client_token").is_none());
+    }
+
+    /// An id is a key in a durable store and a label in every log line, so its
+    /// length is bounded like any other client-supplied value.
+    #[test]
+    fn an_overlong_client_id_is_an_invalid_field() {
+        let mut s = V6Session::default();
+        let id = "x".repeat(MAX_CLIENT_ID_LEN + 1);
+        let line = format!(
+            r#"{{"id":0,"kind":"request","op":"handshake","data":{{"protocol_version":6,"client_id":"{id}","client_type":"android"}}}}"#
+        );
+        let out = feed(&mut s, &line);
+        let v = parse(&out.replies[0]);
+        assert_eq!(v["error"]["code"], "invalid_field");
+        assert_eq!(v["error"]["field"], "client_id");
+        assert!(out.close);
     }
 
     /// A handshaked session, for the tests that are about what comes after one.
@@ -396,7 +514,7 @@ mod tests {
     /// The envelope and handshake never reach a provider; the op handlers have
     /// their own tests in `commands_v6`.
     fn feed(s: &mut V6Session, line: &str) -> Outcome {
-        s.handle_frame(line, &NullProviders, None, None, None)
+        s.handle_frame(line, &NullProviders, None, None, None, None)
     }
 
     const GOOD_HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"install-1","client_type":"android"}}"#;
