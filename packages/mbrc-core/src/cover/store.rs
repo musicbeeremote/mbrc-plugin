@@ -27,7 +27,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use redb::{Durability, ReadableTable};
 
 use super::{CACHE_SIZE, resize_to_jpeg, sha1_hex};
-use crate::store::{COVER_COVERS, COVER_META, Db, LAST_CHECK};
+use crate::store::{COVER_COVERS, COVER_META, COVER_SIZE, Db, LAST_CHECK};
 
 /// One album's identity ingredients, provided by the host.
 ///
@@ -182,13 +182,14 @@ impl CoverStore {
         Ok(hash)
     }
 
-    /// Warms the cache from the host's album list: record the key->path map, then
-    /// keep each cached cover whose track file has NOT been modified since the
-    /// last check (mirrors C# `WarmUpCache`). Covers for modified, unknown, or
-    /// removed albums are dropped so `build` refetches them.
+    /// Warms the cache from the host's album list: record the key->path map,
+    /// then keep each cached cover whose track file has NOT been modified since
+    /// the last check. Covers for modified, unknown or removed albums are
+    /// dropped so `build` refetches them, and `prune_orphans` deletes a
+    /// content-hashed file once no key references it.
     ///
-    /// A key survives while any track still carries it, and `prune_orphans` only
-    /// deletes a content-hashed file once no key references it.
+    /// A change to [`CACHE_SIZE`] keeps nothing: the source files are unchanged,
+    /// so every cover would otherwise survive at its original size.
     pub fn warm_up(&self, albums: &[AlbumIdentity]) {
         let path_map: HashMap<String, String> = albums
             .iter()
@@ -197,8 +198,13 @@ impl CoverStore {
         *self.write_paths() = path_map;
 
         let (persisted, last_check) = self.load_state();
+        let resized = self.stored_cover_size() != Some(CACHE_SIZE);
         let mut covers = self.write_covers();
         covers.clear();
+        if resized {
+            self.store_cover_size();
+            return;
+        }
         for a in albums {
             if let Some(hash) = persisted.get(&a.key) {
                 // Keep only if the track predates the last cache check.
@@ -207,6 +213,28 @@ impl CoverStore {
                 }
             }
         }
+    }
+
+    /// The size the stored covers were built at, if one has been recorded.
+    fn stored_cover_size(&self) -> Option<u32> {
+        self.db
+            .read(|txn| {
+                let table = match txn.open_table(COVER_META) {
+                    Ok(t) => t,
+                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+                    Err(e) => return Err(e.into()),
+                };
+                Ok(table.get(COVER_SIZE)?.map(|g| g.value() as u32))
+            })
+            .flatten()
+    }
+
+    fn store_cover_size(&self) {
+        self.db.write(Durability::Immediate, |txn| {
+            let mut meta = txn.open_table(COVER_META)?;
+            meta.insert(COVER_SIZE, i64::from(CACHE_SIZE))?;
+            Ok(())
+        });
     }
 
     /// Builds missing covers: fetch each album's artwork, resize+hash+store it,
@@ -597,6 +625,45 @@ mod tests {
             modified: last_check + 1000,
         }]);
         assert_eq!(store2.hash_for("alb1"), None);
+    }
+
+    /// A cover is kept while its source file is unchanged, and changing the
+    /// cache size does not change a source file - so without a recorded size the
+    /// whole cache stays at whatever it was first built at.
+    #[test]
+    fn warm_up_drops_everything_when_the_cache_size_changed() {
+        let (db, dir) = temp_storage("resized");
+        let store = CoverStore::new(db.clone(), &dir);
+        let album = AlbumIdentity {
+            key: "alb1".into(),
+            path: "/a.mp3".into(),
+            modified: 0,
+        };
+        store.warm_up(std::slice::from_ref(&album));
+        store.build(|_| Some(jpeg_bytes(400, 400)), false);
+        assert!(store.hash_for("alb1").is_some());
+
+        // A warm start at the same size keeps what is there.
+        let same = CoverStore::new(db.clone(), &dir);
+        same.warm_up(std::slice::from_ref(&album));
+        assert!(
+            same.hash_for("alb1").is_some(),
+            "unchanged size keeps covers"
+        );
+
+        // Pretend the constant moved: the recorded size no longer agrees.
+        db.write(Durability::Immediate, |txn| {
+            let mut meta = txn.open_table(COVER_META)?;
+            meta.insert(COVER_SIZE, i64::from(CACHE_SIZE) + 1)?;
+            Ok(())
+        });
+        let resized = CoverStore::new(db.clone(), &dir);
+        resized.warm_up(std::slice::from_ref(&album));
+        assert_eq!(
+            resized.hash_for("alb1"),
+            None,
+            "a new size rebuilds them all"
+        );
     }
 
     #[test]

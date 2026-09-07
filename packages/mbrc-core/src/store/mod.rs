@@ -63,6 +63,12 @@ pub const TRACK_PATHS: TableDefinition<u32, &str> = TableDefinition::new("track_
 /// batch and written here.
 pub const TRACK_TAGS: TableDefinition<&str, &[u8]> = TableDefinition::new("track_tags");
 
+/// [`COVER_META`] key holding the pixel size the covers were built at.
+///
+/// A cover is kept while its source file is unchanged, which a change to the
+/// cache size is not - so without this the whole cache would stay at the size
+/// it was first built at, whatever the constant later said.
+pub const COVER_SIZE: &str = "cover_size";
 /// [`COVER_META`] key holding the last cache-check time (unix seconds).
 pub const LAST_CHECK: &str = "last_check";
 /// [`META`] key holding the last library fingerprint (u64 LE).
