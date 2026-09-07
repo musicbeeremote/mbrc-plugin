@@ -195,12 +195,12 @@ pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
 
 /// Refreshes the library caches incrementally (the Scanner's delta pass).
 ///
-/// Rebuilds the ordinal index from the current path list (catches add / delete
-/// / reorder), drops the cached tags of tracks the host reports changed since
-/// the watermark (they re-read lazily), re-prewarms the small lists (an add /
-/// tag edit shifts their counts), and advances the watermark. No-op until the
-/// cache is validated (the init reconcile owns the first build). Best-effort: a
-/// failed provider call leaves that piece stale for the next pass.
+/// Rebuilds the ordinal index, drops the tags of tracks the host reports
+/// changed, re-prewarms the small lists, advances the watermark. No-op until
+/// the cache is validated; best-effort otherwise.
+///
+/// Only `updated` and `deleted` drop tags: `added` is asked for with no cached
+/// file list, which MusicBee answers with the whole library.
 pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
     if !cache.is_validated() {
         return;
@@ -213,12 +213,9 @@ pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
         Err(e) => tracing::warn!(error = %e, "scanner: track path refetch failed"),
     }
 
-    // `added` are not cached yet, `updated` are the ones that matter, and
-    // `deleted` clears tag rows the index rebuild orphaned.
     match p.sync_delta(since) {
         Ok(delta) => {
             let mut changed = delta.updated;
-            changed.extend(delta.added);
             changed.extend(delta.deleted);
             cache.drop_track_tags(&changed);
         }
@@ -770,6 +767,50 @@ mod tests {
         assert!(cache.tracks_synced_at() > 100);
         assert!(m.recorded().contains(&"sync_delta(100)".to_string()));
         assert!(m.recorded().contains(&"track_paths".to_string()));
+    }
+
+    /// The host is asked for the delta with no cached file list, which it
+    /// answers by calling the whole library new. Dropping tags for that emptied
+    /// the cache on every pass, so nothing a browse had filled ever survived.
+    #[test]
+    fn a_delta_that_calls_everything_new_keeps_the_cached_tags() {
+        use crate::metadata_cache::MetadataCache;
+        use crate::protocol::messages::SyncDelta;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join("mbrc-delta-all-new");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(1);
+
+        cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into()]);
+        cache.put_track_tags(&[
+            Track {
+                src: "/a.mp3".into(),
+                title: "A".into(),
+                ..Default::default()
+            },
+            Track {
+                src: "/b.mp3".into(),
+                title: "B".into(),
+                ..Default::default()
+            },
+        ]);
+
+        let m = MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
+            sync_delta: SyncDelta {
+                added: vec!["/a.mp3".into(), "/b.mp3".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        refresh_library_delta(&cache, &m);
+
+        assert!(cache.track_tags("/a.mp3").is_some(), "kept what it built");
+        assert!(cache.track_tags("/b.mp3").is_some(), "kept what it built");
     }
 
     #[test]

@@ -45,13 +45,13 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
                 scan_after_a_library_change(&core).await;
             }
             _ = interval.tick() => {
-                if core.broadcaster.client_count() > 0 {
+                if subscribers(&core) > 0 {
                     // Debug-gated, so the syscall is skipped when filtered out.
                     // Should stay flat under a paging sweep: the cache is O(page).
                     tracing::debug!(
                         rss_mib = crate::logging::rss_mib(),
                         tracks = core.metadata_cache.track_count(),
-                        clients = core.broadcaster.client_count(),
+                        clients = subscribers(&core),
                         "core memory sample"
                     );
                     scan_periodically(&core).await;
@@ -59,6 +59,16 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
             }
         }
     }
+}
+
+/// Clients subscribed to broadcasts, on either protocol.
+///
+/// Both, because a V6 client registers with the V6 broadcaster alone: counting
+/// only the legacy one made a session with nothing but V6 clients look idle, and
+/// the periodic pass - the safety net for changes no notification covered -
+/// never ran.
+fn subscribers(core: &Arc<Core>) -> usize {
+    core.broadcaster.client_count() + core.v6_broadcaster.client_count()
 }
 
 /// A delta pass prompted by an explicit change signal.
@@ -104,4 +114,29 @@ async fn scan(core: &Arc<Core>, covers: bool) {
             .emit_event(HostEventType::CacheStatusChanged, &[]);
     })
     .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::providers::NullProviders;
+    use tokio::sync::mpsc;
+
+    /// A V6 client registers with the V6 broadcaster alone. Counting only the
+    /// legacy one made a V6-only session look idle, so the periodic pass - the
+    /// safety net for changes no notification covered - never ran.
+    #[test]
+    fn a_v6_only_session_counts_as_connected() {
+        let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(0)));
+        assert_eq!(subscribers(&core), 0);
+
+        let (tx, _rx) = mpsc::unbounded_channel();
+        core.v6_broadcaster.register(1, tx);
+        assert_eq!(subscribers(&core), 1, "a V6 subscriber is a client");
+
+        let (tx4, _rx4) = mpsc::unbounded_channel();
+        core.broadcaster.register(2, tx4);
+        assert_eq!(subscribers(&core), 2, "both protocols count");
+    }
 }
