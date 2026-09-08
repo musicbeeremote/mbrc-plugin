@@ -509,9 +509,19 @@ pub mod test_support {
         }
     }
 
+    /// Held for the length of a capture, so only one runs at a time.
+    ///
+    /// `with_default` raises tracing's global maximum level on entry and puts it
+    /// back when its guard drops. That maximum is what `enabled!` consults, so a
+    /// capture finishing on one thread switches the wire logging off under a
+    /// capture still running on another, which comes back holding nothing.
+    static CAPTURING: Mutex<()> = Mutex::new(());
+
     /// Runs `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
     /// and above, and return what it captured.
     pub fn capture_wire_lines(f: impl FnOnce()) -> Vec<WireLine> {
+        // A panic in one capture must not stop the rest from running.
+        let _serialised = CAPTURING.lock().unwrap_or_else(|held| held.into_inner());
         let lines = Arc::new(Mutex::new(Vec::new()));
         let layer = CaptureLayer {
             lines: Arc::clone(&lines),
