@@ -69,6 +69,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.LibraryGenreArtists: return Pack(BuildGenreArtists(Q(p)));
                 case QueryType.LibraryArtistAlbums: return Pack(BuildArtistAlbums(Q(p)));
                 case QueryType.LibraryAlbumTracks: return Pack(BuildAlbumTracks(Q(p)));
+                case QueryType.LibraryGenreTracks: return Pack(BuildGenreTracks(Q(p)));
                 case QueryType.AlbumIdentifiers: return Pack(BuildAlbumIdentifiers());
                 case QueryType.ArtworkRawForPath: return Pack(BuildArtworkRaw(Msgpack.Deserialize<PathParams>(p)));
                 case QueryType.BatchMetadata: return Pack(BuildBatchMetadata(Msgpack.Deserialize<BatchMetadataParams>(p)));
@@ -184,6 +185,9 @@ namespace MusicBeePlugin.Ffi
 
         private List<Track> BuildAlbumTracks(QueryParams p) =>
             (_library.GetAlbumTracks(p.query ?? string.Empty, Source()) ?? Enumerable.Empty<Track>()).ToList();
+
+        private List<Track> BuildGenreTracks(QueryParams p) =>
+            (_library.GetGenreTracks(p.query ?? string.Empty, Source()) ?? Enumerable.Empty<Track>()).ToList();
 
         // Cover-cache leaf providers: the host supplies raw ingredients, the Rust
         // core owns resize/hash/cache/serve. See ILibraryDataProvider for why the

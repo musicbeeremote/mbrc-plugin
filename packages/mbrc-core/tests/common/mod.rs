@@ -270,6 +270,18 @@ impl Providers for FixtureProviders {
             ..Default::default()
         }])
     }
+    fn genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String> {
+        Ok(vec![Track {
+            src: "C:\\Music\\g.mp3".into(),
+            artist: "Artist".into(),
+            title: "Title".into(),
+            trackno: 1,
+            disc: 1,
+            album_artist: "AlbumArtist".into(),
+            genre: genre.into(),
+            ..Default::default()
+        }])
+    }
     fn album_cover(&self, _ar: &str, _al: &str, _h: &str) -> Result<AlbumCover, String> {
         Ok(AlbumCover {
             status: 200,

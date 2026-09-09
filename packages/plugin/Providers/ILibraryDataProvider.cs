@@ -67,6 +67,12 @@ namespace MusicBeePlugin.Providers
         IEnumerable<Track> GetAlbumTracks(string album, SearchSource searchSource);
 
         /// <summary>
+        ///     Every track filed under one genre, which walking the genre's
+        ///     artists and albums cannot give: GetAlbumTracks reports no genre.
+        /// </summary>
+        IEnumerable<Track> GetGenreTracks(string genre, SearchSource searchSource);
+
+        /// <summary>
         ///     Gets all albums for a specific artist.
         ///     Returns List because deduplication requires Contains/IndexOf operations.
         /// </summary>

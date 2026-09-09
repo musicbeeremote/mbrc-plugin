@@ -81,6 +81,7 @@ namespace MusicBeePlugin.Ffi.Generated
         LibraryTrackTags = 35,
         NowPlayingLyricsSynced = 36,
         HasLastFmAccount = 37,
+        LibraryGenreTracks = 38,
     }
 
     public enum CommandType

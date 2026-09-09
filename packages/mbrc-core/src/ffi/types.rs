@@ -163,6 +163,11 @@ pub enum QueryType {
     // core reject `player_set_scrobbling`(on)/love/ban with a proper `unavailable`
     // error instead of a generic command failure when scrobbling can't be enabled.
     HasLastFmAccount = 37,
+    // Every track filed under one genre, as full tags. A genre scope cannot be
+    // resolved by walking its artists' albums: `LibraryAlbumTracks` leaves the
+    // genre field empty (it is V4's DTO, frozen), so the walk cannot tell an
+    // artist's tracks in this genre from their tracks in another.
+    LibraryGenreTracks = 38,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

@@ -103,6 +103,8 @@ pub trait Providers: Send + Sync {
     fn genre_artists(&self, genre: &str) -> Result<Vec<ArtistData>, String>;
     fn artist_albums(&self, artist: &str) -> Result<Vec<AlbumData>, String>;
     fn album_tracks(&self, album: &str) -> Result<Vec<Track>, String>;
+    /// Every track filed under one genre, which walking its albums cannot give.
+    fn genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String>;
 
     // Library - covers, radio, play-all.
     fn album_cover(&self, artist: &str, album: &str, hash: &str) -> Result<AlbumCover, String>;
@@ -383,6 +385,14 @@ impl Providers for FfiProviders {
             },
         )
     }
+    fn genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String> {
+        self.callbacks.query(
+            QueryType::LibraryGenreTracks,
+            &QueryParams {
+                query: genre.to_string(),
+            },
+        )
+    }
     fn album_cover(&self, artist: &str, album: &str, hash: &str) -> Result<AlbumCover, String> {
         self.callbacks.query(
             QueryType::AlbumCover,
@@ -626,6 +636,9 @@ impl Providers for NullProviders {
     fn album_tracks(&self, _album: &str) -> Result<Vec<Track>, String> {
         Ok(Vec::new())
     }
+    fn genre_tracks(&self, _genre: &str) -> Result<Vec<Track>, String> {
+        Ok(Vec::new())
+    }
     fn album_cover(&self, _artist: &str, _album: &str, _hash: &str) -> Result<AlbumCover, String> {
         Ok(AlbumCover::default())
     }
@@ -698,6 +711,7 @@ pub struct MockProviders {
     pub genre_artists: Vec<ArtistData>,
     pub artist_albums: Vec<AlbumData>,
     pub album_tracks: Vec<Track>,
+    pub genre_tracks: Vec<Track>,
     pub album_cover: AlbumCover,
     pub album_cover_page: Page<AlbumCoverItem>,
     pub cover_cache_status: bool,
@@ -907,6 +921,10 @@ impl Providers for MockProviders {
     fn album_tracks(&self, album: &str) -> Result<Vec<Track>, String> {
         self.record(format!("album_tracks({album})"));
         Ok(self.album_tracks.clone())
+    }
+    fn genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String> {
+        self.record(format!("genre_tracks({genre})"));
+        Ok(self.genre_tracks.clone())
     }
     fn album_cover(&self, artist: &str, album: &str, hash: &str) -> Result<AlbumCover, String> {
         self.record(format!("album_cover({artist},{album},{hash})"));

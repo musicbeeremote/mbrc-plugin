@@ -251,6 +251,45 @@ namespace MusicBeePlugin.Providers
         }
 
         /// <summary>
+        ///     Every track filed under one genre.
+        /// </summary>
+        /// <remarks>
+        ///     Walking the genre's artists and their albums cannot answer this:
+        ///     GetAlbumTracks leaves the genre field empty, so an artist filed
+        ///     under two genres yields tracks nothing can tell apart. Asking the
+        ///     library for the genre directly is both exact and one query.
+        /// </remarks>
+        public IEnumerable<Track> GetGenreTracks(string genre, SearchSource searchSource)
+        {
+            var filter = XmlFilterHelper.CreateFilter(
+                GenreSearchFields, genre, true, searchSource);
+
+            if (!_api.Library_QueryFiles(filter))
+                yield break;
+
+            while (true)
+            {
+                var currentTrack = _api.Library_QueryGetNextFile();
+                if (string.IsNullOrEmpty(currentTrack))
+                    break;
+
+                _api.Library_GetFileTags(currentTrack, AlbumTrackFields, out var tags);
+
+                yield return new Track
+                {
+                    artist = Tag(tags, 0),
+                    title = Tag(tags, 1),
+                    album_artist = Tag(tags, 2),
+                    trackno = ParseTag(tags, 3),
+                    disc = ParseTag(tags, 4),
+                    src = currentTrack,
+                    album = string.Empty,
+                    genre = genre
+                };
+            }
+        }
+
+        /// <summary>
         ///     One entry per (album artist, album) for the given artist, each
         ///     carrying its track count. Unlike BrowseAlbums, the count here is
         ///     real.
