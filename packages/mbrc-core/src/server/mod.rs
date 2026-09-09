@@ -367,17 +367,17 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     match core.providers.album_identifiers() {
         Ok(identifiers) => {
             let identities: Vec<AlbumIdentity> = identifiers
-                .into_iter()
+                .iter()
                 .map(|a| AlbumIdentity {
                     // Identity lives in one place: the core hashes artist+album.
                     key: cover_identifier(&a.artist, &a.album),
-                    path: a.path,
+                    path: a.path.clone(),
                     modified: a.modified,
                 })
                 .collect();
 
             if scope.does_metadata() {
-                reconcile_metadata(core, &identities);
+                reconcile_metadata(core, &identifiers);
             }
 
             // Covers are the expensive half nobody waits for on the way out.
@@ -411,10 +411,19 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
 ///
 /// A rebuild is also forced when the browse lists are missing, which is the
 /// cold-start case: the fingerprint matches but there is nothing to serve.
-fn reconcile_metadata(core: &Core, identities: &[crate::cover::store::AlbumIdentity]) {
+fn reconcile_metadata(core: &Core, identifiers: &[crate::protocol::messages::AlbumIdentifier]) {
+    let albums: Vec<(String, i64)> = identifiers
+        .iter()
+        .map(|a| {
+            (
+                crate::metadata_cache::album_key(&a.artist, &a.artist, &a.album),
+                a.modified,
+            )
+        })
+        .collect();
     let fingerprint =
-        crate::metadata_cache::fingerprint(identities.iter().map(|a| (a.key.as_str(), a.modified)));
-    let changed = core.metadata_cache.reconcile(fingerprint);
+        crate::metadata_cache::fingerprint(albums.iter().map(|(k, m)| (k.as_str(), *m)));
+    let changed = core.metadata_cache.reconcile(&albums, fingerprint);
     let needs_rebuild = changed || !commands::library::browse_lists_cached(&core.metadata_cache);
 
     let (counts, tracks) = if needs_rebuild {
@@ -428,7 +437,7 @@ fn reconcile_metadata(core: &Core, identities: &[crate::cover::store::AlbumIdent
     };
 
     tracing::info!(
-        albums = identities.len(),
+        albums = identifiers.len(),
         fingerprint,
         library_changed = changed,
         rebuilt = needs_rebuild,
@@ -702,6 +711,52 @@ mod cover_delta_tests {
             path: path.into(),
             modified,
         }
+    }
+
+    /// The stamps are keyed the way the cached tags are keyed, so an album that
+    /// moves can find its own rows. Keyed by the cover store's hash instead,
+    /// nothing ever matched and the stamps dropped nothing at all.
+    #[test]
+    fn a_moved_album_drops_its_own_tags_and_leaves_the_rest() {
+        use crate::metadata_cache::CachedTags;
+
+        let mut core = temp_core(
+            "stamps",
+            vec![
+                album("Artist", "One", "/one.mp3", 100),
+                album("Artist", "Two", "/two.mp3", 200),
+            ],
+        );
+        let tags = |path: &str, album: &str| CachedTags {
+            src: path.into(),
+            album_artist: "Artist".into(),
+            artist: "Artist".into(),
+            album: album.into(),
+            ..Default::default()
+        };
+
+        let identifiers = core.providers.album_identifiers().unwrap();
+        reconcile_metadata(&core, &identifiers);
+        core.metadata_cache
+            .put_track_tags(&[tags("/one.mp3", "One"), tags("/two.mp3", "Two")]);
+
+        let mut moved = identifiers.clone();
+        moved[0].modified = 999;
+        let mock = MockProviders {
+            album_identifiers: moved.clone(),
+            ..MockProviders::default()
+        };
+        Arc::get_mut(&mut core).unwrap().providers = Arc::new(mock);
+        reconcile_metadata(&core, &moved);
+
+        assert!(
+            core.metadata_cache.track_tags("/one.mp3").is_none(),
+            "the album that moved loses its tags"
+        );
+        assert!(
+            core.metadata_cache.track_tags("/two.mp3").is_some(),
+            "the album that did not move keeps them"
+        );
     }
 
     /// The nudge-path cover delta broadcasts `librarycovercachebuildstatus` only

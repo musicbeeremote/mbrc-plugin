@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use super::{Ctx, HandlerResult, as_bool_lenient, as_set_string, pagination, reply_dto};
 use crate::cover::{cover_identifier, from_base64, store::CoverStore};
-use crate::metadata_cache::MetadataCache;
+use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
 use crate::providers::Providers;
 
@@ -90,7 +90,10 @@ fn serve_tracks_from_store(
     let paths = cache.track_page_paths(offset, limit);
 
     // Resolve cached tags; the `None` slots are this page's misses.
-    let mut resolved: Vec<Option<Track>> = paths.iter().map(|p| cache.track_tags(p)).collect();
+    let mut resolved: Vec<Option<Track>> = paths
+        .iter()
+        .map(|p| cache.track_tags(p).as_ref().map(Track::from))
+        .collect();
     let misses: Vec<String> = paths
         .iter()
         .zip(&resolved)
@@ -99,15 +102,18 @@ fn serve_tracks_from_store(
         .collect();
 
     if !misses.is_empty()
-        && let Ok(fetched) = p.tracks_for_paths(misses)
+        && let Ok(fetched) = p.tracks_detailed_for_paths(misses)
     {
-        cache.put_track_tags(&fetched);
+        let cached: Vec<CachedTags> = fetched.iter().map(CachedTags::from).collect();
+        cache.put_track_tags(&cached);
         // Fill the holes from the batch we just fetched (no second DB read).
-        let mut by_path: HashMap<&str, &Track> =
-            fetched.iter().map(|t| (t.src.as_str(), t)).collect();
+        let mut by_path: HashMap<&str, Track> = cached
+            .iter()
+            .map(|t| (t.src.as_str(), Track::from(t)))
+            .collect();
         for (slot, path) in resolved.iter_mut().zip(&paths) {
             if slot.is_none() {
-                *slot = by_path.remove(path.as_str()).cloned();
+                *slot = by_path.remove(path.as_str());
             }
         }
     }
@@ -587,7 +593,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(1); // validate so the cache is live
+        cache.reconcile(&[], 1); // validate so the cache is live
 
         let album = |name: &str| AlbumData {
             album: name.into(),
@@ -628,23 +634,25 @@ mod tests {
     #[test]
     fn browse_tracks_serves_from_store_with_one_batch_then_caches() {
         use crate::metadata_cache::MetadataCache;
+        use crate::protocol::messages::TrackTags;
         use crate::store::Db;
 
         let dir = std::env::temp_dir().join("mbrc-browse-tracks-store");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(1); // validate so the store is live
+        cache.reconcile(&[], 1); // validate so the store is live
 
         // Build a 5-track ordinal index (browse order).
         let paths: Vec<String> = (0..5).map(|i| format!("/m/{i}.mp3")).collect();
         cache.replace_track_index(&paths);
 
         let m = MockProviders {
-            tracks_for_paths: (0..5)
-                .map(|i| Track {
+            tracks_detailed: (0..5)
+                .map(|i| TrackTags {
                     src: format!("/m/{i}.mp3"),
                     title: format!("t{i}"),
+                    year: "1984".into(),
                     ..Default::default()
                 })
                 .collect(),
@@ -654,7 +662,7 @@ mod tests {
         let batch_calls = || {
             m.recorded()
                 .iter()
-                .filter(|c| c.starts_with("tracks_for_paths("))
+                .filter(|c| c.starts_with("tracks_detailed_for_paths("))
                 .count()
         };
 
@@ -668,6 +676,13 @@ mod tests {
         assert_eq!(data[0]["title"], json!("t1"), "tags came from the batch");
         assert_eq!(data[1]["src"], json!("/m/2.mp3"));
         assert_eq!(batch_calls(), 1);
+
+        // The cache keeps the whole record, not the fields this wire shows.
+        assert_eq!(
+            cache.track_tags("/m/1.mp3").map(|t| t.year),
+            Some(1984),
+            "the cache keeps what this wire drops"
+        );
 
         // The same page again: all cached now - no second FFI batch.
         let _ = browse_tracks(&json!({"offset":1,"limit":2}), &ctx).unwrap();
@@ -686,7 +701,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(1);
+        cache.reconcile(&[], 1);
 
         let m = MockProviders {
             track_paths: vec!["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()],
@@ -720,17 +735,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(1);
+        cache.reconcile(&[], 1);
 
         // Seed an index + cached tags for two tracks, at watermark 100.
         cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into()]);
         cache.put_track_tags(&[
-            Track {
+            CachedTags {
                 src: "/a.mp3".into(),
                 title: "A".into(),
                 ..Default::default()
             },
-            Track {
+            CachedTags {
                 src: "/b.mp3".into(),
                 title: "B".into(),
                 ..Default::default()
@@ -771,7 +786,8 @@ mod tests {
 
     /// The host is asked for the delta with no cached file list, which it
     /// answers by calling the whole library new. Dropping tags for that emptied
-    /// the cache on every pass, so nothing a browse had filled ever survived.
+    /// the cache on every pass, so the backfill refilled the same rows forever
+    /// and no sort order was ever built.
     #[test]
     fn a_delta_that_calls_everything_new_keeps_the_cached_tags() {
         use crate::metadata_cache::MetadataCache;
@@ -782,16 +798,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(1);
+        cache.reconcile(&[], 1);
 
         cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into()]);
         cache.put_track_tags(&[
-            Track {
+            CachedTags {
                 src: "/a.mp3".into(),
                 title: "A".into(),
                 ..Default::default()
             },
-            Track {
+            CachedTags {
                 src: "/b.mp3".into(),
                 title: "B".into(),
                 ..Default::default()
@@ -809,8 +825,9 @@ mod tests {
 
         refresh_library_delta(&cache, &m);
 
-        assert!(cache.track_tags("/a.mp3").is_some(), "kept what it built");
-        assert!(cache.track_tags("/b.mp3").is_some(), "kept what it built");
+        assert!(cache.untagged_paths(10).is_empty(), "nothing was refetched");
+        assert_eq!(cache.track_tags("/a.mp3").unwrap().title, "A");
+        assert_eq!(cache.track_tags("/b.mp3").unwrap().title, "B");
     }
 
     #[test]

@@ -40,6 +40,13 @@ pub const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");
 /// Library metadata cache: a canonical query key -> the rmp-serialized response.
 pub const METADATA_CACHE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata_cache");
 
+/// Paired browsers for the web remote: `id -> msgpack record`.
+///
+/// The record carries the hashed session token, the browser's own name for
+/// itself, and when it paired and was last admitted. Hashed for the same reason
+/// [`CLIENT_IDENTITIES`] is: this one really is a credential, and a token read
+/// out of the file would be a working impersonation.
+pub const PAIRED_BROWSERS: TableDefinition<&str, &[u8]> = TableDefinition::new("paired_browsers");
 /// Per-installation client identities: `client_id -> msgpack record`.
 ///
 /// The record carries the hashed handshake token and when the installation was
@@ -63,14 +70,34 @@ pub const TRACK_PATHS: TableDefinition<u32, &str> = TableDefinition::new("track_
 /// batch and written here.
 pub const TRACK_TAGS: TableDefinition<&str, &[u8]> = TableDefinition::new("track_tags");
 
+/// Sorted browse orders: `(sort field, position) -> path`.
+///
+/// One table rather than one per field: a redb range over `(field, a)..(field, b)`
+/// is the same O(page) read the ordinal index gives, and descending is the same
+/// range walked backwards, so a field needs only the one ascending order stored.
+///
+/// Built from cached tags, so it is only as complete as [`TRACK_TAGS`]; the
+/// browse path falls back to [`TRACK_PATHS`] until it has been built.
+pub const TRACK_SORT: TableDefinition<(&str, u32), &str> = TableDefinition::new("track_sort");
+
+/// Per-album modification stamps: `album key -> newest file mtime`.
+///
+/// The library fingerprint folds these same pairs into one number, which can
+/// only say that something moved. Kept apart, they say *which* album moved, so
+/// a rating written to one record invalidates that record's tags rather than
+/// every row in [`TRACK_TAGS`].
+pub const ALBUM_STAMPS: TableDefinition<&str, i64> = TableDefinition::new("album_stamps");
+
+/// [`COVER_META`] key holding the last cache-check time (unix seconds).
+pub const LAST_CHECK: &str = "last_check";
 /// [`COVER_META`] key holding the pixel size the covers were built at.
 ///
 /// A cover is kept while its source file is unchanged, which a change to the
 /// cache size is not - so without this the whole cache would stay at the size
 /// it was first built at, whatever the constant later said.
 pub const COVER_SIZE: &str = "cover_size";
-/// [`COVER_META`] key holding the last cache-check time (unix seconds).
-pub const LAST_CHECK: &str = "last_check";
+/// [`META`] key holding the cached-tag schema version (u32 LE).
+pub const TAGS_SCHEMA: &str = "tags_schema";
 /// [`META`] key holding the last library fingerprint (u64 LE).
 pub const LIBRARY_FINGERPRINT: &str = "library_fingerprint";
 /// [`META`] key holding the tracks-cache sync watermark (unix seconds, i64 LE) -
