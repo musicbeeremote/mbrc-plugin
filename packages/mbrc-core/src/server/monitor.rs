@@ -5,6 +5,10 @@
 //! own UI. A timer task polls the provider RPC, broadcasts `nowplayingposition`
 //! while playing, and broadcasts shuffle/repeat/scrobble only when they change.
 //!
+//! Both protocols hear it. This poll is the only place those three changes are
+//! ever noticed, so a version it does not speak has no other way to learn them:
+//! a V6 client saw its own writes and nothing a user did in MusicBee.
+//!
 //! Only polls while at least one client is connected, so an idle core makes no
 //! FFI calls.
 
@@ -14,6 +18,9 @@ use std::time::Duration;
 use serde_json::json;
 use tokio::sync::Notify;
 
+use mbrc_wire::v6;
+
+use super::commands_v6::player::{repeat_str, shuffle_str};
 use super::notifications::frame;
 use crate::nowplaying::NowPlayingCache;
 use crate::protocol::messages::{PlayState, RepeatMode, ShuffleMode};
@@ -27,6 +34,14 @@ const POLL_INTERVAL_MS: u64 = 1000;
 /// (shuffle/repeat/scrobble) still check every tick; only position is throttled,
 /// since clients advance the seek bar locally between these re-syncs.
 const POSITION_EVERY_TICKS: u64 = 20;
+
+/// One tick's frames, per protocol. The V4 and V6 subscriber sets are separate,
+/// and a frame shaped for one is unreadable to the other.
+#[derive(Default)]
+struct Polled {
+    v4: Vec<String>,
+    v6: Vec<String>,
+}
 
 #[derive(Default)]
 struct Cached {
@@ -44,14 +59,15 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
         tokio::select! {
             _ = shutdown.notified() => return,
             _ = interval.tick() => {
-                if core.broadcaster.client_count() == 0 {
+                if core.broadcaster.client_count() == 0 && core.v6_broadcaster.client_count() == 0 {
                     continue;
                 }
                 tick += 1;
                 // First position broadcast lands at 20s (tick 20), like the C# timer.
                 let emit_position = tick.is_multiple_of(POSITION_EVERY_TICKS);
-                let frames = poll(core.providers.as_ref(), &mut cached, &core.now_playing, emit_position);
-                core.broadcaster.broadcast(&frames);
+                let Polled { v4, v6 } = poll(core.providers.as_ref(), &mut cached, &core.now_playing, emit_position);
+                core.broadcaster.broadcast(&v4);
+                core.v6_broadcaster.broadcast(&v6);
             }
         }
     }
@@ -67,13 +83,12 @@ fn poll(
     cached: &mut Cached,
     store: &NowPlayingCache,
     emit_position: bool,
-) -> Vec<String> {
-    let mut frames = Vec::new();
+) -> Polled {
+    let mut out = Polled::default();
     let Ok(state) = providers.player_state() else {
-        return frames;
+        return out;
     };
     store.set_player(state.clone());
-    // Poll broadcasts are V4-formatted; per-client version fan-out is a V6 concern.
     let wire = ProtocolVersion::V4.codec();
 
     // Position is throttled to every 20s (emit_position); only query it then.
@@ -82,18 +97,32 @@ fn poll(
         && let Ok(position) = providers.playback_position()
         && let Ok(value) = serde_json::to_value(&position)
     {
-        frames.push(frame("nowplayingposition", value));
+        out.v4.push(frame("nowplayingposition", value));
     }
     if seed_or_changed(&mut cached.shuffle, state.shuffle) {
-        frames.push(frame("playershuffle", wire.shuffle(state.shuffle)));
+        out.v4
+            .push(frame("playershuffle", wire.shuffle(state.shuffle)));
+        out.v6.push(v6::event(
+            "shuffle_changed",
+            json!({ "shuffle": shuffle_str(state.shuffle) }),
+        ));
     }
     if seed_or_changed(&mut cached.repeat, state.repeat) {
-        frames.push(frame("playerrepeat", wire.repeat(state.repeat)));
+        out.v4
+            .push(frame("playerrepeat", wire.repeat(state.repeat)));
+        out.v6.push(v6::event(
+            "repeat_changed",
+            json!({ "repeat": repeat_str(state.repeat) }),
+        ));
     }
     if seed_or_changed(&mut cached.scrobble, state.scrobble) {
-        frames.push(frame("scrobbler", json!(state.scrobble)));
+        out.v4.push(frame("scrobbler", json!(state.scrobble)));
+        out.v6.push(v6::event(
+            "scrobbling_changed",
+            json!({ "scrobbling": state.scrobble }),
+        ));
     }
-    frames
+    out
 }
 
 /// Seeds the cache on first observation (no broadcast), then report changes.
@@ -115,6 +144,20 @@ mod tests {
         // The poll only writes to the store here; its provider side is never
         // read, so a null provider is fine.
         NowPlayingCache::new(Arc::new(crate::providers::NullProviders))
+    }
+
+    /// The `event` name of each V6 frame, which is where its identity lives:
+    /// V6 has one envelope shape and names the event inside it.
+    fn events(frames: &[String]) -> Vec<String> {
+        frames
+            .iter()
+            .map(|f| {
+                serde_json::from_str::<Value>(f).unwrap()["event"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
     }
 
     fn contexts(frames: &[String]) -> Vec<String> {
@@ -155,19 +198,19 @@ mod tests {
         // On a position tick while playing: position broadcast; shuffle/repeat/
         // scrobble are seeded, not sent.
         assert_eq!(
-            contexts(&poll(&m, &mut cached, &store, true)),
+            contexts(&poll(&m, &mut cached, &store, true).v4),
             vec!["nowplayingposition"]
         );
 
         // On a non-position tick, position is not sent even while playing.
-        assert!(poll(&m, &mut cached, &store, false).is_empty());
+        assert!(poll(&m, &mut cached, &store, false).v4.is_empty());
 
         let paused = MockProviders {
             player_state: state(PlayState::Paused, ShuffleMode::Off, RepeatMode::None, true),
             ..Default::default()
         };
         // Position tick but not playing, nothing changed -> no frames.
-        assert!(poll(&paused, &mut cached, &store, true).is_empty());
+        assert!(poll(&paused, &mut cached, &store, true).v4.is_empty());
     }
 
     #[test]
@@ -188,8 +231,64 @@ mod tests {
         };
         // shuffle off->shuffle and scrobble true->false changed; repeat unchanged.
         assert_eq!(
-            contexts(&poll(&m, &mut cached, &store(), false)),
+            contexts(&poll(&m, &mut cached, &store(), false).v4),
             vec!["playershuffle", "scrobbler"]
         );
+    }
+
+    #[test]
+    fn a_change_reaches_v6_as_well_as_v4() {
+        let mut cached = Cached {
+            shuffle: Some(ShuffleMode::Off),
+            repeat: Some(RepeatMode::All),
+            scrobble: Some(false),
+        };
+        let m = MockProviders {
+            player_state: state(
+                PlayState::Playing,
+                ShuffleMode::AutoDj,
+                RepeatMode::One,
+                true,
+            ),
+            ..Default::default()
+        };
+
+        let polled = poll(&m, &mut cached, &store(), false);
+        assert_eq!(
+            events(&polled.v6),
+            vec!["shuffle_changed", "repeat_changed", "scrobbling_changed"]
+        );
+        // The V6 payload carries the new value, so a client needs no follow-up
+        // read to know what it changed to.
+        let first: Value = serde_json::from_str(&polled.v6[0]).unwrap();
+        assert_eq!(first["data"]["shuffle"], "autodj");
+
+        // Both protocols hear the same tick.
+        assert_eq!(polled.v4.len(), 3);
+    }
+
+    #[test]
+    fn every_event_the_poll_emits_is_advertised() {
+        let mut cached = Cached {
+            shuffle: Some(ShuffleMode::Off),
+            repeat: Some(RepeatMode::All),
+            scrobble: Some(false),
+        };
+        let m = MockProviders {
+            player_state: state(
+                PlayState::Playing,
+                ShuffleMode::Shuffle,
+                RepeatMode::None,
+                true,
+            ),
+            ..Default::default()
+        };
+
+        for name in events(&poll(&m, &mut cached, &store(), false).v6) {
+            assert!(
+                super::super::commands_v6::SUPPORTED_EVENTS.contains(&name.as_str()),
+                "{name} is emitted but not advertised in capabilities"
+            );
+        }
     }
 }

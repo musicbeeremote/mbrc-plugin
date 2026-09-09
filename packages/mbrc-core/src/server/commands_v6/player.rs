@@ -84,8 +84,14 @@ fn set_mute(data: &Value, p: &dyn Providers) -> OpResult {
 
 /// Set an explicit shuffle mode (no toggle). AutoDJ-aware, mirroring the legacy
 /// handler's `set_shuffle` + `set_auto_dj` sequencing.
+///
+/// Answers with the mode asked for, not a fresh read. MusicBee applies auto-DJ
+/// asynchronously, so a read taken in the same breath as the write describes
+/// the state before it, and no `shuffle_changed` event exists to correct the
+/// client later. A setter that errors on refusal is what makes that safe.
 fn set_shuffle(data: &Value, p: &dyn Providers) -> OpResult {
-    match req_str(data, "mode")? {
+    let mode = req_str(data, "mode")?;
+    match mode {
         "off" => {
             p.set_shuffle(false).map_err(internal)?;
             p.set_auto_dj(false).map_err(internal)?;
@@ -105,7 +111,7 @@ fn set_shuffle(data: &Value, p: &dyn Providers) -> OpResult {
             ));
         }
     }
-    Ok(json!({ "mode": shuffle_str(p.player_state().map_err(internal)?.shuffle) }))
+    Ok(json!({ "mode": mode }))
 }
 
 fn set_repeat(data: &Value, p: &dyn Providers) -> OpResult {
@@ -121,7 +127,7 @@ fn set_repeat(data: &Value, p: &dyn Providers) -> OpResult {
         }
     };
     p.set_repeat(repeat).map_err(internal)?;
-    Ok(json!({ "mode": repeat_str(p.player_state().map_err(internal)?.repeat) }))
+    Ok(json!({ "mode": repeat_str(repeat) }))
 }
 
 /// Turns scrobbling on or off.
@@ -188,7 +194,7 @@ pub(crate) fn play_state_str(s: PlayState) -> &'static str {
     }
 }
 
-fn shuffle_str(s: ShuffleMode) -> &'static str {
+pub(crate) fn shuffle_str(s: ShuffleMode) -> &'static str {
     match s {
         ShuffleMode::Off => "off",
         ShuffleMode::Shuffle => "shuffle",
@@ -196,7 +202,7 @@ fn shuffle_str(s: ShuffleMode) -> &'static str {
     }
 }
 
-fn repeat_str(r: RepeatMode) -> &'static str {
+pub(crate) fn repeat_str(r: RepeatMode) -> &'static str {
     match r {
         RepeatMode::All => "all",
         RepeatMode::One => "one",
@@ -319,6 +325,19 @@ mod tests {
         let m = mock(); // no account, but disabling is always allowed
         run("player_set_scrobbling", json!({ "enabled": false }), &m).unwrap();
         assert!(m.recorded().iter().any(|c| c.starts_with("set_scrobble")));
+    }
+
+    #[test]
+    fn a_set_answers_with_the_mode_asked_for_while_the_player_still_lags() {
+        // The fake reports off and none throughout, standing in for MusicBee
+        // applying the change a moment after the call returns.
+        let m = mock();
+
+        let shuffle = run("player_set_shuffle", json!({ "mode": "autodj" }), &m).unwrap();
+        assert_eq!(shuffle["mode"], "autodj");
+
+        let repeat = run("player_set_repeat", json!({ "mode": "all" }), &m).unwrap();
+        assert_eq!(repeat["mode"], "all");
     }
 
     #[test]
