@@ -50,7 +50,7 @@ namespace MusicBeePlugin.Settings
         // Plugin help / documentation, opened from the footer link.
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
 
-        // Fixed width, and the height wanted when the screen has room. Seven
+        // Fixed width, and the height wanted when the screen has room. The
         // groups plus the footer do not fit 720p, so height is what gets clamped
         // (see PreferredDialogHeight) and anything shorter scrolls.
         private const int DialogWidth = 560;
@@ -89,7 +89,45 @@ namespace MusicBeePlugin.Settings
         private ComboBox _logLevel;
         private CheckBox _firewall;
         private CheckBox _mdns;
+        private CheckBox _webEnabled;
+        private CheckBox _webAuth;
+        private Label _webStatus;
+        private Button _webPairBtn;
+        private Button _webRevokeBtn;
+        private Button _webUnpairOneBtn;
+        private Button _webRenameBtn;
+        private Button _webCopyCodeBtn;
+
+        /// <summary>The code on offer, or null when none is outstanding.</summary>
+        private string _pairingCode;
+
+        /// <summary>
+        ///     True while a name is being typed. The countdown redraws the list
+        ///     once a second, and redrawing it closes the editor: a rename would
+        ///     have to be finished inside a second to survive one.
+        /// </summary>
+        private bool _renaming;
+        private ListView _webPaired;
+
+        /// <summary>
+        ///     Ticks while a pairing code is outstanding, so the panel counts it
+        ///     down and notices the moment it is used or lapses. Only the core
+        ///     knows which of those happened, so this asks rather than assumes.
+        /// </summary>
+        private System.Windows.Forms.Timer _pairingTick;
+
+        /// <summary>The paired count when the panel last looked.</summary>
+        private int _pairedBefore;
         private Label _status;
+
+        /// <summary>
+        ///     The settings as the core last reported them, for telling an edit
+        ///     from the value that was already there.
+        /// </summary>
+        private byte[] _savedShape;
+
+        /// <summary>True while the controls are being filled from the core.</summary>
+        private bool _loading;
         private Label _cacheStatus;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
@@ -133,6 +171,7 @@ namespace MusicBeePlugin.Settings
 
             BuildLayout();
             LoadFromCore();
+            WatchForEdits(this);
             LoadListeningAddresses();
             LoadCacheStatus();
             LoadBlockedCount();
@@ -217,6 +256,7 @@ namespace MusicBeePlugin.Settings
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // advanced
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // cache
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // updates
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // web remote
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // diagnostics
 
             // No title label: the window title bar already reads "MusicBee Remote";
@@ -227,6 +267,7 @@ namespace MusicBeePlugin.Settings
             root.Controls.Add(BuildAdvancedGroup());
             root.Controls.Add(BuildCacheGroup());
             root.Controls.Add(BuildUpdatesGroup());
+            root.Controls.Add(BuildWebGroup());
             root.Controls.Add(BuildDiagnosticsGroup());
             // No trailing spacer row: a Percent-100 row would absorb every
             // overflow and the scroller below would never see one.
@@ -666,6 +707,313 @@ namespace MusicBeePlugin.Settings
             return layout;
         }
 
+        /// <summary>
+        ///     The Web remote group: the two toggles, plus the pairing controls
+        ///     that only matter while pairing is enforced.
+        /// </summary>
+        private Control BuildWebGroup()
+        {
+            _webEnabled = new CheckBox
+            {
+                Text = "Serve the web remote on the listening port",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+            _webAuth = new CheckBox
+            {
+                Text = "Require browsers to pair with a code",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+            _webAuth.CheckedChanged += (s, e) => UpdateWebEnabled();
+            _webEnabled.CheckedChanged += (s, e) => UpdateWebEnabled();
+
+            _webStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 4, 0, 0),
+                ForeColor = SystemColors.GrayText,
+            };
+
+            _webPairBtn = new Button { Text = "Show pairing code", AutoSize = true };
+            _webPairBtn.Click += (s, e) =>
+            {
+                _host.GenerateWebPairingCode();
+                LoadWebStatus();
+            };
+            _webCopyCodeBtn = new Button { Text = "Copy code", AutoSize = true, Visible = false };
+            _webCopyCodeBtn.Click += (s, e) => CopyPairingCode();
+            _webRevokeBtn = new Button { Text = "Unpair all browsers", AutoSize = true };
+            _webRevokeBtn.Click += (s, e) =>
+            {
+                _host.RevokeWebPairings();
+                LoadWebStatus();
+            };
+            _webUnpairOneBtn = new Button { Text = "Unpair selected", AutoSize = true, Enabled = false };
+            _webUnpairOneBtn.Click += (s, e) => UnpairSelected();
+            // F2 does this too, and nobody finds F2.
+            _webRenameBtn = new Button { Text = "Rename", AutoSize = true, Enabled = false };
+            _webRenameBtn.Click += (s, e) =>
+            {
+                if (_webPaired.SelectedItems.Count > 0) _webPaired.SelectedItems[0].BeginEdit();
+            };
+
+            // Columns rather than one line per browser: a name, a date and a
+            // time on one row is a line that runs off the end of any box it is
+            // given, and the part that fell off was the part being read.
+            _webPaired = new ListView
+            {
+                View = View.Details,
+                FullRowSelect = true,
+                MultiSelect = false,
+                HideSelection = false,
+                HeaderStyle = ColumnHeaderStyle.Nonclickable,
+                Height = 74,
+                Width = 360,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            _webPaired.Columns.Add("Browser", 170);
+            _webPaired.Columns.Add("Paired", 90);
+            _webPaired.Columns.Add("Last seen", 90);
+            _webPaired.ShowItemToolTips = true;
+            // Edited in place, which fills the box with the current name: a
+            // rename is nearly always a correction to it rather than a fresh
+            // thought, and retyping one is how a good name gets lost.
+            _webPaired.LabelEdit = true;
+            _webPaired.BeforeLabelEdit += (s, e) => _renaming = true;
+            _webPaired.AfterLabelEdit += RenameBrowser;
+            _webPaired.SelectedIndexChanged += (s, e) => FollowSelection();
+
+            var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0) };
+            buttons.Controls.Add(_webPairBtn);
+            buttons.Controls.Add(_webCopyCodeBtn);
+            buttons.Controls.Add(_webRenameBtn);
+            buttons.Controls.Add(_webUnpairOneBtn);
+            buttons.Controls.Add(_webRevokeBtn);
+
+            var layout = GroupLayout();
+            AddRow(layout, "Web remote", _webEnabled);
+            AddRow(layout, "Pairing", _webAuth);
+            AddRow(layout, "Status", _webStatus);
+            AddRow(layout, "Paired", _webPaired);
+            AddRow(layout, string.Empty, buttons);
+            return WrapGroup("Web remote", layout);
+        }
+
+        /// <summary>
+        ///     Render the core's pairing state: the outstanding code if there is
+        ///     one, otherwise how many browsers are paired.
+        /// </summary>
+        private void LoadWebStatus()
+        {
+            var status = _host.ReadWebStatus();
+            if (status == null)
+            {
+                _webStatus.Text = "Not running";
+                OfferCode(null);
+                return;
+            }
+
+            var wasOffered = _pairingTick != null && _pairingTick.Enabled;
+            var pairedNow = status.paired_count;
+            OfferCode(status.pairing_code);
+
+            if (!string.IsNullOrEmpty(status.pairing_code))
+            {
+                _webStatus.Text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Enter {0} in the browser - {1} left",
+                    status.pairing_code,
+                    Countdown(status.pairing_code_expires_in));
+                StartPairingTick();
+            }
+            else
+            {
+                // A code that has gone was either spent or lapsed, and only the
+                // count tells them apart: without it the panel would report a
+                // browser pairing as a code running out.
+                if (wasOffered)
+                    _webStatus.Text = pairedNow > _pairedBefore
+                        ? "Paired. That code is spent."
+                        : "That code expired - press Show pairing code for another.";
+                else
+                    _webStatus.Text = Describe(pairedNow);
+                StopPairingTick();
+            }
+
+            _pairedBefore = pairedNow;
+            ShowPairedBrowsers(status.paired);
+        }
+
+        /// <summary>
+        ///     Points the copy button at <paramref name="code" />, or hides it
+        ///     when there is nothing to copy.
+        ///
+        ///     The acknowledgement on the button lasts until the code changes
+        ///     rather than for a moment, because the countdown redraws this panel
+        ///     every second and anything shorter would rarely be seen.
+        /// </summary>
+        private void OfferCode(string code)
+        {
+            if (code != _pairingCode)
+            {
+                _pairingCode = code;
+                _webCopyCodeBtn.Text = "Copy code";
+            }
+
+            _webCopyCodeBtn.Visible = !string.IsNullOrEmpty(code);
+        }
+
+        /// <summary>
+        ///     Puts the code on the clipboard on its own.
+        ///
+        ///     The status line reads as a sentence and the code sits in the
+        ///     middle of it, so selecting it by hand costs more than the typing
+        ///     it saves, and the countdown rewrites the line under any selection
+        ///     a second later.
+        /// </summary>
+        private void CopyPairingCode()
+        {
+            if (string.IsNullOrEmpty(_pairingCode)) return;
+            Clipboard.SetText(_pairingCode);
+            _webCopyCodeBtn.Text = "Copied";
+        }
+
+        private static string Describe(int paired)
+        {
+            if (paired == 0) return "No browsers paired";
+            return paired == 1 ? "1 browser paired" : paired + " browsers paired";
+        }
+
+        private static string Countdown(int seconds)
+        {
+            if (seconds <= 0) return "no time";
+            return seconds >= 60
+                ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", seconds / 60, seconds % 60)
+                : seconds + "s";
+        }
+
+        /// <summary>Fills the list, keeping the selection where it still exists.</summary>
+        private void ShowPairedBrowsers(List<PairedBrowser> paired)
+        {
+            // Never while a name is being typed: rebuilding closes the editor.
+            if (_renaming) return;
+
+            var selected = SelectedBrowserId();
+
+            _webPaired.BeginUpdate();
+            _webPaired.Items.Clear();
+            foreach (var browser in paired ?? new List<PairedBrowser>())
+            {
+                var label = string.IsNullOrEmpty(browser.label) ? "browser" : browser.label;
+                var row = new ListViewItem(label) { Tag = browser.id ?? string.Empty };
+                row.SubItems.Add(Ago(browser.paired_at));
+                row.SubItems.Add(Ago(browser.last_seen));
+                // The whole row on hover, for a name wider than its column.
+                row.ToolTipText = string.Format(CultureInfo.CurrentCulture,
+                    "{0} - paired {1}, last seen {2}",
+                    label, Ago(browser.paired_at), Ago(browser.last_seen));
+                if ((string)row.Tag == selected) row.Selected = true;
+                _webPaired.Items.Add(row);
+            }
+
+            _webPaired.EndUpdate();
+            FollowSelection();
+        }
+
+        /// <summary>The per-browser buttons only mean something with a row chosen.</summary>
+        private void FollowSelection()
+        {
+            var chosen = _webPaired.SelectedItems.Count > 0;
+            _webUnpairOneBtn.Enabled = chosen;
+            _webRenameBtn.Enabled = chosen;
+        }
+
+        /// <summary>
+        ///     Takes the edited name, or puts the old one back when it was
+        ///     cancelled, emptied, or refused by the core.
+        /// </summary>
+        private void RenameBrowser(object sender, LabelEditEventArgs e)
+        {
+            _renaming = false;
+            var id = (string)_webPaired.Items[e.Item].Tag;
+            var label = (e.Label ?? string.Empty).Trim();
+            if (label.Length == 0 || !_host.RenameWebPairing(id, label))
+            {
+                e.CancelEdit = true;
+                return;
+            }
+
+            // The core trims and bounds what it keeps, so the row is redrawn
+            // from what it stored rather than from what was typed.
+            e.CancelEdit = true;
+            LoadWebStatus();
+        }
+
+        private string SelectedBrowserId()
+        {
+            return _webPaired.SelectedItems.Count > 0
+                ? (string)_webPaired.SelectedItems[0].Tag
+                : null;
+        }
+
+        private void UnpairSelected()
+        {
+            var id = SelectedBrowserId();
+            if (id == null) return;
+
+            // Refused means it was already gone, which the refreshed list shows.
+            if (!_host.RevokeWebPairing(id))
+                SetStatus("That browser was already unpaired.", true);
+            LoadWebStatus();
+        }
+
+        /// <summary>How long ago a moment was, for a column that has to be short.</summary>
+        private static string Ago(long unixSeconds)
+        {
+            if (unixSeconds <= 0) return "never";
+            var when = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime();
+            var elapsed = DateTimeOffset.Now - when;
+            if (elapsed.TotalSeconds < 60) return "just now";
+            if (elapsed.TotalMinutes < 60) return (int)elapsed.TotalMinutes + " min ago";
+            if (elapsed.TotalHours < 24) return (int)elapsed.TotalHours + "h ago";
+            return when.ToString("d MMM HH:mm", CultureInfo.CurrentCulture);
+        }
+
+        private void StartPairingTick()
+        {
+            if (_pairingTick == null)
+            {
+                _pairingTick = new System.Windows.Forms.Timer { Interval = 1000 };
+                _pairingTick.Tick += (s, e) => LoadWebStatus();
+            }
+            _pairingTick.Start();
+        }
+
+        private void StopPairingTick()
+        {
+            if (_pairingTick != null) _pairingTick.Stop();
+        }
+
+        // The pairing buttons only mean anything while the server serves and
+        // demands a token; leaving them live otherwise invites a code nothing
+        // will ever ask for.
+        private void UpdateWebEnabled()
+        {
+            _webAuth.Enabled = _webEnabled.Checked;
+            var pairing = _webEnabled.Checked && _webAuth.Checked;
+            _webPairBtn.Enabled = pairing;
+            _webRevokeBtn.Enabled = pairing;
+            if (_webPaired != null) _webPaired.Enabled = pairing;
+            if (_webUnpairOneBtn != null && _webRenameBtn != null)
+            {
+                var chosen = pairing && _webPaired.SelectedItems.Count > 0;
+                _webUnpairOneBtn.Enabled = chosen;
+                _webRenameBtn.Enabled = chosen;
+            }
+        }
+
         private static Control WrapGroup(string title, Control content)
         {
             var box = new GroupBox
@@ -936,6 +1284,7 @@ namespace MusicBeePlugin.Settings
         private void Apply()
         {
             var ok = _host.ApplySettings(Collect(), out var reloaded);
+            if (ok) MarkSaved();
             SetStatus(
                 ok ? "Settings saved." : "Settings were rejected - check the port and range values.",
                 ok);
@@ -953,6 +1302,7 @@ namespace MusicBeePlugin.Settings
 
         private void LoadFromCore()
         {
+            _loading = true;
             var s = _host.ReadSettings() ?? new CoreSettings();
             _port.Value = Clamp(s.port, 1, 65535);
             _filterMode.SelectedIndex = FilterModeToIndex(s.filter_mode);
@@ -963,9 +1313,14 @@ namespace MusicBeePlugin.Settings
             _logLevel.SelectedIndex = LogLevelToIndex(s.log_level);
             _firewall.Checked = s.update_firewall;
             _mdns.Checked = s.mdns_enabled;
+            _webEnabled.Checked = s.web_enabled;
+            _webAuth.Checked = s.web_auth_required;
             _autoCheck.Checked = s.update_check_enabled;
             UpdateFilterEnabled();
-            SetStatus(string.Empty, true);
+            UpdateWebEnabled();
+            LoadWebStatus();
+            _loading = false;
+            MarkSaved();
         }
 
         /// <summary>
@@ -1435,6 +1790,46 @@ namespace MusicBeePlugin.Settings
             }
         }
 
+        /// <summary>
+        ///     Watch every editable control under <paramref name="root" />, so an
+        ///     edit anywhere in the panel is noticed without each control having
+        ///     to remember to say so.
+        /// </summary>
+        private void WatchForEdits(Control root)
+        {
+            foreach (Control child in root.Controls)
+            {
+                if (child is CheckBox check) check.CheckedChanged += (s, e) => NoteEdit();
+                else if (child is NumericUpDown number) number.ValueChanged += (s, e) => NoteEdit();
+                else if (child is ComboBox combo) combo.SelectedIndexChanged += (s, e) => NoteEdit();
+                else if (child is TextBox text) text.TextChanged += (s, e) => NoteEdit();
+
+                WatchForEdits(child);
+            }
+        }
+
+        /// <summary>
+        ///     Say whether what is on screen is still what the core holds.
+        ///
+        ///     Compared as serialized bytes rather than field by field, so a
+        ///     setting added later is covered without anyone remembering to add
+        ///     it here.
+        /// </summary>
+        private void NoteEdit()
+        {
+            if (_loading || _savedShape == null) return;
+
+            var edited = !Msgpack.Serialize(Collect()).SequenceEqual(_savedShape);
+            SetStatus(edited ? "Unsaved changes - press Save to apply them." : string.Empty, true);
+        }
+
+        /// <summary>Takes what is on screen as the saved state.</summary>
+        private void MarkSaved()
+        {
+            _savedShape = Msgpack.Serialize(Collect());
+            SetStatus(string.Empty, true);
+        }
+
         private CoreSettings Collect()
         {
             return new CoreSettings
@@ -1450,6 +1845,8 @@ namespace MusicBeePlugin.Settings
                 search_source = IndexToSource(_searchSource.SelectedIndex),
                 update_firewall = _firewall.Checked,
                 mdns_enabled = _mdns.Checked,
+                web_enabled = _webEnabled.Checked,
+                web_auth_required = _webAuth.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
             };

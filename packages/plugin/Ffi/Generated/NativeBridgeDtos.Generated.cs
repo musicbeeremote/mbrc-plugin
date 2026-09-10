@@ -336,4 +336,33 @@ namespace MusicBeePlugin.Ffi
         public string value { get; set; }
     }
 
+    public class WebStatus
+    {
+        public bool enabled { get; set; }
+        public bool auth_required { get; set; }
+        public string pairing_code { get; set; }
+        public int pairing_code_expires_in { get; set; }
+        public int paired_count { get; set; }
+        public List<PairedBrowser> paired { get; set; }
+    }
+
+    public class PairedBrowser
+    {
+        public string id { get; set; }
+        public string label { get; set; }
+        public long paired_at { get; set; }
+        public long last_seen { get; set; }
+    }
+
+    public class PairedBrowserRef
+    {
+        public string id { get; set; }
+    }
+
+    public class PairedBrowserName
+    {
+        public string id { get; set; }
+        public string label { get; set; }
+    }
+
 }

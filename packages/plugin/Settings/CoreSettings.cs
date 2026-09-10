@@ -42,6 +42,19 @@ namespace MusicBeePlugin.Settings
         public bool mdns_enabled { get; set; } = true;
 
         /// <summary>
+        ///     Whether the command port also serves the embedded web remote over
+        ///     HTTP and WebSocket. The JSON protocols are unaffected either way.
+        /// </summary>
+        public bool web_enabled { get; set; } = true;
+
+        /// <summary>
+        ///     Whether a browser must present a paired token. Off admits every
+        ///     browser that can reach the port, the same trust model the JSON
+        ///     protocols already use.
+        /// </summary>
+        public bool web_auth_required { get; set; }
+
+        /// <summary>
         ///     Whether the core checks for a newer release on its own. Off by
         ///     default: an automatic check is an unprompted request to github.com.
         ///     The panel's "Check now" button works regardless of this.

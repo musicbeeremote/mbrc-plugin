@@ -156,6 +156,18 @@ namespace MusicBeePlugin.Host
         /// <summary>Where the diagnostics capture stands, for the panel.</summary>
         public CaptureStatus ReadCaptureStatus() => _bridge.ReadCaptureStatus();
 
+        public WebStatus ReadWebStatus() => _bridge.ReadWebStatus();
+
+        public bool GenerateWebPairingCode() => _bridge.GenerateWebPairingCode();
+
+        public bool RevokeWebPairings() => _bridge.RevokeWebPairings();
+
+        /// <summary>Unpair a single browser by the id the panel shows.</summary>
+        public bool RevokeWebPairing(string id) => _bridge.RevokeWebPairing(id);
+
+        /// <summary>Rename a paired browser, so lookalike names can be told apart.</summary>
+        public bool RenameWebPairing(string id, string label) => _bridge.RenameWebPairing(id, label);
+
         /// <summary>
         ///     Begin a diagnostics capture. <paramref name="environment" /> is the
         ///     host-only half of the report (MusicBee build, Windows, CLR).
@@ -253,10 +265,10 @@ namespace MusicBeePlugin.Host
 
         /// <summary>
         ///     Whether a settings change needs networking restarted: the port and
-        ///     the address filter, because they decide what the listener binds and
-        ///     admits, and mDNS, because the advertisement task is started (or not)
-        ///     when networking starts - without this, unticking the checkbox would
-        ///     appear to do nothing until MusicBee was restarted.
+        ///     the address filter decide what the listener binds and admits, while
+        ///     mDNS, the web remote and its pairing are all read when networking
+        ///     starts - so without this, a checkbox would appear to do nothing
+        ///     until MusicBee was restarted.
         /// </summary>
         private static bool NeedsRestart(CoreSettings a, CoreSettings b)
         {
@@ -265,6 +277,8 @@ namespace MusicBeePlugin.Host
                    || a.base_ip != b.base_ip
                    || a.last_octet_max != b.last_octet_max
                    || a.mdns_enabled != b.mdns_enabled
+                   || a.web_enabled != b.web_enabled
+                   || a.web_auth_required != b.web_auth_required
                    || !ListEqual(a.allowed_addresses, b.allowed_addresses);
         }
 

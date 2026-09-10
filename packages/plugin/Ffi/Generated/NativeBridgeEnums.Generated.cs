@@ -125,6 +125,7 @@ namespace MusicBeePlugin.Ffi.Generated
         ListeningAddresses = 3,
         UpdateStatus = 4,
         CaptureStatus = 5,
+        WebStatus = 6,
     }
 
     public enum HostCommandType
@@ -138,6 +139,10 @@ namespace MusicBeePlugin.Ffi.Generated
         StartCapture = 7,
         StopCapture = 8,
         CancelCapture = 9,
+        GenerateWebPairingCode = 10,
+        RevokeWebPairings = 11,
+        RevokeWebPairing = 12,
+        RenameWebPairing = 13,
     }
 
     public enum HostEventType

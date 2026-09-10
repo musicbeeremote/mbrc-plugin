@@ -481,6 +481,42 @@ namespace MusicBeePlugin.Ffi
         public bool SkipUpdate() => Command(HostCommandType.SkipUpdate);
 
         /// <summary>
+        ///     Where the web remote stands, for the settings panel's Web remote
+        ///     group: whether it serves, whether it demands pairing, any code
+        ///     still inside its window, and how many browsers are paired. Null if
+        ///     the core is not initialized.
+        /// </summary>
+        public WebStatus ReadWebStatus() => Query<WebStatus>(HostQueryType.WebStatus);
+
+        /// <summary>
+        ///     Mint a pairing code, replacing any still outstanding. The code
+        ///     itself arrives through <see cref="ReadWebStatus" />, so the panel
+        ///     reads it the same way it reads every other piece of core state.
+        /// </summary>
+        public bool GenerateWebPairingCode() => Command(HostCommandType.GenerateWebPairingCode);
+
+        /// <summary>Drop every browser token, so each has to pair again.</summary>
+        public bool RevokeWebPairings() => Command(HostCommandType.RevokeWebPairings);
+
+        /// <summary>
+        ///     Unpair one browser, named by the id the panel lists. The token
+        ///     itself never crosses this boundary.
+        /// </summary>
+        public bool RevokeWebPairing(string id) =>
+            Command(HostCommandType.RevokeWebPairing, Msgpack.Serialize(new PairedBrowserRef { id = id ?? string.Empty }));
+
+        /// <summary>
+        ///     Rename one paired browser. The core trims and bounds the label;
+        ///     what comes back is what it kept.
+        /// </summary>
+        public bool RenameWebPairing(string id, string label) =>
+            Command(HostCommandType.RenameWebPairing, Msgpack.Serialize(new PairedBrowserName
+            {
+                id = id ?? string.Empty,
+                label = label ?? string.Empty
+            }));
+
+        /// <summary>
         ///     Where the diagnostics capture stands, for the settings panel's
         ///     Diagnostics group. Answers even before the core is initialized (the
         ///     capture state is the core's own, not the running core's), so the
