@@ -1,0 +1,40 @@
+{
+  "app": {
+    "name": "MusicBee Remote"
+  },
+  "state": {
+    "reconnecting": "Reconnecting...",
+    "loading": "Loading...",
+    "loadMore": "Load more",
+    "updated": "MusicBee Remote {version} is running. Tap to reload.",
+    "disconnected": "Not connected to MusicBee. Tap to try again."
+  },
+  "nav": {
+    "playing": "Playing",
+    "queue": "Queue",
+    "library": "Library",
+    "playlists": "Lists",
+    "radio": "Radio"
+  },
+  "action": {
+    "back": "Back",
+    "close": "Close"
+  },
+  "unknown": {
+    "artist": "Unknown artist",
+    "album": "Unknown album",
+    "genre": "[Empty]"
+  },
+  "theme": {
+    "label": {
+      "auto": "Auto",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "action": {
+      "auto": "Theme: following the system",
+      "light": "Theme: light",
+      "dark": "Theme: dark"
+    }
+  }
+}

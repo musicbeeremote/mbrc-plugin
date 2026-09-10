@@ -1,0 +1,7 @@
+{
+  "title": "Radio",
+  "empty": {
+    "title": "No radio stations",
+    "hint": "Stations added to MusicBee's Radio node show up here."
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "nothingPlaying": "Nothing playing",
+  "action": {
+    "playPause": "Play or pause",
+    "previous": "Previous",
+    "next": "Next",
+    "stop": "Stop",
+    "shuffle": "Shuffle",
+    "shuffleOff": "Shuffle off",
+    "shuffleOn": "Shuffle on",
+    "autoDj": "Auto-DJ",
+    "repeat": "Repeat",
+    "mute": "Mute",
+    "rate": "Rate {stars} stars",
+    "love": "Love",
+    "ban": "Ban",
+    "scrobble": "Scrobble to last.fm"
+  },
+  "panel": {
+    "lyrics": "Lyrics",
+    "details": "Details",
+    "output": "Output"
+  },
+  "empty": {
+    "lyrics": "No lyrics for this track",
+    "details": "No extra details for this track",
+    "outputs": "No output devices reported"
+  },
+  "detail": {
+    "format": "Format",
+    "bitrate": "Bitrate",
+    "sampleRate": "Sample rate",
+    "channels": "Channels",
+    "size": "Size",
+    "kind": "Kind",
+    "publisher": "Publisher",
+    "composer": "Composer",
+    "grouping": "Grouping",
+    "comment": "Comment",
+    "encoder": "Encoder",
+    "playCount": "Plays",
+    "skipCount": "Skips",
+    "lastPlayed": "Last played",
+    "dateModified": "Modified"
+  },
+  "live": "Live",
+  "art": {
+    "expand": "Show the artwork full size",
+    "expanded": "Album artwork"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "tab": {
+    "genres": "Genres",
+    "artists": "Artists",
+    "albums": "Albums",
+    "tracks": "Tracks"
+  },
+  "artists": "Artists",
+  "search": {
+    "placeholder": "Search {level}",
+    "clear": "Clear search",
+    "empty": "Nothing matches \"{query}\""
+  },
+  "empty": "Nothing here",
+  "action": {
+    "queue": "Queue {title}",
+    "playAll": "Play all",
+    "shuffleAll": "Shuffle all",
+    "more": "Queue options for {title}",
+    "now": "Play now",
+    "next": "Play next",
+    "last": "Add to queue",
+    "addAll": "Play all from here",
+    "playThese": "Play {scope}",
+    "shuffleThese": "Shuffle {scope}"
+  },
+  "queued": "Queued {count} tracks",
+  "emptyHint": "MusicBee's library has nothing to list here.",
+  "sort": {
+    "label": "Sort",
+    "name": "Name",
+    "title": "Title",
+    "artist": "Artist",
+    "album": "Album",
+    "album_artist": "Album artist",
+    "track": "Track number",
+    "year": "Year",
+    "rating": "Rating",
+    "date_added": "Date added",
+    "duration": "Length"
+  },
+  "failed": "Could not read the library: {reason}",
+  "albumArtists": {
+    "label": "Album artists",
+    "hint": "Browse the artist albums are filed under, not every credit"
+  },
+  "emptyScopedHint": "Nothing is filed under this one."
+}

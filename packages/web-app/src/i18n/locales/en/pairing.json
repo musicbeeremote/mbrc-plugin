@@ -1,0 +1,9 @@
+{
+  "title": "Pair this browser",
+  "help": "In MusicBee, open the MusicBee Remote settings and press {button} in the Web remote section.",
+  "button": "Show pairing code",
+  "submit": "Pair",
+  "failed": "Pairing failed",
+  "unreachable": "Could not reach MusicBee",
+  "name": "Call this browser"
+}

@@ -1,0 +1,21 @@
+{
+  "view": {
+    "full": "Full list",
+    "upNext": "Up next"
+  },
+  "count": "{count} track | {count} tracks",
+  "empty": "The queue is empty.",
+  "reloaded": "The queue changed; the list was reloaded.",
+  "action": {
+    "remove": "Remove {title}",
+    "reorder": "Reorder {title}"
+  },
+  "playing": "Now playing",
+  "emptyHint": "Play something from the library and it will appear here.",
+  "found": "{shown} of {total}",
+  "search": {
+    "placeholder": "Search the queue",
+    "clear": "Clear the search",
+    "none": "Nothing in the queue matches \"{term}\""
+  }
+}

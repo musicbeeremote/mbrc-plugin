@@ -1,0 +1,25 @@
+# Supply-chain hardening (patterns borrowed from rotki/ui-library).
+# This is a single-package project, so there is no `catalog:` - versions are
+# pinned directly in package.json.
+
+# Wait 7 days (in minutes) after a release before it's eligible to install,
+# so freshly-published (possibly compromised) versions aren't picked up.
+# Belt-and-suspenders with Renovate's minimumReleaseAge cooldown.
+minimumReleaseAge: 10080
+
+# Pin exact versions on `pnpm add` (no ^/~ ranges).
+saveExact: true
+
+# Reject non-registry (git/tarball/link) transitive dependencies.
+blockExoticSubdeps: true
+
+# Fail install if a dependency wants to run a build script that isn't
+# explicitly allowed below.
+strictDepBuilds: true
+
+# Never silently accept a version downgrade.
+trustPolicy: no-downgrade
+
+# The only dependency permitted to run its install script.
+allowBuilds:
+  esbuild: true
