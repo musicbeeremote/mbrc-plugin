@@ -303,8 +303,12 @@ All enums are lowercase strings:
 ## Canonical track
 
 Track objects are uniform across every domain (`track_get`, `now_playing_state`,
-`library_tracks`, `now_playing_list`). Base fields are always present; the four typed fields
-are `null` when unknown; `cover_hash` is omitted when the album has no cached cover.
+`library_tracks`, `now_playing_list`, `playlist_tracks`). Base fields are always present; the
+four typed fields are `null` when unknown; `cover_hash` is omitted when the album has no
+cached cover.
+
+A list may add index fields beside these - `order` and `position` on a playlist, plus
+`play_position` on the queue - but never changes the track's own shape.
 
 ```json
 {
@@ -520,6 +524,37 @@ the selection rather than turning the player's shuffle mode on.
 |----|----------------|----------|
 | `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..}` |
 | `playlist_play` | `{"url":"<path>"}` | `{}` |
+| `playlist_tracks` | `{"url":"<path>", offset?, limit?, query?, query_field?, totals?}` | `{name, version, total, offset, items}` |
+
+`playlist_tracks` answers one playlist as a page of [canonical tracks](#canonical-track),
+each carrying two indices:
+
+- **`order`** - its place in the playlist, 0-based. This is the key a mutation takes,
+  and it does not change when a search narrows the list.
+- **`position`** - its rank among the rows returned. Equal to `order` on an unfiltered
+  read, and different under a `query`, which is exactly when a client must not
+  renumber anything.
+
+`version` is an opaque token over the ordered paths - a string, because it is a
+64-bit hash and no JavaScript number holds one exactly. It changes when the playlist
+is reordered, not only when its contents change, and it is what the mutations in
+[#115](https://github.com/musicbeeremote/mbrc-plugin/issues/115) will echo back.
+Clients must not interpret it.
+
+`query` narrows the whole playlist, `query_field` points it at one column (`any`
+default, `title`, `artist`, `album`), and `totals: true` adds **`total_duration_ms`**
+summed over whatever `total` counts - so a narrowed list reports its own length.
+
+Both are opt-in because they are the two answers a window cannot give: each reads the
+playlist's own tags, where a plain page reads only the tags of the rows it serves.
+
+A path the host cannot describe still comes back as a canonical track with its tags
+empty, so a client parses one shape and the row keeps its place in the playlist.
+
+**An unreadable playlist is an empty one.** MusicBee derives a name from the filename
+and reports no files, so a path that does not exist is indistinguishable from a
+playlist with nothing in it. Only a missing `url` is an error.
+
 ## Events
 
 Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker
