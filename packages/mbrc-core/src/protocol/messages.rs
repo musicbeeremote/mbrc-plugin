@@ -401,6 +401,18 @@ pub struct Playlist {
     pub name: String,
 }
 
+/// A playlist's files in playlist order, with the playlist's own name.
+///
+/// Paths only: tags are read for the served page alone, so the size of this
+/// answer does not grow with what a client is looking at.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PlaylistFiles {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
 /// A radio station (`radiostations` item).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RadioStation {

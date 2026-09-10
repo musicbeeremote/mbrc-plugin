@@ -388,6 +388,12 @@ impl Providers for FixtureProviders {
     fn play_playlist(&self, _u: &str) -> Result<(), String> {
         Ok(())
     }
+    fn playlist_files(
+        &self,
+        _u: &str,
+    ) -> Result<mbrc_core::protocol::messages::PlaylistFiles, String> {
+        Ok(Default::default())
+    }
     fn plugin_version(&self) -> Result<String, String> {
         Ok("1.4.0".into())
     }

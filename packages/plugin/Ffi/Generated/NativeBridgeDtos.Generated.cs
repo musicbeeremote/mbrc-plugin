@@ -191,6 +191,12 @@ namespace MusicBeePlugin.Ffi
         public string name { get; set; }
     }
 
+    public class PlaylistFiles
+    {
+        public string name { get; set; }
+        public List<string> paths { get; set; }
+    }
+
     public class RadioStation
     {
         public string name { get; set; }

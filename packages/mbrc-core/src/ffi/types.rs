@@ -168,6 +168,10 @@ pub enum QueryType {
     // genre field empty (it is V4's DTO, frozen), so the walk cannot tell an
     // artist's tracks in this genre from their tracks in another.
     LibraryGenreTracks = 38,
+    // A playlist's files in playlist order, with its name. The host enumerates
+    // them in one call; tags are read for the served page only, so a long
+    // playlist costs a page of tag reads rather than all of them.
+    PlaylistTracks = 39,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

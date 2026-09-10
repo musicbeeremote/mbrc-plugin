@@ -75,5 +75,8 @@ namespace MusicBeePlugin.Providers
         ///     Uses yield return for streaming results and proper query cleanup.
         /// </summary>
         IEnumerable<Playlist> GetPlaylists();
+
+        /// <summary>Gets one playlist's files, in playlist order, with its name.</summary>
+        PlaylistFiles GetPlaylistFiles(string playlistUrl);
     }
 }

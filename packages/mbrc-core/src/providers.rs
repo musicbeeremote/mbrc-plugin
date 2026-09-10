@@ -20,8 +20,8 @@ use crate::ffi::types::{CommandType, QueryType};
 use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
     LastfmStatus, Lyrics, NowPlayingListTrack, OutputDevices, Page, PlaybackPositionResponse,
-    PlayerState, Playlist, QueueType, RadioStation, RepeatMode, SyncDelta, Track, TrackDetails,
-    TrackInfo, TrackMetadata, TrackTags,
+    PlayerState, Playlist, PlaylistFiles, QueueType, RadioStation, RepeatMode, SyncDelta, Track,
+    TrackDetails, TrackInfo, TrackMetadata, TrackTags,
 };
 
 /// The MusicBee data/command surface, as the core sees it. Handlers take
@@ -136,6 +136,8 @@ pub trait Providers: Send + Sync {
     // Playlists.
     fn playlists(&self, offset: i32, limit: i32) -> Result<Page<Playlist>, String>;
     fn play_playlist(&self, url: &str) -> Result<(), String>;
+    /// A playlist's files in playlist order, with its name.
+    fn playlist_files(&self, url: &str) -> Result<PlaylistFiles, String>;
 
     // System.
     fn plugin_version(&self) -> Result<String, String>;
@@ -461,6 +463,14 @@ impl Providers for FfiProviders {
         self.callbacks
             .query(QueryType::PlaylistList, &PaginationParams { offset, limit })
     }
+    fn playlist_files(&self, url: &str) -> Result<PlaylistFiles, String> {
+        self.callbacks.query(
+            QueryType::PlaylistTracks,
+            &QueryParams {
+                query: url.to_string(),
+            },
+        )
+    }
     fn play_playlist(&self, url: &str) -> Result<(), String> {
         self.callbacks.execute_command(
             CommandType::PlaylistPlay,
@@ -681,6 +691,9 @@ impl Providers for NullProviders {
     fn play_playlist(&self, _url: &str) -> Result<(), String> {
         Ok(())
     }
+    fn playlist_files(&self, _url: &str) -> Result<PlaylistFiles, String> {
+        Ok(PlaylistFiles::default())
+    }
     fn plugin_version(&self) -> Result<String, String> {
         Ok(String::new())
     }
@@ -725,6 +738,7 @@ pub struct MockProviders {
     pub sync_delta: SyncDelta,
     pub radio_stations: Page<RadioStation>,
     pub playlists: Page<Playlist>,
+    pub playlist_files: PlaylistFiles,
     pub plugin_version: String,
     pub calls: std::sync::Mutex<Vec<String>>,
 }
@@ -981,6 +995,10 @@ impl Providers for MockProviders {
     fn play_playlist(&self, url: &str) -> Result<(), String> {
         self.record(format!("play_playlist({url})"));
         Ok(())
+    }
+    fn playlist_files(&self, url: &str) -> Result<PlaylistFiles, String> {
+        self.record(format!("playlist_files({url})"));
+        Ok(self.playlist_files.clone())
     }
     fn plugin_version(&self) -> Result<String, String> {
         self.record("plugin_version");

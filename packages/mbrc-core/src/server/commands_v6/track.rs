@@ -15,6 +15,7 @@ use mbrc_wire::v6::ErrorCode;
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
 use crate::cover::store::CoverStore;
+use crate::metadata_cache::CachedTags;
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
 
@@ -120,6 +121,46 @@ pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>) -> Value {
     obj
 }
 
+/// The canonical V6 `track` from a cached row.
+///
+/// The cache stores what the host already parsed, so this reads the same fields
+/// without re-parsing a `m:ss` string or a locale-shaped rating. It must emit
+/// exactly what [`track_json`] does for the same track: a client cannot tell
+/// which one answered it, and `cached_and_live_tracks_agree` fails if they part.
+pub(crate) fn cached_track_json(tags: &CachedTags, cover_hash: Option<&str>) -> Value {
+    let mut obj = json!({
+        "src": tags.src,
+        "artist": tags.artist,
+        "title": tags.title,
+        "album": tags.album,
+        "album_artist": tags.album_artist,
+        "track_no": tags.track_no,
+        "disc_no": tags.disc_no,
+        "genre": tags.genre,
+        "year": (tags.year > 0).then_some(tags.year as i64),
+        "duration_ms": (tags.duration_ms > 0).then_some(tags.duration_ms),
+        "rating": (tags.rating > 0.0).then_some(tags.rating as f64),
+        "date_added": non_empty(&tags.date_added),
+    });
+    if let Some(hash) = cover_hash {
+        obj["cover_hash"] = json!(hash);
+    }
+    obj
+}
+
+/// A cached row's `cover_hash`, by the same album key [`cover_hash_for`] uses.
+pub(crate) fn cached_cover_hash_for(
+    store: Option<&CoverStore>,
+    tags: &CachedTags,
+) -> Option<String> {
+    let artist = if tags.album_artist.is_empty() {
+        &tags.artist
+    } else {
+        &tags.album_artist
+    };
+    album_cover_hash(store, artist, &tags.album)
+}
+
 fn non_empty(s: &str) -> Option<&str> {
     (!s.is_empty()).then_some(s)
 }
@@ -207,6 +248,49 @@ mod tests {
         assert_eq!(parse_rating("0"), None);
         assert_eq!(parse_rating(""), None);
         assert_eq!(parse_rating("6"), Some(5.0)); // clamped
+    }
+
+    /// The two builders answer for the same track, so a client cannot tell
+    /// whether the cache or the host filled its page.
+    #[test]
+    fn cached_and_live_tracks_agree() {
+        let live = TrackTags {
+            src: "C:/m/a.mp3".into(),
+            artist: "Artist".into(),
+            title: "Title".into(),
+            album: "Album".into(),
+            album_artist: "AlbumArtist".into(),
+            track_no: 3,
+            disc_no: 1,
+            genre: "Rock".into(),
+            year: "12/03/2007".into(),
+            duration: "3:45".into(),
+            rating: "3.5".into(),
+            date_added: "2024-01-02T03:04:05Z".into(),
+        };
+        let cached = CachedTags::from(&live);
+        assert_eq!(track_json(&live, None), cached_track_json(&cached, None));
+        assert_eq!(
+            track_json(&live, Some("abc")),
+            cached_track_json(&cached, Some("abc"))
+        );
+    }
+
+    /// An unknown tag is `null` on both sides rather than a zero that reads as
+    /// a real value.
+    #[test]
+    fn cached_and_live_tracks_agree_when_tags_say_nothing() {
+        let live = TrackTags {
+            src: "C:/m/b.mp3".into(),
+            ..Default::default()
+        };
+        let cached = CachedTags::from(&live);
+        let out = cached_track_json(&cached, None);
+        assert_eq!(track_json(&live, None), out);
+        assert!(out["year"].is_null());
+        assert!(out["duration_ms"].is_null());
+        assert!(out["rating"].is_null());
+        assert!(out["date_added"].is_null());
     }
 
     #[test]

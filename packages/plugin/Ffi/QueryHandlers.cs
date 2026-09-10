@@ -59,6 +59,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.NowPlayingLfmRating: return Pack(_track.GetNowPlayingLastfmStatus().ToString());
                 case QueryType.PluginVersion: return Pack(_userSettings.CurrentVersion ?? string.Empty);
                 case QueryType.PlaylistList: return Pack(BuildPlaylists(Page(p)));
+                case QueryType.PlaylistTracks: return Pack(_playlist.GetPlaylistFiles(Q(p).query));
                 case QueryType.NowPlayingList: return Pack(BuildNowPlayingList(Page(p), ordered: false));
                 case QueryType.NowPlayingListOrdered: return Pack(BuildNowPlayingList(Page(p), ordered: true));
                 case QueryType.RadioStations: return Pack(BuildRadioStations(Page(p)));

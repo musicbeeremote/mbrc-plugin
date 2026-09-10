@@ -48,6 +48,11 @@ pub struct CachedTags {
     pub rating: f32,
     /// ISO-8601 UTC, converted host-side; empty when unknown.
     pub date_added: String,
+    /// Zero when the tag carried no duration.
+    ///
+    /// Stored parsed rather than as the host's `m:ss` string, so a row can
+    /// answer the canonical track without a format round trip.
+    pub duration_ms: i64,
 }
 
 /// Bumped when [`CachedTags`] gains a field.
@@ -55,7 +60,7 @@ pub struct CachedTags {
 /// A record that has grown makes every stored row stale in a way no library
 /// fingerprint would notice: the library did not change, the shape it is read
 /// into did.
-const TAGS_SCHEMA_VERSION: u32 = 2;
+const TAGS_SCHEMA_VERSION: u32 = 3;
 
 impl From<&TrackTags> for CachedTags {
     fn from(tags: &TrackTags) -> Self {
@@ -71,6 +76,7 @@ impl From<&TrackTags> for CachedTags {
             year: parse_year(&tags.year),
             rating: parse_rating(&tags.rating),
             date_added: tags.date_added.clone(),
+            duration_ms: parse_duration_ms(&tags.duration),
         }
     }
 }
@@ -154,6 +160,18 @@ fn parse_year(raw: &str) -> i32 {
 }
 
 /// A rating tag, which may use either decimal separator.
+/// `m:ss` or `h:mm:ss` to milliseconds. Zero when the tag says nothing.
+fn parse_duration_ms(raw: &str) -> i64 {
+    let mut total: i64 = 0;
+    for part in raw.split(':') {
+        let Ok(n) = part.trim().parse::<i64>() else {
+            return 0;
+        };
+        total = total * 60 + n;
+    }
+    total * 1000
+}
+
 fn parse_rating(raw: &str) -> f32 {
     raw.trim().replace(',', ".").parse::<f32>().unwrap_or(0.0)
 }
@@ -1026,6 +1044,20 @@ pub fn fingerprint<'a>(albums: impl IntoIterator<Item = (&'a str, i64)>) -> u64 
     // Mix in the count so adding + removing albums whose terms happen to cancel
     // still changes the fingerprint.
     acc ^ count.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+/// A deterministic fingerprint of an ordered list of paths, for the `version` a
+/// client echoes back when it mutates that list.
+///
+/// Order-SENSITIVE, unlike [`fingerprint`]: moving a track without changing the
+/// set is exactly the edit this has to notice, so each path is folded into the
+/// running hash rather than summed into it.
+pub fn ordered_fingerprint<S: AsRef<str>>(paths: &[S]) -> u64 {
+    let mut acc: u64 = 0;
+    for path in paths {
+        acc = fnv1a_64(path.as_ref().as_bytes()) ^ acc.rotate_left(7);
+    }
+    acc ^ (paths.len() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
 }
 
 fn fnv1a_64(bytes: &[u8]) -> u64 {

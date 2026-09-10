@@ -125,6 +125,22 @@ namespace MusicBeePlugin.Providers
             return _api.Playlist_PlayNow(playlistUrl);
         }
 
+        /// <summary>
+        ///     One playlist's files, in playlist order. <c>Playlist_QueryFilesEx</c>
+        ///     answers the whole playlist in a single call, so the core reads tags
+        ///     for the page it serves rather than for every file here.
+        /// </summary>
+        public PlaylistFiles GetPlaylistFiles(string playlistUrl)
+        {
+            string[] files = null;
+            var ok = _api.Playlist_QueryFilesEx(playlistUrl, out files);
+            return new PlaylistFiles
+            {
+                name = _api.Playlist_GetName(playlistUrl) ?? string.Empty,
+                paths = ok && files != null ? new List<string>(files) : new List<string>()
+            };
+        }
+
         public IEnumerable<Playlist> GetPlaylists()
         {
             _api.Playlist_QueryPlaylists();
