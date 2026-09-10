@@ -108,6 +108,20 @@ fn default_mdns_enabled() -> bool {
     true
 }
 
+/// On. A browser is the only client some platforms have, and the server rides
+/// the port and firewall rule that are already open, so being on costs a user
+/// with no browser client nothing but the sniff on the first four bytes.
+fn default_web_enabled() -> bool {
+    true
+}
+
+/// Off. Pairing is built and ready, but the web remote lives behind the same LAN
+/// the JSON protocols already trust, and defaulting it on would lock out every
+/// browser until the user found the panel.
+fn default_web_auth_required() -> bool {
+    false
+}
+
 /// Off. An automatic check is an unprompted outbound request to github.com, so
 /// it is the user's call to make, not ours to assume. The panel's "Check now"
 /// works whatever this says - never being able to ask would be the other way to
@@ -191,6 +205,18 @@ pub struct Config {
     /// which is why it can be a preference at all.
     #[serde(default = "default_mdns_enabled")]
     pub mdns_enabled: bool,
+
+    /// Whether the command port also serves the embedded web remote over
+    /// HTTP/WebSocket. Off means nothing answers an HTTP request line; the JSON
+    /// protocols are unaffected either way.
+    #[serde(default = "default_web_enabled")]
+    pub web_enabled: bool,
+
+    /// Whether the web remote requires a paired token. Off admits every browser
+    /// that can reach the port, which is the same trust model the JSON protocols
+    /// already use.
+    #[serde(default = "default_web_auth_required")]
+    pub web_auth_required: bool,
     /// Whether the core checks for plugin updates *on its own*. A check is a
     /// request to github.com, so it is opt-in: this defaults to off, and the
     /// panel's "Check now" runs regardless of it.
@@ -251,6 +277,8 @@ impl Default for Config {
             aux_idle_timeout_secs: default_aux_idle_timeout_secs(),
             tcp_keepalive_secs: default_tcp_keepalive_secs(),
             mdns_enabled: default_mdns_enabled(),
+            web_enabled: default_web_enabled(),
+            web_auth_required: default_web_auth_required(),
             update_check_enabled: default_update_check_enabled(),
             update_channel: UpdateChannel::default(),
             update_check_interval_hours: default_update_check_interval_hours(),

@@ -33,6 +33,8 @@ pub struct Core {
     /// Fan-out to V6 broadcast subscribers (V6 event frames). Separate client set
     /// so V4-shaped frames never reach a V6 socket and vice-versa.
     pub v6_broadcaster: Broadcaster,
+    /// Pairing codes and session tokens for the web remote.
+    pub pairing: crate::web::auth::Pairing,
     pub now_playing: NowPlayingCache,
     /// The on-disk album cover cache (resize/hash/store/serve). Rooted at
     /// `config.storage_path`; the background build is kicked when networking
@@ -82,11 +84,16 @@ impl Core {
             config.max_conns_per_ip,
         ));
         let clients = Arc::new(crate::server::clients::ClientIdentities::new(db.clone()));
+        // Reads back the browsers paired in an earlier run, so a phone is paired
+        // once rather than once per launch.
+        let pairing = crate::web::auth::Pairing::default();
+        pairing.open(db.clone());
         Self {
             providers,
             config,
             broadcaster: Broadcaster::default(),
             v6_broadcaster: Broadcaster::default(),
+            pairing,
             now_playing,
             cover_store,
             metadata_cache,
@@ -330,6 +337,7 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
         // Answers without the core, so a panel opened before init still renders
         // a Diagnostics group instead of a blank one.
         HostQueryType::CaptureStatus => crate::diagnostics::capture::status_bytes(),
+        HostQueryType::WebStatus => web_status_bytes(),
     }
 }
 
@@ -363,6 +371,44 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
                 MbrcResult::InvalidArgument
             }
         },
+        HostCommandType::GenerateWebPairingCode => with_core(|core| {
+            core.pairing.new_code();
+            MbrcResult::Ok
+        }),
+        HostCommandType::RevokeWebPairings => with_core(|core| {
+            core.pairing.revoke_all();
+            MbrcResult::Ok
+        }),
+        HostCommandType::RevokeWebPairing => {
+            match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserRef>(params) {
+                Ok(named) => with_core(|core| {
+                    if core.pairing.revoke(&named.id) {
+                        MbrcResult::Ok
+                    } else {
+                        MbrcResult::InvalidArgument
+                    }
+                }),
+                Err(error) => {
+                    tracing::warn!(error = %error, "ignoring a malformed unpair request");
+                    MbrcResult::InvalidArgument
+                }
+            }
+        }
+        HostCommandType::RenameWebPairing => {
+            match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserName>(params) {
+                Ok(named) => with_core(|core| {
+                    if core.pairing.rename(&named.id, &named.label) {
+                        MbrcResult::Ok
+                    } else {
+                        MbrcResult::InvalidArgument
+                    }
+                }),
+                Err(error) => {
+                    tracing::warn!(error = %error, "ignoring a malformed rename request");
+                    MbrcResult::InvalidArgument
+                }
+            }
+        }
         HostCommandType::CancelCapture => {
             with_core(|core| crate::diagnostics::capture::cancel(&core))
         }
@@ -423,6 +469,32 @@ fn recent_blocked_bytes() -> Option<Vec<u8>> {
 /// Serializes the addresses a client can reach the server on (candidate interface
 /// IPv4s + the bound port) as MessagePack for the settings panel. `None` if the
 /// core is not initialized; an interface-less host yields an empty address list.
+/// The Web remote group's state for the settings panel.
+fn web_status_bytes() -> Option<Vec<u8>> {
+    let guard = lock();
+    let core = &guard.as_ref()?.core;
+    let paired: Vec<crate::ffi::dtos::PairedBrowser> = core
+        .pairing
+        .paired()
+        .into_iter()
+        .map(|client| crate::ffi::dtos::PairedBrowser {
+            id: client.id,
+            label: client.label,
+            paired_at: client.paired_at,
+            last_seen: client.last_seen,
+        })
+        .collect();
+    let status = crate::ffi::dtos::WebStatus {
+        enabled: core.config.web_enabled,
+        auth_required: core.config.web_auth_required,
+        pairing_code: core.pairing.current_code().unwrap_or_default(),
+        pairing_code_expires_in: core.pairing.code_expires_in(),
+        paired_count: paired.len() as i32,
+        paired,
+    };
+    rmp_serde::to_vec_named(&status).ok()
+}
+
 fn listening_info_bytes() -> Option<Vec<u8>> {
     let port = {
         let guard = lock();

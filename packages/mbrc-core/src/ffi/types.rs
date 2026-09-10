@@ -248,6 +248,10 @@ pub enum HostQueryType {
     /// error), for the panel's Diagnostics group. Returns a MessagePack
     /// `CaptureStatus`. Always answers, even when nothing has ever been captured.
     CaptureStatus = 5,
+    /// Whether the web remote is on, whether it demands a paired token, the
+    /// pairing code currently outstanding, and how many browsers are paired.
+    /// Returns a MessagePack `WebStatus`.
+    WebStatus = 6,
 }
 
 impl HostQueryType {
@@ -258,6 +262,7 @@ impl HostQueryType {
             3 => Some(Self::ListeningAddresses),
             4 => Some(Self::UpdateStatus),
             5 => Some(Self::CaptureStatus),
+            6 => Some(Self::WebStatus),
             _ => None,
         }
     }
@@ -307,6 +312,16 @@ pub enum HostCommandType {
     StopCapture = 8,
     /// Abandon the capture: restore the log level and write nothing.
     CancelCapture = 9,
+    /// Mint a pairing code for a browser, replacing any code outstanding. The
+    /// code itself comes back through [`HostQueryType::WebStatus`], so the panel
+    /// reads it the same way it reads every other piece of core state.
+    GenerateWebPairingCode = 10,
+    /// Drop every browser session token, so each has to pair again.
+    RevokeWebPairings = 11,
+    /// Drop one paired browser, named by the id the panel lists.
+    RevokeWebPairing = 12,
+    /// Rename one paired browser, named by the id the panel lists.
+    RenameWebPairing = 13,
 }
 
 impl HostCommandType {
@@ -321,6 +336,10 @@ impl HostCommandType {
             7 => Some(Self::StartCapture),
             8 => Some(Self::StopCapture),
             9 => Some(Self::CancelCapture),
+            10 => Some(Self::GenerateWebPairingCode),
+            11 => Some(Self::RevokeWebPairings),
+            12 => Some(Self::RevokeWebPairing),
+            13 => Some(Self::RenameWebPairing),
             _ => None,
         }
     }
@@ -427,64 +446,54 @@ mod tests {
         assert_eq!(NotificationType::from_i32(-1), None);
     }
 
+    /// The discriminants are the ABI: C# sends these numbers, so a value that
+    /// moved would call the wrong thing rather than fail to build. Listed
+    /// rather than asserted one by one, so adding a command is one line.
     #[test]
     fn host_enums_roundtrip_and_reject_unknown() {
-        assert_eq!(HostQueryType::from_i32(1), Some(HostQueryType::CacheStatus));
-        assert_eq!(
-            HostQueryType::from_i32(2),
-            Some(HostQueryType::RecentBlocked)
-        );
-        assert_eq!(
-            HostQueryType::from_i32(3),
-            Some(HostQueryType::ListeningAddresses)
-        );
-        assert_eq!(
-            HostQueryType::from_i32(4),
-            Some(HostQueryType::UpdateStatus)
-        );
-        assert_eq!(
-            HostQueryType::from_i32(5),
-            Some(HostQueryType::CaptureStatus)
-        );
+        let queries = [
+            (1, HostQueryType::CacheStatus),
+            (2, HostQueryType::RecentBlocked),
+            (3, HostQueryType::ListeningAddresses),
+            (4, HostQueryType::UpdateStatus),
+            (5, HostQueryType::CaptureStatus),
+            (6, HostQueryType::WebStatus),
+        ];
+        for (value, expected) in queries {
+            assert_eq!(
+                HostQueryType::from_i32(value),
+                Some(expected),
+                "query {value}"
+            );
+        }
         assert_eq!(HostQueryType::from_i32(0), None);
-        assert_eq!(HostQueryType::from_i32(6), None);
-        assert_eq!(
-            HostCommandType::from_i32(1),
-            Some(HostCommandType::RebuildMetadata)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(2),
-            Some(HostCommandType::RebuildCovers)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(3),
-            Some(HostCommandType::ClearBlockedLog)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(4),
-            Some(HostCommandType::CheckForUpdate)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(5),
-            Some(HostCommandType::DownloadUpdate)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(6),
-            Some(HostCommandType::SkipUpdate)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(7),
-            Some(HostCommandType::StartCapture)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(8),
-            Some(HostCommandType::StopCapture)
-        );
-        assert_eq!(
-            HostCommandType::from_i32(9),
-            Some(HostCommandType::CancelCapture)
-        );
-        assert_eq!(HostCommandType::from_i32(10), None);
+        assert_eq!(HostQueryType::from_i32(queries.len() as i32 + 1), None);
+
+        let commands = [
+            (1, HostCommandType::RebuildMetadata),
+            (2, HostCommandType::RebuildCovers),
+            (3, HostCommandType::ClearBlockedLog),
+            (4, HostCommandType::CheckForUpdate),
+            (5, HostCommandType::DownloadUpdate),
+            (6, HostCommandType::SkipUpdate),
+            (7, HostCommandType::StartCapture),
+            (8, HostCommandType::StopCapture),
+            (9, HostCommandType::CancelCapture),
+            (10, HostCommandType::GenerateWebPairingCode),
+            (11, HostCommandType::RevokeWebPairings),
+            (12, HostCommandType::RevokeWebPairing),
+            (13, HostCommandType::RenameWebPairing),
+        ];
+        for (value, expected) in commands {
+            assert_eq!(
+                HostCommandType::from_i32(value),
+                Some(expected),
+                "command {value}"
+            );
+        }
+        assert_eq!(HostCommandType::from_i32(0), None);
+        assert_eq!(HostCommandType::from_i32(commands.len() as i32 + 1), None);
+
         // HostEventType is core -> host (no from_i32), but its contract value is
         // still pinned so the C# enum stays in sync.
         assert_eq!(HostEventType::CacheStatusChanged as i32, 1);

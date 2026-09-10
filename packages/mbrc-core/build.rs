@@ -27,6 +27,18 @@ const DTO_SOURCES: &[&str] = &["src/protocol/messages.rs", "src/ffi/dtos.rs"];
 /// The FFI contract enums (`#[repr(i32)]` in `ffi/types.rs`) mirrored to C#.
 const ENUM_SOURCE: &str = "src/ffi/types.rs";
 
+/// Guarantees the directory `rust_embed` reads the web bundle from exists.
+///
+/// A checked-in placeholder cannot do this job: Vite empties `dist` on every
+/// build. Without the directory `rust_embed` fails to compile, so a clone that
+/// has never run the web build would not build the core at all.
+fn ensure_web_bundle_dir() {
+    let dist = Path::new("../web-app/dist");
+    if !dist.exists() {
+        let _ = std::fs::create_dir_all(dist);
+    }
+}
+
 fn main() {
     for f in [
         "src/lib.rs",
@@ -41,6 +53,13 @@ fn main() {
     }
 
     mbrc_buildinfo::emit_version();
+    ensure_web_bundle_dir();
+    // A release build bakes the bundle in, so a rebuilt bundle is a reason to
+    // rebuild even when no Rust source moved.
+    println!("cargo:rerun-if-changed=../web-app/dist");
+    // A release build bakes the bundle in, so a rebuilt bundle is a reason to
+    // rebuild even when no Rust source moved.
+    println!("cargo:rerun-if-changed=../web-app/dist");
 
     generate_abi_bindings();
     generate_dtos();

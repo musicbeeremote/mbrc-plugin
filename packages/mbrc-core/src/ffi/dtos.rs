@@ -267,3 +267,50 @@ pub struct CaptureEnvEntry {
     /// Its value, already rendered as text by the host.
     pub value: String,
 }
+
+/// What the settings panel needs to render the Web remote group.
+///
+/// The outstanding pairing code is included rather than returned by the command
+/// that mints it: the panel then has one way to learn core state, and a dialog
+/// reopened while a code is still live shows it instead of a blank box.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebStatus {
+    /// Whether the command port also answers HTTP.
+    pub enabled: bool,
+    /// Whether a browser must present a paired token.
+    pub auth_required: bool,
+    /// The pairing code still inside its window, or empty when none is.
+    pub pairing_code: String,
+    /// Seconds left on that code, so the panel can count it down and say when
+    /// it lapsed rather than showing one that stopped working a minute ago.
+    pub pairing_code_expires_in: i32,
+    /// How many browsers hold a token.
+    pub paired_count: i32,
+    /// The paired browsers themselves, for a panel that lets one be dropped.
+    pub paired: Vec<PairedBrowser>,
+}
+
+/// One paired browser, as the panel lists it. The token itself never crosses
+/// this boundary: `id` is what names a browser for unpairing.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairedBrowser {
+    pub id: String,
+    pub label: String,
+    /// Unix seconds.
+    pub paired_at: i64,
+    /// Unix seconds of the last request this browser was admitted on.
+    pub last_seen: i64,
+}
+
+/// Names the browser a `RevokeWebPairing` command drops.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PairedBrowserRef {
+    pub id: String,
+}
+
+/// Names a browser and what it should be called instead.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PairedBrowserName {
+    pub id: String,
+    pub label: String,
+}

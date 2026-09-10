@@ -14,10 +14,19 @@ use sha1::{Digest, Sha1};
 
 pub mod store;
 
-/// The album-cover cache thumbnail size (C# `DefaultCacheSize`).
-pub const CACHE_SIZE: u32 = 150;
-/// The now-playing cover size (C# `DefaultResizeSize`).
-pub const NOW_PLAYING_SIZE: u32 = 600;
+/// The album-cover cache thumbnail size.
+///
+/// Raised from the C# `DefaultCacheSize` of 150, which every grid in the web
+/// app draws larger than: 97% of a real library's covers were being capped at
+/// 150 from a bigger source, so the detail was discarded and then upscaled
+/// back. Measured at ~2x the bytes for a cache of a few thousand albums.
+pub const CACHE_SIZE: u32 = 250;
+/// The now-playing cover size.
+///
+/// Raised from the C# `DefaultResizeSize` of 600: the web app can open the art
+/// at window size, where 600 is an upscale. Rendered per request from the
+/// original, so it costs bytes on a track change and nothing on disk.
+pub const NOW_PLAYING_SIZE: u32 = 900;
 /// JPEG re-encode quality for cached/served covers (C# `DefaultJpegQuality`).
 const JPEG_QUALITY: u8 = 80;
 
@@ -301,7 +310,10 @@ mod tests {
         let raw = b64().decode(make_jpeg_base64(1200, 800)).unwrap();
         let out = resize_to_jpeg(&raw, CACHE_SIZE, CACHE_SIZE).unwrap();
         let img = image::load_from_memory(&out).unwrap();
-        assert_eq!((img.width(), img.height()), (150, 100));
+        // The long side takes the cap and the shape is kept, whatever the cap
+        // is set to - a size written into the assertion outlives the constant.
+        assert_eq!(img.width(), CACHE_SIZE);
+        assert_eq!(img.height(), CACHE_SIZE * 800 / 1200);
         // A stable, non-empty content hash (the on-disk filename / etag).
         assert_eq!(sha1_hex(&out).len(), 40);
     }

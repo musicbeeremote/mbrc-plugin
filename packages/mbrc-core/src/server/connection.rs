@@ -68,6 +68,21 @@ fn log_ping(conn_id: u64) {
     );
 }
 
+/// Whether the connection opens with an HTTP request line.
+///
+/// `peek`, not `read`: the bytes stay in the socket for whichever transport
+/// takes the connection, and the JSON protocols route by parsing their own first
+/// frame below. Bounded by the un-handshaked window so a silent client reaches
+/// the reaper, and a timeout falls through to the JSON path, which is where a
+/// silent socket belongs.
+async fn peek_is_http(stream: &TcpStream, timeouts: &IdleTimeouts) -> bool {
+    let mut head = [0u8; 4];
+    match tokio::time::timeout(timeouts.unhandshaked, stream.peek(&mut head)).await {
+        Ok(Ok(n)) => crate::web::sniff(&head[..n]),
+        Ok(Err(_)) | Err(_) => false,
+    }
+}
+
 /// The protocol a connection speaks, chosen from its first frame's shape.
 enum Proto {
     /// Not yet routed (no complete first frame seen).
@@ -195,6 +210,15 @@ impl Proto {
 /// into the per-IP cap. That cap's eviction, not this, is the real bound.
 pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::io::Result<()> {
     configure_socket(&stream, peer, core.config.tcp_keepalive_secs);
+
+    let timeouts = IdleTimeouts::from(&core.config);
+    // Started before the sniff, so a socket that says nothing is reaped on the
+    // un-handshaked window it would have had without the sniff, not twice it.
+    let opened_at = tokio::time::Instant::now();
+    if core.config.web_enabled && peek_is_http(&stream, &timeouts).await {
+        return crate::web::serve(stream, peer, core).await;
+    }
+
     let (mut reader, writer) = stream.into_split();
 
     let terminator: Arc<OnceLock<&'static str>> = Arc::new(OnceLock::new());
@@ -202,7 +226,6 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let writer_task = tokio::spawn(writer_loop(writer, out_rx, terminator.clone()));
 
     let conn_id = core.next_conn_id();
-    let timeouts = IdleTimeouts::from(&core.config);
     let mut ping_tick = ping_ticker(Duration::from_secs(core.config.ping_interval_secs)).await;
     let conn = Conn {
         span: conn_span(conn_id),
@@ -219,8 +242,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let mut buf = [0u8; 4096];
     let mut registered = false;
     let mut closing = false;
-    let opened_at = tokio::time::Instant::now();
-    let mut last_inbound = tokio::time::Instant::now();
+    let mut last_inbound = opened_at;
 
     tracing::debug!(%peer, conn_id, "connection opened");
     while !closing {
