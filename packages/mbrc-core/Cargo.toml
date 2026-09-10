@@ -71,6 +71,13 @@ socket2 = "=0.6.5"
 # thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
 # crate would pull in `log`, and the core's logging goes through `tracing`.
 mdns-sd = { version = "=0.21.0", default-features = false }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "ws", "json", "query", "matched-path"] }
+tower-http = { version = "0.7.1", default-features = false, features = ["set-header"] }
+# Only for the SSE body's `Stream`; already in the tree under axum.
+futures-core = "0.3"
+rust-embed = { version = "8.12.0", default-features = false }
+hyper-util = { version = "0.1.20", default-features = false, features = ["service", "tokio"] }
+hyper = { version = "1.11.1", default-features = false, features = ["server", "http1"] }
 
 # ShellExecuteExW (the elevation prompt for the update helper) and the loader
 # calls that answer "which directory was this DLL loaded from", which is how the
