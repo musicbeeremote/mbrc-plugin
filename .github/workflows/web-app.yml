@@ -1,0 +1,74 @@
+name: web-app
+
+# The browser client (packages/web-app). Its bundle is embedded in mbrc_core.dll,
+# so `build.yml` already builds it on every run; this workflow is the part that
+# build does not do - lint, typecheck and the unit tests - and it runs only when
+# the app itself changes.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'packages/web-app/**'
+      - '.github/workflows/web-app.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'packages/web-app/**'
+      - '.github/workflows/web-app.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-app-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: packages/web-app
+
+jobs:
+  check:
+    name: lint & test
+    # Nothing here is platform-specific and the plugin's own build already
+    # covers Windows, so this takes the cheaper and faster runner.
+    runs-on: ubuntu-latest
+    # A cold install and the full suite finish in about two minutes; this caps a
+    # hung vitest run well short of GitHub's six-hour default.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup pnpm
+        # No version pin: pnpm/action-setup reads the exact version from the
+        # `packageManager` field in packages/web-app/package.json.
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: packages/web-app/package.json
+
+      - name: setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: packages/web-app/.nvmrc
+          cache: pnpm
+          cache-dependency-path: packages/web-app/pnpm-lock.yaml
+
+      - name: install deps
+        # --frozen-lockfile fails if pnpm-lock.yaml is out of sync with
+        # package.json, so a forgotten lockfile update breaks CI here.
+        run: pnpm install --frozen-lockfile
+
+      - name: lint
+        run: pnpm lint
+
+      - name: test
+        run: pnpm test
+
+      # Last, because it is the slowest and the one whose failure the two steps
+      # above usually explain. `pnpm build` runs vue-tsc before vite, so this is
+      # the typecheck as well as the bundle the core embeds.
+      - name: typecheck + build
+        run: pnpm build

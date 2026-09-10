@@ -4,9 +4,12 @@
 #
 #   .\build.ps1                      # both, Release
 #   .\build.ps1 -Configuration Debug # both, Debug (copies to app\MusicBee\Plugins)
-#   .\build.ps1 -Rust                # just the Rust core
+#   .\build.ps1 -Rust                # just the Rust core (and the bundle it embeds)
 #   .\build.ps1 -Plugin              # just the C# plugin
 #   .\build.ps1 -Clean               # remove build output first
+#
+# The web app is an input to the Rust core rather than a product beside it: the
+# core embeds packages\web-app\dist, so it is rebuilt whenever the core is.
 #
 # The Rust core is built for i686-pc-windows-msvc (the plugin is x86/net48) with
 # the `plugin` profile (panic = "unwind" so a Rust panic can't abort MusicBee).
@@ -45,6 +48,38 @@ if ($SetupHooks) {
 if ($Clean -and (Test-Path "$root\build")) {
     Write-Step "Cleaning build output"
     Remove-Item "$root\build" -Recurse -Force
+}
+
+# ----------------------------------------------------------------- Web app ---
+# The core embeds packages\web-app\dist, so the bundle is an input to the Rust
+# build and not a separate artifact. Skipping it does not produce a plugin with
+# no web remote, it produces one whose web remote answers "web app not built",
+# so this stops rather than shipping that.
+#
+# The plugin's MSBuild target invokes this script again as `-Rust`, so a full
+# build would otherwise build the bundle twice. The marker is process-scoped and
+# inherited by that child, and a fresh run of this script never sees it.
+if ($buildRust -and -not $env:MBRC_WEB_BUILT) {
+    Write-Step "Building the web app (packages\web-app -> dist)"
+
+    if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+        throw "pnpm is required to build the web app the core embeds (https://pnpm.io/installation). Use -Plugin to build only the C# side."
+    }
+
+    Push-Location "$root\packages\web-app"
+    try {
+        # --frozen-lockfile so a lockfile left behind fails here rather than
+        # quietly resolving to something nobody has tested.
+        pnpm install --frozen-lockfile
+        if ($LASTEXITCODE -ne 0) { throw "pnpm install failed" }
+        pnpm build
+        if ($LASTEXITCODE -ne 0) { throw "the web app build failed" }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $env:MBRC_WEB_BUILT = "1"
 }
 
 # ---------------------------------------------------------------- Rust core ---

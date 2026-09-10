@@ -1,8 +1,9 @@
 name: package
 description: >-
   Build the NSIS installer and zip from build/dist, emit SHA512 sidecars and the
-  signed-release manifest, and optionally attest build provenance. Shared by
-  release.yml and nightly.yml so the packaging logic exists once.
+  signed-release manifest, and optionally attest build provenance. The work is
+  done by tools/package.ps1, which a maintainer also runs locally, so a
+  published package and a local one are built by one implementation.
 
 inputs:
   version:
@@ -53,114 +54,17 @@ runs:
       shell: pwsh
       run: choco install nsis -y
 
-    - name: build installer
-      shell: pwsh
-      env:
-        VERSION: ${{ inputs.version }}
-        BASE: ${{ steps.names.outputs.BASE }}
-      run: |
-        # MusicBeeRemote.nsi reads PLUGIN_VERSION from the environment.
-        $env:PLUGIN_VERSION = $env:VERSION
-        & "C:\Program Files (x86)\NSIS\makensis.exe" installer\MusicBeeRemote.nsi
-        mv "installer\$env:BASE.exe" "build\dist\"
-
-    - name: create zip archive
-      shell: pwsh
-      env:
-        BASE: ${{ steps.names.outputs.BASE }}
-      run: |
-        $files = @(
-          "build\dist\mb_remote.dll",
-          "build\dist\mbrc_core.dll",
-          "build\dist\mbrc-helper.exe",
-          "build\dist\MBRC_LICENSE.txt",
-          "build\dist\MBRC_README.txt"
-        )
-        Compress-Archive -Path $files -DestinationPath "build\dist\$env:BASE.zip"
-
-    - name: generate checksums
-      shell: pwsh
-      env:
-        BASE: ${{ steps.names.outputs.BASE }}
-      run: |
-        foreach ($ext in @('exe', 'zip')) {
-          $name = "$env:BASE.$ext"
-          $hash = (Get-FileHash -Algorithm SHA512 "build\dist\$name").Hash.ToLower()
-          "$hash  $name" | Out-File -Encoding ascii "build\dist\$name.sha512"
-        }
-
-    - name: generate manifest
+    - name: package
       shell: pwsh
       env:
         VERSION: ${{ inputs.version }}
         CHANNEL: ${{ inputs.channel }}
         NOTES_URL: ${{ inputs.notes-url }}
-        BASE: ${{ steps.names.outputs.BASE }}
       run: |
-        $ErrorActionPreference = 'Stop'
-
-        # The two constants below are read from the sources that already own
-        # them, so the manifest cannot drift from what the plugin enforces.
-        $abiSrc = Get-Content packages/mbrc-core/src/ffi/types.rs -Raw
-        if ($abiSrc -notmatch 'MBRC_ABI_VERSION:\s*i32\s*=\s*(\d+)') {
-          throw "MBRC_ABI_VERSION not found in packages/mbrc-core/src/ffi/types.rs"
-        }
-        $abiVersion = [int]$Matches[1]
-
-        $nsiSrc = Get-Content installer/MusicBeeRemote.nsi -Raw
-        if ($nsiSrc -notmatch '\$R4\s*<\s*(\d+)') {
-          throw "minimum MusicBee build not found in installer/MusicBeeRemote.nsi"
-        }
-        $minBuild = [int]$Matches[1]
-
-        function Get-Artifact($path, $name) {
-          [ordered]@{
-            name   = $name
-            size   = (Get-Item $path).Length
-            sha512 = (Get-FileHash -Algorithm SHA512 $path).Hash.ToLower()
-          }
-        }
-
-        # Exactly the files the updater installs. MBRC_LICENSE.txt and
-        # MBRC_README.txt ride along in the zip but are not applied, so they are
-        # not listed: the extractor writes only what appears here.
-        $bundled = @('mb_remote.dll', 'mbrc_core.dll', 'mbrc-helper.exe')
-        $files = foreach ($name in $bundled) {
-          [ordered]@{
-            path   = $name
-            sha512 = (Get-FileHash -Algorithm SHA512 "build\dist\$name").Hash.ToLower()
-          }
-        }
-
-        $notesUrl = $env:NOTES_URL
-        if (-not $notesUrl) {
-          $notesUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$env:VERSION"
-        }
-
-        $manifest = [ordered]@{
-          schema             = 1
-          channel            = $env:CHANNEL
-          version            = $env:VERSION
-          released_at        = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-          abi_version        = $abiVersion
-          min_musicbee_build = $minBuild
-          notes_url          = $notesUrl
-          artifacts          = [ordered]@{
-            zip       = Get-Artifact "build\dist\$env:BASE.zip" "$env:BASE.zip"
-            installer = Get-Artifact "build\dist\$env:BASE.exe" "$env:BASE.exe"
-          }
-          files              = @($files)
-        }
-
-        # No BOM: the signature covers these bytes exactly, and minisign-verify
-        # on the plugin side sees whatever is written here.
-        $json = ($manifest | ConvertTo-Json -Depth 6) + "`n"
-        [System.IO.File]::WriteAllText(
-          (Join-Path $PWD 'build\dist\manifest.json'),
-          $json,
-          (New-Object System.Text.UTF8Encoding $false)
-        )
-        Get-Content build\dist\manifest.json
+        # -SkipBuild: the bundle was downloaded rather than rebuilt, so the
+        # bytes that get hashed, signed and published are the bytes that were
+        # tested. Everything after that is the same script a local package runs.
+        ./tools/package.ps1 -Version $env:VERSION -Channel $env:CHANNEL -NotesUrl $env:NOTES_URL -SkipBuild
 
     - name: attest build provenance (installer)
       if: inputs.attest == 'true'

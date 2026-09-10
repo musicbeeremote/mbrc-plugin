@@ -69,6 +69,23 @@ jobs:
       - name: setup NuGet
         uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
 
+      # build.ps1 builds the web app before the core, because the core embeds
+      # its bundle. Without pnpm on PATH that step fails the build rather than
+      # shipping a plugin whose web remote answers "web app not built".
+      - name: setup pnpm
+        # No version pin: pnpm/action-setup reads the exact version from the
+        # `packageManager` field in packages/web-app/package.json.
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: packages/web-app/package.json
+
+      - name: setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: packages/web-app/.nvmrc
+          cache: pnpm
+          cache-dependency-path: packages/web-app/pnpm-lock.yaml
+
       # The plugin build invokes build.ps1 -Rust (MSBuild BuildRustCore target),
       # which compiles mbrc_core.dll for i686. The runner ships Rust; we just add
       # the 32-bit target the plugin links against.
