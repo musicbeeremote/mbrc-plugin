@@ -8,6 +8,7 @@
 import type { RouteLocationRaw } from 'vue-router'
 
 import type { LibraryScope } from '../api/ops'
+import type { QueryField } from '../api/types'
 import type { LibraryLevel, Position } from '../composables/libraryLevels'
 import { SORT_FIELDS, isLibraryLevel } from '../composables/libraryLevels'
 
@@ -120,7 +121,43 @@ export function wideRedirect(wide: boolean, name: unknown): string | null {
   return wide && name === RouteName.Playing ? '/library' : null
 }
 
+/**
+ * The address of one playlist's contents.
+ *
+ * The folder is kept alongside it so closing the playlist returns to where it
+ * was opened from rather than to the playlists root.
+ */
+export function playlistTracksRoute(
+  url: string,
+  path: string[],
+  { search = '', field = 'any' }: { search?: string; field?: QueryField } = {},
+): RouteLocationRaw {
+  const query: Record<string, string> = { playlist: url }
+  if (path.length > 0) query.path = path.join('/')
+  // `q`, as the library spells it: one name for the same thing across the app.
+  if (search.trim() !== '') query.q = search.trim()
+  // A column is only meaningful beside a term, so it travels with one.
+  if (query.q !== undefined && field !== 'any') query.qf = field
+  return { name: RouteName.Playlists, query }
+}
+
 /** The folder segments a playlists URL names. */
 export function playlistPathFromRoute(query: Record<string, unknown>): string[] {
   return (one(query.path) ?? '').split('/').filter((segment) => segment !== '')
+}
+
+/** The playlist a URL has open, or nothing when it names a folder. */
+export function openPlaylistFromRoute(query: Record<string, unknown>): string | undefined {
+  return one(query.playlist)
+}
+
+/** What the open playlist is narrowed to, empty when it is not. */
+export function playlistQueryFromRoute(query: Record<string, unknown>): string {
+  return one(query.q) ?? ''
+}
+
+/** Which column that search reads. An address naming no column reads them all. */
+export function playlistQueryFieldFromRoute(query: Record<string, unknown>): QueryField {
+  const raw = one(query.qf)
+  return raw === 'title' || raw === 'artist' || raw === 'album' ? raw : 'any'
 }

@@ -9,7 +9,13 @@ import type { OpResponses } from '../api/responses'
 import { LibraryLevel, defaultSort } from '../composables/libraryLevels'
 import type { Position } from '../composables/libraryLevels'
 import { QueueMode } from '../api/types'
-import type { AlbumEntry, ArtistEntry, GenreEntry, PlaylistEntry, Track } from '../api/types'
+import type {
+  AlbumEntry,
+  ArtistEntry,
+  GenreEntry,
+  PlaylistEntry,
+  Track,
+} from '../api/types'
 
 export { LibraryLevel } from '../composables/libraryLevels'
 

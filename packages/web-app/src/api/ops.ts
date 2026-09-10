@@ -10,7 +10,14 @@
  * instead, and live in `responses`.
  */
 
-import type { Empty, LastfmStatus, QueueMode, RepeatMode, ShuffleMode } from './types'
+import type {
+  Empty,
+  LastfmStatus,
+  QueryField,
+  QueueMode,
+  RepeatMode,
+  ShuffleMode,
+} from './types'
 
 interface PageArgs {
   offset?: number
@@ -91,6 +98,14 @@ export interface OpRequests {
 
   playlist_list: PageArgs
   playlist_play: { url: string }
+  // `query` and `totals` are what a window cannot answer, so each is asked for
+  // rather than assumed: both read the whole playlist's tags server-side.
+  playlist_tracks: PageArgs & {
+    url: string
+    query?: string
+    query_field?: QueryField
+    totals?: boolean
+  }
 }
 
 /**
@@ -144,6 +159,7 @@ export const Op = {
 
   PlaylistList: 'playlist_list',
   PlaylistPlay: 'playlist_play',
+  PlaylistTracks: 'playlist_tracks',
 } as const satisfies Record<string, keyof OpRequests>
 
 export type Op = (typeof Op)[keyof typeof Op]

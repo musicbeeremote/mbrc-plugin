@@ -18,6 +18,7 @@ import {
   LyricsSchema,
   pageSchema,
   PlaylistEntrySchema,
+  PlaylistPageSchema,
   PlayStateSchema,
   QueuePageSchema,
   RadioEntrySchema,
@@ -144,6 +145,7 @@ export const OpResponseSchemas = {
 
   playlist_list: pageSchema(PlaylistEntrySchema),
   playlist_play: EmptySchema,
+  playlist_tracks: PlaylistPageSchema,
 } satisfies Record<keyof OpRequests, z.ZodType>
 
 /** The `data` each op answers with, projected from the schemas above. */

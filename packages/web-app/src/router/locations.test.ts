@@ -5,8 +5,12 @@ import { LibraryLevel, carriedSort, libraryTab, parentPosition } from '../compos
 import {
   RouteName,
   libraryRoute,
+  openPlaylistFromRoute,
   playlistPathFromRoute,
+  playlistQueryFieldFromRoute,
+  playlistQueryFromRoute,
   playlistsRoute,
+  playlistTracksRoute,
   positionFromRoute,
   wideRedirect,
 } from './locations'
@@ -151,5 +155,75 @@ describe('a playlist folder address', () => {
     expect((playlistsRoute([]) as { query: Record<string, string> }).query).toStrictEqual({})
     expect(playlistPathFromRoute({})).toStrictEqual([])
     expect(playlistPathFromRoute({ path: '' })).toStrictEqual([])
+  })
+})
+
+describe('an open playlist address', () => {
+  const url = String.raw`C:\Music\Playlists\Caraven.mbp`
+
+  it('carries the playlist and the folder it was opened from', () => {
+    const route = playlistTracksRoute(url, ['tracks']) as { query: Record<string, string> }
+    expect(route.query).toStrictEqual({ playlist: url, path: 'tracks' })
+    expect(openPlaylistFromRoute(route.query)).toBe(url)
+    expect(playlistPathFromRoute(route.query)).toStrictEqual(['tracks'])
+  })
+
+  it('round-trips a search, so a reload and a shared link keep it', () => {
+    const route = playlistTracksRoute(url, [], { search: 'phone' }) as { query: Record<string, string> }
+    expect(route.query.q).toBe('phone')
+    expect(playlistQueryFromRoute(route.query)).toBe('phone')
+  })
+
+  /** An empty box is no search, and a URL should not carry one that says nothing. */
+  it('leaves a blank search out of the address', () => {
+    const blank = playlistTracksRoute(url, [], { search: '   ' }) as { query: Record<string, string> }
+    expect(blank.query.q).toBeUndefined()
+    expect(playlistQueryFromRoute(blank.query)).toBe('')
+    expect(playlistQueryFromRoute({})).toBe('')
+  })
+
+  it('trims what it carries, so two spellings of one search are one address', () => {
+    const route = playlistTracksRoute(url, [], { search: '  phone  ' }) as { query: Record<string, string> }
+    expect(route.query.q).toBe('phone')
+  })
+
+  it('is a folder address when no playlist is open', () => {
+    expect(openPlaylistFromRoute({ path: 'tracks' })).toBeUndefined()
+  })
+})
+
+describe('a playlist search field', () => {
+  const url = String.raw`C:\Music\Caraven.mbp`
+
+  it('carries the column a search was pointed at', () => {
+    const route = playlistTracksRoute(url, [], {
+      search: 'caravan',
+      field: 'artist',
+    }) as { query: Record<string, string> }
+    expect(route.query.qf).toBe('artist')
+    expect(playlistQueryFieldFromRoute(route.query)).toBe('artist')
+  })
+
+  /** Every column is the default, so the common case leaves no trace. */
+  it('leaves the address alone when the search reads them all', () => {
+    const route = playlistTracksRoute(url, [], { search: 'caravan', field: 'any' }) as {
+      query: Record<string, string>
+    }
+    expect(route.query.qf).toBeUndefined()
+    expect(playlistQueryFieldFromRoute({})).toBe('any')
+  })
+
+  /** A column with nothing to find in it is not a search, so it is not an address. */
+  it('drops the column when there is no term beside it', () => {
+    const route = playlistTracksRoute(url, [], { field: 'title' }) as {
+      query: Record<string, string>
+    }
+    expect(route.query.q).toBeUndefined()
+    expect(route.query.qf).toBeUndefined()
+  })
+
+  it('reads an unknown column as every column', () => {
+    expect(playlistQueryFieldFromRoute({ qf: 'genre' })).toBe('any')
+    expect(playlistQueryFieldFromRoute({ qf: '' })).toBe('any')
   })
 })

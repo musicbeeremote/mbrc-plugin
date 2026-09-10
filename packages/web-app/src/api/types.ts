@@ -172,6 +172,39 @@ export const QueuePageSchema = pageSchema(QueueItemSchema).extend({
 })
 export type QueuePage = z.infer<typeof QueuePageSchema>
 
+/** Which column a playlist search reads. `Any` takes all three. */
+export const QueryField = {
+  Any: 'any',
+  Title: 'title',
+  Artist: 'artist',
+  Album: 'album',
+} as const
+export type QueryField = (typeof QueryField)[keyof typeof QueryField]
+
+/** A playlist entry: a track plus where it sits and where it is shown. */
+export const PlaylistTrackSchema = TrackSchema.extend({
+  /** Place in the playlist. Absolute, and the key a mutation takes. */
+  order: z.number(),
+  /** Rank among the rows returned, which a search makes differ from `order`. */
+  position: z.number(),
+})
+export type PlaylistTrack = z.infer<typeof PlaylistTrackSchema>
+
+/**
+ * A playlist page carries the playlist's own name and a version.
+ *
+ * The version is a string where the queue's is a number: it is a 64-bit hash of
+ * the ordered paths, which no JavaScript number can hold exactly. Opaque to a
+ * client either way - it is echoed back on a mutation, never interpreted.
+ */
+export const PlaylistPageSchema = pageSchema(PlaylistTrackSchema).extend({
+  name: z.string(),
+  version: z.string(),
+  /** Summed over what `total` counts; absent unless `totals` was asked for. */
+  total_duration_ms: z.number().optional(),
+})
+export type PlaylistPage = z.infer<typeof PlaylistPageSchema>
+
 export const GenreEntrySchema = z.object({
   genre: z.string(),
   count: z.number(),
