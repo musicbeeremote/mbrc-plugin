@@ -1,0 +1,15 @@
+{
+  "name": "MusicBee Remote",
+  "short_name": "MusicBee",
+  "description": "Control MusicBee from a browser on the same network.",
+  "start_url": "/playing",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
