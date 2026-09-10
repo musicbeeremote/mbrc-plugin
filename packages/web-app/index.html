@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- No `viewport-fit=cover`: it opts the page out of being inset below the
+         browser's and the system's own bars, which leaves the artwork partly
+         behind them unless every inset is answered exactly. Being laid out
+         below them is what this app wants. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Installed, the app owns the whole screen, which is the only way the
+         artwork is not partly behind a browser's address bar on a phone. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon-512.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Paired with the viewport above: `black-translucent` puts the web view
+         under the status bar, which only works when the insets are honoured. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MusicBee" />
+    <!-- The bar above the app takes the surface it sits on, per theme. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafafa" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1a1a" />
+    <title>MusicBee Remote</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

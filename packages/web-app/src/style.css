@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/* The design tokens. Everything visual reads from here, so a change to the
+   identity is a change to this block and nothing else.
+
+   Colours are the Android app's Material theme, taken from its own
+   `core/ui/.../theme/Color.kt` rather than from anything that describes it
+   second-hand: the two clients are one product and should not disagree about
+   what it looks like. Each token resolves per theme in the block below, so
+   templates carry no `dark:` variants for colour. */
+@theme {
+  --color-accent: var(--mbrc-accent);
+  --color-accent-soft: var(--mbrc-accent-soft);
+  --color-surface: var(--mbrc-surface);
+  --color-surface-2: var(--mbrc-surface-2);
+  --color-ink: var(--mbrc-ink);
+  --color-ink-soft: var(--mbrc-ink-soft);
+  --color-outline: var(--mbrc-outline);
+
+  /* A 1.2 scale from 12px, rounded to whole pixels. Small enough a step that a
+     phone and a desktop can share it without a second scale. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
+
+  /* Spacing steps at 4px. Panes pad by 4 (16px) on a phone and 6 (24px) from
+     the `sm` breakpoint up; controls sit on the same grid so rows line up
+     across panes without per-view nudging. */
+  --spacing: 0.25rem;
+
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-art: 1.25rem;
+}
+
+/* Light: Deep Orange 900 on Grey 50, the app's light theme.
+
+   The accent is stored as three numbers rather than one colour because the
+   album art may replace the hue and chroma at runtime. The lightness is never
+   the art's to choose: `--mbrc-accent-art-l` is the value a borrowed hue is
+   rendered at, tuned so any hue stays legible against this theme's surface. */
+:root {
+  --mbrc-accent-h: 40.3;
+  --mbrc-accent-c: 0.197;
+  --mbrc-accent-l: 63.1%;
+  --mbrc-accent-art-l: 58%;
+  --mbrc-accent-soft-a: 14%;
+  /* Chroma the surfaces borrow from the art's hue. Zero until a cover supplies
+     one, so the app's own theme is exactly the Android app's greys and only a
+     record on screen can tint them. `--mbrc-tint-art-c` is what a cover sets it
+     to: enough to feel like the record, far too little to read as a colour. */
+  --mbrc-tint-c: 0;
+  --mbrc-tint-art-c: 0.008;
+
+  /* Grey 50 and Grey 300, restated in oklch so the hue can be borrowed at the
+     same lightness: the tint changes what the surface is made of, never how far
+     the ink is from it. */
+  --mbrc-surface: oklch(98.5% var(--mbrc-tint-c) var(--mbrc-accent-h));
+  --mbrc-surface-2: oklch(90.5% var(--mbrc-tint-c) var(--mbrc-accent-h));
+  --mbrc-ink: #1a1a1a;
+  --mbrc-ink-soft: #424242;
+  --mbrc-outline: #757575;
+
+  --mbrc-accent: oklch(var(--mbrc-accent-l) var(--mbrc-accent-c) var(--mbrc-accent-h));
+  --mbrc-accent-soft: oklch(
+    var(--mbrc-accent-l) var(--mbrc-accent-c) var(--mbrc-accent-h) / var(--mbrc-accent-soft-a)
+  );
+}
+
+/* Dark: Amber 500 on Grey 900. The app shifts hue between themes rather than
+   only lightness, so both are stated in full.
+
+   Three states, not two. `data-theme` is what the reader chose and wins in
+   both directions; with nothing chosen the system decides, which is why the
+   media query is guarded rather than left to fight an explicit light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --mbrc-accent-h: 84.9;
+    --mbrc-accent-c: 0.172;
+    --mbrc-accent-l: 84.4%;
+    --mbrc-accent-art-l: 76%;
+    --mbrc-accent-soft-a: 16%;
+    /* A dark surface carries a hue with less of it showing, so it takes more. */
+    --mbrc-tint-art-c: 0.014;
+
+    --mbrc-surface: oklch(25.1% var(--mbrc-tint-c) var(--mbrc-accent-h));
+    --mbrc-surface-2: oklch(37.4% var(--mbrc-tint-c) var(--mbrc-accent-h));
+    --mbrc-ink: #e3e3e3;
+    --mbrc-ink-soft: #bdbdbd;
+    --mbrc-outline: #8a8a8a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --mbrc-accent-h: 84.9;
+  --mbrc-accent-c: 0.172;
+  --mbrc-accent-l: 84.4%;
+  --mbrc-accent-art-l: 76%;
+  --mbrc-accent-soft-a: 16%;
+  --mbrc-tint-art-c: 0.014;
+
+  --mbrc-surface: oklch(25.1% var(--mbrc-tint-c) var(--mbrc-accent-h));
+  --mbrc-surface-2: oklch(37.4% var(--mbrc-tint-c) var(--mbrc-accent-h));
+  --mbrc-ink: #e3e3e3;
+  --mbrc-ink-soft: #bdbdbd;
+  --mbrc-outline: #8a8a8a;
+}
+
+/* The phone is the target, so the app owns the viewport and never scrolls the
+   document itself; each pane scrolls inside its own region instead.
+
+   `dvh` after `%` because a phone's address bar slides away: sized against the
+   full viewport, the app is taller than what is on screen and its top edge sits
+   under the bar. The percentage stays as the answer for anything that has not
+   heard of the dynamic unit. */
+html,
+body,
+#app {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+  background: var(--mbrc-surface);
+  color: var(--mbrc-ink);
+  /* Every platform's UI face is already tuned for its own rendering, so the
+     stack above beats shipping a webfont in a DLL. These two settings are what
+     it costs to make them agree: the default synthesis muddies semibold, and
+     unsmoothed text on a dark surface reads heavier than it should. */
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The scrollbars are part of the theme, not part of the browser: a pane that
+   takes the record's hue should not be edged by a stock grey bar.
+
+   `scrollbar-color` inherits and `scrollbar-width` does not, hence the two
+   selectors. The track is left transparent so a bar reads against whichever
+   surface it is over rather than forcing one of its own. */
+html {
+  scrollbar-color: var(--mbrc-outline) transparent;
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+/* A small icon control, given a finger-sized target without being drawn any
+   larger. A 16px icon in 8px of padding comes to 32px, and a finger wants at
+   least 44: the shortfall is made up by an overlay that paints nothing, so the
+   phone gets the target and the desktop keeps the design.
+
+   Opt-in rather than a rule over every icon button, because controls that sit
+   in a row of their own - the five rating stars - would overlap each other and
+   take taps meant for a neighbour. */
+.tap-target {
+  position: relative;
+}
+
+.tap-target::after {
+  content: '';
+  position: absolute;
+  inset: 50%;
+  width: 2.75rem;
+  height: 2.75rem;
+  translate: -50% -50%;
+}
+
+/* Times, durations and counts must not reflow as they count up. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One focus treatment for the whole app, on keyboard only. Pointer users never
+   see it; a keyboard user never loses their place. */
+:focus-visible {
+  outline: 2px solid var(--mbrc-accent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Range inputs are the one control a browser styles for us, so they only need
+   telling which colour to use. */
+input[type="range"] {
+  accent-color: var(--mbrc-accent);
+}
+
+/* The playing indicator's bars. Kept here rather than inline because a keyframe
+   set is not something a utility class can express. */
+@keyframes equalize {
+  0%,
+  100% {
+    height: 0.25rem;
+  }
+  50% {
+    height: 0.875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* The bars stop mid-animation at whatever height they held, which can be
+     nothing at all. Pin them to a legible mark instead. */
+  .animate-\[equalize_900ms_ease-in-out_infinite\] {
+    height: 0.375rem;
+  }
+}
