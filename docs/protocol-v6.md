@@ -39,6 +39,147 @@ Rules:
   frame (bad `kind`, missing `op`, not an object) gets a typed error.
 - Events have **no `id`** and are best-effort broadcasts to subscribed connections.
 
+## Transports
+
+V6 speaks over four transports on the **same port** (default 3000). The op catalog,
+the envelope and the error codes are identical on all of them: only the framing and
+the way a subscription is expressed differ.
+
+The server tells them apart by peeking at the first four bytes of a connection. A
+frame that begins `GET `, `POST`, `HEAD`, `PUT `, `DELE`, `OPTI` or `PATC` is HTTP;
+anything else is parsed as a JSON first frame and routed to V4/V5 or V6 by its shape.
+The peek happens inside the un-handshaked window, and its clock starts before the
+sniff, so a client that connects and says nothing is reaped exactly as it would have
+been without it.
+
+### 1. TCP socket (the native transport)
+
+Connect to the port, send the [handshake](#handshake), then send request frames and
+read response and event frames as [newline-delimited JSON](#framing). This is the
+only transport that holds session state, so `handshake` and `ping` exist here alone.
+Events arrive unsolicited on the same socket unless the handshake asked for
+`no_broadcast`.
+
+### 2. HTTP-RPC - `POST /api/v6/{op}`
+
+The request body is the op's `data`, and the response body is the response `data`.
+No envelope: there is no `id` to correlate because the answer is the response to
+this request, and no `kind` because HTTP already says which is which.
+
+```
+POST /api/v6/library_tracks
+Content-Type: application/json
+
+{"album": "Panic", "limit": 2}
+
+200 OK
+{"total": 14, "offset": 0, "items": [ ... ]}
+```
+
+A failure carries the same V6 error object, with a status chosen to match its code so
+a browser, a proxy and `curl` all read it correctly:
+
+| Error code | Status |
+|---|---|
+| `malformed_frame`, `missing_field`, `invalid_field`, `unsupported_version` | 400 |
+| `unauthorized`, `invalid_token` | 401 |
+| `not_allowed` | 403 |
+| `unknown_op`, `not_found` | 404 |
+| `stale_list` | 409 |
+| `unavailable` | 503 |
+| `internal` | 500 |
+
+**`handshake` and `ping` are not offered here.** They are meaningless without a
+connection to hold their state; asking for either is `unknown_op`.
+
+`GET /api/v6/capabilities` returns the same capability object the handshake carries,
+so an HTTP-only client can discover the surface without a socket.
+
+### 3. WebSocket - `GET /ws`
+
+An upgrade on the same port. Once open it is the socket transport exactly: send the
+handshake, then exchange newline-delimited JSON frames, one JSON object per message.
+This is the transport a browser uses when it can hold a connection, and the only one
+besides TCP that carries events without polling.
+
+The pairing token travels in the **query string** (`/ws?token=...`) rather than a
+header, because a browser's `WebSocket` constructor cannot set one.
+
+### 4. Server-sent events - `GET /api/events`
+
+The broadcast half of the protocol for a client that cannot hold a socket. Each
+message carries one event frame, in the same envelope the socket uses:
+
+```
+: open
+
+data: {"kind":"event","event":"play_state_changed","data":{"play_state":"playing"}}
+
+data: {"kind":"event","event":"volume_changed","data":{"volume":46}}
+```
+
+It needs no handshake: the stream is one-way, opening it is the whole subscription
+and closing it is the whole goodbye. The opening `: open` comment exists because the
+response head is not flushed until the body produces something, and a player that
+changes nothing for an hour would otherwise look like a stream that never opened.
+
+Paired with HTTP-RPC for commands, SSE gives a complete client without a socket. The
+token travels in the query string here too, for the same reason: `EventSource` takes
+a URL and nothing else.
+
+## Pairing and authentication
+
+Pairing is off by default (`web_auth_required`), and the admission check is the same
+function whether it is on or off, so the guarded path is never an untested branch.
+
+**Ask first.** `GET /api/pair/status` answers `{"auth_required":bool,"paired":bool}`.
+`paired` is about *this* caller, not the server: the token lives in a cookie the page
+cannot read, so asking is the only way a browser can know whether it already has one.
+A client should skip its pairing screen entirely when `auth_required` is false.
+
+**Redeem a code.** The user reads a six-digit code out of MusicBee's Configure panel;
+it lasts two minutes. `POST /api/pair` with `{"code":"123456","label":"Firefox"}`
+answers `{"token":"..."}` and sets it as a cookie:
+
+```
+Set-Cookie: mbrc_token=<token>; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000
+```
+
+A wrong or expired code is 401. A spent code is refused: redeeming is one-shot.
+
+**Present it.** A token is accepted three ways, checked in this order:
+
+1. the `mbrc_token` cookie, which a browser sends by itself;
+2. `Authorization: Bearer <token>`, for a native client;
+3. `?token=<token>` on `/ws` and `/api/events`, where neither of the above is possible.
+
+The cookie is why a browser works at all under pairing. An `<img>`, a `WebSocket` and
+an `EventSource` cannot set a header, and covers, the socket and the stream are
+exactly the three things a page needs. `HttpOnly` also puts the token beyond any
+script on the page, which `localStorage` never did.
+
+Tokens do not expire and are stored **hashed**, so the file cannot be replayed as a
+credential. Pairings outlive the process: a phone is paired once, not once per launch.
+A browser can be listed, renamed and unpaired individually from the Configure panel.
+
+**What is guarded.** Under `web_auth_required`, `/api/v6/*`, `/api/cover/*`, `/ws` and
+`/api/events` all answer 401 to an unpaired caller. `/` and `/api/pair*` stay open, so
+the pairing screen can load and pair. An unpaired caller always sees the same shape:
+
+```json
+{"error": {"code": "unauthorized", "message": "pair this browser first"}}
+```
+
+**Two guards apply whether pairing is on or not**, because an attacker who cannot pair
+can still point a name they control at this address:
+
+- a **Host allowlist** - IP literals, `localhost`, a single label (a dotless name
+  cannot be delegated in the root, so nobody off this network can aim one here) and
+  the suffixes reserved for private use. A router's invented suffix under a real gTLD
+  is not admitted: `.box` is delegated, so a `fritz.box` is a name someone else can
+  come to hold. A rejected Host is 421.
+- a **CSP** admitting only this origin.
+
 ## Discovery
 
 Both discovery channels are shared with the legacy protocol and documented in full under
@@ -178,7 +319,9 @@ are `null` when unknown; `cover_hash` is omitted when the album has no cached co
 }
 ```
 
-`cover_hash` is an album-level content hash; fetch the image with `cover_get`.
+`cover_hash` is an album-level content hash. Fetch the image with `cover_get` over any
+transport, or - because it is content-addressed and so can be cached forever - straight from
+`GET /api/cover/{hash}`, which is what lets a browser put one in an `<img src>`.
 
 \* `duration_ms` is parsed from MusicBee's formatted tag, the only per-path source there is,
 so it is second-granular. The **playing** track is the exception: `now_playing_state` serves
@@ -238,8 +381,15 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | `player_output` | `{}` | `{"active":"Speakers","devices":["Speakers","Headphones"]}` |
 | `player_set_output` | `{"device":"<name>"}` | `{"active":<new>,"devices":[...]}` |
 
-> Setters echo the new canonical value in their response. `shuffle`/`repeat` have **no**
-> dedicated broadcast event, so the reply is the only state signal for those.
+> Setters echo the state that was asked for, not a read-back of the player. MusicBee applies
+> auto-DJ asynchronously, so reading the player in the same breath as the write describes the
+> state *before* it: a `player_set_shuffle` of `shuffle` answered `off`, and the three-way
+> cycle collapsed to off/on/off. A setter fails when MusicBee refuses, so one that returned
+> `{}` may answer with the mode it was given.
+>
+> `shuffle_changed`, `repeat_changed` and `scrobbling_changed` are broadcast as well, so a
+> client also learns about a change made in MusicBee's own window rather than only about its
+> own writes.
 
 ### Track
 
@@ -253,13 +403,30 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | Op | Request `data` | Response |
 |----|----------------|----------|
 | `now_playing_state` | `{include_list_order?}` | `{"track":<canonical\|null>,"list_order":<int\|null>,"position_ms":..,"duration_ms":..,"lfm_status":".."}` |
-| `now_playing_details` | `{}` | extended tags (publisher/composer/counts/format/bitrate/...) |
+| `now_playing_details` | `{}` | extended tags - see below |
 | `now_playing_position` | `{}` | `{"position_ms":..,"duration_ms":..}` |
 | `now_playing_lyrics` | `{}` | `{"type":"synced"\|"plain"\|"none","lines":[{"text":..,"at_ms?":..}]}` |
 | `now_playing_seek` | `{"position_ms":N}` | `{"position_ms":..,"duration_ms":..}` (read back after the seek) |
 | `now_playing_set_rating` | `{"rating":0-5\|null}` | `{"rating":<new>}` |
 | `now_playing_set_lfm` | `{"status":"normal"\|"love"\|"ban"}` | `{"lfm_status":<new>}` |
 | `now_playing_set_tag` | `{"tag":"<name>","value":"<v>"}` | `{}` |
+
+`now_playing_details` carries what the canonical track does not, for a details pane:
+
+```json
+{
+  "track_count": 10, "disc_count": 1,        // int | null
+  "play_count": 3, "skip_count": 0,
+  "channels": 2, "sample_rate": 44100, "bitrate": 320,
+  "publisher": "Label", "composer": "Composer", "comment": "..", "grouping": "..",
+  "rating_album": "..", "encoder": "LAME", "kind": "mp3", "format": "MPEG",
+  "size": "..", "date_modified": "..", "last_played": ".."   // strings, "" when unknown
+}
+```
+
+The seven counts parse to integers and are **`null`** when the tag says nothing, so a client
+never has to tell "0" apart from "absent". The rest are the host's own strings, passed through
+as it formats them.
 
 `now_playing_lyrics` returns structured lyrics; synced lines carry `at_ms`, plain lines do not,
 and `type:"none"` yields an empty `lines`.
@@ -312,12 +479,40 @@ optional: send none and the mutation is unguarded, as before. Batch versioned re
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `library_genres` | `{offset?, limit?}` | page of `{"genre":..,"count":..}` |
-| `library_artists` | `{offset?, limit?, album_artists?, genre?}` | page of `{"artist":..,"count":..}` |
-| `library_albums` | `{offset?, limit?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached) |
-| `library_tracks` | `{offset?, limit?, album?}` | page of [canonical tracks](#canonical-track) |
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}` |
+| `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}` |
+| `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, + `year` when the tracks agree on one) |
+| `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
-| `library_play_all` | `{"shuffle?":bool}` | `{}` |
+| `library_play_all` | `{shuffle?}` | `{}` |
+| `library_queue` | `{mode?, play?, shuffle?, genre?, artist?, album?, query?}` | `{"count":N}` |
+
+**Scope.** `genre`, `artist` and `album` narrow a listing to what they name, and
+combine. An **empty string is an answer, not an absence**: `{"artist":""}` names the
+tracks filed under no artist at all, which is the only way to reach the untagged
+corner of a library. Omit the key entirely to mean "no filter".
+
+On `library_tracks` the artist is not a second filter: it says **which record is
+meant** when several share a title, and is ignored without an album. The rule is
+that the artist chooses between records that share a title and never trims a
+record's contents, so a list and what it queues cannot disagree.
+
+**Order.** `sort` on the name lists (`library_genres`, `library_artists`) takes only
+`name`. On `library_albums` and `library_tracks` it takes `title`, `artist`, `album`,
+`album_artist`, `track`, `year`, `rating` or `date_added`; `order` is `asc` (default)
+or `desc`. An unknown value is `invalid_field` rather than a silent fallback.
+
+**Search.** `query` is a case-insensitive substring match, applied to the whole level
+rather than to the page that happens to be loaded. A searched list with no `sort`
+comes back **by relevance** - the name that *is* the search before the names merely
+containing it - and by the named order once one is asked for.
+
+**`library_queue`** queues what a scope selects without the client naming the tracks:
+the server resolves the scope and answers how many it queued. `mode` is `now`, `next`
+or `last` (default `last`); `play` names one `src` to start from; `shuffle` shuffles
+the selection rather than turning the player's shuffle mode on.
 
 ### Playlist
 
@@ -325,7 +520,6 @@ optional: send none and the mutation is unguarded, as before. Batch versioned re
 |----|----------------|----------|
 | `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..}` |
 | `playlist_play` | `{"url":"<path>"}` | `{}` |
-
 ## Events
 
 Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker
@@ -337,6 +531,9 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `play_state_changed` | `{"play_state":".."}` | playback starts/pauses/stops |
 | `volume_changed` | `{"volume":N}` | volume changes |
 | `mute_changed` | `{"muted":bool}` | mute toggles |
+| `shuffle_changed` | `{"shuffle":".."}` | the shuffle mode changes, including from MusicBee's own window |
+| `repeat_changed` | `{"repeat":".."}` | the repeat mode changes |
+| `scrobbling_changed` | `{"scrobbling":bool}` | scrobbling is turned on or off |
 | `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
@@ -354,9 +551,15 @@ a MusicBee that is closing. It is best-effort like every other event - a crash o
 cable produces no goodbye, so a dropped connection with no preceding `server_shutdown` still
 means "retry".
 
-> There is intentionally no `shuffle_changed` / `repeat_changed` / `lfm_changed` event yet, so
-> those states only refresh on the next state fetch (or from a setter's reply). Candidate
-> additions, tracked against #118.
+**Shuffle, repeat and scrobbling are polled, not announced.** MusicBee raises no
+notification for any of the three, so the server diffs them once a second and
+broadcasts what moved. That is what makes a change someone makes in MusicBee's own
+window visible to a client at all, and it is why these three carry their new value
+rather than being markers: there is nothing cheaper to re-query.
+
+> There is still no `lfm_changed` event, so the love/ban state refreshes on the next
+> `now_playing_state` (or from a setter's reply). A candidate addition, tracked
+> against #118.
 
 ## Differences from V4 / V5
 

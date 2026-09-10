@@ -20,11 +20,18 @@ V6 client can be connected simultaneously.
 
 ## Coexistence
 
-Both protocols are served from one accept loop. Routing is by first-frame shape:
+Both protocols are served from one accept loop, and so is HTTP. Routing is by the shape
+of what arrives first:
 
+- an HTTP request line (`GET `, `POST`, ...) -> **HTTP**, which serves the embedded web
+  client, the V6 op catalog as RPC, a WebSocket upgrade and an event stream. See
+  [Transports](protocol-v6.md#transports);
 - a first frame with a `context` key -> **legacy** (V4/V5) session;
 - a first frame with a `kind` key (an `op:"handshake"` envelope) -> **V6** session;
 - anything else -> the connection is closed.
+
+So V6 reaches a client four ways - TCP, HTTP-RPC, WebSocket and server-sent events - with
+one op catalog behind all of them. V4/V5 is the TCP socket only, and is not extended.
 
 Pre-V4 protocols (V2 / V2.1 / V3) are rejected at handshake and are not documented.
 
