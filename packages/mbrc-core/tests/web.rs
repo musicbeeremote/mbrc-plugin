@@ -26,9 +26,27 @@ fn free_port() -> u16 {
         .port()
 }
 
-fn start(config: Config) -> server::NetHandle {
-    let core = Arc::new(Core::new(Arc::new(NullProviders), config));
-    server::start(core).expect("server should bind and start")
+/// How many ports to try before giving up on finding a free one.
+const BIND_ATTEMPTS: u32 = 16;
+
+/// Starts a server on a port nothing else holds, and says which.
+///
+/// The port has to be released before the server can take it, and the tests run
+/// in parallel, so between asking the OS for a free one and binding it another
+/// test can be handed the same number. Rolling a new port and trying again is
+/// what closes that window: the alternative is a suite that fails on a race
+/// nobody introduced, roughly one Windows run in ten.
+fn start_on_free_port(config: impl Fn(u16) -> Config) -> (u16, server::NetHandle) {
+    for _ in 0..BIND_ATTEMPTS {
+        let port = free_port();
+        let core = Arc::new(Core::new(Arc::new(NullProviders), config(port)));
+        match server::start(core) {
+            Ok(net) => return (port, net),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
+            Err(e) => panic!("server should bind and start: {e:?}"),
+        }
+    }
+    panic!("no free port after {BIND_ATTEMPTS} attempts");
 }
 
 /// Sends one HTTP/1.1 request and returns `(status line, body)`.
@@ -67,8 +85,7 @@ fn request(port: u16, request: &str) -> (String, String) {
 
 #[test]
 fn capabilities_are_served_over_http_on_the_command_port() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = start_on_free_port(Config::for_test);
 
     let (status, body) = request(
         port,
@@ -92,8 +109,7 @@ fn capabilities_are_served_over_http_on_the_command_port() {
 /// 400 that looks nothing like the cause.
 #[test]
 fn the_now_playing_cover_route_is_not_read_as_a_hash() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = start_on_free_port(Config::for_test);
 
     let (status, body) = request(
         port,
@@ -116,8 +132,7 @@ Connection: close
 
 #[test]
 fn a_rebinding_host_is_refused() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = start_on_free_port(Config::for_test);
 
     let (status, _) = request(
         port,
@@ -130,8 +145,7 @@ fn a_rebinding_host_is_refused() {
 
 #[test]
 fn an_unknown_op_is_a_404_carrying_the_v6_error_code() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = start_on_free_port(Config::for_test);
 
     let (status, body) = request(
         port,
@@ -147,8 +161,7 @@ fn an_unknown_op_is_a_404_carrying_the_v6_error_code() {
 
 #[test]
 fn the_handshake_op_is_not_offered_over_http() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = start_on_free_port(Config::for_test);
 
     let (status, _) = request(
         port,
@@ -162,8 +175,7 @@ fn the_handshake_op_is_not_offered_over_http() {
 
 #[test]
 fn pairing_is_required_only_when_the_setting_says_so() {
-    let port = free_port();
-    let net = start(Config {
+    let (port, net) = start_on_free_port(|port| Config {
         web_auth_required: true,
         ..Config::for_test(port)
     });
@@ -191,8 +203,7 @@ fn pairing_is_required_only_when_the_setting_says_so() {
 
 #[test]
 fn http_can_be_turned_off_without_disturbing_the_json_protocols() {
-    let port = free_port();
-    let net = start(Config {
+    let (port, net) = start_on_free_port(|port| Config {
         web_enabled: false,
         ..Config::for_test(port)
     });
@@ -231,8 +242,7 @@ fn http_can_be_turned_off_without_disturbing_the_json_protocols() {
 /// no handshake: it is one-way, and opening it is the whole subscription.
 #[test]
 fn the_event_stream_opens_without_a_handshake() {
-    let port = free_port();
-    let handle = start(Config::for_test(port));
+    let (port, handle) = start_on_free_port(Config::for_test);
 
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     stream
