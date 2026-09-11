@@ -23,6 +23,8 @@ Change Log
   search lives in the address, so a narrowed playlist can be bookmarked or shared
   (#82).
 - Clearing the now-playing queue (#109).
+- Stopping playback at the end of the current track, from the browser client's
+  Playback menu (#111).
 - V6, a new protocol for new clients, spoken over the same port as a plain
   socket, HTTP, a WebSocket or a server-sent event stream. It is what the browser
   client is written against and what the mobile apps will move to. Existing

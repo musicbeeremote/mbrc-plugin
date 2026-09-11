@@ -376,12 +376,13 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 |----|----------------|----------|
 | `player_play` / `player_pause` / `player_play_pause` / `player_stop` | `{}` | `{}` |
 | `player_next` / `player_previous` | `{}` | `{}` |
-| `player_status` | `{}` | `{"play_state":"playing","volume":75,"muted":false,"shuffle":"off","repeat":"none","scrobbling":true}` |
+| `player_status` | `{}` | `{"play_state":"playing","volume":75,"muted":false,"shuffle":"off","repeat":"none","scrobbling":true,"stop_after_current":false}` |
 | `player_set_volume` | `{"volume":0-100}` | `{"volume":<new>}` |
 | `player_set_mute` | `{"muted":bool}` | `{"muted":<new>}` |
 | `player_set_shuffle` | `{"mode":"off"\|"shuffle"\|"autodj"}` | `{"mode":<new>}` |
 | `player_set_repeat` | `{"mode":"none"\|"all"\|"one"}` | `{"mode":<new>}` |
 | `player_set_scrobbling` | `{"enabled":bool}` | `{"enabled":<new>}` (`unavailable` if enabling without a last.fm account) |
+| `player_set_stop_after_current` | `{"enabled":bool}` | `{"enabled":<new>}` |
 | `player_output` | `{}` | `{"active":"Speakers","devices":["Speakers","Headphones"]}` |
 | `player_set_output` | `{"device":"<name>"}` | `{"active":<new>,"devices":[...]}` |
 
@@ -394,6 +395,21 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 > `shuffle_changed`, `repeat_changed` and `scrobbling_changed` are broadcast as well, so a
 > client also learns about a change made in MusicBee's own window rather than only about its
 > own writes.
+
+> **Stop-after-current is one-shot.** MusicBee clears it the moment it fires, and
+> announces nothing when it does, so `stop_after_current_changed` is emitted by the
+> same one-second poll that watches shuffle, repeat and scrobbling rather than by the
+> notification. A client sees `play_state_changed` to `stopped` and then, within a
+> second, `stop_after_current_changed` to `false`. Do not assume the mode survives the
+> track it was armed for.
+
+> **Stop-after-current takes a value, never a toggle.** V4 spells it as one; V6 does not,
+> because `enabled` would have to be `bool | "toggle"` and a toggle sent against a stale
+> reading lands on the opposite of what was asked for. The current value is a field on
+> `player_status` and `stop_after_current_changed` announces every change, so a client that
+> wants to flip it always knows what it is flipping from. MusicBee offers no setter of its
+> own here, only a call that inverts the flag, so asking for the value already held does
+> nothing rather than inverting it.
 
 ### Track
 
@@ -570,6 +586,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `shuffle_changed` | `{"shuffle":".."}` | the shuffle mode changes, including from MusicBee's own window |
 | `repeat_changed` | `{"repeat":".."}` | the repeat mode changes |
 | `scrobbling_changed` | `{"scrobbling":bool}` | scrobbling is turned on or off |
+| `stop_after_current_changed` | `{"stop_after_current":bool}` | stop-after-current is turned on or off, including from MusicBee's own window and when it clears itself after firing |
 | `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
