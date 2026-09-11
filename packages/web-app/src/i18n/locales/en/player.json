@@ -14,12 +14,14 @@
     "rate": "Rate {stars} stars",
     "love": "Love",
     "ban": "Ban",
-    "scrobble": "Scrobble to last.fm"
+    "scrobble": "Scrobble to last.fm",
+    "stopAfterCurrent": "Stop after this track"
   },
   "panel": {
     "lyrics": "Lyrics",
     "details": "Details",
-    "output": "Output"
+    "output": "Output",
+    "playback": "Playback"
   },
   "empty": {
     "lyrics": "No lyrics for this track",

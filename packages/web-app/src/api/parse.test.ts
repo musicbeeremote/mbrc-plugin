@@ -9,6 +9,7 @@ const STATUS = {
   shuffle: 'off',
   repeat: 'none',
   scrobbling: true,
+  stop_after_current: false,
 }
 
 describe('parsing an op response', () => {

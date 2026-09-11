@@ -14,6 +14,7 @@ const STATUS = {
   shuffle: 'off',
   repeat: 'none',
   scrobbling: true,
+  stop_after_current: false,
 }
 
 beforeEach(() => {

@@ -107,6 +107,18 @@ describe('the track panels', () => {
     expect(player.lyrics.lines).toHaveLength(1)
   })
 
+  // V4 spells this one as a toggle. Sent that way it would race a change made
+  // in MusicBee's own window and land on the opposite of what was asked for.
+  it('asks for stop-after-current by value, not as a toggle', async () => {
+    const player = usePlayerStore()
+    call.mockResolvedValue({ enabled: true })
+
+    await player.setStopAfterCurrent(true)
+
+    expect(call).toHaveBeenCalledWith('player_set_stop_after_current', { enabled: true })
+    expect(player.stopAfterCurrent).toBe(true)
+  })
+
   it('starts with no lyrics rather than an empty synced set', () => {
     const player = usePlayerStore()
     expect(player.lyrics.type).toBe(LyricsType.None)

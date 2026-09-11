@@ -6,6 +6,8 @@ import IconCheck from '~icons/lucide/check'
 import IconDetails from '~icons/lucide/info'
 import IconLyrics from '~icons/lucide/mic-vocal'
 import IconOutput from '~icons/lucide/speaker'
+import IconPlayback from '~icons/lucide/sliders-horizontal'
+import IconStopAfter from '~icons/lucide/circle-stop'
 
 import { activeLyricLine } from '../composables/lyrics'
 import { useOutputStore } from '../stores/output'
@@ -15,12 +17,17 @@ import EmptyState from './EmptyState.vue'
 import PanelSheet from './PanelSheet.vue'
 
 /**
- * The three things about the playing track worth more than a row of their own.
+ * The four things about playback worth more than a row of their own.
  *
  * Lyrics and the tag list are content and open a sheet, which is the only way
  * either gets the room it needs: a rail is narrow, and words in a letterbox are
- * the worst version of that feature. Output is a control, not content, so it
- * stays a popover anchored to its own button.
+ * the worst version of that feature. Output and playback modes are controls,
+ * not content, so they stay popovers anchored to their own buttons.
+ *
+ * A mode belongs here rather than in the transport row for two reasons: the row
+ * seats two controls either side of the play button and a sixth would push it
+ * off centre, and no icon says "stop after this track" on its own. Every player
+ * that ships this one either writes it out or hides it in a menu.
  *
  * Details and outputs fetch only while open: they are per-track, and would
  * otherwise be round trips on every track change for panels nobody has looked
@@ -34,8 +41,10 @@ const output = useOutputStore()
 const showLyrics = ref(false)
 const showDetails = ref(false)
 const showOutput = ref(false)
+const showPlayback = ref(false)
 
 const outputRoot = ref<HTMLElement | null>(null)
+const playbackRoot = ref<HTMLElement | null>(null)
 const lyricsBox = ref<HTMLElement | null>(null)
 
 /** Whether the track has any, which the button shows without being opened. */
@@ -53,6 +62,10 @@ function openDetails() {
 function toggleOutput() {
   showOutput.value = !showOutput.value
   if (showOutput.value) void output.refreshOutputs()
+}
+
+function togglePlayback() {
+  showPlayback.value = !showPlayback.value
 }
 
 /** The synced line the playhead is in, so the words follow the music. */
@@ -97,8 +110,9 @@ const trackTitle = computed(() => player.track?.title ?? t('player.nothingPlayin
 
 // A popover that survives a tap elsewhere has to be dismissed twice.
 function onDocumentPointerDown(event: PointerEvent) {
-  if (!showOutput.value) return
-  if (!outputRoot.value?.contains(event.target as Node)) showOutput.value = false
+  const target = event.target as Node
+  if (showOutput.value && !outputRoot.value?.contains(target)) showOutput.value = false
+  if (showPlayback.value && !playbackRoot.value?.contains(target)) showPlayback.value = false
 }
 
 onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown, true))
@@ -123,6 +137,41 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       <IconDetails class="size-4" />
       {{ $t('player.panel.details') }}
     </button>
+
+    <div ref="playbackRoot" class="relative">
+      <button
+        class="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-2xs transition-colors"
+        :class="
+          showPlayback || player.stopAfterCurrent
+            ? 'bg-accent-soft text-accent'
+            : 'text-outline hover:text-ink'
+        "
+        :aria-expanded="showPlayback"
+        aria-haspopup="menu"
+        @click="togglePlayback"
+      >
+        <IconPlayback class="size-4" />
+        {{ $t('player.panel.playback') }}
+      </button>
+
+      <div
+        v-if="showPlayback"
+        role="menu"
+        class="absolute right-0 bottom-full z-10 mb-1 w-60 overflow-hidden rounded-control border border-surface-2 bg-surface/85 py-1 backdrop-blur-md shadow-lg"
+      >
+        <button
+          role="menuitemcheckbox"
+          :aria-checked="player.stopAfterCurrent"
+          class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60"
+          :class="player.stopAfterCurrent ? 'text-accent' : 'text-ink-soft'"
+          @click="player.setStopAfterCurrent(!player.stopAfterCurrent)"
+        >
+          <IconStopAfter class="size-4 shrink-0" />
+          <span class="truncate">{{ $t('player.action.stopAfterCurrent') }}</span>
+          <IconCheck v-if="player.stopAfterCurrent" class="ml-auto size-4 shrink-0" />
+        </button>
+      </div>
+    </div>
 
     <div ref="outputRoot" class="relative">
       <button

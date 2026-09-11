@@ -58,6 +58,7 @@ export interface OpRequests {
   // Refused with `unavailable` when no last.fm account is configured, which
   // is a state the server knows and the client cannot.
   player_set_scrobbling: { enabled: boolean }
+  player_set_stop_after_current: { enabled: boolean }
   player_status: Empty
   player_set_volume: { volume: number }
   player_set_mute: { muted: boolean }
@@ -126,6 +127,7 @@ export const Op = {
   PlayerNext: 'player_next',
   PlayerPrevious: 'player_previous',
   PlayerSetScrobbling: 'player_set_scrobbling',
+  PlayerSetStopAfterCurrent: 'player_set_stop_after_current',
   PlayerStatus: 'player_status',
   PlayerSetVolume: 'player_set_volume',
   PlayerSetMute: 'player_set_mute',
@@ -181,6 +183,7 @@ export const WireEvent = {
   ShuffleChanged: 'shuffle_changed',
   RepeatChanged: 'repeat_changed',
   ScrobblingChanged: 'scrobbling_changed',
+  StopAfterCurrentChanged: 'stop_after_current_changed',
   NowPlayingChanged: 'now_playing_changed',
   NowPlayingLyricsChanged: 'now_playing_lyrics_changed',
   NowPlayingListChanged: 'now_playing_list_changed',

@@ -53,6 +53,7 @@ export const usePlayerStore = defineStore('player', () => {
   const details = ref<TrackDetails | null>(null)
   const lyrics = ref<Lyrics>({ type: LyricsType.None, lines: [] })
   const scrobbling = ref(false)
+  const stopAfterCurrent = ref(false)
   /** Whether the track is loved or banned, which is a tag on it, not an account. */
   const lastfm = ref<LastfmStatus>(LastfmStatus.Normal)
   /** Why scrobbling could not be turned on, when the server said so. */
@@ -66,6 +67,7 @@ export const usePlayerStore = defineStore('player', () => {
     shuffle.value = status.shuffle
     repeat.value = status.repeat
     scrobbling.value = status.scrobbling
+    stopAfterCurrent.value = status.stop_after_current
   }
 
   /**
@@ -86,6 +88,18 @@ export const usePlayerStore = defineStore('player', () => {
       if (!(error instanceof OpError)) throw error
       scrobblingRefusal.value = error.message
     }
+  }
+
+  /**
+   * Stops playback at the end of the current track, or cancels that.
+   *
+   * Sent as the value wanted, never as a toggle: MusicBee's own window can
+   * change this too, and a toggle sent against a stale reading lands on the
+   * opposite of what was asked for.
+   */
+  async function setStopAfterCurrent(enabled: boolean) {
+    const result = await client.call(Op.PlayerSetStopAfterCurrent, { enabled })
+    stopAfterCurrent.value = result.enabled
   }
 
   async function refreshNowPlaying() {
@@ -215,6 +229,9 @@ export const usePlayerStore = defineStore('player', () => {
     client.on(WireEvent.ScrobblingChanged, (data) => {
       scrobbling.value = data.scrobbling
     })
+    client.on(WireEvent.StopAfterCurrentChanged, (data) => {
+      stopAfterCurrent.value = data.stop_after_current
+    })
     client.on(WireEvent.NowPlayingChanged, () => {
       void refreshNowPlaying()
       // The panels are about the track that just changed, so a stale one is
@@ -239,6 +256,7 @@ export const usePlayerStore = defineStore('player', () => {
     muted,
     shownVolume,
     scrobbling,
+    stopAfterCurrent,
     scrobblingRefusal,
     lastfm,
     shuffle,
@@ -262,6 +280,7 @@ export const usePlayerStore = defineStore('player', () => {
     setVolume,
     setMuted,
     setScrobbling,
+    setStopAfterCurrent,
     setShuffle,
     setRepeat,
     cycleShuffle,

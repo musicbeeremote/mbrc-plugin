@@ -35,6 +35,7 @@ export const PlayerStatusSchema = z.object({
   shuffle: ShuffleModeSchema,
   repeat: RepeatModeSchema,
   scrobbling: z.boolean(),
+  stop_after_current: z.boolean(),
 })
 export type PlayerStatus = z.infer<typeof PlayerStatusSchema>
 
@@ -110,6 +111,7 @@ export const OpResponseSchemas = {
   player_next: EmptySchema,
   player_previous: EmptySchema,
   player_set_scrobbling: ScrobblingSchema,
+  player_set_stop_after_current: ScrobblingSchema,
   player_status: PlayerStatusSchema,
   player_set_volume: z.object({ volume: z.number() }),
   player_set_mute: z.object({ muted: z.boolean() }),
@@ -179,6 +181,7 @@ export const EventPayloadSchemas = {
   shuffle_changed: z.object({ shuffle: ShuffleModeSchema }),
   repeat_changed: z.object({ repeat: RepeatModeSchema }),
   scrobbling_changed: z.object({ scrobbling: z.boolean() }),
+  stop_after_current_changed: z.object({ stop_after_current: z.boolean() }),
   now_playing_changed: z.object({
     artist: z.string(),
     title: z.string(),
