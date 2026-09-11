@@ -107,20 +107,6 @@ describe('the track panels', () => {
     expect(player.lyrics.lines).toHaveLength(1)
   })
 
-  it('reads the output list and switches to a named device', async () => {
-    const player = usePlayerStore()
-    call.mockResolvedValue({ active: 'Speakers', devices: ['Speakers', 'Headphones'] })
-
-    await player.refreshOutputs()
-    expect(player.outputs.devices).toStrictEqual(['Speakers', 'Headphones'])
-
-    call.mockResolvedValue({ active: 'Headphones', devices: ['Speakers', 'Headphones'] })
-    await player.setOutput('Headphones')
-
-    expect(call).toHaveBeenCalledWith('player_set_output', { device: 'Headphones' })
-    expect(player.outputs.active).toBe('Headphones')
-  })
-
   it('starts with no lyrics rather than an empty synced set', () => {
     const player = usePlayerStore()
     expect(player.lyrics.type).toBe(LyricsType.None)

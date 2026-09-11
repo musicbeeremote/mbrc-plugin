@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { client } from '../api/client'
 import { OpError } from '../api/parse'
 import { Op, WireEvent } from '../api/ops'
-import type { OutputDevices, TrackDetails } from '../api/responses'
+import type { TrackDetails } from '../api/responses'
 import { LastfmStatus, LyricsType, PlayState, RepeatMode, ShuffleMode } from '../api/types'
 import type { Lyrics, Track } from '../api/types'
 
@@ -52,7 +52,6 @@ export const usePlayerStore = defineStore('player', () => {
   const listOrder = ref<number | null>(null)
   const details = ref<TrackDetails | null>(null)
   const lyrics = ref<Lyrics>({ type: LyricsType.None, lines: [] })
-  const outputs = ref<OutputDevices>({ active: '', devices: [] })
   const scrobbling = ref(false)
   /** Whether the track is loved or banned, which is a tag on it, not an account. */
   const lastfm = ref<LastfmStatus>(LastfmStatus.Normal)
@@ -117,14 +116,6 @@ export const usePlayerStore = defineStore('player', () => {
     lyrics.value = await client.call(Op.NowPlayingLyrics)
   }
 
-  async function refreshOutputs() {
-    outputs.value = await client.call(Op.PlayerOutput)
-  }
-
-  async function setOutput(device: string) {
-    outputs.value = await client.call(Op.PlayerSetOutput, { device })
-  }
-
   async function refreshAll() {
     await Promise.all([refreshStatus(), refreshNowPlaying(), refreshLyrics()])
   }
@@ -150,8 +141,6 @@ export const usePlayerStore = defineStore('player', () => {
     const result = await client.call(Op.PlayerSetMute, { muted: value })
     muted.value = result.muted
   }
-  // Shuffle and repeat have no broadcast event, so the setter's reply is the
-  // only signal their state changed. Assigning from it is not an optimisation.
   async function setShuffle(mode: ShuffleMode) {
     const result = await client.call(Op.PlayerSetShuffle, { mode })
     shuffle.value = result.mode
@@ -260,12 +249,9 @@ export const usePlayerStore = defineStore('player', () => {
     listOrder,
     details,
     lyrics,
-    outputs,
     refreshAll,
     refreshDetails,
     refreshLyrics,
-    refreshOutputs,
-    setOutput,
     refreshStatus,
     refreshNowPlaying,
     refreshPosition,

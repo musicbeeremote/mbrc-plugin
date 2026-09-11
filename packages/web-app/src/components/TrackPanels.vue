@@ -8,6 +8,7 @@ import IconLyrics from '~icons/lucide/mic-vocal'
 import IconOutput from '~icons/lucide/speaker'
 
 import { activeLyricLine } from '../composables/lyrics'
+import { useOutputStore } from '../stores/output'
 import { usePlayerStore } from '../stores/player'
 
 import EmptyState from './EmptyState.vue'
@@ -28,6 +29,7 @@ import PanelSheet from './PanelSheet.vue'
  */
 const { t } = useI18n()
 const player = usePlayerStore()
+const output = useOutputStore()
 
 const showLyrics = ref(false)
 const showDetails = ref(false)
@@ -50,7 +52,7 @@ function openDetails() {
 
 function toggleOutput() {
   showOutput.value = !showOutput.value
-  if (showOutput.value) void player.refreshOutputs()
+  if (showOutput.value) void output.refreshOutputs()
 }
 
 /** The synced line the playhead is in, so the words follow the music. */
@@ -139,19 +141,19 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
         role="menu"
         class="absolute right-0 bottom-full z-10 mb-1 w-60 overflow-hidden rounded-control border border-surface-2 bg-surface/85 py-1 backdrop-blur-md shadow-lg"
       >
-        <p v-if="player.outputs.devices.length === 0" class="px-3 py-2 text-2xs text-outline">
+        <p v-if="output.outputs.devices.length === 0" class="px-3 py-2 text-2xs text-outline">
           {{ $t('player.empty.outputs') }}
         </p>
         <button
-          v-for="device in player.outputs.devices"
+          v-for="device in output.outputs.devices"
           v-else
           :key="device"
           role="menuitem"
           class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60"
-          :class="device === player.outputs.active ? 'text-accent' : 'text-ink-soft'"
-          @click="player.setOutput(device)"
+          :class="device === output.outputs.active ? 'text-accent' : 'text-ink-soft'"
+          @click="output.setOutput(device)"
         >
-          <IconCheck v-if="device === player.outputs.active" class="size-4 shrink-0" />
+          <IconCheck v-if="device === output.outputs.active" class="size-4 shrink-0" />
           <span v-else class="size-4 shrink-0" />
           <span class="truncate">{{ device }}</span>
         </button>
