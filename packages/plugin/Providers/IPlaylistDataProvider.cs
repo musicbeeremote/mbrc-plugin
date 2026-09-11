@@ -30,6 +30,12 @@ namespace MusicBeePlugin.Providers
         bool RemoveFromNowPlayingList(int index);
 
         /// <summary>
+        ///     Removes every track from the now playing list.
+        /// </summary>
+        /// <returns>True if successful</returns>
+        bool ClearNowPlayingList();
+
+        /// <summary>
         ///     Plays a track in the now playing list by file URL.
         /// </summary>
         /// <param name="fileUrl">File URL of the track to play</param>

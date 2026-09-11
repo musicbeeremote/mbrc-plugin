@@ -42,6 +42,11 @@ namespace MusicBeePlugin.Providers
             return _api.NowPlayingList_RemoveAt(index);
         }
 
+        public bool ClearNowPlayingList()
+        {
+            return _api.NowPlayingList_Clear();
+        }
+
         public bool PlayNowPlayingTrack(string fileUrl)
         {
             return _api.NowPlayingList_PlayNow(fileUrl);

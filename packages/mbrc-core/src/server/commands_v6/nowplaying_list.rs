@@ -2,7 +2,7 @@
 //!
 //! Per #118 §7 this is ONE canonical list, with no `client_type` fork - the V4
 //! ordered/sequential and album-drop quirks dissolve - plus play / remove / move
-//! / search and queueing. Mutations key on `order`; #110 versioned order is not
+//! / clear / search and queueing. Mutations key on `order`; #110 versioned order is not
 //! served here.
 //!
 //! Two views, selected by `up_next`: the default FULL list in list order,
@@ -38,6 +38,7 @@ pub const OPS: &[&str] = &[
     "now_playing_list_play",
     "now_playing_list_remove",
     "now_playing_list_move",
+    "now_playing_list_clear",
     "now_playing_list_search",
     "now_playing_queue",
 ];
@@ -55,6 +56,7 @@ pub fn dispatch(
         "now_playing_list_play" => play(data, p, now_playing),
         "now_playing_list_remove" => remove(data, p, now_playing),
         "now_playing_list_move" => move_item(data, p, now_playing),
+        "now_playing_list_clear" => clear(data, p, now_playing),
         "now_playing_list_search" => search(data, p),
         "now_playing_queue" => queue(data, p),
         _ => return None,
@@ -210,6 +212,12 @@ fn move_item(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCac
     let from = i32_saturating(req_i64(data, "from")?);
     let to = i32_saturating(req_i64(data, "to")?);
     guarded(data, now_playing, || p.move_list_item(from, to))
+}
+
+/// Empties the queue. Takes the same optional `version` as the other mutations,
+/// so a client that read a list and means to discard *that* list says so.
+fn clear(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
+    guarded(data, now_playing, || p.clear_list())
 }
 
 fn search(data: &Value, p: &dyn Providers) -> OpResult {
@@ -584,6 +592,44 @@ mod tests {
         .unwrap()
         .unwrap();
         assert!(m.recorded().contains(&"remove_list_item(2)".to_string()));
+    }
+
+    #[test]
+    fn clearing_empties_the_queue_and_bumps_the_version() {
+        let providers: std::sync::Arc<dyn Providers> =
+            std::sync::Arc::new(MockProviders::default());
+        let cache = NowPlayingCache::new(providers);
+        let m = MockProviders::default();
+
+        let data = dispatch("now_playing_list_clear", &json!({}), &m, Some(&cache), None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(data, json!({}));
+        assert!(m.recorded().contains(&"clear_list()".to_string()));
+        assert_eq!(cache.list_version(), 1);
+    }
+
+    /// Discarding a queue is the mutation a client is least able to undo, so it
+    /// takes the same guard as removing one track.
+    #[test]
+    fn clearing_against_a_stale_version_is_refused() {
+        let providers: std::sync::Arc<dyn Providers> =
+            std::sync::Arc::new(MockProviders::default());
+        let cache = NowPlayingCache::new(providers);
+        cache.bump_list_version();
+        let m = MockProviders::default();
+
+        let err = dispatch(
+            "now_playing_list_clear",
+            &json!({ "version": 0 }),
+            &m,
+            Some(&cache),
+            None,
+        )
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::StaleList);
+        assert!(m.recorded().is_empty());
     }
 
     #[test]

@@ -219,6 +219,9 @@ pub enum CommandType {
     // Set MusicBee's status-bar background-task text (host-only UI). The core
     // uses it to surface cover-cache build progress now that it owns the build.
     SetBackgroundTaskMessage = 29,
+    // Empty the now-playing list. MusicBee offers no per-index bulk removal, so
+    // clearing is its own command rather than a loop over NowPlayingListRemove.
+    NowPlayingListClear = 30,
 }
 
 /// Host -> core queries (request/response), the mirror of [`QueryType`] in the

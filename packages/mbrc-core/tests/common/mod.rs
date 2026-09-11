@@ -200,6 +200,9 @@ impl Providers for FixtureProviders {
     fn search_list(&self, _q: &str) -> Result<(), String> {
         Ok(())
     }
+    fn clear_list(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn queue(&self, _q: QueueType, _f: Vec<String>, _p: &str) -> Result<(), String> {
         Ok(())
     }

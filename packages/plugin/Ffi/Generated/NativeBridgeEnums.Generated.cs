@@ -117,6 +117,7 @@ namespace MusicBeePlugin.Ffi.Generated
         Play = 27,
         Pause = 28,
         SetBackgroundTaskMessage = 29,
+        NowPlayingListClear = 30,
     }
 
     public enum HostQueryType

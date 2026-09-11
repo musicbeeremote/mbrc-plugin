@@ -86,6 +86,7 @@ pub trait Providers: Send + Sync {
     fn remove_list_item(&self, index: i32) -> Result<(), String>;
     fn move_list_item(&self, from: i32, to: i32) -> Result<(), String>;
     fn search_list(&self, query: &str) -> Result<(), String>;
+    fn clear_list(&self) -> Result<(), String>;
     fn queue(&self, queue_type: QueueType, files: Vec<String>, play: &str) -> Result<(), String>;
 
     // Library - flat browse (paginated).
@@ -310,6 +311,10 @@ impl Providers for FfiProviders {
     fn move_list_item(&self, from: i32, to: i32) -> Result<(), String> {
         self.callbacks
             .execute_command(CommandType::NowPlayingListMove, &MoveParams { from, to })
+    }
+    fn clear_list(&self) -> Result<(), String> {
+        self.callbacks
+            .execute_command(CommandType::NowPlayingListClear, &())
     }
     fn search_list(&self, query: &str) -> Result<(), String> {
         self.callbacks.execute_command(
@@ -612,6 +617,9 @@ impl Providers for NullProviders {
     fn search_list(&self, _query: &str) -> Result<(), String> {
         Ok(())
     }
+    fn clear_list(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn queue(
         &self,
         _queue_type: QueueType,
@@ -897,6 +905,10 @@ impl Providers for MockProviders {
     }
     fn search_list(&self, query: &str) -> Result<(), String> {
         self.record(format!("search_list({query})"));
+        Ok(())
+    }
+    fn clear_list(&self) -> Result<(), String> {
+        self.record("clear_list()".to_owned());
         Ok(())
     }
     fn queue(&self, queue_type: QueueType, files: Vec<String>, play: &str) -> Result<(), String> {

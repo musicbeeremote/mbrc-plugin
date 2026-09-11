@@ -67,6 +67,7 @@ namespace MusicBeePlugin.Ffi
                 case CommandType.LibraryPlayAll: return _playlist.PlayAllLibrary(Bool(p));
                 case CommandType.NowPlayingListPlay: return _playlist.PlayNowPlayingByIndex(Index(p));
                 case CommandType.NowPlayingListRemove: return _playlist.RemoveFromNowPlayingList(Index(p));
+                case CommandType.NowPlayingListClear: return _playlist.ClearNowPlayingList();
                 case CommandType.NowPlayingListMove: return ApplyMove(p);
                 case CommandType.NowPlayingListSearch: return ApplySearch(p);
                 case CommandType.NowPlayingQueue: return ApplyQueue(p);
