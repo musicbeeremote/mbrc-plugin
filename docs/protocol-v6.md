@@ -461,6 +461,7 @@ One canonical list (no per-client-type variants). Each item is the
 | `now_playing_list_play` | `{"order":N, "version?":V}` | `{}` |
 | `now_playing_list_remove` | `{"order":N, "version?":V}` | `{}` |
 | `now_playing_list_move` | `{"from":N,"to":M, "version?":V}` | `{}` - `from`/`to` are `order` values |
+| `now_playing_list_clear` | `{"version?":V}` | `{}` - empties the queue |
 | `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
 | `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add_all","play?":"<path>"}` | `{}` |
 
@@ -468,7 +469,9 @@ One canonical list (no per-client-type variants). Each item is the
 `order` only means what you read while the list it came from still holds. Every page carries
 the queue's `version`; pass it back on a mutation and a queue that moved in between is refused
 `stale_list` instead of hitting the wrong slot - re-read the page and retry. The field is
-optional: send none and the mutation is unguarded, as before. Batch versioned removal is
+optional: send none and the mutation is unguarded, as before. `now_playing_list_clear` takes
+it too: it is the mutation a client is least able to undo, so a queue that moved since the
+page it was read from is worth refusing. Batch versioned removal is
 [#110](https://github.com/musicbeeremote/mbrc-plugin/issues/110).
 
 > `mode` is `snake_case` like every other V6 enum, so the last one is **`add_all`** - V4 spells
@@ -481,8 +484,6 @@ optional: send none and the mutation is unguarded, as before. Batch versioned re
 
 ### Library
 
-| Op | Request `data` | Response |
-|----|----------------|----------|
 | Op | Request `data` | Response |
 |----|----------------|----------|
 | `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}` |
