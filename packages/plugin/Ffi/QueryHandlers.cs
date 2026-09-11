@@ -91,6 +91,7 @@ namespace MusicBeePlugin.Ffi
             repeat = _player.GetRepeatMode().ToString(),
             position = _player.GetPosition(),
             scrobble = _player.GetScrobbleEnabled(),
+            stop_after_current = _player.GetStopAfterCurrent(),
         };
 
         private TrackInfo BuildTrackInfo() => _track.GetNowPlayingTrackInfo() ?? new TrackInfo();

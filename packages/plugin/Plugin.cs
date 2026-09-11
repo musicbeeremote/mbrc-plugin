@@ -539,6 +539,9 @@ namespace MusicBeePlugin
                 case NotificationType.LibrarySwitched:
                     coreType = FfiGen.NotificationType.LibrarySwitched;
                     break;
+                case NotificationType.StopAfterCurrentChanged:
+                    coreType = FfiGen.NotificationType.StopAfterCurrentChanged;
+                    break;
                 default:
                     return;
             }

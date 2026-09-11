@@ -46,6 +46,7 @@ pub trait Providers: Send + Sync {
     fn set_auto_dj(&self, value: bool) -> Result<(), String>;
     fn set_repeat(&self, mode: RepeatMode) -> Result<(), String>;
     fn set_scrobble(&self, value: bool) -> Result<(), String>;
+    fn set_stop_after_current(&self, value: bool) -> Result<(), String>;
 
     // Output devices.
     fn output_devices(&self) -> Result<OutputDevices, String>;
@@ -215,6 +216,10 @@ impl Providers for FfiProviders {
     fn set_scrobble(&self, value: bool) -> Result<(), String> {
         self.callbacks
             .execute_command(CommandType::SetScrobble, &SetBoolParams { value })
+    }
+    fn set_stop_after_current(&self, value: bool) -> Result<(), String> {
+        self.callbacks
+            .execute_command(CommandType::SetStopAfterCurrent, &SetBoolParams { value })
     }
 
     fn output_devices(&self) -> Result<OutputDevices, String> {
@@ -549,6 +554,9 @@ impl Providers for NullProviders {
     fn set_scrobble(&self, _value: bool) -> Result<(), String> {
         Ok(())
     }
+    fn set_stop_after_current(&self, _value: bool) -> Result<(), String> {
+        Ok(())
+    }
     fn output_devices(&self) -> Result<OutputDevices, String> {
         Ok(OutputDevices::default())
     }
@@ -813,6 +821,10 @@ impl Providers for MockProviders {
     }
     fn set_repeat(&self, mode: RepeatMode) -> Result<(), String> {
         self.record(format!("set_repeat({mode:?})"));
+        Ok(())
+    }
+    fn set_stop_after_current(&self, value: bool) -> Result<(), String> {
+        self.record(format!("set_stop_after_current({value})"));
         Ok(())
     }
     fn set_scrobble(&self, value: bool) -> Result<(), String> {

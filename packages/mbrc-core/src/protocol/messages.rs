@@ -91,6 +91,8 @@ pub struct PlayerState {
     pub position: i32,
     #[serde(default)]
     pub scrobble: bool,
+    #[serde(default)]
+    pub stop_after_current: bool,
 }
 
 /// Audio output devices (FFI query `OutputDevices`). Sent to the wire as-is on

@@ -226,6 +226,7 @@ mod tests {
                 repeat: RepeatMode::None,
                 position: 0,
                 scrobble: true,
+                stop_after_current: false,
             },
             ..Default::default()
         }

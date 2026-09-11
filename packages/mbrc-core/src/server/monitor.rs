@@ -1,9 +1,15 @@
 //! Poll-driven broadcasts (the C# `StateMonitor` port).
 //!
 //! Some state changes fire no MusicBee event: playback position advances
-//! continuously, and a user can change shuffle/repeat/scrobble in MusicBee's
-//! own UI. A timer task polls the provider RPC, broadcasts `nowplayingposition`
-//! while playing, and broadcasts shuffle/repeat/scrobble only when they change.
+//! continuously, a user can change shuffle/repeat/scrobble in MusicBee's own UI,
+//! and stop-after-current clears itself when it fires without announcing it. A
+//! timer task polls the provider RPC, broadcasts `nowplayingposition` while
+//! playing, and broadcasts the four modes only when they change.
+//!
+//! Stop-after-current is the one MusicBee does notify about, on the way in. The
+//! event is emitted here anyway, and only here, so there is one source rather
+//! than a notification and a poll racing to say the same thing a second apart -
+//! and so the silent clear is announced like any other change.
 //!
 //! Both protocols hear it. This poll is the only place those three changes are
 //! ever noticed, so a version it does not speak has no other way to learn them:
@@ -48,6 +54,7 @@ struct Cached {
     shuffle: Option<ShuffleMode>,
     repeat: Option<RepeatMode>,
     scrobble: Option<bool>,
+    stop_after_current: Option<bool>,
 }
 
 /// Runs the poll loop until `shutdown` fires.
@@ -120,6 +127,13 @@ fn poll(
         out.v6.push(v6::event(
             "scrobbling_changed",
             json!({ "scrobbling": state.scrobble }),
+        ));
+    }
+    // V6 only: V4 has no spelling for this and is frozen.
+    if seed_or_changed(&mut cached.stop_after_current, state.stop_after_current) {
+        out.v6.push(v6::event(
+            "stop_after_current_changed",
+            json!({ "stop_after_current": state.stop_after_current }),
         ));
     }
     out
@@ -219,6 +233,7 @@ mod tests {
             shuffle: Some(ShuffleMode::Off),
             repeat: Some(RepeatMode::None),
             scrobble: Some(true),
+            ..Default::default()
         };
         let m = MockProviders {
             player_state: state(
@@ -242,6 +257,7 @@ mod tests {
             shuffle: Some(ShuffleMode::Off),
             repeat: Some(RepeatMode::All),
             scrobble: Some(false),
+            ..Default::default()
         };
         let m = MockProviders {
             player_state: state(
@@ -267,12 +283,39 @@ mod tests {
         assert_eq!(polled.v4.len(), 3);
     }
 
+    /// MusicBee clears stop-after-current the moment it fires and announces
+    /// nothing, so without the poll every client would keep showing a mode that
+    /// has already been spent.
+    #[test]
+    fn the_poll_reports_stop_after_current_clearing_itself() {
+        let mut cached = Cached {
+            stop_after_current: Some(true),
+            ..Default::default()
+        };
+        let m = MockProviders {
+            player_state: PlayerState {
+                play_state: PlayState::Stopped,
+                stop_after_current: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let polled = poll(&m, &mut cached, &store(), false);
+        assert_eq!(events(&polled.v6), vec!["stop_after_current_changed"]);
+        let event: Value = serde_json::from_str(&polled.v6[0]).unwrap();
+        assert_eq!(event["data"]["stop_after_current"], false);
+        // V4 is frozen and has no spelling for it.
+        assert!(polled.v4.is_empty());
+    }
+
     #[test]
     fn every_event_the_poll_emits_is_advertised() {
         let mut cached = Cached {
             shuffle: Some(ShuffleMode::Off),
             repeat: Some(RepeatMode::All),
             scrobble: Some(false),
+            ..Default::default()
         };
         let m = MockProviders {
             player_state: state(

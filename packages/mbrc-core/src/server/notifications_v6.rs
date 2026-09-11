@@ -8,6 +8,11 @@
 //! `play_state_changed`, `volume_changed`, `mute_changed` - the same live set as
 //! V4. Track / now-playing / library events arrive with their own
 //! later domains.
+//!
+//! `StopAfterCurrentChanged` is the exception: it refreshes the cache but
+//! broadcasts nothing here, because the poll in [`monitor`](super::monitor) is
+//! the only thing that also sees MusicBee clear the mode silently once it has
+//! fired, and one event is better served by one source.
 
 use serde_json::json;
 
@@ -60,7 +65,8 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
         // from the dispatch and reconcile paths, which own the `Arc<Core>`.
         NotificationType::NowPlayingArtworkReady
         | NotificationType::FileAddedToLibrary
-        | NotificationType::LibrarySwitched => Vec::new(),
+        | NotificationType::LibrarySwitched
+        | NotificationType::StopAfterCurrentChanged => Vec::new(),
     }
 }
 
@@ -80,6 +86,21 @@ mod tests {
     fn one(frames: &[String]) -> Value {
         assert_eq!(frames.len(), 1, "expected exactly one event frame");
         serde_json::from_str(&frames[0]).unwrap()
+    }
+
+    /// MusicBee clears stop-after-current when it fires and says nothing, so the
+    /// poll owns the event. Emitting it here as well would put two sources a
+    /// second apart on the same name.
+    #[test]
+    fn the_stop_after_current_notification_broadcasts_nothing_itself() {
+        let frames = build(
+            NotificationType::StopAfterCurrentChanged,
+            &snap(PlayerState {
+                stop_after_current: true,
+                ..Default::default()
+            }),
+        );
+        assert!(frames.is_empty());
     }
 
     #[test]

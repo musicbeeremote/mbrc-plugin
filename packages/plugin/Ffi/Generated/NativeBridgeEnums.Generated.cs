@@ -40,6 +40,7 @@ namespace MusicBeePlugin.Ffi.Generated
         NowPlayingListChanged = 6,
         FileAddedToLibrary = 7,
         LibrarySwitched = 8,
+        StopAfterCurrentChanged = 9,
     }
 
     public enum QueryType
@@ -118,6 +119,7 @@ namespace MusicBeePlugin.Ffi.Generated
         Pause = 28,
         SetBackgroundTaskMessage = 29,
         NowPlayingListClear = 30,
+        SetStopAfterCurrent = 31,
     }
 
     public enum HostQueryType

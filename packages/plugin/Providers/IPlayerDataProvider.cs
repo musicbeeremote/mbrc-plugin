@@ -43,6 +43,11 @@ namespace MusicBeePlugin.Providers
         bool GetScrobbleEnabled();
 
         /// <summary>
+        ///     Gets whether playback stops at the end of the current track.
+        /// </summary>
+        bool GetStopAfterCurrent();
+
+        /// <summary>
         ///     Gets the current playback position in milliseconds.
         /// </summary>
         int GetPosition();
@@ -115,6 +120,13 @@ namespace MusicBeePlugin.Providers
         /// <param name="enabled">True to enable scrobbling</param>
         /// <returns>True if successful</returns>
         bool SetScrobble(bool enabled);
+
+        /// <summary>
+        ///     Sets whether playback stops at the end of the current track.
+        /// </summary>
+        /// <param name="enabled">True to stop after the current track</param>
+        /// <returns>True if successful</returns>
+        bool SetStopAfterCurrent(bool enabled);
 
         /// <summary>
         ///     Whether a Last.fm account is configured (a non-empty user id). Lets

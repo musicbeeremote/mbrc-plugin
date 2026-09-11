@@ -23,6 +23,7 @@ namespace MusicBeePlugin.Ffi
         public string repeat { get; set; }
         public int position { get; set; }
         public bool scrobble { get; set; }
+        public bool stop_after_current { get; set; }
     }
 
     public class OutputDevices

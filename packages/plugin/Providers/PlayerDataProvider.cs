@@ -82,6 +82,27 @@ namespace MusicBeePlugin.Providers
             return _api.Player_GetScrobbleEnabled();
         }
 
+        public bool GetStopAfterCurrent()
+        {
+            return _api.Player_GetStopAfterCurrentEnabled();
+        }
+
+        /// <summary>
+        ///     Sets stop-after-current to an explicit value. MusicBee offers no
+        ///     setter, only a no-argument call that flips the flag, so asking
+        ///     for the value it already holds must do nothing rather than
+        ///     invert it.
+        /// </summary>
+        public bool SetStopAfterCurrent(bool enabled)
+        {
+            if (_api.Player_GetStopAfterCurrentEnabled() == enabled)
+            {
+                return true;
+            }
+
+            return _api.Player_StopAfterCurrent();
+        }
+
         public int GetPosition()
         {
             return _api.Player_GetPosition();

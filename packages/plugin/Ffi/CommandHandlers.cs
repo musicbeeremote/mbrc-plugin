@@ -58,6 +58,7 @@ namespace MusicBeePlugin.Ffi
                 case CommandType.SetMute: return _player.SetMute(Bool(p));
                 case CommandType.SetShuffle: return _player.SetShuffle(Bool(p));
                 case CommandType.SetScrobble: return _player.SetScrobble(Bool(p));
+                case CommandType.SetStopAfterCurrent: return _player.SetStopAfterCurrent(Bool(p));
                 case CommandType.SetAutoDj: return _player.SetAutoDj(Bool(p));
                 case CommandType.SetRepeat: return ApplyRepeat(p);
                 case CommandType.SetRating: return _track.SetNowPlayingRating(Str(p));

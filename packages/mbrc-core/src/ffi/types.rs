@@ -79,6 +79,10 @@ pub enum NotificationType {
     /// The active MusicBee library changed. The metadata + cover caches are
     /// keyed to a single library, so this invalidates and rebuilds them.
     LibrarySwitched = 8,
+    /// Stop-after-current was turned on or off, including from MusicBee's own
+    /// window. The only playback mode MusicBee announces rather than leaving to
+    /// the poll in `server::monitor`.
+    StopAfterCurrentChanged = 9,
 }
 
 impl NotificationType {
@@ -94,6 +98,7 @@ impl NotificationType {
             6 => Some(Self::NowPlayingListChanged),
             7 => Some(Self::FileAddedToLibrary),
             8 => Some(Self::LibrarySwitched),
+            9 => Some(Self::StopAfterCurrentChanged),
             _ => None,
         }
     }
@@ -222,6 +227,9 @@ pub enum CommandType {
     // Empty the now-playing list. MusicBee offers no per-index bulk removal, so
     // clearing is its own command rather than a loop over NowPlayingListRemove.
     NowPlayingListClear = 30,
+    // MusicBee's own call takes no argument and flips the flag, so the host
+    // reads the current value and calls it only when it differs.
+    SetStopAfterCurrent = 31,
 }
 
 /// Host -> core queries (request/response), the mirror of [`QueryType`] in the
@@ -446,10 +454,10 @@ mod tests {
 
     #[test]
     fn notification_type_roundtrips() {
-        for raw in 0..=8 {
+        for raw in 0..=9 {
             assert_eq!(NotificationType::from_i32(raw).map(|n| n as i32), Some(raw));
         }
-        assert_eq!(NotificationType::from_i32(9), None);
+        assert_eq!(NotificationType::from_i32(10), None);
         assert_eq!(NotificationType::from_i32(-1), None);
     }
 

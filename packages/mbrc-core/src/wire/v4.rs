@@ -235,6 +235,7 @@ mod tests {
             repeat: RepeatMode::None,
             position: 0,
             scrobble: true,
+            stop_after_current: false,
         };
         let v = V4_CODEC.player_status(&state);
         assert_eq!(v["playervolume"], json!("75")); // string

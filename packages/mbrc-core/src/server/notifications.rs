@@ -33,7 +33,8 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
         NotificationType::TrackChanged => core.now_playing.refresh_track_bundle(),
         NotificationType::PlayStateChanged
         | NotificationType::VolumeLevelChanged
-        | NotificationType::VolumeMuteChanged => core.now_playing.refresh_player(),
+        | NotificationType::VolumeMuteChanged
+        | NotificationType::StopAfterCurrentChanged => core.now_playing.refresh_player(),
         NotificationType::NowPlayingLyricsReady => core.now_playing.refresh_lyrics(),
         NotificationType::NowPlayingArtworkReady => core.now_playing.refresh_cover(),
         // These touch no now-playing slice. The metadata cache is maintained in
@@ -62,6 +63,11 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
 
 /// Builds the raw broadcast frames from a cache snapshot (empty = nothing to
 /// send). Pure - no FFI - so it is unit-tested against a `NowPlaying` literal.
+///
+/// Three notifications produce no V4 frame at all: `FileAddedToLibrary` is cache
+/// maintenance, the `LibrarySwitched` reconcile broadcasts its own cover-cache
+/// status, and `StopAfterCurrentChanged` has no V4 spelling to add - the legacy
+/// wire is frozen, so it reaches V6 subscribers alone.
 fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) -> Vec<String> {
     let mut out: Vec<(String, Value)> = Vec::new();
     // Broadcasts are V4-formatted; per-client version fan-out is a V6 concern.
@@ -104,9 +110,9 @@ fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) ->
         NotificationType::NowPlayingListChanged => {
             out.push(("nowplayinglistchanged".to_string(), json!(true)));
         }
-        // No self-emitted frame: FileAdded is cache maintenance only, and the
-        // LibrarySwitched reconcile broadcasts its own cover-cache build status.
-        NotificationType::FileAddedToLibrary | NotificationType::LibrarySwitched => {}
+        NotificationType::FileAddedToLibrary
+        | NotificationType::LibrarySwitched
+        | NotificationType::StopAfterCurrentChanged => {}
     }
     out.into_iter()
         .map(|(ctx, data)| frame(&ctx, data))

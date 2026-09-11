@@ -28,6 +28,7 @@ pub const OPS: &[&str] = &[
     "player_set_shuffle",
     "player_set_repeat",
     "player_set_scrobbling",
+    "player_set_stop_after_current",
     "player_status",
     "player_output",
     "player_set_output",
@@ -52,6 +53,7 @@ pub fn dispatch(
         "player_set_shuffle" => set_shuffle(data, p),
         "player_set_repeat" => set_repeat(data, p),
         "player_set_scrobbling" => set_scrobbling(data, p),
+        "player_set_stop_after_current" => set_stop_after_current(data, p),
         "player_status" => status(p, now_playing),
         "player_output" => output(p),
         "player_set_output" => set_output(data, p),
@@ -147,6 +149,17 @@ fn set_scrobbling(data: &Value, p: &dyn Providers) -> OpResult {
     Ok(json!({ "enabled": p.player_state().map_err(internal)?.scrobble }))
 }
 
+/// Stops playback at the end of the current track, or cancels that.
+///
+/// Takes an explicit boolean rather than V4's "toggle" string: a client always
+/// knows the current value from the player state and the change event, and a
+/// toggle racing a change from MusicBee's own window lands on the wrong one.
+fn set_stop_after_current(data: &Value, p: &dyn Providers) -> OpResult {
+    let enabled = req_bool(data, "enabled")?;
+    p.set_stop_after_current(enabled).map_err(internal)?;
+    Ok(json!({ "enabled": p.player_state().map_err(internal)?.stop_after_current }))
+}
+
 /// Full player state (a pure read - served from the now-playing cache when wired).
 fn status(p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
     let state = match now_playing {
@@ -178,6 +191,7 @@ pub(crate) fn player_status_json(s: &PlayerState) -> Value {
         "shuffle": shuffle_str(s.shuffle),
         "repeat": repeat_str(s.repeat),
         "scrobbling": s.scrobble,
+        "stop_after_current": s.stop_after_current,
     })
 }
 
@@ -226,6 +240,7 @@ mod tests {
                 repeat: RepeatMode::None,
                 position: 0,
                 scrobble: true,
+                stop_after_current: false,
             },
             ..Default::default()
         }
@@ -350,6 +365,46 @@ mod tests {
     }
 
     #[test]
+    fn stop_after_current_is_set_explicitly_and_answered_from_the_state() {
+        let mut m = mock();
+        m.player_state.stop_after_current = true;
+        let out = run(
+            "player_set_stop_after_current",
+            json!({ "enabled": true }),
+            &m,
+        )
+        .unwrap();
+        assert_eq!(out, json!({ "enabled": true }));
+        assert!(
+            m.recorded()
+                .contains(&"set_stop_after_current(true)".to_string())
+        );
+    }
+
+    /// V4 spells this one as a toggle. V6 does not: a client that reads the
+    /// state and asks for a value cannot land on the wrong one.
+    #[test]
+    fn stop_after_current_refuses_a_missing_or_non_boolean_enabled() {
+        let m = mock();
+        assert_eq!(
+            run("player_set_stop_after_current", json!({}), &m)
+                .unwrap_err()
+                .code,
+            ErrorCode::MissingField
+        );
+        assert_eq!(
+            run(
+                "player_set_stop_after_current",
+                json!({ "enabled": "toggle" }),
+                &m
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::InvalidField
+        );
+    }
+
+    #[test]
     fn status_is_typed() {
         let m = mock();
         let out = run("player_status", json!({}), &m).unwrap();
@@ -362,6 +417,7 @@ mod tests {
                 "shuffle": "off",
                 "repeat": "none",
                 "scrobbling": true,
+                "stop_after_current": false,
             })
         );
     }

@@ -61,6 +61,7 @@ impl Providers for FixtureProviders {
             repeat: RepeatMode::None,
             position: 1000,
             scrobble: true,
+            stop_after_current: false,
         })
     }
     fn set_mute(&self, _v: bool) -> Result<(), String> {
@@ -76,6 +77,9 @@ impl Providers for FixtureProviders {
         Ok(())
     }
     fn set_scrobble(&self, _v: bool) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_stop_after_current(&self, _v: bool) -> Result<(), String> {
         Ok(())
     }
     fn output_devices(&self) -> Result<OutputDevices, String> {
