@@ -80,6 +80,7 @@ export interface OpRequests {
   now_playing_list_play: { order: number; version?: number }
   now_playing_list_remove: { order: number; version?: number }
   now_playing_list_move: { from: number; to: number; version?: number }
+  now_playing_list_clear: { version?: number }
   now_playing_queue: { paths: string[]; mode?: QueueMode; play?: string }
 
   library_genres: PageArgs & LibraryOrder & Pick<LibraryScope, 'query'>
@@ -147,6 +148,7 @@ export const Op = {
   NowPlayingListPlay: 'now_playing_list_play',
   NowPlayingListRemove: 'now_playing_list_remove',
   NowPlayingListMove: 'now_playing_list_move',
+  NowPlayingListClear: 'now_playing_list_clear',
   NowPlayingQueue: 'now_playing_queue',
 
   LibraryGenres: 'library_genres',

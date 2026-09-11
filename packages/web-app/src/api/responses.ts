@@ -132,6 +132,7 @@ export const OpResponseSchemas = {
   now_playing_list_play: EmptySchema,
   now_playing_list_remove: EmptySchema,
   now_playing_list_move: EmptySchema,
+  now_playing_list_clear: EmptySchema,
   now_playing_queue: EmptySchema,
 
   library_genres: pageSchema(GenreEntrySchema),

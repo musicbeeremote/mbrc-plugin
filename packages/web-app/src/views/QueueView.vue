@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import IconGrip from '~icons/lucide/grip-vertical'
 import IconMusic from '~icons/lucide/music'
 import IconQueue from '~icons/lucide/list-music'
 import IconSearch from '~icons/lucide/search'
+import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 
 import { ShuffleMode, coverUrl, formatDuration, trackLabel } from '../api/types'
@@ -87,6 +88,33 @@ const { list, containerProps, wrapperProps } = useLazyRows(
   },
 )
 
+/** How long the clear button stays armed before it forgets it was pressed. */
+const CLEAR_ARMED_MS = 4000
+
+const clearArmed = ref(false)
+let disarm: ReturnType<typeof setTimeout> | undefined = undefined
+
+/**
+ * Clearing takes two presses.
+ *
+ * Emptying the queue cannot be undone and the button sits beside the view
+ * toggles, so one misplaced tap would discard a queue with nothing to restore it
+ * from. The arming lapses on its own, so a button armed by a stray press is not
+ * still waiting to fire minutes later.
+ */
+function clearQueue() {
+  if (!clearArmed.value) {
+    clearArmed.value = true
+    disarm = setTimeout(() => (clearArmed.value = false), CLEAR_ARMED_MS)
+    return
+  }
+  clearTimeout(disarm)
+  clearArmed.value = false
+  void queue.clear()
+}
+
+onUnmounted(() => clearTimeout(disarm))
+
 const drag = useDragSort(
   () => rows.value.length,
   (from, to) => {
@@ -125,6 +153,16 @@ const drag = useDragSort(
       <span class="ml-auto text-xs text-outline">
         {{ term === '' ? $t('queue.count', queue.total) : $t('queue.found', { shown: rows.length, total: queue.total }) }}
       </span>
+      <button
+        v-if="queue.total > 0"
+        class="tap-target flex items-center gap-1 rounded-control p-1 text-xs transition-colors"
+        :class="clearArmed ? 'text-accent' : 'text-outline hover:text-ink'"
+        :aria-label="clearArmed ? $t('queue.action.clearConfirm') : $t('queue.action.clear')"
+        @click="clearQueue"
+      >
+        <IconTrash class="size-4" />
+        <span v-if="clearArmed">{{ $t('queue.action.clearConfirm') }}</span>
+      </button>
     </div>
 
     <!-- Searching only narrows what is shown. Nothing here changes what is

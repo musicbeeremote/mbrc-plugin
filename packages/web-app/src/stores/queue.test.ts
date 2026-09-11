@@ -105,3 +105,31 @@ describe('a mutation the server refuses', () => {
     expect(queue.stale).toBe(true)
   })
 })
+
+describe('clearing the queue', () => {
+  it('sends the version the page was read at', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 7))
+    await queue.load()
+
+    call.mockResolvedValue({})
+    await queue.clear()
+
+    expect(call).toHaveBeenCalledWith('now_playing_list_clear', { version: 7 })
+  })
+
+  // The list the user meant to discard is not the list the server now holds, so
+  // the refusal has to reach the view rather than be retried over the new one.
+  it('reports a queue that moved rather than clearing the new one', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 1))
+    await queue.load()
+
+    call.mockRejectedValueOnce(new OpError({ code: ErrorCode.StaleList, message: 'stale' }))
+    call.mockResolvedValue(page(5, 5, 2))
+    await queue.clear()
+
+    expect(queue.stale).toBe(true)
+    expect(queue.items).toHaveLength(5)
+  })
+})

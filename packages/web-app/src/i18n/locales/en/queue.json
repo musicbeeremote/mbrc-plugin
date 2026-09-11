@@ -8,7 +8,9 @@
   "reloaded": "The queue changed; the list was reloaded.",
   "action": {
     "remove": "Remove {title}",
-    "reorder": "Reorder {title}"
+    "reorder": "Reorder {title}",
+    "clear": "Clear the queue",
+    "clearConfirm": "Clear it?"
   },
   "playing": "Now playing",
   "emptyHint": "Play something from the library and it will appear here.",
