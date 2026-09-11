@@ -2,6 +2,51 @@ Change Log
 ---------
 # Versions
 
+## Unreleased
+
+### Added
+- A browser client. Open the address the Configure panel lists, in a browser on
+  any device on the network, and you get a full remote: what is playing with its
+  artwork and lyrics, the queue with drag-to-reorder and search, the library by
+  genre, artist, album or track with sorting and search, playlists, radio
+  stations, ratings and love/ban. It is served by the plugin itself on the port
+  and firewall rule that are already open, so there is nothing extra to install
+  or forward. Add it to a phone's home screen and it runs without an address bar
+  (#16).
+- Pairing for the browser client. With "require pairing" on, a browser has to be
+  let in once with a six-digit code generated from the Configure panel; the panel
+  counts the code down while it is valid and says how many browsers are paired.
+  Turning pairing on drops the sessions it was turned on against, which is the
+  point of turning it on. Both web settings take effect on the next restart.
+- Opening a playlist to see what is in it, with a track count, total duration, a
+  play button, and a search that can be narrowed to title, artist or album. The
+  search lives in the address, so a narrowed playlist can be bookmarked or shared
+  (#82).
+- Clearing the now-playing queue (#109).
+- V6, a new protocol for new clients, spoken over the same port as a plain
+  socket, HTTP, a WebSocket or a server-sent event stream. It is what the browser
+  client is written against and what the mobile apps will move to. Existing
+  Android and iOS clients are untouched: V4 is frozen and byte-identical, as
+  before. See `docs/protocol-v6.md`.
+
+### Fixed
+- Library browsing could show almost nothing for an album but its name. The cache
+  emptied every tag it held roughly once a minute for as long as a client stayed
+  connected, and what the browse path wrote back in its place had no year, rating
+  or date added, so those stayed missing even after a rebuild. A library of 1,437
+  albums had a date on none of them.
+- Changing one track's rating threw away the tags for the entire library, because
+  every album's timestamp was folded into a single value that could only say that
+  something, somewhere, had moved. Only the album that changed loses anything now.
+- Sorting or searching the library sorted or searched the page you were looking
+  at rather than the library, so page two of an A-to-Z list was page two of the
+  arrival order with its own rows put in order.
+- Changing the album-cover cache size did nothing after the first build. Covers
+  were kept as long as their source file was unchanged, and resizing the cache is
+  not a change to any file, so every cover stayed at the size it was first built
+  at. The size is recorded with the cache now, and one built at a different size
+  is discarded.
+
 ## 1.5.0 - 2026/08/31
 
 The plugin's core has been rewritten in Rust. It ships as `mbrc_core.dll`
