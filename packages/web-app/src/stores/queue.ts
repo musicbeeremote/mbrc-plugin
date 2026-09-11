@@ -12,11 +12,12 @@ import { usePlayerStore } from './player'
 
 const PAGE_SIZE = 200
 
-/** The queue ops that take an `order` and a `version`. */
+/** The queue ops that carry the `version` the page was read at. */
 type MutationOp =
   | typeof Op.NowPlayingListPlay
   | typeof Op.NowPlayingListRemove
   | typeof Op.NowPlayingListMove
+  | typeof Op.NowPlayingListClear
 
 /**
  * The now-playing queue.
@@ -109,8 +110,10 @@ export const useQueueStore = defineStore('queue', () => {
       await client.call(op, { ...data, version: version.value })
     } catch (error) {
       if (!(error instanceof OpError) || error.code !== ErrorCode.StaleList) throw error
-      stale.value = true
       await load()
+      // Set after the re-read, which clears it: the reason the list is being
+      // shown again is what the notice is for.
+      stale.value = true
       return
     }
     await Promise.all([load(), usePlayerStore().refreshNowPlaying()])
@@ -124,6 +127,9 @@ export const useQueueStore = defineStore('queue', () => {
   }
   async function move(from: number, to: number) {
     await mutate(Op.NowPlayingListMove, { from, to })
+  }
+  async function clear() {
+    await mutate(Op.NowPlayingListClear, {})
   }
 
   function bind() {
@@ -146,6 +152,7 @@ export const useQueueStore = defineStore('queue', () => {
     play,
     remove,
     move,
+    clear,
     bind,
   }
 })

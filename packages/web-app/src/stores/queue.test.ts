@@ -2,6 +2,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { client as V6Client } from '../api/client'
+import { OpError } from '../api/parse'
+import { ErrorCode } from '../api/types'
 
 import { useQueueStore } from './queue'
 
@@ -84,5 +86,22 @@ describe('reading a long queue', () => {
     expect(queue.items).toHaveLength(3)
     expect(queue.stale).toBe(true)
     expect(queue.version).toBe(2)
+  })
+})
+
+describe('a mutation the server refuses', () => {
+  // The notice was set before the re-read that clears it, so the one thing it
+  // exists to explain - the list being redrawn from under the user - never said
+  // anything.
+  it('leaves the notice up after the re-read', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 1))
+    await queue.load()
+
+    call.mockRejectedValueOnce(new OpError({ code: ErrorCode.StaleList, message: 'stale' }))
+    call.mockResolvedValue(page(4, 4, 2))
+    await queue.remove(0)
+
+    expect(queue.stale).toBe(true)
   })
 })
