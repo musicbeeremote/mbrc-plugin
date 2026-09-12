@@ -473,13 +473,20 @@ One canonical list (no per-client-type variants). Each item is the
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `now_playing_list` | `{offset?, limit?, up_next?}` | `{total, offset, version, items}` - canonical tracks + `order` + `position` + `play_position` |
+| `now_playing_list` | `{offset?, limit?, up_next?, totals?}` | `{total, offset, version, items}` - canonical tracks + `order` + `position` + `play_position` |
 | `now_playing_list_play` | `{"order":N, "version?":V}` | `{}` |
 | `now_playing_list_remove` | `{"order":N, "version?":V}` | `{}` |
 | `now_playing_list_move` | `{"from":N,"to":M, "version?":V}` | `{}` - `from`/`to` are `order` values |
 | `now_playing_list_clear` | `{"version?":V}` | `{}` - empties the queue |
 | `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
 | `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add_all","play?":"<path>"}` | `{}` |
+
+`totals: true` adds **`total_duration_ms`**: the whole queue in the default view, and under
+`up_next` everything still to play, whatever `limit` the page asked for. (`total` under
+`up_next` reports the walk the window covers, so the two do not match there; the run time is
+the one that describes the view.) Opt-in because it is the answer a window cannot give - it
+reads the tags of the whole list, where a plain page reads only the rows it serves. A track
+the host reports no duration for counts as nothing.
 
 **`version` and the mutation guard.** MusicBee addresses the queue by index alone, so an
 `order` only means what you read while the list it came from still holds. Every page carries
