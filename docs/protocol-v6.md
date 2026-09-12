@@ -598,12 +598,25 @@ is the ordinary queue command with a URL the core resolved.
 ```json
 // subscription
 { "id": "<id>", "title": "Podcast Title", "grouping": "Category", "genre": "Technology",
-  "description": "...", "downloaded_count": 10, "image_hash": "<hash>" }
+  "description": "...", "downloaded_count": 10, "episode_count": 79, "image_hash": "<hash>" }
 
 // episode
 { "index": 0, "id": "<feed id>", "title": "Episode Title", "date": "2026-01-15T00:00:00Z",
-  "description": "...", "duration_ms": 5025000, "is_downloaded": true, "has_been_played": false }
+  "description": "...", "duration_ms": 5025000, "is_downloaded": true, "has_been_played": false,
+  "url": "https://feed/episode.mp3", "author": "The Hosts" }
 ```
+
+**`id` is the feed's address** for a real subscription. MusicBee also reports its own
+smart views (`All` = Unplayed Episodes, `Recent` = Recent Updates) as subscriptions, with a
+plain word for an id and no artwork; they hold episodes from every show. A client that wants
+to tell them apart can test whether the id is a URL.
+
+**`url` says where an episode is now**, not what it is: the feed URL until MusicBee downloads
+it, the local path afterwards. Use `(id, index)` to address an episode, never the url.
+
+**`author` comes from the episode's own tags**, not the podcast API, which has no such field.
+It is worth showing in the smart views, where every row is a different show; within one feed
+it repeats the show itself. Empty when the host cannot resolve the url.
 
 **An episode is addressed by `(id, index)`**, because that is the only key MusicBee takes.
 The feed's own `id` is carried so a client can recognise an episode across a re-read, and
@@ -618,7 +631,13 @@ a feed URL exactly as it does from its own window, so a client may play any epis
 `image_hash` is the subscription's artwork in the same content-addressed store album art uses
 (`podcast:` namespace), fetched with `cover_get` or `GET /api/cover/{hash}` like any other
 cover. It is resolved for the page being served, so listing ten subscriptions never ingests a
-hundred, and is absent when a feed has no art.
+hundred, and is absent when a feed has no art. Artwork is per subscription only: MusicBee's
+artwork call takes an index, but every index past the feed image returns nothing, so an
+episode has no image of its own.
+
+An unknown `id` on `podcast_episodes` answers an empty page rather than `not_found`, because
+MusicBee reports a subscription with no episodes the same way it reports one that is not
+there. The single-item ops do say `not_found`.
 
 **No events.** MusicBee has no podcast notifications to forward, so nothing is broadcast and a
 client re-reads when it wants to be current (#118 §8). The one exception is the playback that
