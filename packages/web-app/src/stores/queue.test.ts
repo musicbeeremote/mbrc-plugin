@@ -133,3 +133,32 @@ describe('clearing the queue', () => {
     expect(queue.items).toHaveLength(5)
   })
 })
+
+describe('queue run time', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    call.mockReset()
+  })
+
+  /** The sum describes the whole queue, so a second page must not re-ask. */
+  it('asks for the run time when reading from the start, not when appending', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValueOnce({ ...page(200, 400), total_duration_ms: 900_000 })
+    await queue.load()
+    expect(lastCall()[1]).toMatchObject({ totals: true })
+    expect(queue.totalDurationMs).toBe(900_000)
+
+    call.mockResolvedValueOnce(page(200, 400))
+    await queue.load(true)
+    expect(lastCall()[1].totals).toBeUndefined()
+    expect(queue.totalDurationMs).toBe(900_000)
+  })
+
+  /** An older core answers the page without the sum; the header shows none. */
+  it('holds no run time when the server reports none', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValueOnce(page(1, 1))
+    await queue.load()
+    expect(queue.totalDurationMs).toBe(0)
+  })
+})

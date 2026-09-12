@@ -31,6 +31,7 @@ type MutationOp =
 export const useQueueStore = defineStore('queue', () => {
   const items = ref<QueueItem[]>([])
   const total = ref(0)
+  const totalDurationMs = ref(0)
   const version = ref(0)
   const upNext = ref(false)
   const loading = ref(false)
@@ -44,6 +45,10 @@ export const useQueueStore = defineStore('queue', () => {
    * page. A page that comes back at a different version describes a list that
    * moved while it was being read, so it is started over rather than stitched
    * onto rows whose `order` no longer means the same thing.
+   *
+   * The run time is asked for only when the queue is read from the start: it
+   * describes the whole queue rather than a page, so a second page would pay
+   * the server to sum again what the first page already reported.
    */
   async function load(append = false): Promise<void> {
     loading.value = true
@@ -53,6 +58,7 @@ export const useQueueStore = defineStore('queue', () => {
         offset,
         limit: PAGE_SIZE,
         up_next: upNext.value,
+        ...(append ? {} : { totals: true }),
       })
       if (append && page.version !== version.value) {
         loading.value = false
@@ -65,7 +71,10 @@ export const useQueueStore = defineStore('queue', () => {
       items.value = append ? [...items.value, ...page.items] : page.items
       total.value = page.total
       version.value = page.version
-      if (!append) stale.value = false
+      if (!append) {
+        totalDurationMs.value = page.total_duration_ms ?? 0
+        stale.value = false
+      }
     } finally {
       loading.value = false
     }
@@ -141,6 +150,7 @@ export const useQueueStore = defineStore('queue', () => {
   return {
     items,
     total,
+    totalDurationMs,
     version,
     upNext,
     loading,

@@ -169,6 +169,8 @@ export interface Page<T> {
 /** A queue page also carries the version its `order` values are valid against. */
 export const QueuePageSchema = pageSchema(QueueItemSchema).extend({
   version: z.number(),
+  /** The run time; absent unless `totals` was asked for. */
+  total_duration_ms: z.number().nullish(),
 })
 export type QueuePage = z.infer<typeof QueuePageSchema>
 
@@ -201,7 +203,7 @@ export const PlaylistPageSchema = pageSchema(PlaylistTrackSchema).extend({
   name: z.string(),
   version: z.string(),
   /** Summed over what `total` counts; absent unless `totals` was asked for. */
-  total_duration_ms: z.number().optional(),
+  total_duration_ms: z.number().nullish(),
 })
 export type PlaylistPage = z.infer<typeof PlaylistPageSchema>
 

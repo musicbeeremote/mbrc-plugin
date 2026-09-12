@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import IconGrip from '~icons/lucide/grip-vertical'
 import IconMusic from '~icons/lucide/music'
@@ -13,6 +14,7 @@ import { ShuffleMode } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import { heardRows } from '../composables/queueHeard'
+import { useRunTime } from '../composables/runTime'
 import { useDragSort } from '../composables/useDragSort'
 import { useLazyRows } from '../composables/useLazyRows'
 import { usePlayerStore } from '../stores/player'
@@ -20,6 +22,8 @@ import { useQueueStore } from '../stores/queue'
 
 const queue = useQueueStore()
 const player = usePlayerStore()
+const { t } = useI18n()
+const runTime = useRunTime()
 
 onMounted(() => {
   void queue.load()
@@ -116,6 +120,22 @@ function clearQueue() {
 
 onUnmounted(() => clearTimeout(disarm))
 
+/**
+ * What the queue holds: how many tracks, and how long they run.
+ *
+ * While a search is open the count says how much of the queue it matched, and
+ * the run time stays out of it: it describes the queue, not the matches, and
+ * two numbers about different things read as one.
+ */
+const summary = computed(() => {
+  if (term.value !== '') {
+    return t('queue.found', { shown: rows.value.length, total: queue.total })
+  }
+  const count = t('queue.count', queue.total)
+  const length = runTime(queue.totalDurationMs)
+  return length === '' ? count : `${count} · ${length}`
+})
+
 const drag = useDragSort(
   () => rows.value.length,
   (from, to) => {
@@ -151,9 +171,7 @@ const drag = useDragSort(
       >
         {{ $t('queue.view.upNext') }}
       </button>
-      <span class="ml-auto text-xs text-outline">
-        {{ term === '' ? $t('queue.count', queue.total) : $t('queue.found', { shown: rows.length, total: queue.total }) }}
-      </span>
+      <span class="ml-auto text-xs text-outline">{{ summary }}</span>
       <button
         v-if="queue.total > 0"
         class="tap-target flex items-center gap-1 rounded-control p-1 text-xs transition-colors"

@@ -77,7 +77,7 @@ export interface OpRequests {
   now_playing_set_rating: { rating: number | null }
   now_playing_set_lfm: { status: LastfmStatus }
 
-  now_playing_list: PageArgs & { up_next?: boolean }
+  now_playing_list: PageArgs & { up_next?: boolean; totals?: boolean }
   now_playing_list_play: { order: number; version?: number }
   now_playing_list_remove: { order: number; version?: number }
   now_playing_list_move: { from: number; to: number; version?: number }
