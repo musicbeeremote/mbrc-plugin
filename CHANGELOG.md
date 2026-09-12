@@ -34,6 +34,9 @@ Change Log
   before. See `docs/protocol-v6.md`.
 
 ### Fixed
+- The browser client's Up Next list stopped at 200 tracks and would not scroll
+  further, because the queue reported the size of the page it had just sent as
+  the number of tracks left to play.
 - Library browsing could show almost nothing for an album but its name. The cache
   emptied every tag it held roughly once a minute for as long as a client stayed
   connected, and what the browse path wrote back in its place had no year, rating
