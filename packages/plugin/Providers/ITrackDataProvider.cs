@@ -102,6 +102,14 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         string[] GetNowPlayingListPaths();
 
+        /// <summary>
+        ///     The play order from the current track: one storage index and path
+        ///     per step, no tag reads. <see cref="GetNowPlayingListOrdered" />
+        ///     walks the same sequence but reads tags, so it cannot be asked how
+        ///     long the walk is without paying for a window nobody wanted.
+        /// </summary>
+        NowPlayingOrder GetNowPlayingListOrder();
+
         // Rating Operations
 
         /// <summary>

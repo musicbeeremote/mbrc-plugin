@@ -29,7 +29,7 @@ use super::{
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
-use crate::protocol::messages::{NowPlayingListTrack, QueueType, TrackTags};
+use crate::protocol::messages::{NowPlayingListTrack, NowPlayingOrder, QueueType, TrackTags};
 use crate::providers::Providers;
 use mbrc_wire::v6::ErrorCode;
 
@@ -68,6 +68,10 @@ pub fn dispatch(
 /// The now-playing queue as a `Page` of canonical tracks.
 ///
 /// The two views and the three per-item indices are described on the module.
+///
+/// Under `up_next`, `total` is the length of the play order rather than what the
+/// host's ordered page reports, which counts only the window it served: a client
+/// paging that view was told it held everything after its first page.
 fn list(
     data: &Value,
     p: &dyn Providers,
@@ -85,10 +89,12 @@ fn list(
     }
     .map_err(internal)?;
 
-    let play_rank = if up_next {
-        HashMap::new()
+    let order = p.now_playing_list_order().map_err(internal)?;
+    let play_rank = play_ranks(&order);
+    let total = if up_next {
+        order.positions.len()
     } else {
-        play_ranks(p)?
+        page.total.max(0) as usize
     };
 
     // A path the library cannot resolve (a queued external file) falls back to
@@ -126,10 +132,10 @@ fn list(
             obj
         })
         .collect();
-    let mut out = page_json(page.total.max(0) as usize, offset, items);
+    let mut out = page_json(total, offset, items);
     out["version"] = json!(list_version(now_playing));
     if totals {
-        out["total_duration_ms"] = json!(run_time_ms(p, cache, up_next)?);
+        out["total_duration_ms"] = json!(run_time_ms(p, cache, up_next, &order)?);
     }
     Ok(out)
 }
@@ -146,14 +152,10 @@ fn run_time_ms(
     p: &dyn Providers,
     cache: Option<&MetadataCache>,
     up_next: bool,
+    order: &NowPlayingOrder,
 ) -> Result<i64, V6Error> {
-    let paths: Vec<String> = if up_next {
-        p.now_playing_list_ordered(0, 0)
-            .map_err(internal)?
-            .data
-            .into_iter()
-            .map(|npt| npt.path)
-            .collect()
+    let paths = if up_next {
+        order.paths.clone()
     } else {
         p.now_playing_list_paths().map_err(internal)?
     };
@@ -201,18 +203,15 @@ fn guarded(
 
 /// Storage index to shuffle play rank, for the list-order view.
 ///
-/// The forward walk carries the storage index in `position`, and its ordinal is
-/// the play rank; a track missing from the walk has been played and gets -1 at
-/// the call site. Indices only, but the walk still reads tags - queues are small
-/// enough that an indices-only provider has not been worth adding.
-fn play_ranks(p: &dyn Providers) -> Result<HashMap<i32, i64>, V6Error> {
-    Ok(p.now_playing_list_ordered(0, 0)
-        .map_err(internal)?
-        .data
+/// The walk's ordinal is the play rank; a track missing from it has been played
+/// and gets -1 at the call site.
+fn play_ranks(order: &NowPlayingOrder) -> HashMap<i32, i64> {
+    order
+        .positions
         .iter()
         .enumerate()
-        .map(|(rank, npt)| (npt.position, rank as i64))
-        .collect())
+        .map(|(rank, position)| (*position, rank as i64))
+        .collect()
 }
 
 /// A minimal canonical-shaped track from the now-playing item's basic fields, for
@@ -302,6 +301,14 @@ mod tests {
     use crate::protocol::messages::Page;
     use crate::providers::MockProviders;
 
+    /// The play order as the host reports it: storage index and path per step.
+    fn order(steps: &[(&str, i32)]) -> NowPlayingOrder {
+        NowPlayingOrder {
+            positions: steps.iter().map(|(_, i)| *i).collect(),
+            paths: steps.iter().map(|(p, _)| (*p).to_string()).collect(),
+        }
+    }
+
     fn npt(path: &str, position: i32) -> NowPlayingListTrack {
         NowPlayingListTrack {
             path: path.into(),
@@ -322,12 +329,7 @@ mod tests {
             },
             // Forward play order = only b remains upcoming (storage index 1),
             // so a (storage 0) is already played -> play_position -1.
-            now_playing_list_ordered: Page {
-                total: 1,
-                offset: 0,
-                limit: 0,
-                data: vec![npt("b.mp3", 1)],
-            },
+            now_playing_list_order: order(&[("b.mp3", 1)]),
             tracks_detailed: vec![TrackTags {
                 src: "a.mp3".into(),
                 title: "Resolved A".into(),
@@ -367,6 +369,7 @@ mod tests {
                 limit: 0,
                 data: vec![npt("x.mp3", 5), npt("y.mp3", 2)],
             },
+            now_playing_list_order: order(&[("x.mp3", 5), ("y.mp3", 2)]),
             ..Default::default()
         };
         let out = dispatch(
@@ -393,6 +396,34 @@ mod tests {
         assert_eq!(out["items"][1]["play_position"], 1);
     }
 
+    /// The host's ordered page counts what it served, so a limited up-next page
+    /// used to report its own size as the total and a client stopped paging.
+    #[test]
+    fn up_next_counts_the_whole_play_order_not_the_page() {
+        let m = MockProviders {
+            now_playing_list_ordered: Page {
+                total: 2,
+                offset: 0,
+                limit: 2,
+                data: vec![npt("x.mp3", 5), npt("y.mp3", 2)],
+            },
+            now_playing_list_order: order(&[("x.mp3", 5), ("y.mp3", 2), ("z.mp3", 7)]),
+            ..Default::default()
+        };
+        let out = dispatch(
+            "now_playing_list",
+            &json!({ "up_next": true, "limit": 2 }),
+            &m,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out["total"], 3);
+        assert_eq!(out["items"].as_array().unwrap().len(), 2);
+    }
+
     #[test]
     fn default_view_offsets_order_position_and_play_position() {
         // A page at offset 5: order/position are the absolute storage indices
@@ -405,12 +436,7 @@ mod tests {
                 data: vec![npt("f.mp3", 5), npt("g.mp3", 6)],
             },
             // Play order: g (storage 6) is current, f (storage 5) is next.
-            now_playing_list_ordered: Page {
-                total: 2,
-                offset: 0,
-                limit: 0,
-                data: vec![npt("g.mp3", 6), npt("f.mp3", 5)],
-            },
+            now_playing_list_order: order(&[("g.mp3", 6), ("f.mp3", 5)]),
             ..Default::default()
         };
         let out = dispatch(
@@ -602,12 +628,7 @@ mod tests {
     #[test]
     fn the_up_next_run_time_covers_the_walk_rather_than_the_queue() {
         let m = MockProviders {
-            now_playing_list_ordered: Page {
-                total: 1,
-                offset: 0,
-                limit: 0,
-                data: vec![npt("b.mp3", 1)],
-            },
+            now_playing_list_order: order(&[("b.mp3", 1)]),
             now_playing_list_paths: vec!["a.mp3".into(), "b.mp3".into()],
             tracks_detailed: vec![
                 TrackTags {

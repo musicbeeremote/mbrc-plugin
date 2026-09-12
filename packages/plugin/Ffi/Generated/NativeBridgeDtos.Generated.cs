@@ -192,6 +192,12 @@ namespace MusicBeePlugin.Ffi
         public string name { get; set; }
     }
 
+    public class NowPlayingOrder
+    {
+        public List<int> positions { get; set; }
+        public List<string> paths { get; set; }
+    }
+
     public class PlaylistFiles
     {
         public string name { get; set; }

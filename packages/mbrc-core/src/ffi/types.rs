@@ -181,6 +181,10 @@ pub enum QueryType {
     // paths-only enumeration. The page query reads tags for its window, which
     // cannot answer how long the whole queue runs.
     NowPlayingListPaths = 40,
+    // The play order from the current track, as indices and paths, without tag
+    // reads. The ordered page walks the same sequence but reports the length of
+    // the window it served, which cannot say how much is left to play.
+    NowPlayingListOrder = 41,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

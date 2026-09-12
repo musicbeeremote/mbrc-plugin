@@ -19,9 +19,9 @@ use crate::ffi::dtos::{
 use crate::ffi::types::{CommandType, QueryType};
 use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
-    LastfmStatus, Lyrics, NowPlayingListTrack, OutputDevices, Page, PlaybackPositionResponse,
-    PlayerState, Playlist, PlaylistFiles, QueueType, RadioStation, RepeatMode, SyncDelta, Track,
-    TrackDetails, TrackInfo, TrackMetadata, TrackTags,
+    LastfmStatus, Lyrics, NowPlayingListTrack, NowPlayingOrder, OutputDevices, Page,
+    PlaybackPositionResponse, PlayerState, Playlist, PlaylistFiles, QueueType, RadioStation,
+    RepeatMode, SyncDelta, Track, TrackDetails, TrackInfo, TrackMetadata, TrackTags,
 };
 
 /// The MusicBee data/command surface, as the core sees it. Handlers take
@@ -88,6 +88,11 @@ pub trait Providers: Send + Sync {
     /// The page queries read tags for the window they serve, so neither can
     /// answer a question about the whole queue.
     fn now_playing_list_paths(&self) -> Result<Vec<String>, String>;
+    /// The whole play order from the current track, without reading a tag.
+    ///
+    /// The ordered page reports the length of the window it served, so it cannot
+    /// say how much is left to play.
+    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String>;
     fn play_list_item(&self, index: i32) -> Result<(), String>;
     fn remove_list_item(&self, index: i32) -> Result<(), String>;
     fn move_list_item(&self, from: i32, to: i32) -> Result<(), String>;
@@ -313,6 +318,10 @@ impl Providers for FfiProviders {
     fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
         self.callbacks
             .query_no_params(QueryType::NowPlayingListPaths)
+    }
+    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
+        self.callbacks
+            .query_no_params(QueryType::NowPlayingListOrder)
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.callbacks
@@ -625,6 +634,9 @@ impl Providers for NullProviders {
     fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
+        Ok(NowPlayingOrder::default())
+    }
     fn play_list_item(&self, _index: i32) -> Result<(), String> {
         Ok(())
     }
@@ -746,6 +758,7 @@ pub struct MockProviders {
     pub now_playing_list: Page<NowPlayingListTrack>,
     pub now_playing_list_ordered: Page<NowPlayingListTrack>,
     pub now_playing_list_paths: Vec<String>,
+    pub now_playing_list_order: NowPlayingOrder,
     pub browse_genres: Page<GenreData>,
     pub browse_artists: Page<ArtistData>,
     pub browse_albums: Page<AlbumData>,
@@ -919,6 +932,10 @@ impl Providers for MockProviders {
     fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
         self.record("now_playing_list_paths");
         Ok(self.now_playing_list_paths.clone())
+    }
+    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
+        self.record("now_playing_list_order");
+        Ok(self.now_playing_list_order.clone())
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.record(format!("play_list_item({index})"));

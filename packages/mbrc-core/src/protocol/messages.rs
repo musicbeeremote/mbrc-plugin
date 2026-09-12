@@ -403,6 +403,21 @@ pub struct Playlist {
     pub name: String,
 }
 
+/// The queue's play order from the current track, as indices and paths.
+///
+/// The same forward walk the ordered page makes, without reading a tag: how long
+/// the walk is, which storage slot each step lands on, and what is filed there.
+/// Every question about the play order as a whole is answered from this, so none
+/// of them costs a walk that reads tags it will not use.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NowPlayingOrder {
+    /// Storage index per step, in play order (`positions[0]` is the current track).
+    #[serde(default)]
+    pub positions: Vec<i32>,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
 /// A playlist's files in playlist order, with the playlist's own name.
 ///
 /// Paths only: tags are read for the served page alone, so the size of this

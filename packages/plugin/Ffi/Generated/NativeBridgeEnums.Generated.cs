@@ -85,6 +85,7 @@ namespace MusicBeePlugin.Ffi.Generated
         LibraryGenreTracks = 38,
         PlaylistTracks = 39,
         NowPlayingListPaths = 40,
+        NowPlayingListOrder = 41,
     }
 
     public enum CommandType

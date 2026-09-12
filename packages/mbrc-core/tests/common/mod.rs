@@ -192,6 +192,13 @@ impl Providers for FixtureProviders {
     ) -> Result<Page<NowPlayingListTrack>, String> {
         self.now_playing_list(o, l)
     }
+    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
+        let data = self.now_playing_list(0, 0)?.data;
+        Ok(NowPlayingOrder {
+            positions: data.iter().map(|t| t.position).collect(),
+            paths: data.into_iter().map(|t| t.path).collect(),
+        })
+    }
     fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
         Ok(self
             .now_playing_list(0, 0)?

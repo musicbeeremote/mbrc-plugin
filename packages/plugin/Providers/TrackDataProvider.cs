@@ -267,6 +267,27 @@ namespace MusicBeePlugin.Providers
             }
         }
 
+        public NowPlayingOrder GetNowPlayingListOrder()
+        {
+            var order = new NowPlayingOrder { positions = new List<int>(), paths = new List<string>() };
+            if (!_api.NowPlayingList_QueryFiles(null))
+                return order;
+
+            var position = 1;
+            var itemIndex = _api.NowPlayingList_GetCurrentIndex();
+            while (true)
+            {
+                var trackPath = _api.NowPlayingList_GetListFileUrl(itemIndex);
+                if (string.IsNullOrEmpty(trackPath))
+                    return order;
+
+                order.positions.Add(itemIndex);
+                order.paths.Add(trackPath);
+                itemIndex = _api.NowPlayingList_GetNextIndex(position);
+                position++;
+            }
+        }
+
         public IEnumerable<NowPlayingListTrack> GetNowPlayingListPage(int offset, int limit)
         {
             if (!_api.NowPlayingList_QueryFiles(null))
