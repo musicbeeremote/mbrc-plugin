@@ -113,7 +113,16 @@ pub fn dispatch(
         .or_else(|| library::dispatch(op, data, providers, cover_store, metadata_cache))
         .or_else(|| playlist::dispatch(op, data, providers, metadata_cache, cover_store))
         .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
-        .or_else(|| nowplaying_list::dispatch(op, data, providers, now_playing, cover_store))
+        .or_else(|| {
+            nowplaying_list::dispatch(
+                op,
+                data,
+                providers,
+                now_playing,
+                cover_store,
+                metadata_cache,
+            )
+        })
 }
 
 /// The shared V6 pagination envelope: `{ total, offset, items }` (#118 §8). `total`

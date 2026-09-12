@@ -27,6 +27,7 @@ use super::{
     req_str, req_str_array, track,
 };
 use crate::cover::store::CoverStore;
+use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::protocol::messages::{NowPlayingListTrack, QueueType, TrackTags};
 use crate::providers::Providers;
@@ -50,9 +51,10 @@ pub fn dispatch(
     p: &dyn Providers,
     now_playing: Option<&NowPlayingCache>,
     cover_store: Option<&CoverStore>,
+    cache: Option<&MetadataCache>,
 ) -> Option<OpResult> {
     Some(match op {
-        "now_playing_list" => list(data, p, now_playing, cover_store),
+        "now_playing_list" => list(data, p, now_playing, cover_store, cache),
         "now_playing_list_play" => play(data, p, now_playing),
         "now_playing_list_remove" => remove(data, p, now_playing),
         "now_playing_list_move" => move_item(data, p, now_playing),
@@ -71,9 +73,11 @@ fn list(
     p: &dyn Providers,
     now_playing: Option<&NowPlayingCache>,
     store: Option<&CoverStore>,
+    cache: Option<&MetadataCache>,
 ) -> OpResult {
     let (offset, limit) = page_args(data)?;
     let up_next = opt_bool(data, "up_next")?.unwrap_or(false);
+    let totals = opt_bool(data, "totals")?.unwrap_or(false);
     let page = if up_next {
         p.now_playing_list_ordered(offset as i32, limit as i32)
     } else {
@@ -124,7 +128,39 @@ fn list(
         .collect();
     let mut out = page_json(page.total.max(0) as usize, offset, items);
     out["version"] = json!(list_version(now_playing));
+    if totals {
+        out["total_duration_ms"] = json!(run_time_ms(p, cache, up_next)?);
+    }
     Ok(out)
+}
+
+/// How long the view runs, in milliseconds: the whole queue, or everything left
+/// to play under `up_next`.
+///
+/// Opt-in because it is the answer a window cannot give: it reads the tags of
+/// the whole list, which the cache makes cheap after the first time. The paths
+/// come from the view that was asked for, so the sum describes what the client
+/// is looking at rather than a longer list it cannot see. A track the host
+/// reports no duration for counts as nothing; there is no better guess.
+fn run_time_ms(
+    p: &dyn Providers,
+    cache: Option<&MetadataCache>,
+    up_next: bool,
+) -> Result<i64, V6Error> {
+    let paths: Vec<String> = if up_next {
+        p.now_playing_list_ordered(0, 0)
+            .map_err(internal)?
+            .data
+            .into_iter()
+            .map(|npt| npt.path)
+            .collect()
+    } else {
+        p.now_playing_list_paths().map_err(internal)?
+    };
+    Ok(track::tags_for_paths(p, cache, &paths)?
+        .iter()
+        .map(|t| t.duration_ms.max(0))
+        .sum())
 }
 
 /// The version a page is served with, and the one a mutation is checked against.
@@ -300,7 +336,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let out = dispatch("now_playing_list", &json!({}), &m, None, None)
+        let out = dispatch("now_playing_list", &json!({}), &m, None, None, None)
             .unwrap()
             .unwrap();
         assert_eq!(out["total"], 2);
@@ -337,6 +373,7 @@ mod tests {
             "now_playing_list",
             &json!({ "up_next": true }),
             &m,
+            None,
             None,
             None,
         )
@@ -382,6 +419,7 @@ mod tests {
             &m,
             None,
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -405,6 +443,7 @@ mod tests {
             &m,
             None,
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -414,6 +453,7 @@ mod tests {
             &m,
             None,
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -421,6 +461,7 @@ mod tests {
             "now_playing_list_move",
             &json!({ "from": 1, "to": 4 }),
             &m,
+            None,
             None,
             None,
         )
@@ -441,6 +482,7 @@ mod tests {
             &m,
             None,
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -458,6 +500,7 @@ mod tests {
             &m,
             None,
             None,
+            None,
         )
         .unwrap()
         .unwrap_err();
@@ -468,7 +511,7 @@ mod tests {
     #[test]
     fn queue_missing_paths_is_missing_field() {
         let m = MockProviders::default();
-        let err = dispatch("now_playing_queue", &json!({}), &m, None, None)
+        let err = dispatch("now_playing_queue", &json!({}), &m, None, None, None)
             .unwrap()
             .unwrap_err();
         assert_eq!(err.code, mbrc_wire::v6::ErrorCode::MissingField);
@@ -477,7 +520,7 @@ mod tests {
     #[test]
     fn play_bad_order_is_invalid_or_missing() {
         let m = MockProviders::default();
-        let err = dispatch("now_playing_list_play", &json!({}), &m, None, None)
+        let err = dispatch("now_playing_list_play", &json!({}), &m, None, None, None)
             .unwrap()
             .unwrap_err();
         assert_eq!(err.code, mbrc_wire::v6::ErrorCode::MissingField);
@@ -502,6 +545,98 @@ mod tests {
         assert!(parse_queue_type("add-all").is_err());
     }
 
+    /// The sum covers the whole queue, not the page: a client showing how long
+    /// the queue runs is not asking about the rows it happens to have read.
+    #[test]
+    fn the_run_time_sums_the_whole_queue_and_only_when_asked() {
+        let m = MockProviders {
+            now_playing_list: Page {
+                total: 2,
+                offset: 0,
+                limit: 1,
+                data: vec![npt("a.mp3", 0)],
+            },
+            now_playing_list_paths: vec!["a.mp3".into(), "b.mp3".into()],
+            tracks_detailed: vec![
+                TrackTags {
+                    src: "a.mp3".into(),
+                    duration: "3:00".into(),
+                    ..Default::default()
+                },
+                TrackTags {
+                    src: "b.mp3".into(),
+                    duration: "1:30".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let out = dispatch(
+            "now_playing_list",
+            &json!({ "limit": 1, "totals": true }),
+            &m,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out["total_duration_ms"], 270_000);
+
+        let out = dispatch(
+            "now_playing_list",
+            &json!({ "limit": 1 }),
+            &m,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(out["total_duration_ms"].is_null());
+    }
+
+    /// Up next drops the tracks already played, so its run time must come from
+    /// the same walk its `total` does rather than from the whole queue.
+    #[test]
+    fn the_up_next_run_time_covers_the_walk_rather_than_the_queue() {
+        let m = MockProviders {
+            now_playing_list_ordered: Page {
+                total: 1,
+                offset: 0,
+                limit: 0,
+                data: vec![npt("b.mp3", 1)],
+            },
+            now_playing_list_paths: vec!["a.mp3".into(), "b.mp3".into()],
+            tracks_detailed: vec![
+                TrackTags {
+                    src: "a.mp3".into(),
+                    duration: "3:00".into(),
+                    ..Default::default()
+                },
+                TrackTags {
+                    src: "b.mp3".into(),
+                    duration: "1:30".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let out = dispatch(
+            "now_playing_list",
+            &json!({ "up_next": true, "totals": true }),
+            &m,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out["total_duration_ms"], 90_000);
+    }
+
     /// The page carries the version its `order`s belong to (#118 §7), so a
     /// client can hand it back and be told the list moved.
     #[test]
@@ -511,13 +646,13 @@ mod tests {
         let cache = NowPlayingCache::new(providers);
         let m = MockProviders::default();
 
-        let out = dispatch("now_playing_list", &json!({}), &m, Some(&cache), None)
+        let out = dispatch("now_playing_list", &json!({}), &m, Some(&cache), None, None)
             .unwrap()
             .unwrap();
         assert_eq!(out["version"], 0);
 
         cache.bump_list_version();
-        let out = dispatch("now_playing_list", &json!({}), &m, Some(&cache), None)
+        let out = dispatch("now_playing_list", &json!({}), &m, Some(&cache), None, None)
             .unwrap()
             .unwrap();
         assert_eq!(out["version"], 1);
@@ -538,6 +673,7 @@ mod tests {
             &json!({ "order": 2, "version": 0 }),
             &m,
             Some(&cache),
+            None,
             None,
         )
         .unwrap()
@@ -562,6 +698,7 @@ mod tests {
             &json!({ "order": 2, "version": 0 }),
             &m,
             Some(&cache),
+            None,
             None,
         )
         .unwrap()
@@ -588,6 +725,7 @@ mod tests {
             &m,
             Some(&cache),
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -601,9 +739,16 @@ mod tests {
         let cache = NowPlayingCache::new(providers);
         let m = MockProviders::default();
 
-        let data = dispatch("now_playing_list_clear", &json!({}), &m, Some(&cache), None)
-            .unwrap()
-            .unwrap();
+        let data = dispatch(
+            "now_playing_list_clear",
+            &json!({}),
+            &m,
+            Some(&cache),
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(data, json!({}));
         assert!(m.recorded().contains(&"clear_list()".to_string()));
         assert_eq!(cache.list_version(), 1);
@@ -625,6 +770,7 @@ mod tests {
             &m,
             Some(&cache),
             None,
+            None,
         )
         .unwrap()
         .unwrap_err();
@@ -635,7 +781,7 @@ mod tests {
     #[test]
     fn unknown_op_is_not_in_this_domain() {
         let m = MockProviders::default();
-        assert!(dispatch("player_status", &json!({}), &m, None, None).is_none());
+        assert!(dispatch("player_status", &json!({}), &m, None, None, None).is_none());
     }
 
     #[test]
@@ -644,7 +790,7 @@ mod tests {
         let data = json!({ "index": 0, "from": 0, "to": 0, "query": "q", "paths": ["a"] });
         for op in OPS {
             assert!(
-                dispatch(op, &data, &m, None, None).is_some(),
+                dispatch(op, &data, &m, None, None, None).is_some(),
                 "advertised op {op} is not dispatched"
             );
         }

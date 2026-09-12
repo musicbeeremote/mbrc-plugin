@@ -305,11 +305,16 @@ namespace MusicBeePlugin.Providers
 
         public int GetNowPlayingListCount()
         {
-            // Paths-only enumeration - the whole list's URLs in one call, no tag
-            // reads - just for the page's reported total.
+            return GetNowPlayingListPaths().Length;
+        }
+
+        public string[] GetNowPlayingListPaths()
+        {
+            // Paths-only enumeration: the whole list's URLs in one call, no tag
+            // reads. What the page query cannot give, since it reads its window.
             return _api.NowPlayingList_QueryFilesEx(null, out var files) && files != null
-                ? files.Length
-                : 0;
+                ? files
+                : Array.Empty<string>();
         }
 
         #endregion

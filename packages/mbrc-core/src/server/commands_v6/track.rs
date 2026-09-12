@@ -15,7 +15,7 @@ use mbrc_wire::v6::ErrorCode;
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
 use crate::cover::store::CoverStore;
-use crate::metadata_cache::CachedTags;
+use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
 
@@ -159,6 +159,37 @@ pub(crate) fn cached_cover_hash_for(
         &tags.album_artist
     };
     album_cover_hash(store, artist, &tags.album)
+}
+
+/// The tags for a set of paths, answered from the shared cache and asked of the
+/// host only for what the cache does not hold.
+///
+/// The cache is the one the library browse paths fill, so a playlist or queue of
+/// tracks a client has already browsed costs no host call at all. What the host
+/// does answer is written back, so the second read of a cold list is warm.
+pub(crate) fn tags_for_paths(
+    p: &dyn Providers,
+    cache: Option<&MetadataCache>,
+    paths: &[String],
+) -> Result<Vec<CachedTags>, V6Error> {
+    let mut hits: Vec<CachedTags> = Vec::new();
+    let mut misses: Vec<String> = Vec::new();
+    for path in paths {
+        match cache.and_then(|c| c.track_tags(path)) {
+            Some(cached) => hits.push(cached),
+            None => misses.push(path.clone()),
+        }
+    }
+    if misses.is_empty() {
+        return Ok(hits);
+    }
+    let fetched = p.tracks_detailed_for_paths(misses).map_err(internal)?;
+    let filled: Vec<CachedTags> = fetched.iter().map(CachedTags::from).collect();
+    if let Some(cache) = cache {
+        cache.put_track_tags(&filled);
+    }
+    hits.extend(filled);
+    Ok(hits)
 }
 
 fn non_empty(s: &str) -> Option<&str> {
@@ -335,9 +366,14 @@ mod tests {
             tracks_detailed: vec![tags()],
             ..Default::default()
         };
-        let out = dispatch("track_get", &json!({ "src": "x" }), &m, Some(&store))
-            .unwrap()
-            .unwrap();
+        let out = dispatch(
+            "track_get",
+            &json!({ "src": r"C:\Music\song.mp3" }),
+            &m,
+            Some(&store),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(out["title"], "Title");
         assert_eq!(out["cover_hash"], hash);
     }

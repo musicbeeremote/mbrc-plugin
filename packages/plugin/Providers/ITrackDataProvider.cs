@@ -96,6 +96,12 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         int GetNowPlayingListCount();
 
+        /// <summary>
+        ///     Every path in the now playing list, in list order. The same
+        ///     paths-only query the count uses, so it costs no tag reads.
+        /// </summary>
+        string[] GetNowPlayingListPaths();
+
         // Rating Operations
 
         /// <summary>

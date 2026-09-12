@@ -104,7 +104,7 @@ fn tracks(
             .collect()
     } else {
         let window: Vec<String> = files.paths[start..].iter().take(take).cloned().collect();
-        let tags = page_tags(p, cache, &window)?;
+        let tags = track::tags_for_paths(p, cache, &window)?;
         let by_path: HashMap<&str, &CachedTags> =
             tags.iter().map(|t| (t.src.as_str(), t)).collect();
         window
@@ -147,7 +147,7 @@ fn selected(
     needle: Option<&str>,
     field: QueryField,
 ) -> Result<Vec<(usize, CachedTags)>, super::V6Error> {
-    let tags = page_tags(p, cache, paths)?;
+    let tags = track::tags_for_paths(p, cache, paths)?;
     let by_path: HashMap<&str, &CachedTags> = tags.iter().map(|t| (t.src.as_str(), t)).collect();
     Ok(paths
         .iter()
@@ -212,37 +212,6 @@ fn untagged_track(path: &str) -> CachedTags {
         src: path.to_string(),
         ..CachedTags::default()
     }
-}
-
-/// The window's tags, answered from the shared cache and asked of the host only
-/// for what the cache does not hold.
-///
-/// The cache is the same one the library browse paths fill, so a playlist of
-/// tracks a client has already browsed costs no host call at all. What the host
-/// does answer is written back, so the second read of a cold playlist is warm.
-fn page_tags(
-    p: &dyn Providers,
-    cache: Option<&MetadataCache>,
-    window: &[String],
-) -> Result<Vec<CachedTags>, super::V6Error> {
-    let mut hits: Vec<CachedTags> = Vec::new();
-    let mut misses: Vec<String> = Vec::new();
-    for path in window {
-        match cache.and_then(|c| c.track_tags(path)) {
-            Some(cached) => hits.push(cached),
-            None => misses.push(path.clone()),
-        }
-    }
-    if misses.is_empty() {
-        return Ok(hits);
-    }
-    let fetched = p.tracks_detailed_for_paths(misses).map_err(internal)?;
-    let filled: Vec<CachedTags> = fetched.iter().map(CachedTags::from).collect();
-    if let Some(cache) = cache {
-        cache.put_track_tags(&filled);
-    }
-    hits.extend(filled);
-    Ok(hits)
 }
 
 fn play(data: &Value, p: &dyn Providers) -> OpResult {

@@ -84,6 +84,7 @@ namespace MusicBeePlugin.Ffi.Generated
         HasLastFmAccount = 37,
         LibraryGenreTracks = 38,
         PlaylistTracks = 39,
+        NowPlayingListPaths = 40,
     }
 
     public enum CommandType

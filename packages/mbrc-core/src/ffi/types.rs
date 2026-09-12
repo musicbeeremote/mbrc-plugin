@@ -177,6 +177,10 @@ pub enum QueryType {
     // them in one call; tags are read for the served page only, so a long
     // playlist costs a page of tag reads rather than all of them.
     PlaylistTracks = 39,
+    // Every path in the now-playing list, in list order, from the host's
+    // paths-only enumeration. The page query reads tags for its window, which
+    // cannot answer how long the whole queue runs.
+    NowPlayingListPaths = 40,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

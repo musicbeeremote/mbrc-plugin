@@ -62,6 +62,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.PlaylistTracks: return Pack(_playlist.GetPlaylistFiles(Q(p).query));
                 case QueryType.NowPlayingList: return Pack(BuildNowPlayingList(Page(p), ordered: false));
                 case QueryType.NowPlayingListOrdered: return Pack(BuildNowPlayingList(Page(p), ordered: true));
+                case QueryType.NowPlayingListPaths: return Pack(_track.GetNowPlayingListPaths());
                 case QueryType.RadioStations: return Pack(BuildRadioStations(Page(p)));
                 case QueryType.LibraryBrowseGenres: return Pack(BuildBrowseGenres(Page(p)));
                 case QueryType.LibraryBrowseArtists: return Pack(BuildBrowseArtists(Msgpack.Deserialize<BrowseParams>(p)));

@@ -83,6 +83,11 @@ pub trait Providers: Send + Sync {
         offset: i32,
         limit: i32,
     ) -> Result<Page<NowPlayingListTrack>, String>;
+    /// Every path in the queue, in list order, without reading a tag.
+    ///
+    /// The page queries read tags for the window they serve, so neither can
+    /// answer a question about the whole queue.
+    fn now_playing_list_paths(&self) -> Result<Vec<String>, String>;
     fn play_list_item(&self, index: i32) -> Result<(), String>;
     fn remove_list_item(&self, index: i32) -> Result<(), String>;
     fn move_list_item(&self, from: i32, to: i32) -> Result<(), String>;
@@ -304,6 +309,10 @@ impl Providers for FfiProviders {
             QueryType::NowPlayingListOrdered,
             &PaginationParams { offset, limit },
         )
+    }
+    fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
+        self.callbacks
+            .query_no_params(QueryType::NowPlayingListPaths)
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.callbacks
@@ -613,6 +622,9 @@ impl Providers for NullProviders {
     ) -> Result<Page<NowPlayingListTrack>, String> {
         Ok(Page::default())
     }
+    fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     fn play_list_item(&self, _index: i32) -> Result<(), String> {
         Ok(())
     }
@@ -733,6 +745,7 @@ pub struct MockProviders {
     pub lfm_rating: LastfmStatus,
     pub now_playing_list: Page<NowPlayingListTrack>,
     pub now_playing_list_ordered: Page<NowPlayingListTrack>,
+    pub now_playing_list_paths: Vec<String>,
     pub browse_genres: Page<GenreData>,
     pub browse_artists: Page<ArtistData>,
     pub browse_albums: Page<AlbumData>,
@@ -903,6 +916,10 @@ impl Providers for MockProviders {
         self.record("now_playing_list_ordered");
         Ok(self.now_playing_list_ordered.clone())
     }
+    fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
+        self.record("now_playing_list_paths");
+        Ok(self.now_playing_list_paths.clone())
+    }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.record(format!("play_list_item({index})"));
         Ok(())
@@ -996,9 +1013,16 @@ impl Providers for MockProviders {
         self.record(format!("tracks_for_paths({})", paths.len()));
         Ok(self.tracks_for_paths.clone())
     }
+    /// Only the paths asked for, as the host answers: a caller that sums what
+    /// comes back must get the window it asked about, not the whole fixture.
     fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
         self.record(format!("tracks_detailed_for_paths({})", paths.len()));
-        Ok(self.tracks_detailed.clone())
+        Ok(self
+            .tracks_detailed
+            .iter()
+            .filter(|t| paths.contains(&t.src))
+            .cloned()
+            .collect())
     }
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String> {
         self.record(format!("sync_delta({updated_since})"));
