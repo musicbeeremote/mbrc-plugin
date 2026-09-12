@@ -162,6 +162,7 @@ fn subscription_json(s: &PodcastSubscription, image_hash: Option<&str>) -> Value
         "genre": s.genre,
         "description": s.description,
         "downloaded_count": s.downloaded_count.max(0),
+        "episode_count": s.episode_count.max(0),
     });
     if let Some(hash) = image_hash {
         obj["image_hash"] = json!(hash);
@@ -180,6 +181,8 @@ fn episode_json(e: &PodcastEpisode) -> Value {
         "duration_ms": parse_duration_ms(&e.duration),
         "is_downloaded": e.is_downloaded,
         "has_been_played": e.has_been_played,
+        "url": e.url,
+        "author": e.author,
     })
 }
 
@@ -201,6 +204,7 @@ mod tests {
             genre: "Technology".into(),
             description: "About things".into(),
             downloaded_count: 3,
+            episode_count: 12,
         }
     }
 
@@ -215,6 +219,7 @@ mod tests {
             is_downloaded: true,
             has_been_played: false,
             url: format!("https://feed/{index}.mp3"),
+            author: "The Hosts".into(),
         }
     }
 
@@ -246,6 +251,7 @@ mod tests {
         assert_eq!(out["items"][0]["id"], "a");
         assert_eq!(out["items"][0]["title"], "a the podcast");
         assert_eq!(out["items"][0]["downloaded_count"], 3);
+        assert_eq!(out["items"][0]["episode_count"], 12);
         // No store, so no art was resolved and the field stays off the item
         // rather than arriving as a null a client has to test for.
         assert!(out["items"][0].get("image_hash").is_none());
@@ -269,9 +275,10 @@ mod tests {
         assert_eq!(out["date"], "2026-01-15T00:00:00Z");
         assert_eq!(out["is_downloaded"], true);
         assert_eq!(out["has_been_played"], false);
-        // The url is what plays the episode, not something a client addresses it
-        // by, so it never reaches the wire.
-        assert!(out.get("url").is_none());
+        assert_eq!(out["author"], "The Hosts");
+        // Playing takes the index, but the url is what names an episode outside
+        // MusicBee, so a client can still see it.
+        assert_eq!(out["url"], "https://feed/1.mp3");
     }
 
     #[test]

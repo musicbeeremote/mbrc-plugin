@@ -418,14 +418,17 @@ pub struct PodcastSubscription {
     pub description: String,
     #[serde(default)]
     pub downloaded_count: i32,
+    /// How many episodes the feed holds, from the host's URL enumeration.
+    #[serde(default)]
+    pub episode_count: i32,
 }
 
 /// One episode of a subscription.
 ///
 /// `index` is its place in the subscription and the only key MusicBee accepts;
 /// `id` is the feed's own and is carried for a client that wants to recognise an
-/// episode across a re-read. `url` never reaches the wire: it is what playing an
-/// episode needs, and a client addresses episodes by index instead.
+/// episode across a re-read. `url` both plays the episode and names it outside
+/// MusicBee, so it travels as a field rather than being kept host-side.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PodcastEpisode {
     #[serde(default)]
@@ -448,6 +451,10 @@ pub struct PodcastEpisode {
     pub has_been_played: bool,
     #[serde(default)]
     pub url: String,
+    /// Who made it, read from the episode's own tags rather than the podcast
+    /// API, which has no such field. Empty when the host cannot resolve the url.
+    #[serde(default)]
+    pub author: String,
 }
 
 /// The queue's play order from the current track, as indices and paths.

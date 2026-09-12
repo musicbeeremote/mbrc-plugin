@@ -137,6 +137,9 @@ namespace MusicBeePlugin.Providers
                 genre = Field(fields, (int)Plugin.SubscriptionMetaDataType.Genre),
                 description = Field(fields, (int)Plugin.SubscriptionMetaDataType.Description),
                 downloaded_count = Count(fields, (int)Plugin.SubscriptionMetaDataType.DounloadedCount),
+                // The podcast API has no episode count; the URL enumeration is
+                // one call and reads no metadata, so it answers for one.
+                episode_count = EpisodeUrls(id).Length,
             };
         }
 
@@ -159,7 +162,21 @@ namespace MusicBeePlugin.Providers
                 is_downloaded = Flag(fields, (int)Plugin.EpisodeMetaDataType.IsDownloaded),
                 has_been_played = Flag(fields, (int)Plugin.EpisodeMetaDataType.HasBeenPlayed),
                 url = urls[index],
+                author = Author(urls[index]),
             };
+        }
+
+        /// <summary>
+        ///     Who made an episode, which the podcast API does not report.
+        ///     MusicBee resolves a feed URL through the ordinary tag path, so the
+        ///     episode's own artist tag answers it; empty when it cannot.
+        /// </summary>
+        private string Author(string url)
+        {
+            var artist = _api.Library_GetFileTag(url, Plugin.MetaDataType.Artist).Cleanup();
+            return artist.Length > 0
+                ? artist
+                : _api.Library_GetFileTag(url, Plugin.MetaDataType.AlbumArtist).Cleanup();
         }
 
         /// <summary>

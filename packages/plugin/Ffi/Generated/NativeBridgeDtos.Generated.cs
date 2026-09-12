@@ -200,6 +200,7 @@ namespace MusicBeePlugin.Ffi
         public string genre { get; set; }
         public string description { get; set; }
         public int downloaded_count { get; set; }
+        public int episode_count { get; set; }
     }
 
     public class PodcastEpisode
@@ -213,6 +214,7 @@ namespace MusicBeePlugin.Ffi
         public bool is_downloaded { get; set; }
         public bool has_been_played { get; set; }
         public string url { get; set; }
+        public string author { get; set; }
     }
 
     public class NowPlayingOrder

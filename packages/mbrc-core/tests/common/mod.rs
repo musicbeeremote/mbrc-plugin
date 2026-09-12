@@ -35,6 +35,7 @@ fn subscription() -> PodcastSubscription {
         genre: "Technology".into(),
         description: "About things".into(),
         downloaded_count: 2,
+        episode_count: 3,
     }
 }
 
@@ -49,6 +50,7 @@ fn episode() -> PodcastEpisode {
         is_downloaded: true,
         has_been_played: false,
         url: "https://feed/1.mp3".into(),
+        author: "The Hosts".into(),
     }
 }
 
