@@ -17,6 +17,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import LibraryView from '../views/LibraryView.vue'
 import NowPlayingView from '../views/NowPlayingView.vue'
 import PlaylistsView from '../views/PlaylistsView.vue'
+import PodcastsView from '../views/PodcastsView.vue'
 import QueueView from '../views/QueueView.vue'
 import RadioView from '../views/RadioView.vue'
 
@@ -28,6 +29,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/queue', name: RouteName.Queue, component: QueueView },
   { path: '/library/:level?', name: RouteName.Library, component: LibraryView },
   { path: '/lists', name: RouteName.Playlists, component: PlaylistsView },
+  { path: '/podcasts', name: RouteName.Podcasts, component: PodcastsView },
   { path: '/radio', name: RouteName.Radio, component: RadioView },
   { path: '/:rest(.*)*', redirect: '/playing' },
 ]

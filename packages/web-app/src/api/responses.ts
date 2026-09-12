@@ -20,6 +20,8 @@ import {
   PlaylistEntrySchema,
   PlaylistPageSchema,
   PlayStateSchema,
+  PodcastEpisodeSchema,
+  PodcastSubscriptionSchema,
   QueuePageSchema,
   RadioEntrySchema,
   RepeatModeSchema,
@@ -136,6 +138,12 @@ export const OpResponseSchemas = {
   now_playing_list_move: EmptySchema,
   now_playing_list_clear: EmptySchema,
   now_playing_queue: EmptySchema,
+
+  podcast_subscriptions: pageSchema(PodcastSubscriptionSchema),
+  podcast_subscription: PodcastSubscriptionSchema,
+  podcast_episodes: pageSchema(PodcastEpisodeSchema),
+  podcast_episode: PodcastEpisodeSchema,
+  podcast_episode_play: EmptySchema,
 
   library_genres: pageSchema(GenreEntrySchema),
   library_artists: pageSchema(ArtistEntrySchema),

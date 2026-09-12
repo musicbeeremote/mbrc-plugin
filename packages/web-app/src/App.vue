@@ -8,6 +8,7 @@ import IconLibrary from '~icons/lucide/library'
 import IconMusic from '~icons/lucide/music'
 import IconPlaylists from '~icons/lucide/list'
 import IconQueue from '~icons/lucide/list-music'
+import IconPodcast from '~icons/lucide/podcast'
 import IconRadio from '~icons/lucide/radio'
 
 import { client } from './api/client'
@@ -28,6 +29,7 @@ const TABS: { id: RouteName; to: string; label: string; icon: Component }[] = [
   { id: RouteName.Queue, to: '/queue', label: 'common.nav.queue', icon: IconQueue },
   { id: RouteName.Library, to: '/library', label: 'common.nav.library', icon: IconLibrary },
   { id: RouteName.Playlists, to: '/lists', label: 'common.nav.playlists', icon: IconPlaylists },
+  { id: RouteName.Podcasts, to: '/podcasts', label: 'common.nav.podcasts', icon: IconPodcast },
   { id: RouteName.Radio, to: '/radio', label: 'common.nav.radio', icon: IconRadio },
 ]
 

@@ -1,0 +1,15 @@
+{
+  "title": "Podcasts",
+  "episodeCount": "no episodes | 1 episode | {count} episodes",
+  "downloadedCount": "1 downloaded | {count} downloaded",
+  "downloaded": "Downloaded",
+  "action": {
+    "queue": "Queue {title}"
+  },
+  "empty": {
+    "title": "No podcasts.",
+    "hint": "Subscribe to a podcast in MusicBee and it will appear here.",
+    "episodes": "No episodes.",
+    "episodesHint": "This subscription has nothing in it yet."
+  }
+}

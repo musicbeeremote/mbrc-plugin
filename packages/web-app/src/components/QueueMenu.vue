@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import IconMore from '~icons/lucide/ellipsis-vertical'
 
@@ -17,7 +17,7 @@ import { QueueMode } from '../api/types'
  * lift the menu over the navigation bar - so it is positioned against the
  * button from outside instead.
  */
-defineProps<{ label: string }>()
+const { label, modes } = defineProps<{ label: string; modes?: QueueMode[] }>()
 const emit = defineEmits<{ select: [mode: QueueMode] }>()
 
 const open = ref(false)
@@ -29,24 +29,39 @@ const at = ref({ top: 0, left: 0 })
 
 /** Matches `w-44`, and the gap the menu keeps from the window's edges. */
 const MENU_WIDTH = 176
-const MENU_HEIGHT = 176
 const MARGIN = 8
 
-const MODES: { mode: QueueMode; label: string }[] = [
-  { mode: QueueMode.Now, label: 'library.action.now' },
-  { mode: QueueMode.Next, label: 'library.action.next' },
-  { mode: QueueMode.Last, label: 'library.action.last' },
-  { mode: QueueMode.AddAll, label: 'library.action.addAll' },
-]
+const LABELS: Record<QueueMode, string> = {
+  [QueueMode.Now]: 'library.action.now',
+  [QueueMode.Next]: 'library.action.next',
+  [QueueMode.Last]: 'library.action.last',
+  [QueueMode.AddAll]: 'library.action.addAll',
+}
+
+/**
+ * The placements offered, all four unless a caller names fewer.
+ *
+ * A row that stands for one track has no "add all" to offer, and a menu
+ * entry that does nothing distinct is worse than one that is not there.
+ */
+const entries = computed(() =>
+  (modes ?? [QueueMode.Now, QueueMode.Next, QueueMode.Last, QueueMode.AddAll]).map((mode) => ({
+    mode,
+    label: LABELS[mode],
+  })),
+)
+
+/** Matches the menu's own padding plus one row per entry. */
+const menuHeight = computed(() => entries.value.length * 40 + 8)
 
 /** Under whatever opened it, or above when the window has no room below. */
 function place() {
   const box = trigger.value?.getBoundingClientRect()
   const anchor = from.value ?? (box && { top: box.bottom, left: box.right })
   if (!anchor) return
-  const below = anchor.top + MENU_HEIGHT + MARGIN < window.innerHeight
+  const below = anchor.top + menuHeight.value + MARGIN < window.innerHeight
   at.value = {
-    top: below ? anchor.top + 4 : anchor.top - MENU_HEIGHT - 4,
+    top: below ? anchor.top + 4 : anchor.top - menuHeight.value - 4,
     left: Math.max(
       MARGIN,
       Math.min(anchor.left - MENU_WIDTH, window.innerWidth - MENU_WIDTH - MARGIN),
@@ -139,7 +154,7 @@ onBeforeUnmount(() => {
         :style="{ top: `${at.top}px`, left: `${at.left}px` }"
       >
         <button
-          v-for="entry in MODES"
+          v-for="entry in entries"
           :key="entry.mode"
           role="menuitem"
           class="block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60"

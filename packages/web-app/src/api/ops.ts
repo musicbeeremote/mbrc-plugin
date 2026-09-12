@@ -98,6 +98,12 @@ export interface OpRequests {
   library_play_all: { shuffle?: boolean }
   library_queue: LibraryScope & { mode?: QueueMode; play?: string; shuffle?: boolean }
 
+  podcast_subscriptions: PageArgs
+  podcast_subscription: { id: string }
+  podcast_episodes: PageArgs & { id: string }
+  podcast_episode: { id: string; index: number }
+  podcast_episode_play: { id: string; index: number; mode?: QueueMode }
+
   playlist_list: PageArgs
   playlist_play: { url: string }
   // `query` and `totals` are what a window cannot answer, so each is asked for
@@ -152,6 +158,12 @@ export const Op = {
   NowPlayingListMove: 'now_playing_list_move',
   NowPlayingListClear: 'now_playing_list_clear',
   NowPlayingQueue: 'now_playing_queue',
+
+  PodcastSubscriptions: 'podcast_subscriptions',
+  PodcastSubscription: 'podcast_subscription',
+  PodcastEpisodes: 'podcast_episodes',
+  PodcastEpisode: 'podcast_episode',
+  PodcastEpisodePlay: 'podcast_episode_play',
 
   LibraryGenres: 'library_genres',
   LibraryArtists: 'library_artists',

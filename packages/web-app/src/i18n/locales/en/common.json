@@ -14,6 +14,7 @@
     "queue": "Queue",
     "library": "Library",
     "playlists": "Lists",
+    "podcasts": "Podcasts",
     "radio": "Radio"
   },
   "action": {

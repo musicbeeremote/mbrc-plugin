@@ -207,6 +207,36 @@ export const PlaylistPageSchema = pageSchema(PlaylistTrackSchema).extend({
 })
 export type PlaylistPage = z.infer<typeof PlaylistPageSchema>
 
+/**
+ * A podcast subscription.
+ *
+ * `image_hash` is absent when the feed has no art, and names the same
+ * content-addressed store album covers come from, so `coverUrl` renders it.
+ */
+export const PodcastSubscriptionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  grouping: z.string(),
+  genre: z.string(),
+  description: z.string(),
+  downloaded_count: z.number(),
+  image_hash: z.string().nullish(),
+})
+export type PodcastSubscription = z.infer<typeof PodcastSubscriptionSchema>
+
+/** One episode. `index` is its place in the subscription, and the only key. */
+export const PodcastEpisodeSchema = z.object({
+  index: z.number(),
+  id: z.string(),
+  title: z.string(),
+  date: z.string().nullish(),
+  description: z.string(),
+  duration_ms: z.number().nullish(),
+  is_downloaded: z.boolean(),
+  has_been_played: z.boolean(),
+})
+export type PodcastEpisode = z.infer<typeof PodcastEpisodeSchema>
+
 export const GenreEntrySchema = z.object({
   genre: z.string(),
   count: z.number(),

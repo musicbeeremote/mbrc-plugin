@@ -17,6 +17,7 @@ export const RouteName = {
   Queue: 'queue',
   Library: 'library',
   Playlists: 'playlists',
+  Podcasts: 'podcasts',
   Radio: 'radio',
 } as const
 export type RouteName = (typeof RouteName)[keyof typeof RouteName]
@@ -139,6 +140,21 @@ export function playlistTracksRoute(
   // A column is only meaningful beside a term, so it travels with one.
   if (query.q !== undefined && field !== 'any') query.qf = field
   return { name: RouteName.Playlists, query }
+}
+
+/**
+ * The address of the podcasts pane, or of one subscription inside it.
+ *
+ * The subscription travels in the query rather than the path so that opening
+ * one is a place to return to, the way an open playlist is.
+ */
+export function podcastsRoute(id?: string): RouteLocationRaw {
+  return { name: RouteName.Podcasts, query: id === undefined ? {} : { show: id } }
+}
+
+/** The subscription a podcasts URL has open, or nothing when it names none. */
+export function openPodcastFromRoute(query: Record<string, unknown>): string | undefined {
+  return one(query.show)
 }
 
 /** The folder segments a playlists URL names. */
