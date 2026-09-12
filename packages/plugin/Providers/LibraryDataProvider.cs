@@ -540,23 +540,11 @@ namespace MusicBeePlugin.Providers
                     // Duration parsed to ms core-side; DateAdded is locale-ambiguous as
                     // a display string, so convert to ISO-8601 UTC here (#114).
                     duration = duration ?? string.Empty,
-                    date_added = ToIso8601(dateAdded),
+                    date_added = dateAdded.ToIso8601Utc(),
                 });
             }
 
             return tracks;
-        }
-
-        /// <summary>
-        ///     Convert a MusicBee date display string (running culture) to ISO-8601
-        ///     UTC. Empty when unparseable, so the core surfaces `date_added: null`
-        ///     rather than a bad value.
-        /// </summary>
-        private static string ToIso8601(string raw)
-        {
-            return DateTime.TryParse(raw, out var dt)
-                ? dt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)
-                : string.Empty;
         }
 
         public (List<string> Added, List<string> Updated, List<string> Deleted) GetSyncDelta(long updatedSince)
