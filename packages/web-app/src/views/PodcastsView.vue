@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import IconBack from '~icons/lucide/chevron-left'
 import IconDownloaded from '~icons/lucide/circle-check'
 import IconPodcast from '~icons/lucide/podcast'
+import IconStack from '~icons/lucide/layers'
 
 import { coverUrl, formatDuration } from '../api/display'
 import { QueueMode } from '../api/types'
@@ -22,6 +23,20 @@ const podcast = usePodcastStore()
 const EPISODE_MODES = [QueueMode.Now, QueueMode.Next, QueueMode.Last]
 
 const openId = computed(() => openPodcastFromRoute(route.query))
+
+/**
+ * MusicBee's own views (Unplayed Episodes, Recent Updates) arrive as
+ * subscriptions but are not feeds: they have no artwork and mix shows together.
+ * A feed is identified by its id being its address, so anything else is a view,
+ * and they are drawn apart from the grid rather than as blank cards in it.
+ */
+const views = computed(() =>
+  podcast.subscriptions.filter((s) => !s.id.startsWith('http')),
+)
+const feeds = computed(() => podcast.subscriptions.filter((s) => s.id.startsWith('http')))
+
+/** Whether what is open mixes shows, which is when an episode's author matters. */
+const openIsView = computed(() => openId.value !== undefined && !openId.value.startsWith('http'))
 
 onMounted(() => {
   void podcast.load()
@@ -77,14 +92,28 @@ function published(episode: PodcastEpisode): string {
       </div>
 
       <span v-if="openId === undefined" class="text-2xs tabular-nums text-outline">
-        {{ podcast.total }}
+        {{ feeds.length }}
       </span>
     </div>
 
     <!-- The subscriptions, as the art the reader recognises them by. -->
     <div v-if="openId === undefined" class="flex-1 overflow-y-auto">
+      <!-- MusicBee's own views, which are lists rather than shows. -->
+      <div v-if="views.length > 0" class="flex flex-wrap gap-2 px-3 pt-3">
+        <button
+          v-for="view in views"
+          :key="view.id"
+          class="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs transition-colors hover:bg-surface-2/60"
+          @click="router.push(podcastsRoute(view.id))"
+        >
+          <IconStack class="size-3.5 shrink-0 text-outline" />
+          <span class="truncate">{{ view.title }}</span>
+          <span class="tabular-nums text-outline">{{ view.episode_count }}</span>
+        </button>
+      </div>
+
       <ul class="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 lg:grid-cols-4">
-        <li v-for="subscription in podcast.subscriptions" :key="subscription.id">
+        <li v-for="subscription in feeds" :key="subscription.id">
           <button
             class="w-full text-left transition-opacity hover:opacity-80"
             @click="router.push(podcastsRoute(subscription.id))"
@@ -104,9 +133,14 @@ function published(episode: PodcastEpisode): string {
             <p class="mt-2 truncate text-sm font-medium">{{ subscription.title }}</p>
             <p class="truncate text-2xs text-outline">
               {{
-                subscription.downloaded_count > 0
-                  ? $t('podcasts.downloadedCount', subscription.downloaded_count)
-                  : subscription.genre
+                [
+                  $t('podcasts.episodeCount', subscription.episode_count),
+                  subscription.downloaded_count > 0
+                    ? $t('podcasts.downloadedCount', subscription.downloaded_count)
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
               }}
             </p>
           </button>
@@ -140,6 +174,11 @@ function published(episode: PodcastEpisode): string {
           >
             <button class="min-w-0 flex-1 text-left" @click="podcast.play(episode.index)">
               <p class="truncate text-sm font-medium">{{ episode.title }}</p>
+              <!-- Who made it, when the list mixes shows and the title alone
+                   does not say. A feed's own episodes are all by the same one. -->
+              <p v-if="openIsView && episode.author !== ''" class="truncate text-2xs text-ink-soft">
+                {{ episode.author }}
+              </p>
               <p class="flex items-center gap-1.5 truncate text-2xs text-outline">
                 <!-- Downloaded is worth a mark rather than a word: it is the
                      difference between playing now and playing over the network. -->

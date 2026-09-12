@@ -220,6 +220,7 @@ export const PodcastSubscriptionSchema = z.object({
   genre: z.string(),
   description: z.string(),
   downloaded_count: z.number(),
+  episode_count: z.number(),
   image_hash: z.string().nullish(),
 })
 export type PodcastSubscription = z.infer<typeof PodcastSubscriptionSchema>
@@ -234,6 +235,9 @@ export const PodcastEpisodeSchema = z.object({
   duration_ms: z.number().nullish(),
   is_downloaded: z.boolean(),
   has_been_played: z.boolean(),
+  /** Where the episode is now: the feed URL, or a local path once downloaded. */
+  url: z.string(),
+  author: z.string(),
 })
 export type PodcastEpisode = z.infer<typeof PodcastEpisodeSchema>
 
