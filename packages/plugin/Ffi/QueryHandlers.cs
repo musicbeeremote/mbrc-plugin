@@ -22,6 +22,7 @@ namespace MusicBeePlugin.Ffi
         private readonly ITrackDataProvider _track;
         private readonly IPlaylistDataProvider _playlist;
         private readonly ILibraryDataProvider _library;
+        private readonly IPodcastDataProvider _podcast;
         private readonly IUserSettings _userSettings;
 
         public QueryHandlers(
@@ -29,12 +30,14 @@ namespace MusicBeePlugin.Ffi
             ITrackDataProvider track,
             IPlaylistDataProvider playlist,
             ILibraryDataProvider library,
+            IPodcastDataProvider podcast,
             IUserSettings userSettings)
         {
             _player = player;
             _track = track;
             _playlist = playlist;
             _library = library;
+            _podcast = podcast;
             _userSettings = userSettings;
         }
 
@@ -64,6 +67,11 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.NowPlayingListOrdered: return Pack(BuildNowPlayingList(Page(p), ordered: true));
                 case QueryType.NowPlayingListPaths: return Pack(_track.GetNowPlayingListPaths());
                 case QueryType.NowPlayingListOrder: return Pack(_track.GetNowPlayingListOrder());
+                case QueryType.PodcastSubscriptions: return Pack(BuildSubscriptions(Page(p)));
+                case QueryType.PodcastSubscription: return Pack(_podcast.GetSubscription(Q(p).query));
+                case QueryType.PodcastEpisodes: return Pack(BuildEpisodes(Msgpack.Deserialize<PodcastEpisodesParams>(p)));
+                case QueryType.PodcastEpisode: return Pack(BuildEpisode(Msgpack.Deserialize<PodcastEpisodeParams>(p)));
+                case QueryType.PodcastArtwork: return Pack(_podcast.GetSubscriptionArtwork(Q(p).query));
                 case QueryType.RadioStations: return Pack(BuildRadioStations(Page(p)));
                 case QueryType.LibraryBrowseGenres: return Pack(BuildBrowseGenres(Page(p)));
                 case QueryType.LibraryBrowseArtists: return Pack(BuildBrowseArtists(Msgpack.Deserialize<BrowseParams>(p)));
@@ -165,6 +173,15 @@ namespace MusicBeePlugin.Ffi
                 data = data,
             };
         }
+
+        private Page<PodcastSubscription> BuildSubscriptions(PaginationParams p) =>
+            _podcast.GetSubscriptions(p.offset, p.limit);
+
+        private Page<PodcastEpisode> BuildEpisodes(PodcastEpisodesParams p) =>
+            _podcast.GetEpisodes(p.id, p.offset, p.limit);
+
+        private List<PodcastEpisode> BuildEpisode(PodcastEpisodeParams p) =>
+            _podcast.GetEpisode(p.id, p.index);
 
         private Page<RadioStation> BuildRadioStations(PaginationParams p) =>
             Paginate(_library.GetRadioStations(0, FetchAll), p.offset, p.limit);

@@ -403,6 +403,53 @@ pub struct Playlist {
     pub name: String,
 }
 
+/// A podcast subscription, as MusicBee's `SubscriptionMetaDataType` describes it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PodcastSubscription {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub grouping: String,
+    #[serde(default)]
+    pub genre: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub downloaded_count: i32,
+}
+
+/// One episode of a subscription.
+///
+/// `index` is its place in the subscription and the only key MusicBee accepts;
+/// `id` is the feed's own and is carried for a client that wants to recognise an
+/// episode across a re-read. `url` never reaches the wire: it is what playing an
+/// episode needs, and a client addresses episodes by index instead.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PodcastEpisode {
+    #[serde(default)]
+    pub index: i32,
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    /// ISO-8601 UTC, formatted host-side, or empty when the feed gave no date.
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub description: String,
+    /// The feed's own spelling (`h:mm:ss` / `mm:ss`); parsed to ms in the core.
+    #[serde(default)]
+    pub duration: String,
+    #[serde(default)]
+    pub is_downloaded: bool,
+    #[serde(default)]
+    pub has_been_played: bool,
+    #[serde(default)]
+    pub url: String,
+}
+
 /// The queue's play order from the current track, as indices and paths.
 ///
 /// The same forward walk the ordered page makes, without reading a tag: how long

@@ -280,7 +280,7 @@ pub(super) fn queue_mode(data: &Value) -> Result<QueueType, V6Error> {
     parse_queue_type(data.get("mode").and_then(Value::as_str).unwrap_or("next"))
 }
 
-pub(super) fn parse_queue_type(mode: &str) -> Result<QueueType, V6Error> {
+pub(crate) fn parse_queue_type(mode: &str) -> Result<QueueType, V6Error> {
     Ok(match mode {
         "next" => QueueType::Next,
         "last" => QueueType::Last,

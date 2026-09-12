@@ -192,6 +192,29 @@ namespace MusicBeePlugin.Ffi
         public string name { get; set; }
     }
 
+    public class PodcastSubscription
+    {
+        public string id { get; set; }
+        public string title { get; set; }
+        public string grouping { get; set; }
+        public string genre { get; set; }
+        public string description { get; set; }
+        public int downloaded_count { get; set; }
+    }
+
+    public class PodcastEpisode
+    {
+        public int index { get; set; }
+        public string id { get; set; }
+        public string title { get; set; }
+        public string date { get; set; }
+        public string description { get; set; }
+        public string duration { get; set; }
+        public bool is_downloaded { get; set; }
+        public bool has_been_played { get; set; }
+        public string url { get; set; }
+    }
+
     public class NowPlayingOrder
     {
         public List<int> positions { get; set; }
@@ -250,6 +273,19 @@ namespace MusicBeePlugin.Ffi
     {
         public int offset { get; set; }
         public int limit { get; set; }
+    }
+
+    public class PodcastEpisodesParams
+    {
+        public string id { get; set; }
+        public int offset { get; set; }
+        public int limit { get; set; }
+    }
+
+    public class PodcastEpisodeParams
+    {
+        public string id { get; set; }
+        public int index { get; set; }
     }
 
     public class QueryParams

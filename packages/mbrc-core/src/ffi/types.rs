@@ -185,6 +185,18 @@ pub enum QueryType {
     // reads. The ordered page walks the same sequence but reports the length of
     // the window it served, which cannot say how much is left to play.
     NowPlayingListOrder = 41,
+    // Podcasts (#37). The host enumerates subscriptions and an episode list in
+    // one call each and reads metadata for the served window alone, as the
+    // library and playlist pages do. The single-item queries answer with an
+    // empty list rather than an error, which is how the core spells not found.
+    PodcastSubscriptions = 42,
+    PodcastSubscription = 43,
+    PodcastEpisodes = 44,
+    PodcastEpisode = 45,
+    // Subscription artwork as raw bytes (base64), ingested into the shared
+    // content-addressed store under `podcast:{id}` and served by hash like any
+    // other cover.
+    PodcastArtwork = 46,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

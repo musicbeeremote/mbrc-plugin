@@ -11,6 +11,7 @@ pub mod nowplaying;
 pub mod nowplaying_list;
 pub mod player;
 pub mod playlist;
+pub mod podcast;
 pub mod system;
 pub mod track;
 
@@ -59,6 +60,7 @@ pub fn capabilities() -> Value {
         .chain(playlist::OPS)
         .chain(nowplaying::OPS)
         .chain(nowplaying_list::OPS)
+        .chain(podcast::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
@@ -113,6 +115,7 @@ pub fn dispatch(
         .or_else(|| library::dispatch(op, data, providers, cover_store, metadata_cache))
         .or_else(|| playlist::dispatch(op, data, providers, metadata_cache, cover_store))
         .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
+        .or_else(|| podcast::dispatch(op, data, providers, cover_store))
         .or_else(|| {
             nowplaying_list::dispatch(
                 op,

@@ -86,6 +86,11 @@ namespace MusicBeePlugin.Ffi.Generated
         PlaylistTracks = 39,
         NowPlayingListPaths = 40,
         NowPlayingListOrder = 41,
+        PodcastSubscriptions = 42,
+        PodcastSubscription = 43,
+        PodcastEpisodes = 44,
+        PodcastEpisode = 45,
+        PodcastArtwork = 46,
     }
 
     public enum CommandType

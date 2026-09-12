@@ -195,6 +195,11 @@ mod tests {
         .unwrap();
         assert_eq!(out[0].1, json!({"code": 200}));
         // "add-all" parsed to the canonical QueueType::AddAndPlay.
-        assert!(m.recorded().contains(&"queue(AddAndPlay,2,)".to_string()));
+        assert!(
+            m.recorded()
+                .contains(&"queue(AddAndPlay,[a.mp3,b.mp3],)".to_string()),
+            "recorded: {:?}",
+            m.recorded()
+        );
     }
 }

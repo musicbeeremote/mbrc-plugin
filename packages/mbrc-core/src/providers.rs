@@ -12,16 +12,17 @@
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::dtos::{
     AlbumCoverParams, BatchMetadataParams, BrowseParams, IndexParams, MoveParams,
-    NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, QueryParams, SetBoolParams,
-    SetIntParams, SetLfmRatingParams, SetRepeatParams, StringValueParams, SyncDeltaParams,
-    TagChangeParams,
+    NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, PodcastEpisodeParams,
+    PodcastEpisodesParams, QueryParams, SetBoolParams, SetIntParams, SetLfmRatingParams,
+    SetRepeatParams, StringValueParams, SyncDeltaParams, TagChangeParams,
 };
 use crate::ffi::types::{CommandType, QueryType};
 use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
     LastfmStatus, Lyrics, NowPlayingListTrack, NowPlayingOrder, OutputDevices, Page,
-    PlaybackPositionResponse, PlayerState, Playlist, PlaylistFiles, QueueType, RadioStation,
-    RepeatMode, SyncDelta, Track, TrackDetails, TrackInfo, TrackMetadata, TrackTags,
+    PlaybackPositionResponse, PlayerState, Playlist, PlaylistFiles, PodcastEpisode,
+    PodcastSubscription, QueueType, RadioStation, RepeatMode, SyncDelta, Track, TrackDetails,
+    TrackInfo, TrackMetadata, TrackTags,
 };
 
 /// The MusicBee data/command surface, as the core sees it. Handlers take
@@ -99,6 +100,25 @@ pub trait Providers: Send + Sync {
     fn search_list(&self, query: &str) -> Result<(), String>;
     fn clear_list(&self) -> Result<(), String>;
     fn queue(&self, queue_type: QueueType, files: Vec<String>, play: &str) -> Result<(), String>;
+
+    // Podcasts (#37). Read-mostly and event-free: MusicBee announces nothing
+    // about them, so a client re-reads rather than waiting to be told. The
+    // single-item reads answer with an empty list when nothing is there.
+    fn podcast_subscriptions(
+        &self,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Page<PodcastSubscription>, String>;
+    fn podcast_subscription(&self, id: &str) -> Result<Vec<PodcastSubscription>, String>;
+    fn podcast_episodes(
+        &self,
+        id: &str,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Page<PodcastEpisode>, String>;
+    fn podcast_episode(&self, id: &str, index: i32) -> Result<Vec<PodcastEpisode>, String>;
+    /// A subscription's artwork as raw bytes (base64), empty when it has none.
+    fn podcast_artwork(&self, id: &str) -> Result<String, String>;
 
     // Library - flat browse (paginated).
     fn browse_genres(&self, offset: i32, limit: i32) -> Result<Page<GenreData>, String>;
@@ -322,6 +342,56 @@ impl Providers for FfiProviders {
     fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
         self.callbacks
             .query_no_params(QueryType::NowPlayingListOrder)
+    }
+    fn podcast_subscriptions(
+        &self,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Page<PodcastSubscription>, String> {
+        self.callbacks.query(
+            QueryType::PodcastSubscriptions,
+            &PaginationParams { offset, limit },
+        )
+    }
+    fn podcast_subscription(&self, id: &str) -> Result<Vec<PodcastSubscription>, String> {
+        self.callbacks.query(
+            QueryType::PodcastSubscription,
+            &QueryParams {
+                query: id.to_string(),
+            },
+        )
+    }
+    fn podcast_episodes(
+        &self,
+        id: &str,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Page<PodcastEpisode>, String> {
+        self.callbacks.query(
+            QueryType::PodcastEpisodes,
+            &PodcastEpisodesParams {
+                id: id.to_string(),
+                offset,
+                limit,
+            },
+        )
+    }
+    fn podcast_episode(&self, id: &str, index: i32) -> Result<Vec<PodcastEpisode>, String> {
+        self.callbacks.query(
+            QueryType::PodcastEpisode,
+            &PodcastEpisodeParams {
+                id: id.to_string(),
+                index,
+            },
+        )
+    }
+    fn podcast_artwork(&self, id: &str) -> Result<String, String> {
+        self.callbacks.query(
+            QueryType::PodcastArtwork,
+            &QueryParams {
+                query: id.to_string(),
+            },
+        )
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.callbacks
@@ -637,6 +707,30 @@ impl Providers for NullProviders {
     fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
         Ok(NowPlayingOrder::default())
     }
+    fn podcast_subscriptions(
+        &self,
+        _offset: i32,
+        _limit: i32,
+    ) -> Result<Page<PodcastSubscription>, String> {
+        Ok(Page::default())
+    }
+    fn podcast_subscription(&self, _id: &str) -> Result<Vec<PodcastSubscription>, String> {
+        Ok(Vec::new())
+    }
+    fn podcast_episodes(
+        &self,
+        _id: &str,
+        _offset: i32,
+        _limit: i32,
+    ) -> Result<Page<PodcastEpisode>, String> {
+        Ok(Page::default())
+    }
+    fn podcast_episode(&self, _id: &str, _index: i32) -> Result<Vec<PodcastEpisode>, String> {
+        Ok(Vec::new())
+    }
+    fn podcast_artwork(&self, _id: &str) -> Result<String, String> {
+        Ok(String::new())
+    }
     fn play_list_item(&self, _index: i32) -> Result<(), String> {
         Ok(())
     }
@@ -759,6 +853,9 @@ pub struct MockProviders {
     pub now_playing_list_ordered: Page<NowPlayingListTrack>,
     pub now_playing_list_paths: Vec<String>,
     pub now_playing_list_order: NowPlayingOrder,
+    pub podcast_subscriptions: Page<PodcastSubscription>,
+    pub podcast_episodes: Page<PodcastEpisode>,
+    pub podcast_artwork: String,
     pub browse_genres: Page<GenreData>,
     pub browse_artists: Page<ArtistData>,
     pub browse_albums: Page<AlbumData>,
@@ -937,6 +1034,47 @@ impl Providers for MockProviders {
         self.record("now_playing_list_order");
         Ok(self.now_playing_list_order.clone())
     }
+    fn podcast_subscriptions(
+        &self,
+        _offset: i32,
+        _limit: i32,
+    ) -> Result<Page<PodcastSubscription>, String> {
+        self.record("podcast_subscriptions");
+        Ok(self.podcast_subscriptions.clone())
+    }
+    fn podcast_subscription(&self, id: &str) -> Result<Vec<PodcastSubscription>, String> {
+        self.record(format!("podcast_subscription({id})"));
+        Ok(self
+            .podcast_subscriptions
+            .data
+            .iter()
+            .filter(|s| s.id == id)
+            .cloned()
+            .collect())
+    }
+    fn podcast_episodes(
+        &self,
+        id: &str,
+        _offset: i32,
+        _limit: i32,
+    ) -> Result<Page<PodcastEpisode>, String> {
+        self.record(format!("podcast_episodes({id})"));
+        Ok(self.podcast_episodes.clone())
+    }
+    fn podcast_episode(&self, id: &str, index: i32) -> Result<Vec<PodcastEpisode>, String> {
+        self.record(format!("podcast_episode({id},{index})"));
+        Ok(self
+            .podcast_episodes
+            .data
+            .iter()
+            .filter(|e| e.index == index)
+            .cloned()
+            .collect())
+    }
+    fn podcast_artwork(&self, id: &str) -> Result<String, String> {
+        self.record(format!("podcast_artwork({id})"));
+        Ok(self.podcast_artwork.clone())
+    }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.record(format!("play_list_item({index})"));
         Ok(())
@@ -958,7 +1096,10 @@ impl Providers for MockProviders {
         Ok(())
     }
     fn queue(&self, queue_type: QueueType, files: Vec<String>, play: &str) -> Result<(), String> {
-        self.record(format!("queue({queue_type:?},{},{play})", files.len()));
+        self.record(format!(
+            "queue({queue_type:?},[{}],{play})",
+            files.join(",")
+        ));
         Ok(())
     }
     fn browse_genres(&self, _offset: i32, _limit: i32) -> Result<Page<GenreData>, String> {

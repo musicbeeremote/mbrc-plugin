@@ -27,6 +27,31 @@ fn track() -> Track {
     }
 }
 
+fn subscription() -> PodcastSubscription {
+    PodcastSubscription {
+        id: "sub-1".into(),
+        title: "A Podcast".into(),
+        grouping: "Grouping".into(),
+        genre: "Technology".into(),
+        description: "About things".into(),
+        downloaded_count: 2,
+    }
+}
+
+fn episode() -> PodcastEpisode {
+    PodcastEpisode {
+        index: 0,
+        id: "ep-1".into(),
+        title: "An Episode".into(),
+        date: "2026-01-15T00:00:00Z".into(),
+        description: "What happens".into(),
+        duration: "1:23:45".into(),
+        is_downloaded: true,
+        has_been_played: false,
+        url: "https://feed/1.mp3".into(),
+    }
+}
+
 impl Providers for FixtureProviders {
     fn play(&self) -> Result<(), String> {
         Ok(())
@@ -191,6 +216,31 @@ impl Providers for FixtureProviders {
         l: i32,
     ) -> Result<Page<NowPlayingListTrack>, String> {
         self.now_playing_list(o, l)
+    }
+    fn podcast_subscriptions(&self, o: i32, l: i32) -> Result<Page<PodcastSubscription>, String> {
+        Ok(Page {
+            offset: o,
+            limit: l,
+            total: 1,
+            data: vec![subscription()],
+        })
+    }
+    fn podcast_subscription(&self, _id: &str) -> Result<Vec<PodcastSubscription>, String> {
+        Ok(vec![subscription()])
+    }
+    fn podcast_episodes(&self, _id: &str, o: i32, l: i32) -> Result<Page<PodcastEpisode>, String> {
+        Ok(Page {
+            offset: o,
+            limit: l,
+            total: 1,
+            data: vec![episode()],
+        })
+    }
+    fn podcast_episode(&self, _id: &str, _index: i32) -> Result<Vec<PodcastEpisode>, String> {
+        Ok(vec![episode()])
+    }
+    fn podcast_artwork(&self, _id: &str) -> Result<String, String> {
+        Ok(String::new())
     }
     fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
         let data = self.now_playing_list(0, 0)?.data;

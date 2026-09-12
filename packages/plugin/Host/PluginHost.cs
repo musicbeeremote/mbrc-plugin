@@ -48,6 +48,7 @@ namespace MusicBeePlugin.Host
             var track = new TrackDataProvider(api);
             var playlist = new PlaylistDataProvider(api);
             var library = new LibraryDataProvider(api);
+            var podcast = new PodcastDataProvider(api);
 
             // Settings are Rust-owned; C# caches only what the host reads,
             // refreshed from the core after init. The version is the product one,
@@ -60,7 +61,8 @@ namespace MusicBeePlugin.Host
             // The FFI boundary to the Rust core. Cover caching now lives entirely
             // in the Rust core (it builds + serves from core_settings storage);
             // there is no C# cover service.
-            _bridge = new NativeBridge(player, track, playlist, library, settings, _system, _logger);
+            _bridge = new NativeBridge(
+                player, track, playlist, library, podcast, settings, _system, _logger);
         }
 
         /// <summary>

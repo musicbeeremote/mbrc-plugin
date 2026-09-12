@@ -64,6 +64,21 @@ pub struct PaginationParams {
     pub limit: i32,
 }
 
+/// A page of one subscription's episodes.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PodcastEpisodesParams {
+    pub id: String,
+    pub offset: i32,
+    pub limit: i32,
+}
+
+/// One episode of one subscription, by its place in it.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PodcastEpisodeParams {
+    pub id: String,
+    pub index: i32,
+}
+
 /// Single-string-query payload for hierarchical navigation queries
 /// (`LibraryGenreArtists`, `LibraryArtistAlbums`, `LibraryAlbumTracks`).
 #[derive(Debug, Serialize, Deserialize)]

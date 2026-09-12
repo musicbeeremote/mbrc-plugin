@@ -107,6 +107,7 @@ namespace MusicBeePlugin.Ffi
             ITrackDataProvider track,
             IPlaylistDataProvider playlist,
             ILibraryDataProvider library,
+            IPodcastDataProvider podcast,
             IUserSettings userSettings,
             ISystemOperations system,
             IPluginLogger logger)
@@ -115,11 +116,12 @@ namespace MusicBeePlugin.Ffi
             if (track == null) throw new ArgumentNullException(nameof(track));
             if (playlist == null) throw new ArgumentNullException(nameof(playlist));
             if (library == null) throw new ArgumentNullException(nameof(library));
+            if (podcast == null) throw new ArgumentNullException(nameof(podcast));
             if (userSettings == null) throw new ArgumentNullException(nameof(userSettings));
             if (system == null) throw new ArgumentNullException(nameof(system));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _queries = new QueryHandlers(player, track, playlist, library, userSettings);
+            _queries = new QueryHandlers(player, track, playlist, library, podcast, userSettings);
             _commands = new CommandHandlers(player, track, playlist, userSettings, system, logger);
             PreloadNativeLibrary();
         }
