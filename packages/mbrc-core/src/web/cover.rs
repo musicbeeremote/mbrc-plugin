@@ -59,8 +59,8 @@ pub async fn get(
 /// cell's size, so a page showing it large shows an enlargement. The original
 /// is one call away, so this renders per request rather than caching a copy.
 ///
-/// `?v=<cover_hash>` is a cache key, not an argument: the response ignores it,
-/// and the browser uses it to tell one track's art from the next.
+/// `?v=<cover_hash>` is a cache key, and the last resort: a streamed track has
+/// no file to render from, but the store holds the bytes MusicBee announced.
 pub async fn now_playing(
     State(state): State<WebState>,
     Query(params): Query<HashMap<String, String>>,
@@ -75,9 +75,17 @@ pub async fn now_playing(
     }
 
     let core = state.core.clone();
+    // The cached copy, for a track the host cannot render art from.
+    let stored = params
+        .get("v")
+        .filter(|hash| is_content_hash(hash))
+        .cloned();
     let rendered = tokio::task::spawn_blocking(move || {
-        let raw = crate::cover::from_base64(&core.providers.artwork_raw(&path).ok()?)?;
-        crate::cover::resize_to_jpeg(&raw, NOW_PLAYING_SIZE, NOW_PLAYING_SIZE).ok()
+        let from_file = crate::cover::from_base64(&core.providers.artwork_raw(&path).ok()?)
+            .and_then(|raw| {
+                crate::cover::resize_to_jpeg(&raw, NOW_PLAYING_SIZE, NOW_PLAYING_SIZE).ok()
+            });
+        from_file.or_else(|| stored.and_then(|hash| core.cover_store.read_cover_bytes(&hash)))
     })
     .await;
 

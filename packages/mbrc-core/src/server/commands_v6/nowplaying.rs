@@ -79,7 +79,11 @@ fn state(
             .into_iter()
             .next()
         {
-            Some(tags) => track::track_json(&tags, track::cover_hash_for(store, &tags).as_deref()),
+            Some(tags) => {
+                let artwork = now_playing.map(|c| c.cover().cover).unwrap_or_default();
+                let hash = track::playing_cover_hash(store, &tags, &artwork);
+                track::track_json(&tags, hash.as_deref())
+            }
             None => Value::Null,
         }
     };

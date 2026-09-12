@@ -88,6 +88,43 @@ pub(crate) fn cover_hash_for(store: Option<&CoverStore>, tags: &TrackTags) -> Op
     album_cover_hash(store, artist, &tags.album)
 }
 
+/// The `cover_hash` for the artwork MusicBee says is playing, which is not
+/// always the album's.
+///
+/// A track whose own art differs from the record it is on - a compilation, a
+/// podcast episode - gets the wrong picture from an album cache, or none. The
+/// bytes announced for the playing track are already cached, so this costs no
+/// host call: it stores them under the track's own key once and answers from
+/// the store after. The album is the fallback, for before MusicBee has spoken.
+pub(crate) fn playing_cover_hash(
+    store: Option<&CoverStore>,
+    tags: &TrackTags,
+    artwork_b64: &str,
+) -> Option<String> {
+    let album = || cover_hash_for(store, tags);
+    let store = match store {
+        Some(store) => store,
+        None => return album(),
+    };
+    if artwork_b64.is_empty() {
+        return album();
+    }
+    let key = track_artwork_key(&tags.src);
+    if let Some(hash) = store.hash_for(&key) {
+        return Some(hash);
+    }
+    let Some(bytes) = crate::cover::from_base64(artwork_b64) else {
+        return album();
+    };
+    store.cache_cover(&key, &bytes).ok().or_else(album)
+}
+
+/// The store key one track's own artwork lives under, apart from the album keys
+/// so that neither can answer for the other.
+fn track_artwork_key(src: &str) -> String {
+    format!("track:{src}")
+}
+
 /// Resolve an album's `cover_hash` from its `(artist, album)` key - the shared
 /// album-keyed lookup the library domain uses for album items too.
 pub(crate) fn album_cover_hash(
@@ -376,6 +413,50 @@ mod tests {
         .unwrap();
         assert_eq!(out["title"], "Title");
         assert_eq!(out["cover_hash"], hash);
+    }
+
+    /// The album cache answers for a record, not for what is playing: a podcast
+    /// episode or a compilation track has art of its own and no album entry.
+    #[test]
+    fn the_playing_track_is_hashed_by_its_own_artwork() {
+        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let store = CoverStore::new(Db::open(&path), path.clone());
+        let artwork = crate::cover::to_base64(&test_jpeg_bytes(120, 120));
+
+        let mut tags = tags();
+        tags.album = "An Album Nothing Cached".into();
+        let hash = playing_cover_hash(Some(&store), &tags, &artwork).unwrap();
+
+        assert!(store.read_cover_bytes(&hash).is_some());
+        // Answered from the store the second time, so a client polling the
+        // playing track does not re-hash the same image on every read.
+        assert_eq!(
+            playing_cover_hash(Some(&store), &tags, &artwork),
+            Some(hash)
+        );
+    }
+
+    /// Before MusicBee has announced the artwork there is nothing to hash, and
+    /// the album it belongs to is a better answer than a blank pane.
+    #[test]
+    fn without_announced_artwork_the_album_answers() {
+        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover-album");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let store = CoverStore::new(Db::open(&path), path.clone());
+        let tags = tags();
+        let album = store
+            .cache_cover(
+                &cover_identifier(&tags.album_artist, &tags.album),
+                &test_jpeg_bytes(200, 200),
+            )
+            .unwrap();
+
+        assert_eq!(playing_cover_hash(Some(&store), &tags, ""), Some(album));
     }
 
     #[test]
