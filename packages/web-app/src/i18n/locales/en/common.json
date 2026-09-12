@@ -20,6 +20,10 @@
     "back": "Back",
     "close": "Close"
   },
+  "runTime": {
+    "minutes": "1 min | {count} min",
+    "hoursMinutes": "{h} h {m} min"
+  },
   "unknown": {
     "artist": "Unknown artist",
     "album": "Unknown album",

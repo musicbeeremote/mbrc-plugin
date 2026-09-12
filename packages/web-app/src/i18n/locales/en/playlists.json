@@ -4,8 +4,6 @@
   "emptyPlaylist": "This playlist has no tracks.",
   "noMatches": "Nothing in this playlist matches.",
   "trackCount": "no tracks | 1 track | {count} tracks",
-  "minutes": "1 min | {count} min",
-  "hoursMinutes": "{h} h {m} min",
   "searchPlaceholder": "Search this playlist",
   "action": {
     "play": "Play {name}",

@@ -15,6 +15,7 @@ import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import QueueMenu from '../components/QueueMenu.vue'
 import { browsePlaylists, playlistLabel } from '../composables/playlistFolders'
+import { useRunTime } from '../composables/runTime'
 import { useLazyRows } from '../composables/useLazyRows'
 import {
   openPlaylistFromRoute,
@@ -34,6 +35,7 @@ const router = useRouter()
 const library = useLibraryStore()
 const player = usePlayerStore()
 const playlist = usePlaylistStore()
+const runTime = useRunTime()
 
 /** The folder being looked at, as segments. Empty is the playlists root. */
 const path = computed(() => playlistPathFromRoute(route.query))
@@ -145,18 +147,10 @@ function queueTrack(src: string, mode: QueueMode) {
   else void library.queue([src], mode)
 }
 
-/** Hours and minutes, because a playlist's length is not read to the second. */
-function formatLength(ms: number): string {
-  if (ms <= 0) return ''
-  const minutes = Math.round(ms / 60000)
-  if (minutes < 60) return t('playlists.minutes', minutes)
-  return t('playlists.hoursMinutes', { h: Math.floor(minutes / 60), m: minutes % 60 })
-}
-
 /** What the open playlist holds: how many tracks, and how long they run. */
 const summary = computed(() => {
   const count = t('playlists.trackCount', playlist.total)
-  const length = formatLength(playlist.totalDurationMs)
+  const length = runTime(playlist.totalDurationMs)
   return length === '' ? count : `${count} · ${length}`
 })
 
