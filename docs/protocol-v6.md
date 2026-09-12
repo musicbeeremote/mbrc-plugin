@@ -581,6 +581,49 @@ empty, so a client parses one shape and the row keeps its place in the playlist.
 and reports no files, so a path that does not exist is indistinguishable from a
 playlist with nothing in it. Only a missing `url` is an error.
 
+### Podcast
+
+Browse subscriptions and their episodes, and play one (#37). Additive: nothing here
+changes the player, library, playlist or now-playing surface, and playing an episode
+is the ordinary queue command with a URL the core resolved.
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `podcast_subscriptions` | `{offset?, limit?}` | `{total, offset, items}` of `subscription` |
+| `podcast_subscription` | `{"id":"<id>"}` | one `subscription` |
+| `podcast_episodes` | `{"id":"<id>", offset?, limit?}` | `{total, offset, items}` of `episode` |
+| `podcast_episode` | `{"id":"<id>","index":N}` | one `episode` |
+| `podcast_episode_play` | `{"id":"<id>","index":N,"mode?":"now"\|"next"\|"last"}` | `{}` |
+
+```json
+// subscription
+{ "id": "<id>", "title": "Podcast Title", "grouping": "Category", "genre": "Technology",
+  "description": "...", "downloaded_count": 10, "image_hash": "<hash>" }
+
+// episode
+{ "index": 0, "id": "<feed id>", "title": "Episode Title", "date": "2026-01-15T00:00:00Z",
+  "description": "...", "duration_ms": 5025000, "is_downloaded": true, "has_been_played": false }
+```
+
+**An episode is addressed by `(id, index)`**, because that is the only key MusicBee takes.
+The feed's own `id` is carried so a client can recognise an episode across a re-read, and
+opens nothing. Unlike the now-playing queue there is **no version token**: MusicBee announces
+nothing about podcasts, so nothing could keep one honest. Acting on an index a feed refresh
+has shifted reaches a neighbouring episode, which is all the drift can cost.
+
+`mode` defaults to **`now`**, where the queueing ops default to `next`: asking for one episode
+of one podcast is asking to hear it. **Download state does not gate playing.** MusicBee streams
+a feed URL exactly as it does from its own window, so a client may play any episode it can see.
+
+`image_hash` is the subscription's artwork in the same content-addressed store album art uses
+(`podcast:` namespace), fetched with `cover_get` or `GET /api/cover/{hash}` like any other
+cover. It is resolved for the page being served, so listing ten subscriptions never ingests a
+hundred, and is absent when a feed has no art.
+
+**No events.** MusicBee has no podcast notifications to forward, so nothing is broadcast and a
+client re-reads when it wants to be current (#118 §8). The one exception is the playback that
+`podcast_episode_play` causes, which surfaces through the ordinary now-playing events.
+
 ## Events
 
 Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker

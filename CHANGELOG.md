@@ -22,6 +22,11 @@ Change Log
   play button, and a search that can be narrowed to title, artist or album. The
   search lives in the address, so a narrowed playlist can be bookmarked or shared
   (#82).
+- Podcasts, in the browser client and over V6. Subscriptions with their
+  artwork, a subscription's episodes with publication date, length and whether
+  each is downloaded or already played, and playing or queueing an episode. An
+  episode plays whether or not it has been downloaded, as it does in MusicBee
+  itself (#37).
 - Clearing the now-playing queue (#109).
 - How long the queue runs, beside the track count in the browser client. Up Next
   reports what is left to play rather than the whole queue.
