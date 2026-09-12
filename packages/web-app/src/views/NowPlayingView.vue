@@ -17,14 +17,8 @@ import IconSkipForward from '~icons/lucide/skip-forward'
 import IconVolume from '~icons/lucide/volume-2'
 import IconVolumeOff from '~icons/lucide/volume-x'
 
-import {
-  formatDuration,
-  LastfmStatus,
-  PlayState,
-  nowPlayingCoverUrl,
-  RepeatMode,
-  ShuffleMode,
-} from '../api/types'
+import { formatDuration, nowPlayingCoverUrl } from '../api/display'
+import { LastfmStatus, PlayState, RepeatMode, ShuffleMode } from '../api/types'
 import StarRating from '../components/StarRating.vue'
 import TrackPanels from '../components/TrackPanels.vue'
 import { useCoverAccent } from '../composables/useCoverAccent'

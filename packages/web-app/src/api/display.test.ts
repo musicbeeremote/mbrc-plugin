@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { coverUrl, formatDuration, nowPlayingCoverUrl, trackLabel } from './types'
+import { coverUrl, formatDuration, nowPlayingCoverUrl, trackLabel } from './display'
 
 describe('formatDuration', () => {
   it('renders under an hour as m:ss', () => {

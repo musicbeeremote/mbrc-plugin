@@ -7,7 +7,8 @@ import IconPlay from '~icons/lucide/play'
 import IconSkipBack from '~icons/lucide/skip-back'
 import IconSkipForward from '~icons/lucide/skip-forward'
 
-import { coverUrl, PlayState } from '../api/types'
+import { coverUrl } from '../api/display'
+import { PlayState } from '../api/types'
 import { useSwipe } from '../composables/useSwipe'
 import { usePlayerStore } from '../stores/player'
 
