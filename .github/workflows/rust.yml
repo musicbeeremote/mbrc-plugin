@@ -5,7 +5,7 @@ name: rust-workspace
 # Tauri api-debugger has its own workflow (api-debugger.yml) and is excluded
 # from this workspace, so it isn't built here. mbrc-core additionally gets an
 # i686 cross-build (its ship target as the plugin's native cdylib) and the
-# workspace is measured for coverage.
+# workspace runs its suite once, instrumented, on that same i686 target.
 on:
   push:
     branches: [ main ]
@@ -47,9 +47,10 @@ concurrency:
 
 jobs:
   build:
-    name: fmt + clippy + test
-    # Windows is the plugin's ship target; ubuntu is the fast common case. Run
-    # both so the shared crates + CLI stay portable and pass where they ship.
+    name: fmt + clippy
+    # Both operating systems compile every target here, tests included, so code
+    # that only breaks on one still fails. Running the suite is the coverage
+    # job's work, once, on the target the plugin ships as.
     strategy:
       fail-fast: false
       matrix:
@@ -83,9 +84,6 @@ jobs:
             -D rustdoc::private_intra_doc_links -D rustdoc::redundant_explicit_links
         run: cargo doc --no-deps --workspace --locked
 
-      - name: test
-        run: cargo test --locked
-
       # mbrc-core ships as the plugin's native cdylib built for 32-bit Windows,
       # and mbrc-helper ships beside it as the elevated helper exe. Cross-build
       # both on the Windows runner so i686-only breakage (linking, target-cfg,
@@ -97,17 +95,13 @@ jobs:
           rustup target add i686-pc-windows-msvc
           cargo build -p mbrc-core -p mbrc-helper --target i686-pc-windows-msvc --profile plugin --locked
 
-      # Building 32-bit catches what fails to compile there; running the suite
-      # catches what compiles and then behaves differently, which is where the
-      # redb store, the paging index and pointer-width arithmetic live.
-      - name: test on i686 (the ship target)
-        if: matrix.os == 'windows-latest'
-        run: cargo test -p mbrc-core -p mbrc-wire --target i686-pc-windows-msvc --locked
-
+  # The suite runs once per PR, instrumented, on the target the plugin ships as.
+  # A second run at another pointer width measured the same assertions twice and
+  # bought a configuration nothing is released for; if another architecture ever
+  # ships, it earns its own run then. The matrix above still compiles every
+  # target's test code through clippy, so breakage elsewhere fails before this.
   coverage:
     name: coverage
-    # Windows: mbrc-core is the Windows plugin cdylib, and this matches where the
-    # test matrix is green, so coverage compiles the whole workspace reliably.
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -115,8 +109,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: setup Rust (llvm-tools)
-        run: rustup component add llvm-tools-preview
+      - name: setup Rust (llvm-tools + the ship target)
+        run: |
+          rustup component add llvm-tools-preview
+          rustup target add i686-pc-windows-msvc
 
       - name: cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -126,16 +122,25 @@ jobs:
         # action; rust-cache keeps the compiled binary warm across runs.
         run: cargo install cargo-llvm-cov --version 0.8.7 --locked
 
-      - name: collect coverage (lcov)
-        run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
+      # Only what ships is measured. mbrc-core, mbrc-wire, mbrc-release's client
+      # half and mbrc-helper reach a user's machine; mbrc-capture is a dev
+      # dependency, mbrc-discovery belongs to the CLI, mbrc-buildinfo runs at
+      # build time, and tools/ is the workbench. Their tests still run here -
+      # the whole workspace is exercised once - they are just not counted as
+      # product coverage, which would report the workbench as if it shipped.
+      - name: run the suite once, instrumented (i686, the ship target)
+        run: >-
+          cargo llvm-cov --workspace --locked
+          --target i686-pc-windows-msvc
+          --ignore-filename-regex '(tools|mbrc-capture|mbrc-discovery|mbrc-buildinfo)[/\\]|[/\\]tests[/\\]'
+          --lcov --output-path lcov.info
 
       - name: upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
-          # One workspace report, two flags: codecov.yml splits it by path so
-          # the CLI's coverage is reported apart from the shipped crates.
-          flags: rust,cli
+          # One report, one flag: what it holds is what ships.
+          flags: rust
           fail_ci_if_error: false
           verbose: true

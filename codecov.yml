@@ -23,18 +23,13 @@ flag_management:
       carryforward: true
       paths:
         - packages/mbrc-
-        - tools/mbrc-lint/
-    - name: cli
-      carryforward: true
-      paths:
-        - tools/mbrc-cli/
 
-# The CLI's live-server drivers. They are socket loops and terminal output
-# around a running plugin, so a test for them would assert the mock rather
-# than the code.
+# Only what reaches a user's machine is measured, so the workbench is not
+# reported as if it shipped. The CLI and the lint tool are developer tools,
+# mbrc-capture is a dev dependency, mbrc-discovery belongs to the CLI, and
+# mbrc-buildinfo runs at build time. Their tests still run in CI.
 ignore:
-  - tools/mbrc-cli/src/fuzz.rs
-  - tools/mbrc-cli/src/monitor.rs
-  - tools/mbrc-cli/src/replay.rs
-  - tools/mbrc-cli/src/capture.rs
-  - tools/mbrc-cli/src/compare.rs
+  - tools/
+  - packages/mbrc-capture/
+  - packages/mbrc-discovery/
+  - packages/mbrc-buildinfo/
