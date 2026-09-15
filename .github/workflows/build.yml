@@ -162,7 +162,13 @@ jobs:
           # The test project is its own Microsoft.Testing.Platform host, opted
           # into by global.json. `--coverage-output` is relative to the results
           # directory, so this writes ./TestResults/coverage.cobertura.xml.
-          dotnet test tests/csharp/MusicBeeRemote.Core.Tests.csproj --configuration Release --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+          #
+          # --no-build because the step above already built this solution, tests
+          # included, and rebuilding took the step from seconds to a minute and a
+          # half for a suite that runs in three. It also means the tests exercise
+          # the assemblies that were built with the CI switches and the resolved
+          # version, rather than a second build made without them.
+          dotnet test tests/csharp/MusicBeeRemote.Core.Tests.csproj --configuration Release --no-build --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
 
       - name: upload coverage to Codecov
         if: inputs.run-tests && inputs.upload-coverage
