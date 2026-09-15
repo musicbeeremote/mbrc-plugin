@@ -23,6 +23,10 @@ flag_management:
       carryforward: true
       paths:
         - packages/mbrc-
+    - name: web
+      carryforward: true
+      paths:
+        - packages/web-app/src/
 
 # Only what reaches a user's machine is measured, so the workbench is not
 # reported as if it shipped. The CLI and the lint tool are developer tools,

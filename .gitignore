@@ -186,3 +186,6 @@ mbrc-release-*.key
 # carrying it trusts any bundle writable in the staging directory, and the apply
 # runs elevated. CI builds from a clean checkout, so ignoring it is the boundary.
 packages/mbrc-release/keys/dev*.pub
+
+# Coverage output from a local vitest --coverage run.
+coverage/

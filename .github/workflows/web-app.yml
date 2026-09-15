@@ -64,8 +64,17 @@ jobs:
       - name: lint
         run: pnpm lint
 
-      - name: test
-        run: pnpm test
+      - name: test with coverage
+        run: pnpm test --coverage
+
+      - name: upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/web-app/coverage/lcov.info
+          flags: web
+          fail_ci_if_error: false
+          verbose: true
 
       # Last, because it is the slowest and the one whose failure the two steps
       # above usually explain. `pnpm build` runs vue-tsc before vite, so this is
