@@ -2,8 +2,8 @@
 //!
 //! Per #118 §7 this is ONE canonical list, with no `client_type` fork - the V4
 //! ordered/sequential and album-drop quirks dissolve - plus play / remove / move
-//! / clear / search and queueing. Mutations key on `order`; #110 versioned order is not
-//! served here.
+//! / clear / search and queueing. Mutations key on `order`, guarded by the list
+//! `version`; removal takes a batch of them (#110).
 //!
 //! Two views, selected by `up_next`: the default FULL list in list order,
 //! already-played tracks included, and the shuffle-aware play order from the
@@ -186,19 +186,27 @@ fn guarded(
     now_playing: Option<&NowPlayingCache>,
     mutate: impl FnOnce() -> Result<(), String>,
 ) -> OpResult {
-    if let Some(expected) = opt_i64(data, "version")?
-        && expected != list_version(now_playing) as i64
-    {
-        return Err(V6Error::new(
+    check_version(data, now_playing)?;
+    mutate().map_err(internal)?;
+    bump_version(now_playing);
+    Ok(json!({}))
+}
+
+/// Refuses `stale_list` when the request carries a `version` the queue has moved past.
+fn check_version(data: &Value, now_playing: Option<&NowPlayingCache>) -> Result<(), V6Error> {
+    match opt_i64(data, "version")? {
+        Some(expected) if expected != list_version(now_playing) as i64 => Err(V6Error::new(
             ErrorCode::StaleList,
             "the now-playing list changed; re-read it and retry",
-        ));
+        )),
+        _ => Ok(()),
     }
-    mutate().map_err(internal)?;
+}
+
+fn bump_version(now_playing: Option<&NowPlayingCache>) {
     if let Some(cache) = now_playing {
         cache.bump_list_version();
     }
-    Ok(json!({}))
 }
 
 /// Storage index to shuffle play rank, for the list-order view.
@@ -238,9 +246,59 @@ fn play(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) 
     guarded(data, now_playing, || p.play_list_item(order))
 }
 
+/// Removes every slot in `orders` (#110), highest first so an earlier removal
+/// never shifts a slot still to go.
+///
+/// The whole batch is checked before anything is removed. A host failure part
+/// way through still moves the version: some slots may already be gone.
 fn remove(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
-    let order = i32_saturating(req_i64(data, "order")?);
-    guarded(data, now_playing, || p.remove_list_item(order))
+    let orders = orders_highest_first(data)?;
+    check_version(data, now_playing)?;
+    let len = p.now_playing_list_paths().map_err(internal)?.len();
+    if orders[0] as usize >= len {
+        return Err(V6Error::field(
+            ErrorCode::InvalidField,
+            "orders",
+            format!("order {} is past the end of a {len}-track queue", orders[0]),
+        ));
+    }
+    let removed = orders.iter().try_for_each(|&o| p.remove_list_item(o));
+    bump_version(now_playing);
+    removed.map_err(internal)?;
+    Ok(json!({}))
+}
+
+/// The `orders` of a removal, validated and sorted descending.
+///
+/// A repeated order is refused rather than collapsed: removing slot 5 twice
+/// removes two different tracks, so the request cannot mean what it says.
+fn orders_highest_first(data: &Value) -> Result<Vec<i32>, V6Error> {
+    let invalid = |message: &str| V6Error::field(ErrorCode::InvalidField, "orders", message);
+    let raw = match data.get("orders") {
+        None => {
+            return Err(V6Error::field(
+                ErrorCode::MissingField,
+                "orders",
+                "missing required field: orders",
+            ));
+        }
+        Some(Value::Array(raw)) if !raw.is_empty() => raw,
+        Some(_) => return Err(invalid("orders must be a non-empty array")),
+    };
+    let mut orders = raw
+        .iter()
+        .map(|v| {
+            v.as_i64()
+                .filter(|o| (0..=i64::from(i32::MAX)).contains(o))
+                .map(|o| o as i32)
+                .ok_or_else(|| invalid("orders must hold non-negative integers"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    orders.sort_unstable_by(|a, b| b.cmp(a));
+    if orders.windows(2).any(|w| w[0] == w[1]) {
+        return Err(invalid("orders must not repeat"));
+    }
+    Ok(orders)
 }
 
 fn move_item(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
@@ -306,6 +364,14 @@ mod tests {
         NowPlayingOrder {
             positions: steps.iter().map(|(_, i)| *i).collect(),
             paths: steps.iter().map(|(p, _)| (*p).to_string()).collect(),
+        }
+    }
+
+    /// A host whose queue holds `len` tracks.
+    fn queue_of(len: usize) -> MockProviders {
+        MockProviders {
+            now_playing_list_paths: (0..len).map(|i| format!("{i}.mp3")).collect(),
+            ..Default::default()
         }
     }
 
@@ -462,7 +528,7 @@ mod tests {
     /// client passes back exactly what it read.
     #[test]
     fn play_remove_move_call_providers() {
-        let m = MockProviders::default();
+        let m = queue_of(5);
         dispatch(
             "now_playing_list_play",
             &json!({ "order": 3 }),
@@ -475,7 +541,7 @@ mod tests {
         .unwrap();
         dispatch(
             "now_playing_list_remove",
-            &json!({ "order": 2 }),
+            &json!({ "orders": [2] }),
             &m,
             None,
             None,
@@ -687,11 +753,11 @@ mod tests {
             std::sync::Arc::new(MockProviders::default());
         let cache = NowPlayingCache::new(providers);
         cache.bump_list_version(); // the client read version 0, the queue moved
-        let m = MockProviders::default();
+        let m = queue_of(5);
 
         let err = dispatch(
             "now_playing_list_remove",
-            &json!({ "order": 2, "version": 0 }),
+            &json!({ "orders": [2], "version": 0 }),
             &m,
             Some(&cache),
             None,
@@ -712,11 +778,11 @@ mod tests {
         let providers: std::sync::Arc<dyn Providers> =
             std::sync::Arc::new(MockProviders::default());
         let cache = NowPlayingCache::new(providers);
-        let m = MockProviders::default();
+        let m = queue_of(5);
 
         dispatch(
             "now_playing_list_remove",
-            &json!({ "order": 2, "version": 0 }),
+            &json!({ "orders": [2], "version": 0 }),
             &m,
             Some(&cache),
             None,
@@ -738,11 +804,11 @@ mod tests {
             std::sync::Arc::new(MockProviders::default());
         let cache = NowPlayingCache::new(providers);
         cache.bump_list_version();
-        let m = MockProviders::default();
+        let m = queue_of(5);
 
         dispatch(
             "now_playing_list_remove",
-            &json!({ "order": 2 }),
+            &json!({ "orders": [2] }),
             &m,
             Some(&cache),
             None,
@@ -799,6 +865,98 @@ mod tests {
         assert!(m.recorded().is_empty());
     }
 
+    fn removals(m: &MockProviders) -> Vec<String> {
+        m.recorded()
+            .into_iter()
+            .filter(|c| c.starts_with("remove_list_item"))
+            .collect()
+    }
+
+    fn remove_err(m: &MockProviders, data: Value) -> V6Error {
+        dispatch("now_playing_list_remove", &data, m, None, None, None)
+            .unwrap()
+            .unwrap_err()
+    }
+
+    /// Removing slot 1 first would shift slots 3 and 5 down by one, and the batch
+    /// would delete the tracks after the ones the client picked.
+    #[test]
+    fn a_batch_removes_the_highest_order_first() {
+        let m = queue_of(6);
+        dispatch(
+            "now_playing_list_remove",
+            &json!({ "orders": [1, 5, 3] }),
+            &m,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            removals(&m),
+            [
+                "remove_list_item(5)",
+                "remove_list_item(3)",
+                "remove_list_item(1)"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_batch_reaching_past_the_end_removes_nothing() {
+        let m = queue_of(3);
+        let err = remove_err(&m, json!({ "orders": [0, 3] }));
+        assert_eq!(err.code, ErrorCode::InvalidField);
+        assert!(removals(&m).is_empty());
+    }
+
+    #[test]
+    fn a_repeated_order_is_refused() {
+        let m = queue_of(6);
+        let err = remove_err(&m, json!({ "orders": [2, 4, 2] }));
+        assert_eq!(err.code, ErrorCode::InvalidField);
+        assert!(removals(&m).is_empty());
+    }
+
+    #[test]
+    fn a_removal_needs_at_least_one_valid_order() {
+        let m = queue_of(6);
+        assert_eq!(remove_err(&m, json!({})).code, ErrorCode::MissingField);
+        for bad in [json!([]), json!([-1]), json!(["2"]), json!(2)] {
+            let err = remove_err(&m, json!({ "orders": bad }));
+            assert_eq!(err.code, ErrorCode::InvalidField, "orders: {bad}");
+        }
+        assert!(removals(&m).is_empty());
+    }
+
+    /// The slots removed before the host refused are gone, so a client holding
+    /// the old version must not be allowed to aim at them again.
+    #[test]
+    fn a_batch_the_host_refuses_part_way_still_moves_the_version() {
+        let providers: std::sync::Arc<dyn Providers> =
+            std::sync::Arc::new(MockProviders::default());
+        let cache = NowPlayingCache::new(providers);
+        let m = MockProviders {
+            refuse_remove_at: Some(2),
+            ..queue_of(6)
+        };
+
+        let err = dispatch(
+            "now_playing_list_remove",
+            &json!({ "orders": [2, 4], "version": 0 }),
+            &m,
+            Some(&cache),
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::Internal);
+        assert_eq!(removals(&m), ["remove_list_item(4)"]);
+        assert_eq!(cache.list_version(), 1);
+    }
+
     #[test]
     fn unknown_op_is_not_in_this_domain() {
         let m = MockProviders::default();
@@ -808,7 +966,8 @@ mod tests {
     #[test]
     fn every_advertised_op_dispatches() {
         let m = MockProviders::default();
-        let data = json!({ "index": 0, "from": 0, "to": 0, "query": "q", "paths": ["a"] });
+        let data =
+            json!({ "order": 0, "orders": [0], "from": 0, "to": 0, "query": "q", "paths": ["a"] });
         for op in OPS {
             assert!(
                 dispatch(op, &data, &m, None, None, None).is_some(),

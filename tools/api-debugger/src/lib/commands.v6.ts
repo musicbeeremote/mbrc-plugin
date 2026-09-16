@@ -78,7 +78,7 @@ export const V6_COMMAND_CATALOG: V6CommandGroup[] = [
       v6cmd("now_playing_set_tag", "Edit tag", { tag: "artist", value: "New Value" }, "{ tag, value }"),
       v6cmd("now_playing_list", "Queue (list)", { offset: 0, limit: 100, up_next: false }, "{ offset?, limit?, up_next? } · up_next=true → shuffle play order (drops played); items carry order (mutation key) + position + play_position (-1 = played)"),
       v6cmd("now_playing_list_play", "Play list item", { index: 0 }, "{ index } · 0-based order"),
-      v6cmd("now_playing_list_remove", "Remove list item", { index: 0 }, "{ index }"),
+      v6cmd("now_playing_list_remove", "Remove list items", { orders: [0] }, "{ orders: number[], version? }"),
       v6cmd("now_playing_list_move", "Move list item", { from: 0, to: 1 }, "{ from, to }"),
       v6cmd("now_playing_list_search", "Search list", { query: "" }, "{ query }"),
       v6cmd("now_playing_queue", "Queue files", { paths: ["file:///path.mp3"], mode: "next" }, '{ paths, mode?: "next"|"last"|"now"|"add-all", play? }'),

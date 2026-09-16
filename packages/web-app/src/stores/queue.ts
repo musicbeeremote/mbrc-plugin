@@ -132,7 +132,7 @@ export const useQueueStore = defineStore('queue', () => {
     await mutate(Op.NowPlayingListPlay, { order })
   }
   async function remove(order: number) {
-    await mutate(Op.NowPlayingListRemove, { order })
+    await mutate(Op.NowPlayingListRemove, { orders: [order] })
   }
   async function move(from: number, to: number) {
     await mutate(Op.NowPlayingListMove, { from, to })

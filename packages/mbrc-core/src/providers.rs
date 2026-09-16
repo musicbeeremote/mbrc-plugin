@@ -853,6 +853,8 @@ pub struct MockProviders {
     pub now_playing_list_ordered: Page<NowPlayingListTrack>,
     pub now_playing_list_paths: Vec<String>,
     pub now_playing_list_order: NowPlayingOrder,
+    /// The storage index whose removal the host refuses, if any.
+    pub refuse_remove_at: Option<i32>,
     pub podcast_subscriptions: Page<PodcastSubscription>,
     pub podcast_episodes: Page<PodcastEpisode>,
     pub podcast_artwork: String,
@@ -1080,6 +1082,9 @@ impl Providers for MockProviders {
         Ok(())
     }
     fn remove_list_item(&self, index: i32) -> Result<(), String> {
+        if self.refuse_remove_at == Some(index) {
+            return Err(format!("host refused to remove {index}"));
+        }
         self.record(format!("remove_list_item({index})"));
         Ok(())
     }

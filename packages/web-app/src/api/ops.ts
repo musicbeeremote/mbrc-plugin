@@ -79,7 +79,7 @@ export interface OpRequests {
 
   now_playing_list: PageArgs & { up_next?: boolean; totals?: boolean }
   now_playing_list_play: { order: number; version?: number }
-  now_playing_list_remove: { order: number; version?: number }
+  now_playing_list_remove: { orders: number[]; version?: number }
   now_playing_list_move: { from: number; to: number; version?: number }
   now_playing_list_clear: { version?: number }
   now_playing_queue: { paths: string[]; mode?: QueueMode; play?: string }

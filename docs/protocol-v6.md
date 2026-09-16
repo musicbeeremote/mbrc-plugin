@@ -479,7 +479,7 @@ way in either.
 |----|----------------|----------|
 | `now_playing_list` | `{offset?, limit?, up_next?, totals?}` | `{total, offset, version, items}` - canonical tracks + `order` + `position` + `play_position` |
 | `now_playing_list_play` | `{"order":N, "version?":V}` | `{}` |
-| `now_playing_list_remove` | `{"order":N, "version?":V}` | `{}` |
+| `now_playing_list_remove` | `{"orders":[N,..], "version?":V}` | `{}` - removes every listed slot |
 | `now_playing_list_move` | `{"from":N,"to":M, "version?":V}` | `{}` - `from`/`to` are `order` values |
 | `now_playing_list_clear` | `{"version?":V}` | `{}` - empties the queue |
 | `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
@@ -496,8 +496,15 @@ the queue's `version`; pass it back on a mutation and a queue that moved in betw
 `stale_list` instead of hitting the wrong slot - re-read the page and retry. The field is
 optional: send none and the mutation is unguarded, as before. `now_playing_list_clear` takes
 it too: it is the mutation a client is least able to undo, so a queue that moved since the
-page it was read from is worth refusing. Batch versioned removal is
-[#110](https://github.com/musicbeeremote/mbrc-plugin/issues/110).
+page it was read from is worth refusing.
+
+**Removing several tracks.** `now_playing_list_remove` takes the `order`s of every slot to
+remove, so a multi-select is one request: send the `order` values exactly as the page listed
+them, and the server removes the highest first so no removal shifts a slot still to go. The
+batch is checked whole before anything is removed: an empty list, a negative or repeated
+`order`, or one past the end of the queue is `invalid_field` and removes nothing. If MusicBee
+refuses a removal part way through, the reply is `internal_error`, some slots may already be
+gone, and the `version` has moved, so re-read the list.
 
 > `mode` is `snake_case` like every other V6 enum, so the last one is **`add_all`** - V4 spells
 > it `add-all` on its own wire, and V6 rejects that spelling. An unrecognized mode is
