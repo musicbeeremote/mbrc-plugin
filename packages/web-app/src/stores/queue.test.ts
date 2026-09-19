@@ -104,6 +104,35 @@ describe('a mutation the server refuses', () => {
 
     expect(queue.stale).toBe(true)
   })
+
+  // A batch the host refused part way may have removed some tracks, and the
+  // user was never told that the rest are still there.
+  it('says why and re-reads when the refusal is not a stale list', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 1))
+    await queue.load()
+
+    call.mockRejectedValueOnce(new OpError({ code: ErrorCode.Internal, message: 'host refused' }))
+    call.mockResolvedValue(page(2, 2, 2))
+    await queue.remove([0, 2])
+
+    expect(queue.failure).toBe('host refused')
+    expect(queue.stale).toBe(false)
+    expect(queue.version).toBe(2)
+  })
+
+  it('drops the failure once the queue reads cleanly again', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 1))
+    await queue.load()
+    call.mockRejectedValueOnce(new OpError({ code: ErrorCode.Internal, message: 'host refused' }))
+    call.mockResolvedValue(page(2, 2, 2))
+    await queue.remove([0])
+
+    await queue.load()
+
+    expect(queue.failure).toBe('')
+  })
 })
 
 describe('removing tracks', () => {

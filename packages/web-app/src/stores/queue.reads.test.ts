@@ -100,6 +100,18 @@ describe('a burst of change events', () => {
     changed()
     first.reject(new Error('timed out'))
     await vi.waitFor(() => expect(queue.version).toBe(5))
+
+    expect(queue.failure).toBe('')
+  })
+
+  it('shows a failed read that nothing came after', async () => {
+    const queue = useQueueStore()
+    queue.bind()
+    call.mockRejectedValue(new Error('timed out'))
+
+    changedHandler()()
+
+    await vi.waitFor(() => expect(queue.failure).toBe('Error: timed out'))
   })
 
   it('reads once when nothing arrives while it runs', async () => {

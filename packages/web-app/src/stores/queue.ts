@@ -12,6 +12,10 @@ import { usePlayerStore } from './player'
 
 const PAGE_SIZE = 200
 
+function reasonOf(error: unknown): string {
+  return error instanceof OpError ? error.message : String(error)
+}
+
 /** The queue ops that carry the `version` the page was read at. */
 type MutationOp =
   | typeof Op.NowPlayingListPlay
@@ -36,6 +40,8 @@ export const useQueueStore = defineStore('queue', () => {
   const upNext = ref(false)
   const loading = ref(false)
   const stale = ref(false)
+  /** Why the last change to the queue failed, until a later read or change succeeds. */
+  const failure = ref('')
 
   /**
    * Reads the queue, or continues it.
@@ -74,6 +80,7 @@ export const useQueueStore = defineStore('queue', () => {
       if (!append) {
         totalDurationMs.value = page.total_duration_ms ?? 0
         stale.value = false
+        failure.value = ''
       }
     } finally {
       loading.value = false
@@ -131,6 +138,15 @@ export const useQueueStore = defineStore('queue', () => {
     return reading
   }
 
+  /** A re-read nobody waits on, whose failure is shown rather than thrown. */
+  async function refresh(): Promise<void> {
+    try {
+      await reload()
+    } catch (error) {
+      failure.value = reasonOf(error)
+    }
+  }
+
   async function load(append = false): Promise<void> {
     await (append ? read(true) : reload())
   }
@@ -168,24 +184,25 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   /**
-   * Re-reads and retries once when the queue moved under a mutation.
+   * Sends a mutation, and re-reads the queue when the server refuses it.
    *
-   * The player is re-read too: which track is current is answered from the same
-   * list, so a mutation that shifts indices leaves the playing track's own
-   * position out of date until something asks again.
+   * A stale version raises the reloaded notice; any other refusal is kept in
+   * `failure`, since a batch the host refused part way may have removed some
+   * tracks. The player is re-read too: which track is current is answered from
+   * the same list, so a mutation that shifts indices leaves the playing track's
+   * own position out of date until something asks again.
    */
   async function mutate<K extends MutationOp>(op: K, data: OpRequests[K]) {
     try {
       await client.call(op, { ...data, version: version.value })
     } catch (error) {
-      if (!(error instanceof OpError) || error.code !== ErrorCode.StaleList) throw error
-      await reload()
-      // Set after the re-read, which clears it: the reason the list is being
-      // shown again is what the notice is for.
-      stale.value = true
+      await reload().catch(() => undefined)
+      // Set after the re-read, which clears both.
+      if (error instanceof OpError && error.code === ErrorCode.StaleList) stale.value = true
+      else failure.value = reasonOf(error)
       return
     }
-    await Promise.all([reload(), usePlayerStore().refreshNowPlaying()])
+    await Promise.all([refresh(), usePlayerStore().refreshNowPlaying()])
   }
 
   async function play(order: number) {
@@ -205,7 +222,7 @@ export const useQueueStore = defineStore('queue', () => {
 
   function bind() {
     client.on(WireEvent.NowPlayingListChanged, () => {
-      void reload()
+      void refresh()
     })
   }
 
@@ -217,6 +234,7 @@ export const useQueueStore = defineStore('queue', () => {
     upNext,
     loading,
     stale,
+    failure,
     hasMore,
     load,
     loadAll,

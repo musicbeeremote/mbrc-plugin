@@ -281,7 +281,14 @@ const drag = useDragSort(
       </button>
     </div>
 
-    <p v-if="queue.stale" class="bg-accent-soft p-2 text-center text-xs text-accent">
+    <p
+      v-if="queue.failure"
+      class="bg-rose-500/10 p-2 text-center text-xs text-rose-500"
+      role="alert"
+    >
+      {{ $t('queue.failed', { reason: queue.failure }) }}
+    </p>
+    <p v-else-if="queue.stale" class="bg-accent-soft p-2 text-center text-xs text-accent">
       {{ $t('queue.reloaded') }}
     </p>
 

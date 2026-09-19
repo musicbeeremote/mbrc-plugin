@@ -6,6 +6,7 @@
   "count": "{count} track | {count} tracks",
   "empty": "The queue is empty.",
   "reloaded": "The queue changed; the list was reloaded.",
+  "failed": "Could not update the queue: {reason}",
   "action": {
     "remove": "Remove {title}",
     "reorder": "Reorder {title}",
