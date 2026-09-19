@@ -50,7 +50,7 @@ export const useQueueStore = defineStore('queue', () => {
    * describes the whole queue rather than a page, so a second page would pay
    * the server to sum again what the first page already reported.
    */
-  async function read(append: boolean): Promise<void> {
+  async function readPage(append: boolean): Promise<void> {
     loading.value = true
     const offset = append ? items.value.length : 0
     try {
@@ -62,7 +62,7 @@ export const useQueueStore = defineStore('queue', () => {
       })
       if (append && page.version !== version.value) {
         loading.value = false
-        await read(false)
+        await readPage(false)
         // Set after the re-read, which clears it: the reason the list is being
         // shown again is what the notice is for.
         stale.value = true
@@ -78,6 +78,17 @@ export const useQueueStore = defineStore('queue', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  let current: Promise<void> | undefined = undefined
+
+  /** Runs `readPage`, keeping hold of it so a caller can wait it out. */
+  function read(append: boolean): Promise<void> {
+    const running = readPage(append)
+    current = running
+    return running.finally(() => {
+      if (current === running) current = undefined
+    })
   }
 
   let reading: Promise<void> | undefined = undefined
@@ -133,10 +144,15 @@ export const useQueueStore = defineStore('queue', () => {
    * What a search needs: filtering the rows that happen to be paged in answers
    * with a list missing the track being looked for, and no way to say why. The
    * pages are read in turn rather than at once so the rows already held stay
-   * usable while the rest arrives.
+   * usable while the rest arrives. A read already running is waited out rather
+   * than taken as the rest, which it may not be.
    */
   async function loadAll(): Promise<void> {
-    if (!hasMore.value || loading.value) return
+    if (current) {
+      await current.catch(() => undefined)
+      return loadAll()
+    }
+    if (!hasMore.value) return
 
     const held = items.value.length
     await load(true)

@@ -111,3 +111,23 @@ describe('a burst of change events', () => {
     expect(call).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('reading the whole queue', () => {
+  // Asked while a page was loading, it read nothing more: a search matched only
+  // the rows already held, and select all picked part of the queue as the whole.
+  it('waits out a read already running instead of stopping at it', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(200, 400))
+    await queue.load()
+
+    const running = held()
+    call.mockReturnValueOnce(running.promise)
+    const scrolled = queue.load(true)
+    const all = queue.loadAll()
+    call.mockResolvedValue(page(100, 400, { offset: 300 }))
+    running.resolve(page(100, 400, { offset: 200 }))
+    await Promise.all([scrolled, all])
+
+    expect(queue.items).toHaveLength(400)
+  })
+})
