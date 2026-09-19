@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import IconCheck from '~icons/lucide/check'
 import IconGrip from '~icons/lucide/grip-vertical'
+import IconListChecks from '~icons/lucide/list-checks'
 import IconMusic from '~icons/lucide/music'
 import IconQueue from '~icons/lucide/list-music'
 import IconSearch from '~icons/lucide/search'
@@ -14,6 +16,7 @@ import { ShuffleMode } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import { heardRows } from '../composables/queueHeard'
+import { useQueueSelection } from '../composables/queueSelection'
 import { useRunTime } from '../composables/runTime'
 import { useDragSort } from '../composables/useDragSort'
 import { useLazyRows } from '../composables/useLazyRows'
@@ -30,12 +33,6 @@ onMounted(() => {
 })
 
 /**
- * Dragging reorders the queue itself, so it is offered only on the full list.
- *
- * Up Next is play order, which for a shuffled queue is not storage order: a row
- * moved two places down there names no storage slot to move it to.
- */
-/**
  * The filter over the queue.
  *
  * A search reads the rest of the queue first: filtering the rows that happen to
@@ -47,8 +44,6 @@ watch(term, (value) => {
   if (value !== '') void queue.loadAll()
 })
 
-const canReorder = computed(() => !queue.upNext && term.value === '')
-
 const rows = computed(() => {
   const needle = term.value.trim().toLowerCase()
   if (needle === '') return queue.items
@@ -58,6 +53,50 @@ const rows = computed(() => {
     ),
   )
 })
+
+const selection = useQueueSelection(
+  rows,
+  computed(() => queue.version),
+  term,
+)
+
+/**
+ * Dragging reorders the queue itself, so it is offered only on the full list.
+ *
+ * Up Next is play order, which for a shuffled queue is not storage order: a row
+ * moved two places down there names no storage slot to move it to.
+ */
+const canReorder = computed(
+  () => !queue.upNext && term.value === '' && !selection.active.value,
+)
+
+/** Select all takes every row the view shows, so the rows not paged in yet are read first. */
+async function selectAll() {
+  await queue.loadAll()
+  selection.selectAll()
+}
+
+/**
+ * One press removes the whole selection. Picking the rows was already the
+ * deliberate step, unlike clearing, which a single stray tap could trigger.
+ */
+function removeSelected() {
+  const orders = selection.orders.value
+  selection.stop()
+  void queue.remove(orders)
+}
+
+function onRowPress(order: number, event: MouseEvent) {
+  if (selection.active.value) selection.toggle(order, event.shiftKey)
+  else void queue.play(order)
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && selection.active.value) selection.stop()
+}
+
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 /**
  * Which row is playing, by path rather than by index.
@@ -148,7 +187,34 @@ const drag = useDragSort(
 
 <template>
   <div class="flex h-full flex-col">
-    <div class="flex items-center gap-2 border-b border-surface-2 p-3">
+    <div
+      v-if="selection.active.value"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-2 p-3"
+    >
+      <span class="text-sm font-medium">
+        {{ $t('queue.select.count', selection.count.value) }}
+      </span>
+      <button
+        class="rounded-full bg-surface-2 px-3 py-1 text-sm"
+        @click="selection.allPicked.value ? selection.clear() : selectAll()"
+      >
+        {{ selection.allPicked.value ? $t('queue.select.none') : $t('queue.select.all') }}
+      </button>
+      <button
+        class="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors disabled:opacity-40"
+        :class="selection.count.value > 0 ? 'bg-rose-500 text-white' : 'bg-surface-2'"
+        :disabled="selection.count.value === 0"
+        @click="removeSelected"
+      >
+        <IconTrash class="size-4" />
+        {{ $t('queue.select.remove', selection.count.value) }}
+      </button>
+      <button class="rounded-full bg-accent px-3 py-1 text-sm text-white" @click="selection.stop()">
+        {{ $t('queue.select.done') }}
+      </button>
+    </div>
+
+    <div v-else class="flex items-center gap-2 border-b border-surface-2 p-3">
       <button
         class="rounded-full px-3 py-1 text-sm"
         :class="
@@ -181,6 +247,15 @@ const drag = useDragSort(
       >
         <IconTrash class="size-4" />
         <span v-if="clearArmed">{{ $t('queue.action.clearConfirm') }}</span>
+      </button>
+      <button
+        v-if="queue.total > 0"
+        class="tap-target rounded-control p-1 text-outline transition-colors hover:text-ink"
+        :aria-label="$t('queue.select.start')"
+        :title="$t('queue.select.start')"
+        @click="selection.start()"
+      >
+        <IconListChecks class="size-4" />
       </button>
     </div>
 
@@ -218,7 +293,8 @@ const drag = useDragSort(
         data-drag-row
         class="flex cursor-pointer items-center gap-3 border-b border-surface-2 px-3 transition-colors hover:bg-surface-2/40 active:bg-surface-2/70"
         :class="[
-          { 'opacity-40': !queue.upNext && heard(index) },
+          { 'opacity-40': !queue.upNext && heard(index) && !selection.has(item.order) },
+          { 'bg-accent-soft': selection.has(item.order) },
           index === drag.from.value ? 'relative z-10 bg-surface shadow-lg' : 'transition-transform',
         ]"
         :style="{
@@ -227,7 +303,18 @@ const drag = useDragSort(
         }"
       >
         <button
-          v-if="canReorder"
+          v-if="selection.active.value"
+          role="checkbox"
+          class="tap-target -ml-1 grid size-6 shrink-0 place-items-center rounded-control border transition-colors"
+          :class="selection.has(item.order) ? 'border-accent bg-accent text-white' : 'border-outline text-transparent'"
+          :aria-checked="selection.has(item.order)"
+          :aria-label="$t('queue.select.toggle', { title: item.title })"
+          @click="selection.toggle(item.order, $event.shiftKey)"
+        >
+          <IconCheck class="size-4" />
+        </button>
+        <button
+          v-else-if="canReorder"
           class="tap-target -ml-1 cursor-grab touch-none p-1 text-outline transition-colors hover:text-ink"
           :aria-label="$t('queue.action.reorder', { title: item.title })"
           @pointerdown="drag.start(index, $event)"
@@ -256,7 +343,7 @@ const drag = useDragSort(
             <PlayingIndicator class="text-accent" />
           </div>
         </div>
-        <button class="min-w-0 flex-1 text-left" @click="queue.play(item.order)">
+        <button class="min-w-0 flex-1 text-left" @click="onRowPress(item.order, $event)">
           <p
             class="truncate text-sm font-medium"
             :class="{ 'text-accent': isPlaying(item.src) }"
@@ -271,9 +358,10 @@ const drag = useDragSort(
           {{ formatDuration(item.duration_ms) }}
         </span>
         <button
+          v-if="!selection.active.value"
           class="tap-target p-2 text-outline transition-colors hover:text-rose-500"
           :aria-label="$t('queue.action.remove', { title: item.title })"
-          @click="queue.remove(item.order)"
+          @click="queue.remove([item.order])"
         >
           <IconX class="size-4" />
         </button>

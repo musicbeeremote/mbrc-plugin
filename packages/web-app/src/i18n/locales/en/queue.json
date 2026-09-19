@@ -15,6 +15,15 @@
   "playing": "Now playing",
   "emptyHint": "Play something from the library and it will appear here.",
   "found": "{shown} of {total}",
+  "select": {
+    "start": "Select tracks",
+    "done": "Done",
+    "count": "{count} selected",
+    "all": "Select all",
+    "none": "Select none",
+    "remove": "Remove {count} track | Remove {count} tracks",
+    "toggle": "Select {title}"
+  },
   "search": {
     "placeholder": "Search the queue",
     "clear": "Clear the search",

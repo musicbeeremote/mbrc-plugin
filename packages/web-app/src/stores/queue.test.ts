@@ -100,9 +100,34 @@ describe('a mutation the server refuses', () => {
 
     call.mockRejectedValueOnce(new OpError({ code: ErrorCode.StaleList, message: 'stale' }))
     call.mockResolvedValue(page(4, 4, 2))
-    await queue.remove(0)
+    await queue.remove([0])
 
     expect(queue.stale).toBe(true)
+  })
+})
+
+describe('removing tracks', () => {
+  it('sends every picked order in one request with the version it was read at', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 4))
+    await queue.load()
+
+    call.mockResolvedValue({})
+    await queue.remove([0, 2])
+
+    expect(call).toHaveBeenCalledWith('now_playing_list_remove', { orders: [0, 2], version: 4 })
+  })
+
+  // The server refuses an empty batch, so asking would only turn a no-op into an error.
+  it('sends nothing for an empty selection', async () => {
+    const queue = useQueueStore()
+    call.mockResolvedValue(page(3, 3, 4))
+    await queue.load()
+    call.mockClear()
+
+    await queue.remove([])
+
+    expect(call).not.toHaveBeenCalled()
   })
 })
 

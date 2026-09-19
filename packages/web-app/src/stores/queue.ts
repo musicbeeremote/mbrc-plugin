@@ -191,8 +191,10 @@ export const useQueueStore = defineStore('queue', () => {
   async function play(order: number) {
     await mutate(Op.NowPlayingListPlay, { order })
   }
-  async function remove(order: number) {
-    await mutate(Op.NowPlayingListRemove, { orders: [order] })
+  /** Removes the given slots in one request; the server works out the order. */
+  async function remove(orders: number[]) {
+    if (orders.length === 0) return
+    await mutate(Op.NowPlayingListRemove, { orders })
   }
   async function move(from: number, to: number) {
     await mutate(Op.NowPlayingListMove, { from, to })
