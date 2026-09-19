@@ -50,7 +50,7 @@ export const useQueueStore = defineStore('queue', () => {
    * describes the whole queue rather than a page, so a second page would pay
    * the server to sum again what the first page already reported.
    */
-  async function load(append = false): Promise<void> {
+  async function read(append: boolean): Promise<void> {
     loading.value = true
     const offset = append ? items.value.length : 0
     try {
@@ -62,7 +62,7 @@ export const useQueueStore = defineStore('queue', () => {
       })
       if (append && page.version !== version.value) {
         loading.value = false
-        await load()
+        await read(false)
         // Set after the re-read, which clears it: the reason the list is being
         // shown again is what the notice is for.
         stale.value = true
@@ -78,6 +78,50 @@ export const useQueueStore = defineStore('queue', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  let reading: Promise<void> | undefined = undefined
+  let readAgain = false
+
+  /** A read that fails is dropped when a newer one was asked for meanwhile. */
+  async function readUntilSettled(): Promise<void> {
+    readAgain = false
+    try {
+      await read(false)
+    } catch (error) {
+      if (!readAgain) throw error
+    }
+    if (readAgain) await readUntilSettled()
+  }
+
+  async function settle(): Promise<void> {
+    try {
+      await readUntilSettled()
+    } finally {
+      reading = undefined
+    }
+  }
+
+  /**
+   * Reads the queue from the start, collapsing a burst of asks into one read
+   * plus one trailing read.
+   *
+   * MusicBee announces a change once per host call, so removing twenty tracks
+   * arrives as twenty events inside a few milliseconds. A request made while a
+   * read is running shares it and asks for one more once it lands, since the
+   * running read may have started before the change it was asked about.
+   */
+  function reload(): Promise<void> {
+    if (reading) {
+      readAgain = true
+      return reading
+    }
+    reading = settle()
+    return reading
+  }
+
+  async function load(append = false): Promise<void> {
+    await (append ? read(true) : reload())
   }
 
   /** Whether the server holds more of the queue than is on screen. */
@@ -104,7 +148,7 @@ export const useQueueStore = defineStore('queue', () => {
 
   async function setView(next: boolean) {
     upNext.value = next
-    await load()
+    await reload()
   }
 
   /**
@@ -119,13 +163,13 @@ export const useQueueStore = defineStore('queue', () => {
       await client.call(op, { ...data, version: version.value })
     } catch (error) {
       if (!(error instanceof OpError) || error.code !== ErrorCode.StaleList) throw error
-      await load()
+      await reload()
       // Set after the re-read, which clears it: the reason the list is being
       // shown again is what the notice is for.
       stale.value = true
       return
     }
-    await Promise.all([load(), usePlayerStore().refreshNowPlaying()])
+    await Promise.all([reload(), usePlayerStore().refreshNowPlaying()])
   }
 
   async function play(order: number) {
@@ -143,7 +187,7 @@ export const useQueueStore = defineStore('queue', () => {
 
   function bind() {
     client.on(WireEvent.NowPlayingListChanged, () => {
-      void load()
+      void reload()
     })
   }
 
