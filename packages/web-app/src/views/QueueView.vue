@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import IconCheck from '~icons/lucide/check'
 import IconGrip from '~icons/lucide/grip-vertical'
 import IconListChecks from '~icons/lucide/list-checks'
+import IconListPlus from '~icons/lucide/list-plus'
 import IconMusic from '~icons/lucide/music'
 import IconQueue from '~icons/lucide/list-music'
 import IconSearch from '~icons/lucide/search'
@@ -21,6 +22,7 @@ import { useRunTime } from '../composables/runTime'
 import { useDragSort } from '../composables/useDragSort'
 import { useLazyRows } from '../composables/useLazyRows'
 import { usePlayerStore } from '../stores/player'
+import { usePlaylistPicker } from '../stores/playlistPicker'
 import { useQueueStore } from '../stores/queue'
 
 const queue = useQueueStore()
@@ -84,6 +86,15 @@ function removeSelected() {
   const orders = selection.orders.value
   selection.stop()
   void queue.remove(orders)
+}
+
+const picker = usePlaylistPicker()
+
+/** The picked tracks, in queue order, for a playlist. The selection ends, as it does on removal. */
+function addSelectedTo() {
+  const paths = queue.items.filter((item) => selection.has(item.order)).map((item) => item.src)
+  selection.stop()
+  picker.show({ paths })
 }
 
 function onRowPress(order: number, event: MouseEvent) {
@@ -201,7 +212,15 @@ const drag = useDragSort(
         {{ selection.allPicked.value ? $t('queue.select.none') : $t('queue.select.all') }}
       </button>
       <button
-        class="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors disabled:opacity-40"
+        class="ml-auto flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm transition-colors disabled:opacity-40"
+        :disabled="selection.count.value === 0"
+        @click="addSelectedTo"
+      >
+        <IconListPlus class="size-4" />
+        {{ $t('playlists.select.addTo') }}
+      </button>
+      <button
+        class="flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors disabled:opacity-40"
         :class="selection.count.value > 0 ? 'bg-rose-500 text-white' : 'bg-surface-2'"
         :disabled="selection.count.value === 0"
         @click="removeSelected"
@@ -247,6 +266,15 @@ const drag = useDragSort(
       >
         <IconTrash class="size-4" />
         <span v-if="clearArmed">{{ $t('queue.action.clearConfirm') }}</span>
+      </button>
+      <button
+        v-if="queue.total > 0"
+        class="tap-target rounded-control p-1 text-outline transition-colors hover:text-ink"
+        :aria-label="$t('queue.action.saveAs')"
+        :title="$t('queue.action.saveAs')"
+        @click="picker.show({ now_playing: true })"
+      >
+        <IconListPlus class="size-4" />
       </button>
       <button
         v-if="queue.total > 0"

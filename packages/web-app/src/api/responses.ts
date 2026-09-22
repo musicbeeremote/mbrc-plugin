@@ -157,6 +157,13 @@ export const OpResponseSchemas = {
   playlist_list: pageSchema(PlaylistEntrySchema),
   playlist_play: EmptySchema,
   playlist_tracks: PlaylistPageSchema,
+  playlist_create: z.object({ url: z.string(), name: z.string(), version: z.string() }),
+  playlist_delete: EmptySchema,
+  /** Every edit answers with the version the next read serves. */
+  playlist_add_tracks: z.object({ version: z.string(), added: z.number() }),
+  playlist_remove_tracks: z.object({ version: z.string(), removed: z.number() }),
+  playlist_move_tracks: z.object({ version: z.string() }),
+  playlist_set_tracks: z.object({ version: z.string() }),
 } satisfies Record<keyof OpRequests, z.ZodType>
 
 /** The `data` each op answers with, projected from the schemas above. */

@@ -202,6 +202,8 @@ export type PlaylistTrack = z.infer<typeof PlaylistTrackSchema>
 export const PlaylistPageSchema = pageSchema(PlaylistTrackSchema).extend({
   name: z.string(),
   version: z.string(),
+  /** False for an auto playlist, which is a rule rather than a list. */
+  editable: z.boolean(),
   /** Summed over what `total` counts; absent unless `totals` was asked for. */
   total_duration_ms: z.number().nullish(),
 })
@@ -272,6 +274,8 @@ export type RadioEntry = z.infer<typeof RadioEntrySchema>
 export const PlaylistEntrySchema = z.object({
   url: z.string(),
   name: z.string(),
+  /** False for an auto playlist, which is a rule rather than a list. */
+  editable: z.boolean(),
 })
 export type PlaylistEntry = z.infer<typeof PlaylistEntrySchema>
 

@@ -45,6 +45,21 @@ export interface LibraryScope {
   query?: string
 }
 
+/**
+ * The tracks a playlist edit names, in exactly one of three ways.
+ *
+ * `paths` names them; a library scope is resolved by the server, as
+ * `library_queue` resolves it; `now_playing` takes the whole queue. The server
+ * refuses a request that names two.
+ */
+export type PlaylistSource = { paths: string[] } | LibraryScope | { now_playing: true }
+
+/** The `version` a playlist page was read at, echoed so a moved list is refused. */
+interface PlaylistGuard {
+  url: string
+  version?: string
+}
+
 /** The `data` each op takes. */
 export interface OpRequests {
   system_info: Empty
@@ -114,6 +129,13 @@ export interface OpRequests {
     query_field?: QueryField
     totals?: boolean
   }
+  // Without a source the playlist is created empty.
+  playlist_create: { name: string; folder?: string } & (PlaylistSource | Empty)
+  playlist_delete: { url: string }
+  playlist_add_tracks: PlaylistGuard & PlaylistSource
+  playlist_remove_tracks: PlaylistGuard & { orders: number[] }
+  playlist_move_tracks: PlaylistGuard & { from_orders: number[]; to_order: number }
+  playlist_set_tracks: PlaylistGuard & PlaylistSource
 }
 
 /**
@@ -176,6 +198,12 @@ export const Op = {
   PlaylistList: 'playlist_list',
   PlaylistPlay: 'playlist_play',
   PlaylistTracks: 'playlist_tracks',
+  PlaylistCreate: 'playlist_create',
+  PlaylistDelete: 'playlist_delete',
+  PlaylistAddTracks: 'playlist_add_tracks',
+  PlaylistRemoveTracks: 'playlist_remove_tracks',
+  PlaylistMoveTracks: 'playlist_move_tracks',
+  PlaylistSetTracks: 'playlist_set_tracks',
 } as const satisfies Record<string, keyof OpRequests>
 
 export type Op = (typeof Op)[keyof typeof Op]

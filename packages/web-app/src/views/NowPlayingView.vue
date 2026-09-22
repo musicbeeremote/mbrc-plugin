@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import IconAutoDj from '~icons/lucide/audio-lines'
 import IconBan from '~icons/lucide/ban'
 import IconHeart from '~icons/lucide/heart'
+import IconListPlus from '~icons/lucide/list-plus'
 import IconMusic from '~icons/lucide/music'
 import IconPause from '~icons/lucide/pause'
 import IconPlay from '~icons/lucide/play'
@@ -23,6 +24,7 @@ import StarRating from '../components/StarRating.vue'
 import TrackPanels from '../components/TrackPanels.vue'
 import { useCoverAccent } from '../composables/useCoverAccent'
 import { usePlayerStore } from '../stores/player'
+import { usePlaylistPicker } from '../stores/playlistPicker'
 
 const { t } = useI18n()
 
@@ -31,6 +33,7 @@ const expanded = ref(false)
 
 
 const player = usePlayerStore()
+const picker = usePlaylistPicker()
 
 // The server pushes no position events, so the bar is advanced locally and
 // corrected against the server twice a minute. Seeking replaces both.
@@ -323,6 +326,16 @@ function cycleRepeat() {
           @click="player.setScrobbling(!player.scrobbling)"
         >
           <IconScrobble class="size-5" />
+        </button>
+
+        <button
+          v-if="player.track?.src"
+          class="ml-auto p-1 text-outline transition-colors hover:text-ink"
+          :aria-label="$t('playlists.action.addTo')"
+          :title="$t('playlists.action.addTo')"
+          @click="picker.show({ paths: [player.track.src] })"
+        >
+          <IconListPlus class="size-5" />
         </button>
       </div>
 

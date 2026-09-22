@@ -5,9 +5,33 @@
   "noMatches": "Nothing in this playlist matches.",
   "trackCount": "no tracks | 1 track | {count} tracks",
   "searchPlaceholder": "Search this playlist",
+  "reloaded": "The playlist changed; it was read again.",
+  "failed": "Could not change the playlist: {reason}",
   "action": {
     "play": "Play {name}",
-    "search": "Search this playlist"
+    "search": "Search this playlist",
+    "addTo": "Add to playlist…",
+    "new": "New playlist",
+    "delete": "Delete this playlist",
+    "deleteConfirm": "Delete it?",
+    "reorder": "Reorder {title}"
+  },
+  "select": {
+    "remove": "Remove {count} track | Remove {count} tracks",
+    "addTo": "Add to playlist"
+  },
+  "pick": {
+    "title": "Add to playlist",
+    "saveQueueTitle": "Save the queue as a playlist",
+    "newTitle": "New playlist",
+    "namePlaceholder": "New playlist name",
+    "create": "Create",
+    "reserved": "A name cannot contain < > : \" / \\ {'|'} ? *",
+    "existing": "Add to an existing playlist",
+    "none": "There are no playlists to add to yet.",
+    "added": "Added nothing to {name} | Added 1 track to {name} | Added {count} tracks to {name}",
+    "created": "Created {name}",
+    "failed": "That did not work: {reason}"
   },
   "searchField": "Search in",
   "field": {

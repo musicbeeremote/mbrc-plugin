@@ -11,7 +11,8 @@
     "remove": "Remove {title}",
     "reorder": "Reorder {title}",
     "clear": "Clear the queue",
-    "clearConfirm": "Clear it?"
+    "clearConfirm": "Clear it?",
+    "saveAs": "Save the queue as a playlist"
   },
   "playing": "Now playing",
   "emptyHint": "Play something from the library and it will appear here.",

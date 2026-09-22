@@ -13,6 +13,7 @@ import IconRadio from '~icons/lucide/radio'
 
 import { client } from './api/client'
 import { WireEvent } from './api/ops'
+import AddToPlaylistSheet from './components/AddToPlaylistSheet.vue'
 import NowPlayingBar from './components/NowPlayingBar.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
 import { useShortcuts } from './composables/useShortcuts'
@@ -251,5 +252,7 @@ function onPaired() {
 
       <ThemeToggle variant="bar" />
     </div>
+
+    <AddToPlaylistSheet />
   </div>
 </template>

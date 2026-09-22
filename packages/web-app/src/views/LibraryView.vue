@@ -37,6 +37,7 @@ import {
 import { libraryRoute, positionFromRoute } from '../router/locations'
 import { useLibraryStore, LibraryLevel } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
+import { usePlaylistPicker } from '../stores/playlistPicker'
 
 const { t } = useI18n()
 const isWide = useMediaQuery('(min-width: 768px)')
@@ -225,6 +226,9 @@ const shuffleAllLabel = computed(() =>
 async function queueScope(add: LibraryScope, mode: QueueMode) {
   await library.queueScope(add, { mode })
 }
+
+// A row's tracks for a playlist are scoped exactly as its queue actions scope them.
+const picker = usePlaylistPicker()
 
 /**
  * A track's own queue actions.
@@ -459,7 +463,9 @@ function onGridScroll(event: Event) {
             <QueueMenu
               class="-mt-1.5 -mr-2"
               :label="$t('library.action.more', { title: entry.album })"
+              playlist
               @select="(mode) => queueScope(albumScope(entry), mode)"
+              @playlist="picker.show({ ...library.scope, ...albumScope(entry) })"
             />
           </div>
         </li>
@@ -490,7 +496,9 @@ function onGridScroll(event: Event) {
             <QueueMenu
               :label="$t('library.action.more', { title: row.data.genre })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
+              playlist
               @select="(mode) => queueScope({ genre: (row.data as GenreEntry).genre }, mode)"
+              @playlist="picker.show({ ...library.scope, genre: (row.data as GenreEntry).genre })"
             />
           </template>
 
@@ -507,7 +515,9 @@ function onGridScroll(event: Event) {
             <QueueMenu
               :label="$t('library.action.more', { title: row.data.artist })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
+              playlist
               @select="(mode) => queueScope({ artist: (row.data as ArtistEntry).artist }, mode)"
+              @playlist="picker.show({ ...library.scope, artist: (row.data as ArtistEntry).artist })"
             />
           </template>
 
@@ -576,7 +586,9 @@ function onGridScroll(event: Event) {
             <QueueMenu
               :label="$t('library.action.more', { title: row.data.title })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
+              playlist
               @select="(mode) => queueTrack((row.data as Track).src, mode)"
+              @playlist="picker.show({ paths: [(row.data as Track).src] })"
             />
           </template>
         </div>

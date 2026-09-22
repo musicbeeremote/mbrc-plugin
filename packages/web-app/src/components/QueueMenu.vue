@@ -17,8 +17,13 @@ import { QueueMode } from '../api/types'
  * lift the menu over the navigation bar - so it is positioned against the
  * button from outside instead.
  */
-const { label, modes } = defineProps<{ label: string; modes?: QueueMode[] }>()
-const emit = defineEmits<{ select: [mode: QueueMode] }>()
+const { label, modes, playlist } = defineProps<{
+  label: string
+  modes?: QueueMode[]
+  /** Offer "Add to playlist" after the placements, for a row whose tracks can go in one. */
+  playlist?: boolean
+}>()
+const emit = defineEmits<{ select: [mode: QueueMode]; playlist: [] }>()
 
 const open = ref(false)
 const trigger = ref<HTMLElement | null>(null)
@@ -52,7 +57,7 @@ const entries = computed(() =>
 )
 
 /** Matches the menu's own padding plus one row per entry. */
-const menuHeight = computed(() => entries.value.length * 40 + 8)
+const menuHeight = computed(() => (entries.value.length + (playlist ? 1 : 0)) * 40 + 8)
 
 /** Under whatever opened it, or above when the window has no room below. */
 function place() {
@@ -93,6 +98,11 @@ defineExpose({ openAt })
 function choose(mode: QueueMode) {
   open.value = false
   emit('select', mode)
+}
+
+function choosePlaylist() {
+  open.value = false
+  emit('playlist')
 }
 
 // A menu that survives a tap elsewhere is a menu that has to be dismissed
@@ -161,6 +171,14 @@ onBeforeUnmount(() => {
           @click.stop="choose(entry.mode)"
         >
           {{ $t(entry.label) }}
+        </button>
+        <button
+          v-if="playlist"
+          role="menuitem"
+          class="block w-full border-t border-surface-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60"
+          @click.stop="choosePlaylist"
+        >
+          {{ $t('playlists.action.addTo') }}
         </button>
       </div>
     </Teleport>

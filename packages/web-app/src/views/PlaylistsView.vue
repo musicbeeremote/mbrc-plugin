@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import IconCheck from '~icons/lucide/check'
 import IconBack from '~icons/lucide/chevron-left'
 import IconFolder from '~icons/lucide/folder'
+import IconGrip from '~icons/lucide/grip-vertical'
 import IconPlaylists from '~icons/lucide/list'
+import IconListChecks from '~icons/lucide/list-checks'
+import IconListPlus from '~icons/lucide/list-plus'
 import IconMusic from '~icons/lucide/music'
 import IconPlay from '~icons/lucide/play'
+import IconPlus from '~icons/lucide/plus'
 import IconSearch from '~icons/lucide/search'
+import IconTrash from '~icons/lucide/trash-2'
 
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { QueryField, QueueMode } from '../api/types'
@@ -16,7 +22,9 @@ import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import QueueMenu from '../components/QueueMenu.vue'
 import { browsePlaylists, playlistLabel } from '../composables/playlistFolders'
+import { useQueueSelection } from '../composables/queueSelection'
 import { useRunTime } from '../composables/runTime'
+import { useDragSort } from '../composables/useDragSort'
 import { useLazyRows } from '../composables/useLazyRows'
 import {
   openPlaylistFromRoute,
@@ -29,6 +37,7 @@ import {
 import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
+import { usePlaylistPicker } from '../stores/playlistPicker'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -37,6 +46,7 @@ const library = useLibraryStore()
 const player = usePlayerStore()
 const playlist = usePlaylistStore()
 const runTime = useRunTime()
+const picker = usePlaylistPicker()
 
 /** The folder being looked at, as segments. Empty is the playlists root. */
 const path = computed(() => playlistPathFromRoute(route.query))
@@ -76,6 +86,94 @@ const { list, containerProps, wrapperProps } = useLazyRows(tracks, {
 onMounted(() => {
   void library.loadPlaylists()
 })
+
+/**
+ * Rows picked for removal or for another playlist, keyed by `order`.
+ *
+ * Held against the playlist's version and search, as the queue's are: an
+ * `order` only names a track in the list it was read from.
+ */
+const selection = useQueueSelection(
+  tracks,
+  computed(() => playlist.version),
+  computed(() => playlist.query),
+)
+
+/**
+ * Dragging reorders the playlist itself, so it is offered only on the whole
+ * list: under a search, the row two places down is not the slot two places down.
+ */
+const canReorder = computed(
+  () => playlist.editable && playlist.query === '' && !selection.active.value,
+)
+
+const drag = useDragSort(
+  () => tracks.value.length,
+  (from, to) => {
+    const moved = tracks.value[from]
+    const target = tracks.value[to]
+    if (moved && target) void playlist.move(moved.order, target.order)
+  },
+)
+
+async function selectAll() {
+  await playlist.loadAll()
+  selection.selectAll()
+}
+
+function removeSelected() {
+  const orders = selection.orders.value
+  selection.stop()
+  void playlist.remove(orders)
+}
+
+function addSelectedTo() {
+  const paths = playlist.tracks
+    .filter((track) => selection.has(track.order))
+    .map((track) => track.src)
+  selection.stop()
+  picker.show({ paths })
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && selection.active.value) selection.stop()
+}
+
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+
+/** How long the delete button stays armed before it forgets it was pressed. */
+const DELETE_ARMED_MS = 4000
+
+const deleteArmed = ref(false)
+let disarm: ReturnType<typeof setTimeout> | undefined = undefined
+
+/**
+ * Deleting takes two presses, as clearing the queue does.
+ *
+ * A playlist is saved work that cannot be brought back from here, and the
+ * button sits beside play. The arming lapses on its own.
+ */
+async function deleteOpen() {
+  const url = openUrl.value
+  if (!url) return
+  if (!deleteArmed.value) {
+    deleteArmed.value = true
+    disarm = setTimeout(() => (deleteArmed.value = false), DELETE_ARMED_MS)
+    return
+  }
+  clearTimeout(disarm)
+  deleteArmed.value = false
+  await playlist.deletePlaylist(url)
+  await router.push(playlistsRoute(path.value))
+}
+
+onUnmounted(() => clearTimeout(disarm))
+
+/** A playlist made here is filed in the folder being looked at. */
+function newPlaylist() {
+  picker.show(null, path.value.join('\\'))
+}
 
 /** Open whenever the address carries a term, so a shared link shows its search. */
 const searching = ref(openQuery.value !== '')
@@ -127,6 +225,9 @@ watch(
     const [wasUrl, wasQuery, wasField] = previous ?? [undefined, undefined, undefined]
     if (url === wasUrl && q === wasQuery && f === wasField && playlist.tracks.length > 0) return
     if (url !== wasUrl) {
+      selection.stop()
+      clearTimeout(disarm)
+      deleteArmed.value = false
       playlist.close()
       term.value = q
       field.value = f
@@ -146,6 +247,11 @@ function back() {
 function queueTrack(src: string, mode: QueueMode) {
   if (mode === QueueMode.Now) void library.playNow([src], src)
   else void library.queue([src], mode)
+}
+
+function onRowPress(src: string, order: number, event: MouseEvent) {
+  if (selection.active.value) selection.toggle(order, event.shiftKey)
+  else queueTrack(src, QueueMode.Now)
 }
 
 /** What the open playlist holds: how many tracks, and how long they run. */
@@ -170,7 +276,7 @@ const summary = computed(() => {
       </button>
       <div class="min-w-0 flex-1">
         <span class="block truncate text-sm font-medium">
-          {{ path.length === 0 ? $t('playlists.title') : heading }}
+          {{ !openUrl && path.length === 0 ? $t('playlists.title') : heading }}
         </span>
         <!-- What is in it, which is the question opening one asks. -->
         <span v-if="openUrl" class="block truncate text-2xs text-outline">
@@ -192,6 +298,27 @@ const summary = computed(() => {
           <IconSearch class="size-4" />
         </button>
         <button
+          v-if="playlist.editable && playlist.total > 0"
+          class="rounded-control p-2 text-ink-soft transition-colors hover:bg-surface-2/60"
+          :class="{ 'text-accent': selection.active.value }"
+          :aria-label="$t('queue.select.start')"
+          :aria-pressed="selection.active.value"
+          :title="$t('queue.select.start')"
+          @click="selection.active.value ? selection.stop() : selection.start()"
+        >
+          <IconListChecks class="size-4" />
+        </button>
+        <button
+          class="flex items-center gap-1 rounded-control p-2 text-xs transition-colors hover:bg-surface-2/60"
+          :class="deleteArmed ? 'text-rose-500' : 'text-ink-soft'"
+          :aria-label="deleteArmed ? $t('playlists.action.deleteConfirm') : $t('playlists.action.delete')"
+          :title="$t('playlists.action.delete')"
+          @click="deleteOpen"
+        >
+          <IconTrash class="size-4" />
+          <span v-if="deleteArmed">{{ $t('playlists.action.deleteConfirm') }}</span>
+        </button>
+        <button
           class="rounded-control p-2 text-accent transition-colors hover:bg-surface-2/60"
           :aria-label="$t('playlists.action.play', { name: playlist.name })"
           @click="library.playPlaylist(openUrl)"
@@ -199,7 +326,64 @@ const summary = computed(() => {
           <IconPlay class="size-4" />
         </button>
       </template>
+      <button
+        v-else
+        class="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm transition-colors hover:bg-surface-2/60"
+        @click="newPlaylist"
+      >
+        <IconPlus class="size-4" />
+        {{ $t('playlists.action.new') }}
+      </button>
     </div>
+
+    <div
+      v-if="openUrl && selection.active.value"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-2 p-3"
+    >
+      <span class="text-sm font-medium">
+        {{ $t('queue.select.count', selection.count.value) }}
+      </span>
+      <button
+        class="rounded-full bg-surface-2 px-3 py-1 text-sm"
+        @click="selection.allPicked.value ? selection.clear() : selectAll()"
+      >
+        {{ selection.allPicked.value ? $t('queue.select.none') : $t('queue.select.all') }}
+      </button>
+      <button
+        class="ml-auto flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm transition-colors disabled:opacity-40"
+        :disabled="selection.count.value === 0"
+        @click="addSelectedTo"
+      >
+        <IconListPlus class="size-4" />
+        {{ $t('playlists.select.addTo') }}
+      </button>
+      <button
+        class="flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors disabled:opacity-40"
+        :class="selection.count.value > 0 ? 'bg-rose-500 text-white' : 'bg-surface-2'"
+        :disabled="selection.count.value === 0"
+        @click="removeSelected"
+      >
+        <IconTrash class="size-4" />
+        {{ $t('playlists.select.remove', selection.count.value) }}
+      </button>
+      <button class="rounded-full bg-accent px-3 py-1 text-sm text-white" @click="selection.stop()">
+        {{ $t('queue.select.done') }}
+      </button>
+    </div>
+
+    <p
+      v-if="openUrl && playlist.failure"
+      class="bg-rose-500/10 p-2 text-center text-xs text-rose-500"
+      role="alert"
+    >
+      {{ $t('playlists.failed', { reason: playlist.failure }) }}
+    </p>
+    <p
+      v-else-if="openUrl && playlist.stale"
+      class="bg-accent-soft p-2 text-center text-xs text-accent"
+    >
+      {{ $t('playlists.reloaded') }}
+    </p>
 
     <!-- Narrowing is server-side: filtering the rows that happen to be paged in
          would answer with the looked-for track missing and no way to say why. -->
@@ -273,9 +457,39 @@ const summary = computed(() => {
         <div
           v-for="row in list"
           :key="row.data.order"
+          data-drag-row
           class="flex items-center border-b border-surface-2"
-          :style="{ height: `${ROW_HEIGHT}px` }"
+          :class="[
+            { 'bg-accent-soft': selection.has(row.data.order) },
+            row.index === drag.from.value ? 'relative z-10 bg-surface shadow-lg' : 'transition-transform',
+          ]"
+          :style="{
+            height: `${ROW_HEIGHT}px`,
+            transform: `translateY(${row.index === drag.from.value ? drag.offset.value : drag.shift(row.index)}px)`,
+          }"
         >
+          <button
+            v-if="selection.active.value"
+            role="checkbox"
+            class="tap-target ml-2 grid size-6 shrink-0 place-items-center rounded-control border transition-colors"
+            :class="selection.has(row.data.order) ? 'border-accent bg-accent text-white' : 'border-outline text-transparent'"
+            :aria-checked="selection.has(row.data.order)"
+            :aria-label="$t('queue.select.toggle', { title: row.data.title })"
+            @click="selection.toggle(row.data.order, $event.shiftKey)"
+          >
+            <IconCheck class="size-4" />
+          </button>
+          <button
+            v-else-if="canReorder"
+            class="tap-target ml-1 cursor-grab touch-none p-1 text-outline transition-colors hover:text-ink"
+            :aria-label="$t('playlists.action.reorder', { title: row.data.title })"
+            @pointerdown="drag.start(row.index, $event)"
+            @pointermove="drag.move"
+            @pointerup="drag.drop"
+            @pointercancel="drag.drop"
+          >
+            <IconGrip class="size-4" />
+          </button>
           <div class="relative ml-3 size-10 shrink-0 overflow-hidden rounded-control bg-surface-2">
             <img
               v-if="coverUrl(row.data.cover_hash)"
@@ -294,7 +508,7 @@ const summary = computed(() => {
           </div>
           <button
             class="min-w-0 flex-1 px-3 text-left"
-            @click="queueTrack(row.data.src, QueueMode.Now)"
+            @click="onRowPress(row.data.src, row.data.order, $event)"
           >
             <span
               class="block min-w-0 truncate text-sm/tight"
@@ -311,9 +525,13 @@ const summary = computed(() => {
             {{ formatDuration(row.data.duration_ms) }}
           </span>
           <QueueMenu
+            v-if="!selection.active.value"
             :label="$t('library.action.more', { title: row.data.title })"
+            playlist
             @select="(mode) => queueTrack(row.data.src, mode)"
+            @playlist="picker.show({ paths: [row.data.src] })"
           />
+          <span v-else class="w-3 shrink-0"></span>
         </div>
       </div>
     </div>

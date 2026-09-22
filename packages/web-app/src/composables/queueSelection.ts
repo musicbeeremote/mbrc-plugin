@@ -1,5 +1,5 @@
 /**
- * Which queue rows are picked for a batch action, keyed by `order`.
+ * Which queue or playlist rows are picked for a batch action, keyed by `order`.
  *
  * An `order` is a storage slot, and it only names a track in the list it was
  * read from. So the selection belongs to one version of the queue: when the
@@ -36,7 +36,7 @@ export interface QueueSelection {
 
 export function useQueueSelection(
   rows: Ref<readonly Ordered[]>,
-  version: Ref<number>,
+  version: Ref<number | string>,
   search: Ref<string>,
 ): QueueSelection {
   const active = ref(false)

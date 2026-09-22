@@ -56,6 +56,13 @@ export const V6_COMMAND_CATALOG: V6CommandGroup[] = [
     commands: [
       v6cmd("playlist_list", "List playlists", { offset: 0, limit: 100 }, "{ offset?, limit? }"),
       v6cmd("playlist_play", "Play playlist", { url: "" }, "{ url } · playlist path/url"),
+      v6cmd("playlist_tracks", "Playlist tracks", { url: "", offset: 0, limit: 100 }, "{ url, offset?, limit?, query?, query_field?, totals? }"),
+      v6cmd("playlist_create", "Create playlist", { name: "New Playlist", paths: [] }, "{ name, folder?, paths | scope | now_playing? }"),
+      v6cmd("playlist_delete", "Delete playlist", { url: "" }, "{ url }"),
+      v6cmd("playlist_add_tracks", "Add tracks", { url: "", paths: [] }, "{ url, paths | genre/artist/album/query | now_playing, version? }"),
+      v6cmd("playlist_remove_tracks", "Remove tracks", { url: "", orders: [0] }, "{ url, orders: number[], version? }"),
+      v6cmd("playlist_move_tracks", "Move tracks", { url: "", from_orders: [0], to_order: 1 }, "{ url, from_orders: number[], to_order, version? }"),
+      v6cmd("playlist_set_tracks", "Replace tracks", { url: "", paths: [] }, "{ url, paths | scope | now_playing, version? }"),
     ],
   },
   {

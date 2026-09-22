@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { browsePlaylists, playlistLabel, playlistSegments } from './playlistFolders'
 
-const entry = (name: string) => ({ name, url: `C:/mb/${name}.mbp` })
+const entry = (name: string) => ({ name, url: `C:/mb/${name}.mbp`, editable: true })
 
 // Every separator is a directory level, and MusicBee reports both kinds.
 const LIBRARY = [
