@@ -72,11 +72,43 @@ fn suites() -> Vec<(&'static str, Vec<Case>)> {
         ("nowplaying", nowplaying_cases()),
         ("nowplaying_list", nowplaying_list_cases(&page)),
         ("library", library_cases(&page)),
-        (
-            "playlist",
-            vec![case("playlist_list", "playlist_list", page.clone())],
-        ),
+        ("playlist", playlist_cases(&page)),
         ("errors", error_cases()),
+    ]
+}
+
+/// The playlist domain, edits included (#115). The fixture's writes are no-ops,
+/// so each reply's `version` is the fixture playlist's own: these lock shapes.
+fn playlist_cases(page: &Value) -> Vec<Case> {
+    let url = "playlist://x";
+    vec![
+        case("playlist_list", "playlist_list", page.clone()),
+        case(
+            "playlist_create",
+            "playlist_create",
+            json!({ "name": "New", "paths": ["C:\\Music\\a.mp3"] }),
+        ),
+        case(
+            "playlist_add_tracks",
+            "playlist_add_tracks",
+            json!({ "url": url, "paths": ["C:\\Music\\c.mp3"] }),
+        ),
+        case(
+            "playlist_remove_tracks",
+            "playlist_remove_tracks",
+            json!({ "url": url, "orders": [0] }),
+        ),
+        case(
+            "playlist_move_tracks",
+            "playlist_move_tracks",
+            json!({ "url": url, "from_orders": [0], "to_order": 1 }),
+        ),
+        case(
+            "playlist_set_tracks",
+            "playlist_set_tracks",
+            json!({ "url": url, "paths": ["C:\\Music\\b.mp3"] }),
+        ),
+        case("playlist_delete", "playlist_delete", json!({ "url": url })),
     ]
 }
 

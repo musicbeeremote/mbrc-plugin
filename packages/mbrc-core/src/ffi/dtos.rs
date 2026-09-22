@@ -57,6 +57,21 @@ pub struct MoveParams {
     pub to: i32,
 }
 
+/// `PlaylistCreate` query. An empty `folder` is the playlists root.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlaylistCreateParams {
+    pub folder: String,
+    pub name: String,
+    pub files: Vec<String>,
+}
+
+/// `PlaylistAppend` / `PlaylistSetFiles`: one playlist and the files to write.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlaylistFilesParams {
+    pub url: String,
+    pub files: Vec<String>,
+}
+
 /// Pagination payload for `NowPlayingList` / `RadioStations` queries.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginationParams {

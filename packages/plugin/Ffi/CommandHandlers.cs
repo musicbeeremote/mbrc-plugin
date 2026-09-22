@@ -74,6 +74,9 @@ namespace MusicBeePlugin.Ffi
                 case CommandType.NowPlayingQueue: return ApplyQueue(p);
                 case CommandType.NowPlayingTagChange: return ApplyTagChange(p);
                 case CommandType.SetBackgroundTaskMessage: return ApplyBackgroundTaskMessage(p);
+                case CommandType.PlaylistDelete: return _playlist.DeletePlaylist(Str(p));
+                case CommandType.PlaylistAppend: return ApplyPlaylistFiles(p, _playlist.AppendToPlaylist);
+                case CommandType.PlaylistSetFiles: return ApplyPlaylistFiles(p, _playlist.SetPlaylistFiles);
                 default:
                     _logger.Warn("Unknown command type {0}", commandType);
                     return false;
@@ -107,6 +110,13 @@ namespace MusicBeePlugin.Ffi
             var dto = Msgpack.Deserialize<MoveParams>(p);
             if (dto.@from < 0 || dto.to < 0) return false;
             return _playlist.MoveNowPlayingTrack(dto.@from, dto.to);
+        }
+
+        private static bool ApplyPlaylistFiles(byte[] p, Func<string, string[], bool> write)
+        {
+            var dto = Msgpack.Deserialize<PlaylistFilesParams>(p);
+            if (string.IsNullOrEmpty(dto.url)) return false;
+            return write(dto.url, (dto.files ?? new List<string>()).ToArray());
         }
 
         private bool ApplySearch(byte[] p)

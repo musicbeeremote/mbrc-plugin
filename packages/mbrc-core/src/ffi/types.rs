@@ -197,6 +197,11 @@ pub enum QueryType {
     // content-addressed store under `podcast:{id}` and served by hash like any
     // other cover.
     PodcastArtwork = 46,
+    // Every playlist with its format, for V6. `PlaylistList = 5` feeds V4's
+    // `playlistlist` and keeps its two fields.
+    PlaylistCatalog = 47,
+    // Creates a playlist and answers its url; empty when the host refused.
+    PlaylistCreate = 48,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).
@@ -250,6 +255,12 @@ pub enum CommandType {
     // MusicBee's own call takes no argument and flips the flag, so the host
     // reads the current value and calls it only when it differs.
     SetStopAfterCurrent = 31,
+    // Playlist edits (#115). Removal and reordering are computed by the core and
+    // written whole: one host call per edit, where `Playlist_RemoveAt` costs one
+    // per slot and `Playlist_MoveFiles` lands an upward move one slot short.
+    PlaylistDelete = 32,
+    PlaylistAppend = 33,
+    PlaylistSetFiles = 34,
 }
 
 /// Host -> core queries (request/response), the mirror of [`QueryType`] in the

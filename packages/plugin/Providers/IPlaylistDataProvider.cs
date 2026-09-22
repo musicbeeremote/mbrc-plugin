@@ -84,5 +84,18 @@ namespace MusicBeePlugin.Providers
 
         /// <summary>Gets one playlist's files, in playlist order, with its name.</summary>
         PlaylistFiles GetPlaylistFiles(string playlistUrl);
+
+        /// <summary>Every playlist with its <c>PlaylistFormat</c> name.</summary>
+        IEnumerable<PlaylistEntry> GetPlaylistCatalog();
+
+        /// <summary>Creates a playlist and returns its url, or empty when MusicBee refused.</summary>
+        string CreatePlaylist(string folder, string name, string[] files);
+
+        bool DeletePlaylist(string playlistUrl);
+
+        bool AppendToPlaylist(string playlistUrl, string[] files);
+
+        /// <summary>Replaces a playlist's contents, in the order given.</summary>
+        bool SetPlaylistFiles(string playlistUrl, string[] files);
     }
 }

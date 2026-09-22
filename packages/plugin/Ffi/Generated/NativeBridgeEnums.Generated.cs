@@ -91,6 +91,8 @@ namespace MusicBeePlugin.Ffi.Generated
         PodcastEpisodes = 44,
         PodcastEpisode = 45,
         PodcastArtwork = 46,
+        PlaylistCatalog = 47,
+        PlaylistCreate = 48,
     }
 
     public enum CommandType
@@ -127,6 +129,9 @@ namespace MusicBeePlugin.Ffi.Generated
         SetBackgroundTaskMessage = 29,
         NowPlayingListClear = 30,
         SetStopAfterCurrent = 31,
+        PlaylistDelete = 32,
+        PlaylistAppend = 33,
+        PlaylistSetFiles = 34,
     }
 
     public enum HostQueryType

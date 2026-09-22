@@ -287,7 +287,7 @@ offending input directly. Its absence means the error is not about a single fiel
 | `unauthorized` | op sent before the handshake |
 | `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
-| `stale_list` | the now-playing list moved since the `version` the request carried |
+| `stale_list` | the queue or playlist moved since the `version` the request carried |
 | `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account) |
 | `internal_error` | an unexpected host/plugin failure |
 
@@ -555,9 +555,15 @@ the selection rather than turning the player's shuffle mode on.
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..}` |
+| `playlist_list` | `{offset?, limit?}` | page of `{"url":..,"name":..,"editable":bool}` |
 | `playlist_play` | `{"url":"<path>"}` | `{}` |
-| `playlist_tracks` | `{"url":"<path>", offset?, limit?, query?, query_field?, totals?}` | `{name, version, total, offset, items}` |
+| `playlist_tracks` | `{"url":"<path>", offset?, limit?, query?, query_field?, totals?}` | `{name, version, editable, total, offset, items}` |
+| `playlist_create` | `{"name":"..", folder?, <tracks>?}` | `{url, name, version}` |
+| `playlist_delete` | `{"url":"<path>"}` | `{}` |
+| `playlist_add_tracks` | `{"url":"<path>", <tracks>, version?}` | `{version, added}` - appends |
+| `playlist_remove_tracks` | `{"url":"<path>", "orders":[N,..], version?}` | `{version, removed}` |
+| `playlist_move_tracks` | `{"url":"<path>", "from_orders":[N,..], "to_order":M, version?}` | `{version}` |
+| `playlist_set_tracks` | `{"url":"<path>", <tracks>, version?}` | `{version}` - replaces the contents |
 
 `playlist_tracks` answers one playlist as a page of [canonical tracks](#canonical-track),
 each carrying two indices:
@@ -570,9 +576,9 @@ each carrying two indices:
 
 `version` is an opaque token over the ordered paths - a string, because it is a
 64-bit hash and no JavaScript number holds one exactly. It changes when the playlist
-is reordered, not only when its contents change, and it is what the mutations in
-[#115](https://github.com/musicbeeremote/mbrc-plugin/issues/115) will echo back.
-Clients must not interpret it.
+is reordered, not only when its contents change, and because it is computed from the
+contents it also changes when the playlist is edited in MusicBee itself. Clients must
+not interpret it.
 
 `query` narrows the whole playlist, `query_field` points it at one column (`any`
 default, `title`, `artist`, `album`), and `totals: true` adds **`total_duration_ms`**
@@ -585,8 +591,46 @@ A path the host cannot describe still comes back as a canonical track with its t
 empty, so a client parses one shape and the row keeps its place in the playlist.
 
 **An unreadable playlist is an empty one.** MusicBee derives a name from the filename
-and reports no files, so a path that does not exist is indistinguishable from a
-playlist with nothing in it. Only a missing `url` is an error.
+and reports no files, so a read of a path that does not exist answers an empty page
+with `editable: false`. Only a missing `url` is an error on a read; an edit of such a
+url is `not_found`.
+
+#### Editing a playlist
+
+**`editable`** says whether a playlist holds a list of tracks that can be changed. An
+auto playlist is a rule MusicBee evaluates, not a list, so every edit of one is
+`unavailable`; `playlist_delete` still removes it. Hide edit actions where `editable`
+is false rather than offering one that will be refused.
+
+**`<tracks>`** names the tracks to add, set or create with, in exactly one of three ways:
+
+- `"paths":[..]` - the `src` of each track, in order.
+- a library scope - `genre`, `artist`, `album` and `query`, exactly as
+  [`library_queue`](#library) takes them. The server resolves it, so adding an artist
+  never pulls its paths to the client and back. A blank `query` is no scope.
+- `"now_playing":true` - the whole queue, in queue order. `playlist_create` with it is
+  "save the queue as a playlist".
+
+Naming two of them is `invalid_field`; naming none is `missing_field`, except on
+`playlist_create`, where it makes an empty playlist.
+
+**`version` guards every edit** the way it guards the queue: send the `version` of the
+page the `order`s came from, and a playlist that changed since - from another client or
+in MusicBee - is refused `stale_list` with nothing written. Re-read and retry. Without a
+`version` the edit is unguarded. Every edit replies with the new `version`, which is the
+one the next `playlist_tracks` serves, so a client can edit again without re-reading.
+
+**Positions are `order` values.** `playlist_remove_tracks` takes the `order`s of every
+slot to remove, in any order, so a multi-select is one request; a repeated `order`, or
+one past the end, is `invalid_field` and removes nothing. `playlist_move_tracks` lifts
+the `from_orders` out, keeping their own order, and puts them back so the first lands at
+`to_order` in the result: moving `[0]` to `3` in `a b c d e` gives `b c d a e`.
+`to_order` runs from 0 to the playlist's length minus the number moved. Removing and
+moving write the whole list in one host call, so a batch costs the same as a single edit.
+
+**`playlist_create`** takes a `name` (not blank, and none of `< > : " / \ | ? *`, since it
+becomes a file name) and an optional `folder` under the playlists root, and answers the
+new playlist's `url`.
 
 ### Podcast
 

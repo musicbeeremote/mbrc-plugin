@@ -252,7 +252,7 @@ fn play(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) 
 /// The whole batch is checked before anything is removed. A host failure part
 /// way through still moves the version: some slots may already be gone.
 fn remove(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
-    let orders = orders_highest_first(data)?;
+    let orders = orders_highest_first(data, "orders")?;
     check_version(data, now_playing)?;
     let len = p.now_playing_list_paths().map_err(internal)?.len();
     if orders[0] as usize >= len {
@@ -268,22 +268,22 @@ fn remove(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>
     Ok(json!({}))
 }
 
-/// The `orders` of a removal, validated and sorted descending.
+/// The slots named by `field`, validated and sorted descending.
 ///
 /// A repeated order is refused rather than collapsed: removing slot 5 twice
 /// removes two different tracks, so the request cannot mean what it says.
-fn orders_highest_first(data: &Value) -> Result<Vec<i32>, V6Error> {
-    let invalid = |message: &str| V6Error::field(ErrorCode::InvalidField, "orders", message);
-    let raw = match data.get("orders") {
+pub(super) fn orders_highest_first(data: &Value, field: &str) -> Result<Vec<i32>, V6Error> {
+    let invalid = |message: String| V6Error::field(ErrorCode::InvalidField, field, message);
+    let raw = match data.get(field) {
         None => {
             return Err(V6Error::field(
                 ErrorCode::MissingField,
-                "orders",
-                "missing required field: orders",
+                field,
+                format!("missing required field: {field}"),
             ));
         }
         Some(Value::Array(raw)) if !raw.is_empty() => raw,
-        Some(_) => return Err(invalid("orders must be a non-empty array")),
+        Some(_) => return Err(invalid(format!("{field} must be a non-empty array"))),
     };
     let mut orders = raw
         .iter()
@@ -291,12 +291,12 @@ fn orders_highest_first(data: &Value) -> Result<Vec<i32>, V6Error> {
             v.as_i64()
                 .filter(|o| (0..=i64::from(i32::MAX)).contains(o))
                 .map(|o| o as i32)
-                .ok_or_else(|| invalid("orders must hold non-negative integers"))
+                .ok_or_else(|| invalid(format!("{field} must hold non-negative integers")))
         })
         .collect::<Result<Vec<_>, _>>()?;
     orders.sort_unstable_by(|a, b| b.cmp(a));
     if orders.windows(2).any(|w| w[0] == w[1]) {
-        return Err(invalid("orders must not repeat"));
+        return Err(invalid(format!("{field} must not repeat")));
     }
     Ok(orders)
 }

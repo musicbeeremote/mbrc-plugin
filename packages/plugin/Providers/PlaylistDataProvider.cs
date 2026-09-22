@@ -142,8 +142,48 @@ namespace MusicBeePlugin.Providers
             return new PlaylistFiles
             {
                 name = _api.Playlist_GetName(playlistUrl) ?? string.Empty,
-                paths = ok && files != null ? new List<string>(files) : new List<string>()
+                paths = ok && files != null ? new List<string>(files) : new List<string>(),
+                kind = _api.Playlist_GetType(playlistUrl).ToString()
             };
+        }
+
+        public IEnumerable<PlaylistEntry> GetPlaylistCatalog()
+        {
+            _api.Playlist_QueryPlaylists();
+
+            while (true)
+            {
+                var url = _api.Playlist_QueryGetNextPlaylist();
+                if (string.IsNullOrEmpty(url))
+                    yield break;
+
+                yield return new PlaylistEntry
+                {
+                    name = _api.Playlist_GetName(url) ?? string.Empty,
+                    url = url,
+                    kind = _api.Playlist_GetType(url).ToString()
+                };
+            }
+        }
+
+        public string CreatePlaylist(string folder, string name, string[] files)
+        {
+            return _api.Playlist_CreatePlaylist(folder ?? string.Empty, name, files) ?? string.Empty;
+        }
+
+        public bool DeletePlaylist(string playlistUrl)
+        {
+            return _api.Playlist_DeletePlaylist(playlistUrl);
+        }
+
+        public bool AppendToPlaylist(string playlistUrl, string[] files)
+        {
+            return _api.Playlist_AppendFiles(playlistUrl, files);
+        }
+
+        public bool SetPlaylistFiles(string playlistUrl, string[] files)
+        {
+            return _api.Playlist_SetFiles(playlistUrl, files);
         }
 
         public IEnumerable<Playlist> GetPlaylists()

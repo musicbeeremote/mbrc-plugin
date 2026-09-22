@@ -91,7 +91,7 @@ pub enum ErrorCode {
     /// The `client_id` is already held by an installation that presented a
     /// different token, so this handshake cannot claim it.
     InvalidToken,
-    /// The now-playing list moved since the version the request carried, so the
+    /// The queue or playlist moved since the version the request carried, so the
     /// `order` it names may no longer hold what the client read.
     StaleList,
     /// A server-side failure carrying out the op (e.g. a MusicBee FFI error).

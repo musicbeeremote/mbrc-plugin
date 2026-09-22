@@ -192,6 +192,13 @@ namespace MusicBeePlugin.Ffi
         public string name { get; set; }
     }
 
+    public class PlaylistEntry
+    {
+        public string url { get; set; }
+        public string name { get; set; }
+        public string kind { get; set; }
+    }
+
     public class PodcastSubscription
     {
         public string id { get; set; }
@@ -227,6 +234,7 @@ namespace MusicBeePlugin.Ffi
     {
         public string name { get; set; }
         public List<string> paths { get; set; }
+        public string kind { get; set; }
     }
 
     public class RadioStation
@@ -269,6 +277,19 @@ namespace MusicBeePlugin.Ffi
     {
         public int @from { get; set; }
         public int to { get; set; }
+    }
+
+    public class PlaylistCreateParams
+    {
+        public string folder { get; set; }
+        public string name { get; set; }
+        public List<string> files { get; set; }
+    }
+
+    public class PlaylistFilesParams
+    {
+        public string url { get; set; }
+        public List<string> files { get; set; }
     }
 
     public class PaginationParams

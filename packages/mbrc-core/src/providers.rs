@@ -12,15 +12,16 @@
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::dtos::{
     AlbumCoverParams, BatchMetadataParams, BrowseParams, IndexParams, MoveParams,
-    NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, PodcastEpisodeParams,
-    PodcastEpisodesParams, QueryParams, SetBoolParams, SetIntParams, SetLfmRatingParams,
-    SetRepeatParams, StringValueParams, SyncDeltaParams, TagChangeParams,
+    NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, PlaylistCreateParams,
+    PlaylistFilesParams, PodcastEpisodeParams, PodcastEpisodesParams, QueryParams, SetBoolParams,
+    SetIntParams, SetLfmRatingParams, SetRepeatParams, StringValueParams, SyncDeltaParams,
+    TagChangeParams,
 };
 use crate::ffi::types::{CommandType, QueryType};
 use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
     LastfmStatus, Lyrics, NowPlayingListTrack, NowPlayingOrder, OutputDevices, Page,
-    PlaybackPositionResponse, PlayerState, Playlist, PlaylistFiles, PodcastEpisode,
+    PlaybackPositionResponse, PlayerState, Playlist, PlaylistEntry, PlaylistFiles, PodcastEpisode,
     PodcastSubscription, QueueType, RadioStation, RepeatMode, SyncDelta, Track, TrackDetails,
     TrackInfo, TrackMetadata, TrackTags,
 };
@@ -170,6 +171,19 @@ pub trait Providers: Send + Sync {
     fn play_playlist(&self, url: &str) -> Result<(), String>;
     /// A playlist's files in playlist order, with its name.
     fn playlist_files(&self, url: &str) -> Result<PlaylistFiles, String>;
+    /// Every playlist with its format, for V6.
+    fn playlist_catalog(&self, offset: i32, limit: i32) -> Result<Page<PlaylistEntry>, String>;
+    /// Creates a playlist holding `paths` and returns its url.
+    fn create_playlist(
+        &self,
+        folder: &str,
+        name: &str,
+        paths: Vec<String>,
+    ) -> Result<String, String>;
+    fn delete_playlist(&self, url: &str) -> Result<(), String>;
+    fn append_to_playlist(&self, url: &str, paths: Vec<String>) -> Result<(), String>;
+    /// Replaces a playlist's contents with `paths`, in that order.
+    fn set_playlist_files(&self, url: &str, paths: Vec<String>) -> Result<(), String>;
 
     // System.
     fn plugin_version(&self) -> Result<String, String>;
@@ -569,6 +583,57 @@ impl Providers for FfiProviders {
             },
         )
     }
+    fn playlist_catalog(&self, offset: i32, limit: i32) -> Result<Page<PlaylistEntry>, String> {
+        self.callbacks.query(
+            QueryType::PlaylistCatalog,
+            &PaginationParams { offset, limit },
+        )
+    }
+    fn create_playlist(
+        &self,
+        folder: &str,
+        name: &str,
+        paths: Vec<String>,
+    ) -> Result<String, String> {
+        let url: String = self.callbacks.query(
+            QueryType::PlaylistCreate,
+            &PlaylistCreateParams {
+                folder: folder.to_string(),
+                name: name.to_string(),
+                files: paths,
+            },
+        )?;
+        if url.is_empty() {
+            return Err("MusicBee did not create the playlist".to_string());
+        }
+        Ok(url)
+    }
+    fn delete_playlist(&self, url: &str) -> Result<(), String> {
+        self.callbacks.execute_command(
+            CommandType::PlaylistDelete,
+            &StringValueParams {
+                value: url.to_string(),
+            },
+        )
+    }
+    fn append_to_playlist(&self, url: &str, paths: Vec<String>) -> Result<(), String> {
+        self.callbacks.execute_command(
+            CommandType::PlaylistAppend,
+            &PlaylistFilesParams {
+                url: url.to_string(),
+                files: paths,
+            },
+        )
+    }
+    fn set_playlist_files(&self, url: &str, paths: Vec<String>) -> Result<(), String> {
+        self.callbacks.execute_command(
+            CommandType::PlaylistSetFiles,
+            &PlaylistFilesParams {
+                url: url.to_string(),
+                files: paths,
+            },
+        )
+    }
     fn play_playlist(&self, url: &str) -> Result<(), String> {
         self.callbacks.execute_command(
             CommandType::PlaylistPlay,
@@ -828,6 +893,26 @@ impl Providers for NullProviders {
     fn playlist_files(&self, _url: &str) -> Result<PlaylistFiles, String> {
         Ok(PlaylistFiles::default())
     }
+    fn playlist_catalog(&self, _offset: i32, _limit: i32) -> Result<Page<PlaylistEntry>, String> {
+        Ok(Page::default())
+    }
+    fn create_playlist(
+        &self,
+        _folder: &str,
+        _name: &str,
+        _paths: Vec<String>,
+    ) -> Result<String, String> {
+        Err("no host".to_string())
+    }
+    fn delete_playlist(&self, _url: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn append_to_playlist(&self, _url: &str, _paths: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_playlist_files(&self, _url: &str, _paths: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
     fn plugin_version(&self) -> Result<String, String> {
         Ok(String::new())
     }
@@ -880,6 +965,12 @@ pub struct MockProviders {
     pub radio_stations: Page<RadioStation>,
     pub playlists: Page<Playlist>,
     pub playlist_files: PlaylistFiles,
+    pub playlist_catalog: Page<PlaylistEntry>,
+    /// What the last playlist write left, read back in place of
+    /// `playlist_files` once set, as the host would.
+    pub written_playlist: std::sync::Mutex<Option<Vec<String>>>,
+    /// Refuse every playlist write, as a host would for a read-only file.
+    pub refuse_playlist_writes: bool,
     pub plugin_version: String,
     pub calls: std::sync::Mutex<Vec<String>>,
 }
@@ -1209,7 +1300,56 @@ impl Providers for MockProviders {
     }
     fn playlist_files(&self, url: &str) -> Result<PlaylistFiles, String> {
         self.record(format!("playlist_files({url})"));
-        Ok(self.playlist_files.clone())
+        let mut files = self.playlist_files.clone();
+        if let Some(written) = self.written_playlist.lock().unwrap().clone() {
+            files.paths = written;
+        }
+        Ok(files)
+    }
+    fn playlist_catalog(&self, _offset: i32, _limit: i32) -> Result<Page<PlaylistEntry>, String> {
+        self.record("playlist_catalog");
+        Ok(self.playlist_catalog.clone())
+    }
+    fn create_playlist(
+        &self,
+        folder: &str,
+        name: &str,
+        paths: Vec<String>,
+    ) -> Result<String, String> {
+        self.record(format!(
+            "create_playlist({folder}, {name}, {})",
+            paths.len()
+        ));
+        if self.refuse_playlist_writes {
+            return Err("refused".to_string());
+        }
+        *self.written_playlist.lock().unwrap() = Some(paths);
+        Ok(format!("{folder}/{name}.mbp"))
+    }
+    fn delete_playlist(&self, url: &str) -> Result<(), String> {
+        self.record(format!("delete_playlist({url})"));
+        Ok(())
+    }
+    fn append_to_playlist(&self, url: &str, paths: Vec<String>) -> Result<(), String> {
+        self.record(format!("append_to_playlist({url}, {})", paths.len()));
+        if self.refuse_playlist_writes {
+            return Err("refused".to_string());
+        }
+        let mut written = self.written_playlist.lock().unwrap();
+        let mut now = written
+            .clone()
+            .unwrap_or_else(|| self.playlist_files.paths.clone());
+        now.extend(paths);
+        *written = Some(now);
+        Ok(())
+    }
+    fn set_playlist_files(&self, url: &str, paths: Vec<String>) -> Result<(), String> {
+        self.record(format!("set_playlist_files({url})"));
+        if self.refuse_playlist_writes {
+            return Err("refused".to_string());
+        }
+        *self.written_playlist.lock().unwrap() = Some(paths);
+        Ok(())
     }
     fn plugin_version(&self) -> Result<String, String> {
         self.record("plugin_version");

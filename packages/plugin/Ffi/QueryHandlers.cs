@@ -63,6 +63,8 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.PluginVersion: return Pack(_userSettings.CurrentVersion ?? string.Empty);
                 case QueryType.PlaylistList: return Pack(BuildPlaylists(Page(p)));
                 case QueryType.PlaylistTracks: return Pack(_playlist.GetPlaylistFiles(Q(p).query));
+                case QueryType.PlaylistCatalog: return Pack(BuildPlaylistCatalog(Page(p)));
+                case QueryType.PlaylistCreate: return Pack(BuildCreatedPlaylist(Msgpack.Deserialize<PlaylistCreateParams>(p)));
                 case QueryType.NowPlayingList: return Pack(BuildNowPlayingList(Page(p), ordered: false));
                 case QueryType.NowPlayingListOrdered: return Pack(BuildNowPlayingList(Page(p), ordered: true));
                 case QueryType.NowPlayingListPaths: return Pack(_track.GetNowPlayingListPaths());
@@ -144,6 +146,17 @@ namespace MusicBeePlugin.Ffi
 
         private Page<Playlist> BuildPlaylists(PaginationParams p) =>
             Paginate(_playlist.GetPlaylists(), p.offset, p.limit);
+
+        private Page<PlaylistEntry> BuildPlaylistCatalog(PaginationParams p) =>
+            Paginate(_playlist.GetPlaylistCatalog(), p.offset, p.limit);
+
+        /// <summary>A write answered as a query, because the caller needs the new url back.</summary>
+        private string BuildCreatedPlaylist(PlaylistCreateParams p)
+        {
+            if (string.IsNullOrWhiteSpace(p.name)) return string.Empty;
+            var files = (p.files ?? new List<string>()).ToArray();
+            return _playlist.CreatePlaylist(p.folder, p.name, files);
+        }
 
         /// <summary>
         ///     A page of the now-playing list. <paramref name="ordered" /> picks

@@ -403,6 +403,21 @@ pub struct Playlist {
     pub name: String,
 }
 
+/// A playlist as the V6 catalog lists it: the V4 fields plus its format.
+///
+/// Its own type because `Playlist` is serialized straight into V4
+/// `playlistlist`, whose frames must not grow a field. `kind` is the host's
+/// `PlaylistFormat` name (`Mbp`, `M3u`, `Auto`, ...).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PlaylistEntry {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub kind: String,
+}
+
 /// A podcast subscription, as MusicBee's `SubscriptionMetaDataType` describes it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PodcastSubscription {
@@ -482,6 +497,9 @@ pub struct PlaylistFiles {
     pub name: String,
     #[serde(default)]
     pub paths: Vec<String>,
+    /// The host's `PlaylistFormat` name, as on [`PlaylistEntry`].
+    #[serde(default)]
+    pub kind: String,
 }
 
 /// A radio station (`radiostations` item).

@@ -409,7 +409,7 @@ fn shuffle(paths: &mut [String]) {
 /// index is warm: the index is filled by browsing, so an artist resolved from
 /// it would queue only the albums already visited and call that the artist.
 /// Only an unscoped search reads the index, which answers it in one pass.
-fn scope_paths(
+pub(super) fn scope_paths(
     data: &Value,
     p: &dyn Providers,
     cache: Option<&MetadataCache>,

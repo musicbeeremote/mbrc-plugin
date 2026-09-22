@@ -466,7 +466,35 @@ impl Providers for FixtureProviders {
         &self,
         _u: &str,
     ) -> Result<mbrc_core::protocol::messages::PlaylistFiles, String> {
-        Ok(Default::default())
+        Ok(PlaylistFiles {
+            name: "X".into(),
+            paths: vec!["C:\\Music\\a.mp3".into(), "C:\\Music\\b.mp3".into()],
+            kind: "Mbp".into(),
+        })
+    }
+    fn playlist_catalog(&self, o: i32, l: i32) -> Result<Page<PlaylistEntry>, String> {
+        Ok(Page {
+            offset: o,
+            limit: l,
+            total: 1,
+            data: vec![PlaylistEntry {
+                url: "playlist://x".into(),
+                name: "X".into(),
+                kind: "Mbp".into(),
+            }],
+        })
+    }
+    fn create_playlist(&self, _f: &str, n: &str, _p: Vec<String>) -> Result<String, String> {
+        Ok(format!("playlist://{n}"))
+    }
+    fn delete_playlist(&self, _u: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn append_to_playlist(&self, _u: &str, _p: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_playlist_files(&self, _u: &str, _p: Vec<String>) -> Result<(), String> {
+        Ok(())
     }
     fn plugin_version(&self) -> Result<String, String> {
         Ok("1.4.0".into())
