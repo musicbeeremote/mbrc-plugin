@@ -164,8 +164,7 @@ async function deleteOpen() {
   }
   clearTimeout(disarm)
   deleteArmed.value = false
-  await playlist.deletePlaylist(url)
-  await router.push(playlistsRoute(path.value))
+  if (await playlist.deletePlaylist(url)) await router.push(playlistsRoute(path.value))
 }
 
 onUnmounted(() => clearTimeout(disarm))

@@ -592,8 +592,8 @@ empty, so a client parses one shape and the row keeps its place in the playlist.
 
 **An unreadable playlist is an empty one.** MusicBee derives a name from the filename
 and reports no files, so a read of a path that does not exist answers an empty page
-with `editable: false`. Only a missing `url` is an error on a read; an edit of such a
-url is `not_found`.
+with `editable: false`. Only a missing `url` is an error on a read; an edit or a
+`playlist_delete` of such a url is `not_found`, and nothing is written.
 
 #### Editing a playlist
 
@@ -630,7 +630,9 @@ moving write the whole list in one host call, so a batch costs the same as a sin
 
 **`playlist_create`** takes a `name` (not blank, and none of `< > : " / \ | ? *`, since it
 becomes a file name) and an optional `folder` under the playlists root, and answers the
-new playlist's `url`.
+new playlist's `url`. `folder` is a relative path, `\` or `/` between its parts: a leading
+separator, a drive, a `.` or `..` part, or a part holding those characters is
+`invalid_field`.
 
 ### Podcast
 

@@ -269,14 +269,7 @@ fn play(data: &Value, p: &dyn Providers) -> OpResult {
 /// `version` its contents have moved past. Sending no `version` skips the
 /// guard, as on the queue.
 fn editable_files(data: &Value, p: &dyn Providers, url: &str) -> Result<PlaylistFiles, V6Error> {
-    let files = p.playlist_files(url).map_err(internal)?;
-    if !known(&files.kind) {
-        return Err(V6Error::field(
-            ErrorCode::NotFound,
-            "url",
-            "no playlist at this url",
-        ));
-    }
+    let files = known_files(p, url)?;
     if !editable(&files.kind) {
         return Err(V6Error::new(
             ErrorCode::Unavailable,
@@ -289,6 +282,20 @@ fn editable_files(data: &Value, p: &dyn Providers, url: &str) -> Result<Playlist
         return Err(V6Error::new(
             ErrorCode::StaleList,
             "the playlist changed; re-read it and retry",
+        ));
+    }
+    Ok(files)
+}
+
+/// A playlist the host knows, or `not_found`: nothing reaches a host write
+/// with a url MusicBee has not listed as a playlist.
+fn known_files(p: &dyn Providers, url: &str) -> Result<PlaylistFiles, V6Error> {
+    let files = p.playlist_files(url).map_err(internal)?;
+    if !known(&files.kind) {
+        return Err(V6Error::field(
+            ErrorCode::NotFound,
+            "url",
+            "no playlist at this url",
         ));
     }
     Ok(files)
@@ -356,14 +363,46 @@ fn create(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpR
         ));
     }
     let folder = opt_str(data, "folder")?.unwrap_or("");
+    if !is_folder_under_root(folder) {
+        return Err(V6Error::field(
+            ErrorCode::InvalidField,
+            "folder",
+            "folder must be a relative path under the playlists root",
+        ));
+    }
     let paths = named_tracks(data, p, cache)?.unwrap_or_default();
     let url = p.create_playlist(folder, name, paths).map_err(internal)?;
     let files = p.playlist_files(&url).map_err(internal)?;
     Ok(json!({ "url": url, "name": files.name, "version": version_of(&files.paths) }))
 }
 
+const SEPARATORS: [char; 2] = ['/', '\\'];
+
+/// Whether `folder` names a place inside the playlists root.
+///
+/// The host joins it onto the root, so an absolute path, a drive or a `..`
+/// segment would file the playlist somewhere else entirely.
+fn is_folder_under_root(folder: &str) -> bool {
+    if folder.is_empty() {
+        return true;
+    }
+    if folder.starts_with(SEPARATORS) {
+        return false;
+    }
+    folder.split(SEPARATORS).all(|segment| {
+        !segment.trim().is_empty()
+            && segment != "."
+            && segment != ".."
+            && !segment.contains(RESERVED_IN_NAME)
+    })
+}
+
+/// Deletes any playlist the host knows, auto playlists included: removing a
+/// rule is a thing a user can mean, where rewriting its tracks is not.
 fn delete(data: &Value, p: &dyn Providers) -> OpResult {
-    p.delete_playlist(req_str(data, "url")?).map_err(internal)?;
+    let url = req_str(data, "url")?;
+    known_files(p, url)?;
+    p.delete_playlist(url).map_err(internal)?;
     Ok(json!({}))
 }
 
@@ -1327,6 +1366,67 @@ mod tests {
             json!({})
         );
         assert!(m.recorded().contains(&format!("delete_playlist({URL})")));
+    }
+
+    /// Delete reaches the host only for a url the host itself listed as a playlist.
+    #[test]
+    fn deleting_a_url_the_host_does_not_know_is_not_found_and_deletes_nothing() {
+        let mut m = mbp(&[]);
+        m.playlist_files.kind = "Unknown".into();
+        let err = edit(
+            &m,
+            "playlist_delete",
+            json!({ "url": "C:/Windows/win.ini" }),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::NotFound);
+        assert!(
+            !m.recorded()
+                .iter()
+                .any(|c| c.starts_with("delete_playlist"))
+        );
+    }
+
+    #[test]
+    fn an_auto_playlist_can_still_be_deleted() {
+        let mut m = mbp(&[]);
+        m.playlist_files.kind = "Auto".into();
+        edit(&m, "playlist_delete", json!({ "url": URL })).unwrap();
+        assert!(m.recorded().contains(&format!("delete_playlist({URL})")));
+    }
+
+    #[test]
+    fn a_folder_outside_the_playlists_root_is_refused() {
+        let m = mbp(&[]);
+        for folder in [
+            "..", "a/../..", "..\\x", "C:\\Temp", "C:", "/abs", "\\abs", "a//b", "a/?",
+        ] {
+            let err = edit(
+                &m,
+                "playlist_create",
+                json!({ "name": "N", "folder": folder }),
+            )
+            .unwrap_err();
+            assert_eq!(err.field.as_deref(), Some("folder"), "{folder:?}");
+        }
+        assert!(
+            !m.recorded()
+                .iter()
+                .any(|c| c.starts_with("create_playlist"))
+        );
+    }
+
+    #[test]
+    fn a_nested_folder_under_the_root_is_accepted() {
+        let m = mbp(&[]);
+        for folder in ["", "Trips", "Trips\\Summer", "Trips/Summer 2026"] {
+            edit(
+                &m,
+                "playlist_create",
+                json!({ "name": "N", "folder": folder }),
+            )
+            .unwrap();
+        }
     }
 
     #[test]

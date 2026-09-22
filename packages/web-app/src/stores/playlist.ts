@@ -184,6 +184,18 @@ export const usePlaylistStore = defineStore('playlist', () => {
     return added
   }
 
+  /**
+   * Reads the list of playlists again after one was made or removed.
+   *
+   * Best effort: the change already happened, so a failed re-read must not be
+   * reported as the change failing, which would invite making the playlist twice.
+   */
+  async function relist() {
+    await useLibraryStore()
+      .loadPlaylists()
+      .catch(() => undefined)
+  }
+
   /** Creates a playlist, empty or holding `source`, and answers its url. */
   async function create(
     title: string,
@@ -194,15 +206,26 @@ export const usePlaylistStore = defineStore('playlist', () => {
       ...(folder ? { folder } : {}),
       ...source,
     })
-    await useLibraryStore().loadPlaylists()
+    await relist()
     return created.url
   }
 
-  /** Deletes a playlist, and closes it when it is the one open. */
-  async function deletePlaylist(target: string) {
-    await client.call(Op.PlaylistDelete, { url: target })
+  /**
+   * Deletes a playlist, and closes it when it is the one open.
+   *
+   * Answers whether it went; a refusal is kept in `failure` rather than thrown,
+   * since the view that asked has nowhere else to show it.
+   */
+  async function deletePlaylist(target: string): Promise<boolean> {
+    try {
+      await client.call(Op.PlaylistDelete, { url: target })
+    } catch (error) {
+      failure.value = reasonOf(error)
+      return false
+    }
     if (target === url.value) close()
-    await useLibraryStore().loadPlaylists()
+    await relist()
+    return true
   }
 
   return {
