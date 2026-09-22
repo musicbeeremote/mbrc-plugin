@@ -327,17 +327,12 @@ fn queue(data: &Value, p: &dyn Providers) -> OpResult {
     Ok(json!({}))
 }
 
-/// The V6 `mode` string as a queue placement (`next` when absent).
+/// The V6 `mode` string as a queue placement.
 ///
 /// A closed enum's unknown value is rejected, never coerced (#118 §2.1): a
 /// client that misspells a mode is told so, instead of silently queueing to a
 /// different place. The V4 wire spells the last one `add-all`; V6 is snake_case
 /// throughout (#118 §4), and that spelling stays in the V4 codec alone.
-/// The `mode` field of a queueing op, defaulting to `next` when absent.
-pub(super) fn queue_mode(data: &Value) -> Result<QueueType, V6Error> {
-    parse_queue_type(data.get("mode").and_then(Value::as_str).unwrap_or("next"))
-}
-
 pub(crate) fn parse_queue_type(mode: &str) -> Result<QueueType, V6Error> {
     Ok(match mode {
         "next" => QueueType::Next,

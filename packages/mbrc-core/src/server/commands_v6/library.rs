@@ -369,8 +369,11 @@ fn radio(data: &Value, p: &dyn Providers) -> OpResult {
 ///
 /// Replies the number queued rather than the paths: the caller named a scope
 /// precisely so it would not have to handle the list.
+///
+/// With no `mode` a scope goes to the end of the queue: a whole artist should
+/// not cut in front of what is already waiting unless that was asked for.
 fn queue(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
-    let mode = super::nowplaying_list::queue_mode(data)?;
+    let mode = super::nowplaying_list::parse_queue_type(opt_str(data, "mode")?.unwrap_or("last"))?;
     let play = opt_str(data, "play")?.unwrap_or("");
     let mut paths = scope_paths(data, p, cache)?;
     if opt_bool(data, "shuffle")?.unwrap_or(false) {
@@ -1535,6 +1538,50 @@ mod tests {
         .unwrap();
         assert_eq!(out, json!({ "count": 0 }));
         assert!(!m.recorded().iter().any(|c| c.starts_with("queue")));
+    }
+
+    /// A scope with no `mode` joins the end of the queue, as the docs say, rather
+    /// than cutting in front of what is already waiting.
+    #[test]
+    fn a_scope_queued_without_a_mode_goes_to_the_end() {
+        let m = MockProviders {
+            album_tracks: vec![Track {
+                src: "a.mp3".into(),
+                artist: "Miles Davis".into(),
+                album: "Kind of Blue".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        dispatch(
+            "library_queue",
+            &json!({ "album": "Kind of Blue", "artist": "Miles Davis" }),
+            &m,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            m.recorded().contains(&"queue(Last,[a.mp3],)".to_string()),
+            "{:?}",
+            m.recorded()
+        );
+    }
+
+    #[test]
+    fn a_mode_that_is_not_a_string_is_refused() {
+        let m = MockProviders::default();
+        let err = dispatch(
+            "library_queue",
+            &json!({ "artist": "Miles Davis", "mode": 3 }),
+            &m,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(err.field.as_deref(), Some("mode"));
     }
 
     #[test]
