@@ -13,6 +13,7 @@ use axum::extract::{Query, State};
 use axum::response::Response;
 use tokio::sync::mpsc;
 
+use crate::server::permissions::Principal;
 use crate::server::session_v6::V6Session;
 use crate::web::router::WebState;
 
@@ -30,16 +31,19 @@ pub async fn upgrade(
     if !state.admits_request(&headers, params.get("token").map(String::as_str)) {
         return crate::web::router::unauthorized();
     }
-    ws.on_upgrade(move |socket| run(socket, state))
+    let principal = state.principal(&headers, params.get("token").map(String::as_str));
+    ws.on_upgrade(move |socket| run(socket, state, principal))
 }
 
-async fn run(mut socket: WebSocket, state: WebState) {
+async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
     let core = state.core;
     let peer = state.peer;
     let conn_id = core.next_conn_id();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
 
-    let mut session = V6Session::default().with_party_mode(&core.party_mode);
+    let mut session = V6Session::default()
+        .with_party_mode(&core.party_mode)
+        .with_principal(principal);
     let mut subscribed = false;
 
     tracing::debug!(%peer, conn_id, "websocket opened");

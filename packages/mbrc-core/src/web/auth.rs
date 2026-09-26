@@ -217,6 +217,12 @@ impl Pairing {
     /// Records the moment as well: a list of paired browsers that cannot say
     /// which are still in use is a list nobody can act on.
     pub fn is_paired(&self, token: &str) -> bool {
+        self.paired_id(token).is_some()
+    }
+
+    /// The id of the paired browser a token names, recording the moment as
+    /// [`is_paired`](Self::is_paired) does.
+    pub fn paired_id(&self, token: &str) -> Option<String> {
         let updated = {
             let mut state = self.lock();
             match state.tokens.get_mut(&client_id(token)) {
@@ -227,13 +233,9 @@ impl Pairing {
                 None => None,
             }
         };
-        match updated {
-            Some(client) => {
-                self.write(&client);
-                true
-            }
-            None => false,
-        }
+        let client = updated?;
+        self.write(&client);
+        Some(client.id)
     }
 
     /// Every paired browser, for the panel's list.

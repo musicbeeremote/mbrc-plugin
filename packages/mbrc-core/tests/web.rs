@@ -16,6 +16,7 @@ use serde_json::Value;
 use mbrc_core::config::Config;
 use mbrc_core::providers::NullProviders;
 use mbrc_core::server;
+use mbrc_core::server::permissions::{Principal, Role};
 use mbrc_core::state::Core;
 
 fn free_port() -> u16 {
@@ -43,7 +44,7 @@ fn start_on_free_port(config: impl Fn(u16) -> Config) -> (u16, server::NetHandle
 /// [`start_on_free_port`], with `prepare` run on the core before it serves.
 fn start_prepared(
     config: impl Fn(u16) -> Config,
-    prepare: impl Fn(&Core),
+    prepare: impl Fn(&Arc<Core>),
 ) -> (u16, server::NetHandle) {
     for _ in 0..BIND_ATTEMPTS {
         let port = free_port();
@@ -182,6 +183,55 @@ fn party_mode_refuses_an_unpaired_caller_with_a_403_forbidden() {
     assert!(status.starts_with("HTTP/1.1 403"), "status was {status}");
     let value: Value = serde_json::from_str(&body).expect("error body is JSON");
     assert_eq!(value["error"]["code"], "forbidden");
+}
+
+#[test]
+fn party_mode_lets_a_paired_browser_act_on_the_role_the_host_gave_it() {
+    let core_slot = std::sync::OnceLock::new();
+    let (port, net) = start_prepared(Config::for_test, |core| {
+        core.party_mode.set_enabled(true);
+        let _ = core_slot.set(Arc::clone(core));
+    });
+    let core = core_slot.get().expect("prepared");
+    let code = core.pairing.new_code();
+    let pair_body = format!(r#"{{"code":"{code}","label":"phone"}}"#);
+    let (pair_status, paired) = request(
+        port,
+        &format!(
+            "POST /api/pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\
+             Content-Type: application/json\r\nConnection: close\r\n\r\n{pair_body}",
+            pair_body.len()
+        ),
+    );
+    let token = serde_json::from_str::<Value>(&paired)
+        .unwrap_or_else(|e| panic!("{pair_status}: {e}"))["token"]
+        .as_str()
+        .expect("a token")
+        .to_owned();
+    let id = core.pairing.paired()[0].id.clone();
+    core.party_mode
+        .roles
+        .assign(&Principal::Browser(id), Role::Dj);
+
+    let next = |auth: &str| {
+        request(
+            port,
+            &format!(
+                "POST /api/v6/player_next HTTP/1.1\r\nHost: 127.0.0.1\r\n{auth}Content-Length: 2\r\n\
+                 Content-Type: application/json\r\nConnection: close\r\n\r\n{{}}"
+            ),
+        )
+        .0
+    };
+    let as_dj = next(&format!("Authorization: Bearer {token}\r\n"));
+    let unpaired = next("");
+    net.stop();
+
+    assert!(as_dj.starts_with("HTTP/1.1 200"), "paired dj got {as_dj}");
+    assert!(
+        unpaired.starts_with("HTTP/1.1 403"),
+        "unpaired got {unpaired}"
+    );
 }
 
 #[test]

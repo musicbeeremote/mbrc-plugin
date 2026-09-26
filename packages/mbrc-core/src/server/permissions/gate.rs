@@ -9,7 +9,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::{Action, Capability, Role};
+use super::{Action, Capability, Principal, Role, Roles};
+use crate::store::Db;
 
 /// How many recent refusals to keep. Older entries are dropped.
 const MAX_REFUSALS: usize = 50;
@@ -33,9 +34,15 @@ pub struct Refusal {
 pub struct PartyMode {
     enabled: AtomicBool,
     refusals: Mutex<VecDeque<Refusal>>,
+    pub roles: Roles,
 }
 
 impl PartyMode {
+    /// Attaches the store the roles live in.
+    pub fn open(&self, db: Db) {
+        self.roles.open(db);
+    }
+
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::Relaxed)
     }
@@ -44,13 +51,14 @@ impl PartyMode {
         self.enabled.store(enabled, Ordering::Relaxed);
     }
 
-    /// Whether `role` may carry out `op`, which the map classified as `action`.
+    /// Whether `principal` may carry out `op`, which the map classified as `action`.
     ///
-    /// Everything passes while Party Mode is off. An op the map does not know
-    /// passes only for the host. A refusal is logged and recorded before it is returned.
+    /// Everything passes while Party Mode is off. The role is looked up on every
+    /// call, so a role the host changes applies to the next request. An op the
+    /// map does not know passes only for the host. A refusal is logged and recorded.
     pub fn check(
         &self,
-        role: Role,
+        principal: &Principal,
         op: &str,
         action: Option<Action>,
         client: &str,
@@ -58,6 +66,7 @@ impl PartyMode {
         if !self.is_enabled() {
             return Ok(());
         }
+        let role = self.roles.role_of(principal);
         let (permitted, capability) = match action {
             Some(action) => (role.permits(&action), action.capability()),
             None => (role == Role::Host, None),
@@ -123,6 +132,14 @@ fn now_unix_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A gate that is on, with one principal of each role that holds one.
+    fn with_role(role: Role) -> (PartyMode, Principal) {
+        let gate = on();
+        let who = Principal::App(format!("{role:?}"));
+        gate.roles.assign(&who, role);
+        (gate, who)
+    }
     use crate::protocol::messages::QueueType;
 
     fn on() -> PartyMode {
@@ -135,8 +152,14 @@ mod tests {
     fn everything_passes_while_party_mode_is_off() {
         let gate = PartyMode::default();
         let skip = Some(Action::Change(Capability::Playback));
-        assert!(gate.check(Role::Listener, "player_next", skip, "c").is_ok());
-        assert!(gate.check(Role::Guest, "mystery", None, "c").is_ok());
+        assert!(
+            gate.check(&Principal::Anonymous, "player_next", skip, "c")
+                .is_ok()
+        );
+        assert!(
+            gate.check(&Principal::Anonymous, "mystery", None, "c")
+                .is_ok()
+        );
         assert!(gate.recent_refusals().is_empty());
     }
 
@@ -145,7 +168,7 @@ mod tests {
         let gate = on();
         let skip = Some(Action::Change(Capability::Playback));
         let refusal = gate
-            .check(Role::Guest, "player_next", skip, "phone")
+            .check(&Principal::Anonymous, "player_next", skip, "phone")
             .unwrap_err();
         assert_eq!(refusal.capability, Some(Capability::Playback));
         assert!(
@@ -160,7 +183,7 @@ mod tests {
     fn a_guest_over_the_track_limit_is_told_the_limit() {
         let refusal = on()
             .check(
-                Role::Guest,
+                &Principal::Anonymous,
                 "q",
                 Some(Action::queue(QueueType::Last, Some(3))),
                 "c",
@@ -175,16 +198,27 @@ mod tests {
 
     #[test]
     fn an_unmapped_op_passes_only_for_the_host() {
-        let gate = on();
-        assert!(gate.check(Role::Host, "mystery", None, "c").is_ok());
-        assert!(gate.check(Role::Dj, "mystery", None, "c").is_err());
+        let (gate, host) = with_role(Role::Host);
+        let dj = Principal::App("dj".into());
+        gate.roles.assign(&dj, Role::Dj);
+        assert!(gate.check(&host, "mystery", None, "c").is_ok());
+        assert!(gate.check(&dj, "mystery", None, "c").is_err());
+    }
+
+    #[test]
+    fn a_role_change_applies_to_the_next_request() {
+        let (gate, who) = with_role(Role::Listener);
+        let skip = Some(Action::Change(Capability::Playback));
+        assert!(gate.check(&who, "player_next", skip, "c").is_err());
+        gate.roles.assign(&who, Role::Dj);
+        assert!(gate.check(&who, "player_next", skip, "c").is_ok());
     }
 
     #[test]
     fn the_log_keeps_only_the_most_recent_refusals() {
         let gate = on();
         for n in 0..MAX_REFUSALS + 5 {
-            let _ = gate.check(Role::Listener, &format!("op{n}"), None, "c");
+            let _ = gate.check(&Principal::Anonymous, &format!("op{n}"), None, "c");
         }
         let log = gate.recent_refusals();
         assert_eq!(log.len(), MAX_REFUSALS);

@@ -8,10 +8,11 @@
 //! client persists and presents thereafter; whoever returns with it is the
 //! original install.
 //!
-//! This is not authentication and nothing may be gated on it - anyone who can
-//! reach the port can already control the player. It settles an identity
-//! collision, no more. The store is bounded on both axes (`IDENTITY_TTL_MS`,
-//! `MAX_IDENTITIES`) because any peer can invent ids to put in it.
+//! The token is not authentication on its own: anyone who can reach the port
+//! gets a fresh id and token for the asking. It does hold a Party Mode role once
+//! the host has given one, so an app with a role is pinned and never pruned. The
+//! store is otherwise bounded on both axes (`IDENTITY_TTL_MS`, `MAX_IDENTITIES`)
+//! because any peer can invent ids to put in it.
 
 use serde::{Deserialize, Serialize};
 
@@ -127,6 +128,13 @@ impl ClientIdentities {
         });
     }
 
+    /// Whether a handshake that [`identify`](Self::identify) accepted proved its id.
+    ///
+    /// Without a database every id is accepted unchecked, so none is proven.
+    pub fn verifies(&self) -> bool {
+        self.db.is_active()
+    }
+
     /// Every identity the store holds, newest contact first. For the diagnostics
     /// report and the settings panel; the token hash is never exposed.
     pub fn seen(&self) -> Vec<(String, i64)> {
@@ -158,12 +166,16 @@ impl ClientIdentities {
 /// only moment the table can grow - no background sweep, and no window in which
 /// an unbounded table exists.
 fn prune(txn: &redb::WriteTransaction, now: i64) -> Result<(), redb::Error> {
+    let pinned = crate::server::permissions::roles::pinned_apps(txn)?;
     let mut table = txn.open_table(CLIENT_IDENTITIES)?;
     let mut live: Vec<(String, i64)> = Vec::new();
     let mut expired: Vec<String> = Vec::new();
     for entry in table.range::<&str>(..)? {
         let (id, value) = entry?;
         let id = id.value().to_owned();
+        if pinned.contains(&id) {
+            continue;
+        }
         match rmp_serde::from_slice::<Record>(value.value()) {
             Ok(record) if now.saturating_sub(record.last_seen_ms) < IDENTITY_TTL_MS => {
                 live.push((id, record.last_seen_ms));
@@ -281,6 +293,28 @@ mod tests {
         );
         // The survivors are the newest: the first ids inserted are the ones gone.
         assert!(!seen.iter().any(|(id, _)| id == "install-0000"));
+    }
+
+    /// Its token is what keeps an app's role from being claimed, so an app with
+    /// a role survives the cap that would otherwise evict it first.
+    #[test]
+    fn an_app_with_a_party_mode_role_is_never_evicted() {
+        use crate::server::permissions::{Principal, Role, Roles};
+
+        let dir = std::env::temp_dir().join(format!("mbrc-clients-pin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = Db::open(&dir.to_string_lossy());
+        let clients = ClientIdentities::new(db.clone());
+        let roles = Roles::default();
+        roles.open(db);
+
+        clients.identify("install-host", None);
+        roles.assign(&Principal::App("install-host".into()), Role::Host);
+        for i in 0..(MAX_IDENTITIES + 20) {
+            clients.identify(&format!("install-{i:04}"), None);
+        }
+        assert!(clients.seen().iter().any(|(id, _)| id == "install-host"));
     }
 
     #[test]

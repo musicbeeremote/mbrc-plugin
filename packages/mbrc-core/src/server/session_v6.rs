@@ -20,7 +20,7 @@ use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
 
 use super::clients::{ClientIdentities, Identity, MAX_CLIENT_ID_LEN};
 use super::commands_v6;
-use super::permissions::{self, PartyMode, Role};
+use super::permissions::{self, PartyMode, Principal};
 use super::session::Outcome;
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
@@ -43,8 +43,9 @@ pub struct V6Session {
     frames_in: u64,
     /// The Party Mode gate every op passes; absent in unit tests.
     party_mode: Option<Arc<PartyMode>>,
-    /// The role Party Mode judges this connection by.
-    role: Role,
+    /// Who Party Mode judges this connection as; settled at the handshake
+    /// unless the transport already knew.
+    principal: Option<Principal>,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -110,6 +111,15 @@ impl V6Session {
     /// Attaches the Party Mode gate. Builder-style.
     pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
         self.party_mode = Some(Arc::clone(gate));
+        self
+    }
+
+    /// Fixes who this connection is, overriding what the handshake would settle.
+    ///
+    /// A browser is known by its pairing token, not by the `client_id` its page
+    /// makes up, so the WebSocket settles the principal before any frame arrives.
+    pub fn with_principal(mut self, principal: Principal) -> Self {
+        self.principal = Some(principal);
         self
     }
 
@@ -269,7 +279,8 @@ impl V6Session {
         }
         if let Some(gate) = &self.party_mode {
             let action = permissions::v6::action(&req.op, &req.data);
-            if let Err(refusal) = gate.check(self.role, &req.op, action, &self.client_id) {
+            let principal = self.principal.as_ref().unwrap_or(&Principal::Anonymous);
+            if let Err(refusal) = gate.check(principal, &req.op, action, &self.client_id) {
                 return Outcome::reply(v6::response_error(
                     req.id,
                     ErrorCode::Forbidden,
@@ -343,6 +354,7 @@ impl V6Session {
             .unwrap_or(false);
 
         let token = data.get("client_token").and_then(Value::as_str);
+        let proven = clients.is_some_and(ClientIdentities::verifies);
         let issued = match clients.map(|c| c.identify(&client_id, token)) {
             Some(Identity::Refused) => {
                 tracing::info!(
@@ -355,6 +367,18 @@ impl V6Session {
             Some(Identity::Known) | None => None,
         };
 
+        if issued.is_some()
+            && let Some(gate) = &self.party_mode
+        {
+            gate.roles.unassign(&Principal::App(client_id.clone()));
+        }
+        if self.principal.is_none() {
+            self.principal = Some(if proven {
+                Principal::App(client_id.clone())
+            } else {
+                Principal::Anonymous
+            });
+        }
         self.handshaked = true;
         self.client_id = client_id;
         self.client_type = Some(client_type);
@@ -538,6 +562,72 @@ mod tests {
             let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
             assert_ne!(v["error"]["code"], "forbidden", "{line}");
         }
+    }
+
+    fn party_gate() -> Arc<PartyMode> {
+        let gate = Arc::new(PartyMode::default());
+        gate.set_enabled(true);
+        gate
+    }
+
+    fn next_track(s: &mut V6Session) -> Value {
+        let out = feed(
+            s,
+            r#"{"id":7,"kind":"request","op":"player_next","data":{}}"#,
+        );
+        parse(&out.replies[0])
+    }
+
+    #[test]
+    fn an_app_that_proved_its_id_gets_the_role_assigned_to_it() {
+        let clients = identities("role-proven");
+        let gate = party_gate();
+        let mut first = V6Session::default().with_party_mode(&gate);
+        let token = handshake_with(&mut first, &clients, None)["data"]["client_token"]
+            .as_str()
+            .expect("first contact is issued a token")
+            .to_owned();
+        gate.roles
+            .assign(&Principal::App("install-1".into()), permissions::Role::Dj);
+
+        let mut back = V6Session::default().with_party_mode(&gate);
+        handshake_with(&mut back, &clients, Some(&token));
+        assert!(next_track(&mut back).get("error").is_none());
+    }
+
+    #[test]
+    fn an_id_that_nothing_verified_is_anonymous_whatever_is_assigned() {
+        let gate = party_gate();
+        gate.roles
+            .assign(&Principal::App("install-1".into()), permissions::Role::Host);
+        let unverified = ClientIdentities::new(crate::store::Db::disabled());
+        let mut s = V6Session::default().with_party_mode(&gate);
+        handshake_with(&mut s, &unverified, None);
+        assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
+    }
+
+    #[test]
+    fn a_freshly_issued_id_does_not_inherit_a_role_left_on_it() {
+        let clients = identities("role-stale");
+        let gate = party_gate();
+        gate.roles
+            .assign(&Principal::App("install-1".into()), permissions::Role::Host);
+        let mut s = V6Session::default().with_party_mode(&gate);
+        handshake_with(&mut s, &clients, None);
+        assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
+    }
+
+    #[test]
+    fn a_principal_the_transport_settled_survives_the_handshake() {
+        let clients = identities("role-browser");
+        let gate = party_gate();
+        let browser = Principal::Browser("paired".into());
+        gate.roles.assign(&browser, permissions::Role::Dj);
+        let mut s = V6Session::default()
+            .with_party_mode(&gate)
+            .with_principal(browser);
+        handshake_with(&mut s, &clients, None);
+        assert!(next_track(&mut s).get("error").is_none());
     }
 
     /// A client cannot act on a validation failure it has to read as prose.

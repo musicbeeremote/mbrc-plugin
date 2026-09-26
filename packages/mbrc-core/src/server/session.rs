@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use mbrc_wire::parse_lenient;
 
 use super::commands;
-use super::permissions::{self, PartyMode, Role};
+use super::permissions::{self, PartyMode, Principal};
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
@@ -55,8 +55,6 @@ pub struct Session {
     pub dropped_pre_handshake: u32,
     /// The Party Mode gate every command passes; absent in unit tests.
     pub party_mode: Option<Arc<PartyMode>>,
-    /// The role Party Mode judges this connection by.
-    pub role: Role,
 }
 
 /// What the IO layer should do with a frame: which raw JSON replies to send
@@ -255,7 +253,17 @@ impl Session {
             .as_deref()
             .or(self.platform.as_deref())
             .unwrap_or("v4");
-        gate.check(self.role, context, action, client).is_err()
+        gate.check(&self.principal(), context, action, client)
+            .is_err()
+    }
+
+    /// Who this connection is for Party Mode: an Android 1.6 client by the
+    /// `client_id` it sent, anyone else anonymous.
+    fn principal(&self) -> Principal {
+        match &self.client_id {
+            Some(id) => Principal::LegacyDevice(id.clone()),
+            None => Principal::Anonymous,
+        }
     }
 
     /// Registration metadata once the handshake completes (`None` before). A
@@ -393,6 +401,7 @@ fn frame(context: &str, data: Value) -> String {
 mod tests {
     use super::*;
     use crate::providers::NullProviders;
+    use crate::server::permissions::Role;
 
     fn ctx(line: &str) -> (String, Value) {
         let v: Value = serde_json::from_str(line).unwrap();
@@ -612,11 +621,28 @@ mod tests {
     fn at_a_party(role: Role) -> Session {
         let gate = Arc::new(PartyMode::default());
         gate.set_enabled(true);
+        gate.roles
+            .assign(&Principal::LegacyDevice("phone".into()), role);
         Session {
             protocol_version: Some(4),
-            role,
+            client_id: Some("phone".into()),
             ..Session::default().with_party_mode(&gate)
         }
+    }
+
+    #[test]
+    fn a_client_without_a_client_id_has_the_default_role_whatever_is_assigned() {
+        let mut s = at_a_party(Role::Host);
+        s.client_id = None;
+        let out = send(&mut s, "playernext", json!(""));
+        assert_eq!(contexts(&out), ["commandunavailable"]);
+    }
+
+    #[test]
+    fn a_device_the_host_promoted_is_let_through() {
+        let mut s = at_a_party(Role::Dj);
+        let out = send(&mut s, "playervolume", json!(90));
+        assert_eq!(contexts(&out), ["playervolume"]);
     }
 
     fn contexts(out: &Outcome) -> Vec<String> {

@@ -10,10 +10,12 @@
 //! cannot ship without a place in the map.
 
 pub mod gate;
+pub mod roles;
 pub mod v4;
 pub mod v6;
 
 pub use gate::{PartyMode, Refusal};
+pub use roles::{Principal, Roles};
 
 use crate::protocol::messages::QueueType;
 

@@ -90,6 +90,8 @@ impl Core {
         // once rather than once per launch.
         let pairing = crate::web::auth::Pairing::default();
         pairing.open(db.clone());
+        let party_mode = Arc::new(crate::server::permissions::PartyMode::default());
+        party_mode.open(db.clone());
         Self {
             providers,
             config,
@@ -103,7 +105,7 @@ impl Core {
             registry,
             clients,
             blocked: BlockedLog::default(),
-            party_mode: Arc::default(),
+            party_mode,
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
             stopping: Arc::new(AtomicBool::new(false)),
@@ -380,12 +382,16 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
         }),
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
+            core.party_mode.roles.unassign_browsers();
             MbrcResult::Ok
         }),
         HostCommandType::RevokeWebPairing => {
             match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserRef>(params) {
                 Ok(named) => with_core(|core| {
                     if core.pairing.revoke(&named.id) {
+                        core.party_mode.roles.unassign(
+                            &crate::server::permissions::Principal::Browser(named.id.clone()),
+                        );
                         MbrcResult::Ok
                     } else {
                         MbrcResult::InvalidArgument

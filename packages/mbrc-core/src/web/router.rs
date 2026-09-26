@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+use crate::server::permissions::Principal;
 use crate::state::Core;
 use crate::web::{assets, cover, events, origin, rpc, ws};
 
@@ -51,6 +52,19 @@ impl WebState {
         }
         let cookie = cookie_token(headers);
         self.admits(cookie.as_deref()) || self.admits(bearer(headers)) || self.admits(query)
+    }
+}
+
+impl WebState {
+    /// Who a request is for Party Mode: the paired browser its token names, or
+    /// anonymous. Checked in the same order as [`admits_request`](Self::admits_request).
+    pub fn principal(&self, headers: &axum::http::HeaderMap, query: Option<&str>) -> Principal {
+        let cookie = cookie_token(headers);
+        [cookie.as_deref(), bearer(headers), query]
+            .into_iter()
+            .flatten()
+            .find_map(|token| self.core.pairing.paired_id(token))
+            .map_or(Principal::Anonymous, Principal::Browser)
     }
 }
 

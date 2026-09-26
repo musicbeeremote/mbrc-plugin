@@ -7,14 +7,14 @@
 
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
 use crate::server::commands_v6::{self, V6Error};
-use crate::server::permissions::{self, Role};
+use crate::server::permissions;
 use crate::web::router::WebState;
 
 /// Ops the session state machine answers itself. They are meaningless without a
@@ -52,6 +52,7 @@ fn error_response(err: &V6Error) -> Response {
 pub async fn call(
     State(state): State<WebState>,
     Path(op): Path<String>,
+    headers: HeaderMap,
     body: Option<Json<Value>>,
 ) -> Response {
     if SESSION_ONLY_OPS.contains(&op.as_str()) {
@@ -62,13 +63,12 @@ pub async fn call(
     }
 
     let data = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
-    let action = permissions::v6::action(&op, &data);
-    if let Err(refusal) = state
-        .core
-        .party_mode
-        .check(Role::default(), &op, action, "http")
-    {
-        return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
+    if state.core.party_mode.is_enabled() {
+        let action = permissions::v6::action(&op, &data);
+        let principal = state.principal(&headers, None);
+        if let Err(refusal) = state.core.party_mode.check(&principal, &op, action, "http") {
+            return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
+        }
     }
     let core = state.core.clone();
     let outcome = tokio::task::spawn_blocking(move || {

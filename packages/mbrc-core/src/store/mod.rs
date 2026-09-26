@@ -53,6 +53,10 @@ pub const PAIRED_BROWSERS: TableDefinition<&str, &[u8]> = TableDefinition::new("
 /// first and last seen. Bounded by `server::clients`, which owns the rules.
 pub const CLIENT_IDENTITIES: TableDefinition<&str, &[u8]> =
     TableDefinition::new("client_identities");
+/// Party Mode roles: `principal key -> role name`.
+///
+/// Keyed by `server::permissions::Principal::key`, which owns the format.
+pub const PARTY_ROLES: TableDefinition<&str, &str> = TableDefinition::new("party_roles");
 /// Ordinal track path index: `u32` position (browse order) ->
 /// path.
 ///
