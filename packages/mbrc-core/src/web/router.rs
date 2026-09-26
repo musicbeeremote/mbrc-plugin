@@ -183,15 +183,22 @@ async fn pair(State(state): State<WebState>, Json(body): Json<Value>) -> Respons
         .and_then(Value::as_str)
         .unwrap_or("browser");
 
-    match state.core.pairing.redeem(code, label) {
-        Some(token) => (
-            [(header::SET_COOKIE, token_cookie(&token))],
-            Json(json!({ "token": token })),
-        )
-            .into_response(),
-        None => (
+    match state.core.pairing.redeem(code, label, state.peer.ip()) {
+        Ok(paired) => {
+            state
+                .core
+                .party_mode
+                .roles
+                .assign(&Principal::Browser(paired.id), paired.role);
+            (
+                [(header::SET_COOKIE, token_cookie(&paired.token))],
+                Json(json!({ "token": paired.token, "role": paired.role.as_str() })),
+            )
+                .into_response()
+        }
+        Err(refused) => (
             StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": { "code": "unauthorized", "message": "pairing code is wrong or expired" } })),
+            Json(json!({ "error": { "code": "unauthorized", "message": refused.message() } })),
         )
             .into_response(),
     }

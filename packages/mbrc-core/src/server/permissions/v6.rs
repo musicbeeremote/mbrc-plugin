@@ -47,6 +47,7 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         "player_set_output" => change(Output),
         "handshake"
         | "ping"
+        | "pair"
         | "player_status"
         | "player_output"
         | "system_info"

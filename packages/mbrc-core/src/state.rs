@@ -34,7 +34,7 @@ pub struct Core {
     /// so V4-shaped frames never reach a V6 socket and vice-versa.
     pub v6_broadcaster: Broadcaster,
     /// Pairing codes and session tokens for the web remote.
-    pub pairing: crate::web::auth::Pairing,
+    pub pairing: Arc<crate::web::auth::Pairing>,
     pub now_playing: NowPlayingCache,
     /// The on-disk album cover cache (resize/hash/store/serve). Rooted at
     /// `config.storage_path`; the background build is kicked when networking
@@ -97,7 +97,7 @@ impl Core {
             config,
             broadcaster: Broadcaster::default(),
             v6_broadcaster: Broadcaster::default(),
-            pairing,
+            pairing: Arc::new(pairing),
             now_playing,
             cover_store,
             metadata_cache,

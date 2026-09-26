@@ -62,6 +62,13 @@ pub async fn call(
         ));
     }
 
+    if op == "pair" {
+        return error_response(&V6Error::new(
+            ErrorCode::UnknownOp,
+            "a browser pairs through `POST /api/pair`; `pair` is for V6 apps on a socket",
+        ));
+    }
+
     let data = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     if state.core.party_mode.is_enabled() {
         let action = permissions::v6::action(&op, &data);

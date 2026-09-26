@@ -12,6 +12,7 @@
 //!   `kind`/`op`); *ignore* unknown additive keys inside `data`.
 //! - Success `{id, kind:"response", data}` XOR failure `{id, kind:"response", error}`.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -26,6 +27,7 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
+use crate::web::auth::Pairing;
 
 /// Per-connection V6 state, built up at the handshake.
 #[derive(Debug, Default)]
@@ -46,6 +48,9 @@ pub struct V6Session {
     /// Who Party Mode judges this connection as; settled at the handshake
     /// unless the transport already knew.
     principal: Option<Principal>,
+    /// The pairing state the `pair` op redeems codes against, and the address
+    /// its wrong-code limits are kept for; absent in unit tests.
+    pairing: Option<(Arc<Pairing>, IpAddr)>,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -111,6 +116,12 @@ impl V6Session {
     /// Attaches the Party Mode gate. Builder-style.
     pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
         self.party_mode = Some(Arc::clone(gate));
+        self
+    }
+
+    /// Lets the `pair` op redeem codes, as offered from `peer`. Builder-style.
+    pub fn with_pairing(mut self, pairing: &Arc<Pairing>, peer: IpAddr) -> Self {
+        self.pairing = Some((Arc::clone(pairing), peer));
         self
     }
 
@@ -277,6 +288,9 @@ impl V6Session {
         if req.op == "ping" {
             return Outcome::reply(v6::response_ok(req.id, req.data));
         }
+        if req.op == "pair" {
+            return Outcome::reply(self.pair(req.id, &req.data));
+        }
         if let Some(gate) = &self.party_mode {
             let action = permissions::v6::action(&req.op, &req.data);
             let principal = self.principal.as_ref().unwrap_or(&Principal::Anonymous);
@@ -399,6 +413,60 @@ impl V6Session {
             reply["client_token"] = json!(token);
         }
         Outcome::reply(v6::response_ok(0, reply))
+    }
+
+    /// The `pair` op: redeems a pairing code and gives this app the code's role.
+    ///
+    /// Answered before the Party Mode gate, since pairing is how a guest stops
+    /// being one. Only an app whose `client_id` was proven can hold a role; a
+    /// browser pairs over HTTP, and its WebSocket is already known by that pairing.
+    fn pair(&self, id: u64, data: &Value) -> String {
+        let code = match data.get("code") {
+            None => {
+                return v6::response_error_field(
+                    id,
+                    ErrorCode::MissingField,
+                    "missing required field: code",
+                    "code",
+                );
+            }
+            Some(Value::String(code)) => code.as_str(),
+            Some(_) => {
+                return v6::response_error_field(
+                    id,
+                    ErrorCode::InvalidField,
+                    "code must be a string",
+                    "code",
+                );
+            }
+        };
+        let client_id = match &self.principal {
+            Some(Principal::App(client_id)) => client_id.clone(),
+            Some(Principal::Browser(_)) => {
+                return v6::response_error(
+                    id,
+                    ErrorCode::NotAllowed,
+                    "this browser is paired through `POST /api/pair`",
+                );
+            }
+            _ => {
+                return v6::response_error(
+                    id,
+                    ErrorCode::Unavailable,
+                    "this server cannot verify client identities, so it cannot hold a role for this app",
+                );
+            }
+        };
+        let (Some((pairing, peer)), Some(gate)) = (&self.pairing, &self.party_mode) else {
+            return v6::response_error(id, ErrorCode::Unavailable, "pairing is not available here");
+        };
+        match pairing.take_code(code, *peer) {
+            Ok(role) => {
+                gate.roles.assign(&Principal::App(client_id), role);
+                v6::response_ok(id, json!({ "role": role.as_str() }))
+            }
+            Err(refused) => v6::response_error(id, ErrorCode::Unauthorized, &refused.message()),
+        }
     }
 
     /// A handshake validation failure: reply a typed error (echoing id 0) and close,
@@ -628,6 +696,71 @@ mod tests {
             .with_principal(browser);
         handshake_with(&mut s, &clients, None);
         assert!(next_track(&mut s).get("error").is_none());
+    }
+
+    const LAN: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 20));
+
+    fn pair_with(s: &mut V6Session, code: &str) -> Value {
+        let line = format!(r#"{{"id":8,"kind":"request","op":"pair","data":{{"code":"{code}"}}}}"#);
+        parse(&feed(s, &line).replies[0])
+    }
+
+    #[test]
+    fn a_proven_app_that_pairs_takes_the_role_of_the_code() {
+        let clients = identities("pair-proven");
+        let gate = party_gate();
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code_for(permissions::Role::Dj);
+        let mut s = V6Session::default()
+            .with_party_mode(&gate)
+            .with_pairing(&pairing, LAN);
+        handshake_with(&mut s, &clients, None);
+        assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
+
+        assert_eq!(pair_with(&mut s, &code)["data"]["role"], "dj");
+        assert!(next_track(&mut s).get("error").is_none());
+    }
+
+    #[test]
+    fn a_wrong_pairing_code_is_unauthorized() {
+        let clients = identities("pair-wrong");
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_party_mode(&party_gate())
+            .with_pairing(&pairing, LAN);
+        handshake_with(&mut s, &clients, None);
+        let wrong = if code == "000000" { "111111" } else { "000000" };
+        assert_eq!(pair_with(&mut s, wrong)["error"]["code"], "unauthorized");
+    }
+
+    #[test]
+    fn an_app_nothing_verified_cannot_pair_and_leaves_the_code_live() {
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_party_mode(&party_gate())
+            .with_pairing(&pairing, LAN);
+        handshake_with(
+            &mut s,
+            &ClientIdentities::new(crate::store::Db::disabled()),
+            None,
+        );
+        assert_eq!(pair_with(&mut s, &code)["error"]["code"], "unavailable");
+        assert!(pairing.take_code(&code, LAN).is_ok());
+    }
+
+    #[test]
+    fn a_browser_socket_cannot_pair_as_an_app() {
+        let clients = identities("pair-browser");
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_party_mode(&party_gate())
+            .with_pairing(&pairing, LAN)
+            .with_principal(Principal::Browser("paired".into()));
+        handshake_with(&mut s, &clients, None);
+        assert_eq!(pair_with(&mut s, &code)["error"]["code"], "not_allowed");
     }
 
     /// A client cannot act on a validation failure it has to read as prose.

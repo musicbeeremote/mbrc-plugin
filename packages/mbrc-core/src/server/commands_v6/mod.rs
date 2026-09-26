@@ -26,7 +26,7 @@ use crate::providers::Providers;
 
 /// Ops the session answers itself, advertised in the handshake capabilities
 /// alongside every domain's own list.
-const SESSION_OPS: &[&str] = &["handshake", "ping"];
+const SESSION_OPS: &[&str] = &["handshake", "ping", "pair"];
 
 /// Event names the server may emit (best-effort). Advertised in capabilities so a
 /// client knows what to expect; it stays in sync with `notifications_v6::build`.

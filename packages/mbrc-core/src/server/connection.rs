@@ -441,7 +441,11 @@ impl Conn {
                 true
             }
             Route::V6 => {
-                *proto = Proto::V6(V6Session::default().with_party_mode(&self.core.party_mode));
+                *proto = Proto::V6(
+                    V6Session::default()
+                        .with_party_mode(&self.core.party_mode)
+                        .with_pairing(&self.core.pairing, self.peer.ip()),
+                );
                 let _ = self.terminator.set("\n");
                 true
             }

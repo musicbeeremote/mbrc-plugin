@@ -14,12 +14,14 @@
 //! that was issued one can present it.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 use serde::{Deserialize, Serialize};
 
+use crate::server::permissions::Role;
 use crate::store::{Db, PAIRED_BROWSERS};
 
 /// Long enough to read off a screen and type on a phone, short enough that
@@ -30,6 +32,24 @@ const CODE_DIGITS: u32 = 6;
 
 /// How long a generated pairing code stays valid.
 const CODE_TTL: Duration = Duration::from_secs(120);
+
+/// Wrong codes an address may send before it has to wait.
+const FREE_WRONG_CODES: u32 = 3;
+
+/// The first wait after an address runs out of free wrong codes; each further
+/// wrong code doubles it, up to [`MAX_BACKOFF`].
+const FIRST_BACKOFF: Duration = Duration::from_secs(5);
+
+const MAX_BACKOFF: Duration = Duration::from_secs(5 * 60);
+
+/// Wrong codes a live code survives, from every address together.
+///
+/// A code grants a role up to Host, so this bounds a guess at ten in a million
+/// per code however many addresses a guest brings.
+const MAX_WRONG_PER_CODE: u32 = 10;
+
+/// Addresses whose wrong codes are remembered at once.
+const MAX_TRACKED_ADDRESSES: usize = 1024;
 
 /// Longest label kept for a browser.
 ///
@@ -70,6 +90,54 @@ struct Record {
     last_seen: i64,
 }
 
+/// Why a pairing code was not accepted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PairingRefused {
+    /// No code is live, or it lapsed.
+    NoCode,
+    WrongCode,
+    /// This address sent too many wrong codes and must wait this long.
+    Backoff(Duration),
+}
+
+impl PairingRefused {
+    /// What the client is told.
+    pub fn message(self) -> String {
+        match self {
+            PairingRefused::NoCode | PairingRefused::WrongCode => {
+                "pairing code is wrong or expired".to_string()
+            }
+            PairingRefused::Backoff(wait) => format!(
+                "too many wrong pairing codes from this address; try again in {} s",
+                wait.as_secs().max(1)
+            ),
+        }
+    }
+}
+
+/// A browser that has just paired.
+#[derive(Debug, Clone)]
+pub struct NewPairing {
+    pub token: String,
+    pub id: String,
+    /// The role the code carried.
+    pub role: Role,
+}
+
+/// Wrong codes one address has sent.
+#[derive(Debug, Clone, Copy)]
+struct Strikes {
+    wrong: u32,
+    blocked_until: Option<Instant>,
+}
+
+struct LiveCode {
+    code: String,
+    issued: Instant,
+    role: Role,
+    wrong: u32,
+}
+
 /// The pairing state: at most one live code, plus the tokens it has minted.
 #[derive(Default)]
 pub struct Pairing {
@@ -81,10 +149,20 @@ pub struct Pairing {
 
 #[derive(Default)]
 struct State {
-    code: Option<(String, Instant)>,
+    code: Option<LiveCode>,
+    /// Whether the last code was voided by too many wrong attempts.
+    voided: bool,
+    strikes: HashMap<IpAddr, Strikes>,
     /// Keyed by the token itself while the process runs, so admitting one is a
     /// lookup rather than a scan. What reaches disk is keyed by id and hashed.
     tokens: HashMap<String, PairedClient>,
+}
+
+/// Prints nothing from the state: it holds the live code and every token.
+impl std::fmt::Debug for Pairing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pairing").finish_non_exhaustive()
+    }
 }
 
 impl Pairing {
@@ -158,9 +236,26 @@ impl Pairing {
     /// with a full window on it, and a code the user walked away from stops
     /// working the moment they ask for another.
     pub fn new_code(&self) -> String {
+        self.new_code_for(Role::Host)
+    }
+
+    /// Mints a fresh pairing code that grants `role`, replacing any code still outstanding.
+    pub fn new_code_for(&self, role: Role) -> String {
         let code = random_digits(CODE_DIGITS);
-        self.lock().code = Some((code.clone(), Instant::now()));
+        let mut state = self.lock();
+        state.code = Some(LiveCode {
+            code: code.clone(),
+            issued: Instant::now(),
+            role,
+            wrong: 0,
+        });
+        state.voided = false;
         code
+    }
+
+    /// Whether the last code was voided because too many wrong codes were tried.
+    pub fn code_voided(&self) -> bool {
+        self.lock().voided
     }
 
     /// The outstanding code, if one is still inside its window.
@@ -169,8 +264,8 @@ impl Pairing {
         state
             .code
             .as_ref()
-            .filter(|(_, issued)| issued.elapsed() < CODE_TTL)
-            .map(|(code, _)| code.clone())
+            .filter(|live| live.issued.elapsed() < CODE_TTL)
+            .map(|live| live.code.clone())
     }
 
     /// Seconds left on the outstanding code, or zero when none is live.
@@ -183,19 +278,64 @@ impl Pairing {
         state
             .code
             .as_ref()
-            .and_then(|(_, issued)| CODE_TTL.checked_sub(issued.elapsed()))
+            .and_then(|live| CODE_TTL.checked_sub(live.issued.elapsed()))
             .map(|left| left.as_secs() as i32)
             .unwrap_or(0)
     }
 
-    /// Exchanges a pairing code for a session token, consuming the code.
-    pub fn redeem(&self, offered: &str, label: &str) -> Option<String> {
+    /// Checks a code offered from `from`, consuming it and returning its role when right.
+    ///
+    /// Rate limited, because a code that grants Host is worth guessing: see
+    /// [`FREE_WRONG_CODES`] and [`MAX_WRONG_PER_CODE`]. An address that must wait
+    /// is refused without its code being looked at.
+    pub fn take_code(&self, offered: &str, from: IpAddr) -> Result<Role, PairingRefused> {
+        self.take_code_at(offered, from, Instant::now())
+    }
+
+    fn take_code_at(
+        &self,
+        offered: &str,
+        from: IpAddr,
+        now: Instant,
+    ) -> Result<Role, PairingRefused> {
         let mut state = self.lock();
-        let (code, issued) = state.code.as_ref()?;
-        if issued.elapsed() >= CODE_TTL || !constant_time_eq(code, offered) {
-            return None;
+        if let Some(until) = state.strikes.get(&from).and_then(|s| s.blocked_until)
+            && until > now
+        {
+            return Err(PairingRefused::Backoff(until - now));
         }
-        state.code = None;
+        let Some(live) = state
+            .code
+            .as_mut()
+            .filter(|live| now.saturating_duration_since(live.issued) < CODE_TTL)
+        else {
+            return Err(PairingRefused::NoCode);
+        };
+        if constant_time_eq(&live.code, offered) {
+            let role = live.role;
+            state.code = None;
+            state.strikes.remove(&from);
+            return Ok(role);
+        }
+        live.wrong += 1;
+        if live.wrong >= MAX_WRONG_PER_CODE {
+            state.code = None;
+            state.voided = true;
+            tracing::warn!("pairing code voided after {MAX_WRONG_PER_CODE} wrong attempts");
+        }
+        state.strike(from, now);
+        Err(PairingRefused::WrongCode)
+    }
+
+    /// Exchanges a pairing code offered from `from` for a browser session token.
+    pub fn redeem(
+        &self,
+        offered: &str,
+        label: &str,
+        from: IpAddr,
+    ) -> Result<NewPairing, PairingRefused> {
+        let role = self.take_code(offered, from)?;
+        let mut state = self.lock();
         let token = random_token();
         let now = now_unix_seconds();
         let client = PairedClient {
@@ -209,7 +349,11 @@ impl Pairing {
         drop(state);
 
         self.write(&client);
-        Some(token)
+        Ok(NewPairing {
+            token,
+            id: client.id,
+            role,
+        })
     }
 
     /// Whether a token names a paired browser.
@@ -287,12 +431,42 @@ impl Pairing {
             let ids = state.tokens.keys().cloned().collect();
             state.tokens.clear();
             state.code = None;
+            state.voided = false;
             ids
         };
         for id in ids {
             self.forget(&id);
         }
     }
+}
+
+impl State {
+    /// Records a wrong code from `from`, starting or doubling its wait once it
+    /// has used up its free attempts.
+    fn strike(&mut self, from: IpAddr, now: Instant) {
+        if self.strikes.len() >= MAX_TRACKED_ADDRESSES && !self.strikes.contains_key(&from) {
+            self.strikes
+                .retain(|_, s| s.blocked_until.is_some_and(|until| until > now));
+            if self.strikes.len() >= MAX_TRACKED_ADDRESSES {
+                self.strikes.clear();
+            }
+        }
+        let strikes = self.strikes.entry(from).or_insert(Strikes {
+            wrong: 0,
+            blocked_until: None,
+        });
+        strikes.wrong += 1;
+        if let Some(over) = strikes.wrong.checked_sub(FREE_WRONG_CODES) {
+            strikes.blocked_until = Some(now + backoff_after(over));
+        }
+    }
+}
+
+/// The wait after the `over`-th wrong code past the free ones, counting from zero.
+fn backoff_after(over: u32) -> Duration {
+    FIRST_BACKOFF
+        .saturating_mul(2u32.saturating_pow(over))
+        .min(MAX_BACKOFF)
 }
 
 /// Compares without an early return on the first differing byte, so the time a
@@ -373,6 +547,8 @@ fn now_unix_seconds() -> i64 {
 mod tests {
     use super::*;
 
+    const LAN: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 20));
+
     /// A phone is paired once, not once per launch - and the toggle that
     /// enforces pairing restarts the core, so without this, turning pairing on
     /// would unpair everything it was turned on for.
@@ -390,7 +566,10 @@ mod tests {
             let before = Pairing::default();
             before.open(Db::open(dir.to_str().unwrap()));
             let code = before.new_code();
-            before.redeem(&code, "Vivaldi on Android").expect("redeem")
+            before
+                .redeem(&code, "Vivaldi on Android", LAN)
+                .expect("redeem")
+                .token
         };
 
         let after = Pairing::default();
@@ -414,7 +593,7 @@ mod tests {
         let pairing = Pairing::default();
         pairing.open(db.clone());
         let code = pairing.new_code();
-        let token = pairing.redeem(&code, "browser").expect("redeem");
+        let token = pairing.redeem(&code, "browser", LAN).expect("redeem").token;
 
         let written = read_all(&db);
         assert_eq!(written.len(), 1);
@@ -436,11 +615,13 @@ mod tests {
             let pairing = Pairing::default();
             pairing.open(Db::open(dir.to_str().unwrap()));
             let phone = pairing
-                .redeem(&pairing.new_code(), "phone")
-                .expect("phone pairs");
+                .redeem(&pairing.new_code(), "phone", LAN)
+                .expect("phone pairs")
+                .token;
             let desk = pairing
-                .redeem(&pairing.new_code(), "desk")
-                .expect("desk pairs");
+                .redeem(&pairing.new_code(), "desk", LAN)
+                .expect("desk pairs")
+                .token;
 
             let phone_id = pairing
                 .paired()
@@ -466,17 +647,20 @@ mod tests {
     fn a_code_redeems_once_and_yields_a_token() {
         let pairing = Pairing::default();
         let code = pairing.new_code();
-        let token = pairing.redeem(&code, "browser").expect("first redeem");
+        let token = pairing
+            .redeem(&code, "browser", LAN)
+            .expect("first redeem")
+            .token;
         assert!(pairing.is_paired(&token));
-        assert!(pairing.redeem(&code, "browser").is_none());
+        assert!(pairing.redeem(&code, "browser", LAN).is_err());
     }
 
     #[test]
     fn a_wrong_code_mints_nothing() {
         let pairing = Pairing::default();
         pairing.new_code();
-        assert!(pairing.redeem("000000", "browser").is_none());
-        assert!(pairing.redeem("", "browser").is_none());
+        assert!(pairing.redeem("000000", "browser", LAN).is_err());
+        assert!(pairing.redeem("", "browser", LAN).is_err());
     }
 
     #[test]
@@ -484,15 +668,15 @@ mod tests {
         let pairing = Pairing::default();
         let first = pairing.new_code();
         let second = pairing.new_code();
-        assert!(pairing.redeem(&first, "browser").is_none());
-        assert!(pairing.redeem(&second, "browser").is_some());
+        assert!(pairing.redeem(&first, "browser", LAN).is_err());
+        assert!(pairing.redeem(&second, "browser", LAN).is_ok());
     }
 
     #[test]
     fn revoking_unpairs_every_browser() {
         let pairing = Pairing::default();
         let code = pairing.new_code();
-        let token = pairing.redeem(&code, "browser").expect("redeem");
+        let token = pairing.redeem(&code, "browser", LAN).expect("redeem").token;
         pairing.revoke_all();
         assert!(!pairing.is_paired(&token));
         assert!(pairing.paired().is_empty());
@@ -502,6 +686,116 @@ mod tests {
     fn an_unminted_token_is_not_paired() {
         let pairing = Pairing::default();
         assert!(!pairing.is_paired("deadbeef"));
+    }
+
+    const OTHER: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 30));
+
+    /// A code that is not `code`, of the same length.
+    fn wrong(code: &str) -> String {
+        if code == "000000" { "111111" } else { "000000" }.to_string()
+    }
+
+    #[test]
+    fn a_code_grants_the_role_it_was_made_for() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code_for(Role::Dj);
+        assert_eq!(pairing.take_code(&code, LAN), Ok(Role::Dj));
+        assert_eq!(pairing.take_code(&code, LAN), Err(PairingRefused::NoCode));
+    }
+
+    #[test]
+    fn the_panel_button_makes_host_codes() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code();
+        assert_eq!(pairing.take_code(&code, LAN), Ok(Role::Host));
+    }
+
+    #[test]
+    fn three_wrong_codes_are_free_and_the_fourth_attempt_must_wait() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code();
+        let now = Instant::now();
+        for _ in 0..FREE_WRONG_CODES {
+            let got = pairing.take_code_at(&wrong(&code), LAN, now);
+            assert_eq!(got, Err(PairingRefused::WrongCode));
+        }
+        assert_eq!(
+            pairing.take_code_at(&code, LAN, now),
+            Err(PairingRefused::Backoff(FIRST_BACKOFF)),
+            "the right code is not even looked at while the address waits"
+        );
+        assert_eq!(pairing.take_code_at(&code, OTHER, now), Ok(Role::Host));
+    }
+
+    #[test]
+    fn the_wait_doubles_with_each_further_wrong_code() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code();
+        let mut now = Instant::now();
+        for _ in 0..FREE_WRONG_CODES {
+            let _ = pairing.take_code_at(&wrong(&code), LAN, now);
+        }
+        now += FIRST_BACKOFF;
+        let _ = pairing.take_code_at(&wrong(&code), LAN, now);
+        assert_eq!(
+            pairing.take_code_at(&code, LAN, now),
+            Err(PairingRefused::Backoff(FIRST_BACKOFF * 2))
+        );
+    }
+
+    #[test]
+    fn the_wait_is_capped() {
+        assert_eq!(backoff_after(0), FIRST_BACKOFF);
+        assert_eq!(backoff_after(1), FIRST_BACKOFF * 2);
+        assert_eq!(backoff_after(6), MAX_BACKOFF);
+        assert_eq!(backoff_after(u32::MAX), MAX_BACKOFF);
+    }
+
+    #[test]
+    fn the_right_code_clears_an_address_of_its_wrong_ones() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code();
+        let now = Instant::now();
+        for _ in 0..FREE_WRONG_CODES - 1 {
+            let _ = pairing.take_code_at(&wrong(&code), LAN, now);
+        }
+        assert!(pairing.take_code_at(&code, LAN, now).is_ok());
+
+        let code = pairing.new_code();
+        for _ in 0..FREE_WRONG_CODES - 1 {
+            let _ = pairing.take_code_at(&wrong(&code), LAN, now);
+        }
+        assert_eq!(pairing.take_code_at(&code, LAN, now), Ok(Role::Host));
+    }
+
+    #[test]
+    fn a_code_is_voided_by_the_tenth_wrong_attempt_from_anywhere() {
+        let pairing = Pairing::default();
+        let code = pairing.new_code();
+        let now = Instant::now();
+        for n in 0..MAX_WRONG_PER_CODE {
+            let from = IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, n as u8));
+            let _ = pairing.take_code_at(&wrong(&code), from, now);
+        }
+        assert!(pairing.code_voided());
+        assert_eq!(
+            pairing.take_code_at(&code, LAN, now),
+            Err(PairingRefused::NoCode)
+        );
+        pairing.new_code();
+        assert!(!pairing.code_voided());
+    }
+
+    #[test]
+    fn trying_a_code_when_none_is_live_is_not_held_against_anyone() {
+        let pairing = Pairing::default();
+        let now = Instant::now();
+        for _ in 0..FREE_WRONG_CODES + 2 {
+            let got = pairing.take_code_at("123456", LAN, now);
+            assert_eq!(got, Err(PairingRefused::NoCode));
+        }
+        let code = pairing.new_code();
+        assert_eq!(pairing.take_code_at(&code, LAN, now), Ok(Role::Host));
     }
 
     #[test]

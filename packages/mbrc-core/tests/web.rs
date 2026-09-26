@@ -16,7 +16,7 @@ use serde_json::Value;
 use mbrc_core::config::Config;
 use mbrc_core::providers::NullProviders;
 use mbrc_core::server;
-use mbrc_core::server::permissions::{Principal, Role};
+use mbrc_core::server::permissions::Role;
 use mbrc_core::state::Core;
 
 fn free_port() -> u16 {
@@ -193,7 +193,7 @@ fn party_mode_lets_a_paired_browser_act_on_the_role_the_host_gave_it() {
         let _ = core_slot.set(Arc::clone(core));
     });
     let core = core_slot.get().expect("prepared");
-    let code = core.pairing.new_code();
+    let code = core.pairing.new_code_for(Role::Dj);
     let pair_body = format!(r#"{{"code":"{code}","label":"phone"}}"#);
     let (pair_status, paired) = request(
         port,
@@ -203,15 +203,13 @@ fn party_mode_lets_a_paired_browser_act_on_the_role_the_host_gave_it() {
             pair_body.len()
         ),
     );
-    let token = serde_json::from_str::<Value>(&paired)
-        .unwrap_or_else(|e| panic!("{pair_status}: {e}"))["token"]
-        .as_str()
-        .expect("a token")
-        .to_owned();
-    let id = core.pairing.paired()[0].id.clone();
-    core.party_mode
-        .roles
-        .assign(&Principal::Browser(id), Role::Dj);
+    let paired: Value =
+        serde_json::from_str(&paired).unwrap_or_else(|e| panic!("{pair_status}: {e}"));
+    assert_eq!(
+        paired["role"], "dj",
+        "the code's role is granted on pairing"
+    );
+    let token = paired["token"].as_str().expect("a token").to_owned();
 
     let next = |auth: &str| {
         request(
