@@ -18,6 +18,8 @@ use super::Role;
 use crate::store::{Db, PARTY_ROLES};
 
 const APP_PREFIX: &str = "app:";
+const BROWSER_PREFIX: &str = "browser:";
+const LEGACY_PREFIX: &str = "v4:";
 
 /// Who a connection or request is, as far as Party Mode can tell.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
@@ -38,9 +40,21 @@ impl Principal {
     pub fn key(&self) -> Option<String> {
         match self {
             Principal::App(id) => Some(format!("{APP_PREFIX}{id}")),
-            Principal::Browser(id) => Some(format!("browser:{id}")),
-            Principal::LegacyDevice(id) => Some(format!("v4:{id}")),
+            Principal::Browser(id) => Some(format!("{BROWSER_PREFIX}{id}")),
+            Principal::LegacyDevice(id) => Some(format!("{LEGACY_PREFIX}{id}")),
             Principal::Anonymous => None,
+        }
+    }
+
+    /// The principal a [`key`](Self::key) names, for the panel handing one back.
+    pub fn from_key(key: &str) -> Option<Principal> {
+        let named = |prefix: &str| key.strip_prefix(prefix).filter(|id| !id.is_empty());
+        if let Some(id) = named(APP_PREFIX) {
+            Some(Principal::App(id.to_owned()))
+        } else if let Some(id) = named(BROWSER_PREFIX) {
+            Some(Principal::Browser(id.to_owned()))
+        } else {
+            named(LEGACY_PREFIX).map(|id| Principal::LegacyDevice(id.to_owned()))
         }
     }
 }
@@ -145,10 +159,10 @@ impl Roles {
             let mut assigned = self.lock();
             let keys = assigned
                 .keys()
-                .filter(|key| key.starts_with("browser:"))
+                .filter(|key| key.starts_with(BROWSER_PREFIX))
                 .cloned()
                 .collect();
-            assigned.retain(|key, _| !key.starts_with("browser:"));
+            assigned.retain(|key, _| !key.starts_with(BROWSER_PREFIX));
             keys
         };
         self.persist(|txn| {
@@ -158,6 +172,15 @@ impl Roles {
             }
             Ok(())
         });
+    }
+
+    /// The Android devices that hold a role, by `client_id`.
+    pub fn legacy_devices(&self) -> Vec<String> {
+        self.lock()
+            .keys()
+            .filter_map(|key| key.strip_prefix(LEGACY_PREFIX))
+            .map(str::to_owned)
+            .collect()
     }
 
     fn persist(&self, f: impl FnOnce(&redb::WriteTransaction) -> Result<(), redb::Error>) {
@@ -218,6 +241,20 @@ mod tests {
             Role::Guest
         );
         assert_eq!(roles.role_of(&Principal::Browser("x".into())), Role::Guest);
+    }
+
+    #[test]
+    fn every_principal_that_holds_a_role_round_trips_through_its_key() {
+        for principal in [
+            app("a:b"),
+            Principal::Browser("b".into()),
+            Principal::LegacyDevice("c".into()),
+        ] {
+            let key = principal.key().unwrap();
+            assert_eq!(Principal::from_key(&key), Some(principal));
+        }
+        assert_eq!(Principal::from_key("app:"), None);
+        assert_eq!(Principal::from_key("nobody"), None);
     }
 
     #[test]

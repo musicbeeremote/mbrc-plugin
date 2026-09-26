@@ -298,6 +298,10 @@ pub enum HostQueryType {
     /// pairing code currently outstanding, and how many browsers are paired.
     /// Returns a MessagePack `WebStatus`.
     WebStatus = 6,
+    /// Party Mode for the panel's group: the switch, the known devices with
+    /// their roles, the outstanding pairing code and the role it grants, and the
+    /// recent refusals. Returns a MessagePack `PartyModeStatus`.
+    PartyModeStatus = 7,
 }
 
 impl HostQueryType {
@@ -309,6 +313,7 @@ impl HostQueryType {
             4 => Some(Self::UpdateStatus),
             5 => Some(Self::CaptureStatus),
             6 => Some(Self::WebStatus),
+            7 => Some(Self::PartyModeStatus),
             _ => None,
         }
     }
@@ -358,9 +363,11 @@ pub enum HostCommandType {
     StopCapture = 8,
     /// Abandon the capture: restore the log level and write nothing.
     CancelCapture = 9,
-    /// Mint a pairing code for a browser, replacing any code outstanding. The
-    /// code itself comes back through [`HostQueryType::WebStatus`], so the panel
-    /// reads it the same way it reads every other piece of core state.
+    /// Mint a pairing code, replacing any code outstanding. The code itself
+    /// comes back through [`HostQueryType::WebStatus`] and
+    /// [`HostQueryType::PartyModeStatus`]. The params are an optional MessagePack
+    /// [`crate::ffi::dtos::PartyRoleChoice`] naming the role the code grants;
+    /// empty params grant Host.
     GenerateWebPairingCode = 10,
     /// Drop every browser session token, so each has to pair again.
     RevokeWebPairings = 11,
@@ -368,6 +375,14 @@ pub enum HostCommandType {
     RevokeWebPairing = 12,
     /// Rename one paired browser, named by the id the panel lists.
     RenameWebPairing = 13,
+    /// Switch Party Mode on or off, at once and for the next start. The params
+    /// are a MessagePack [`crate::ffi::dtos::PartyModeSwitch`].
+    SetPartyMode = 14,
+    /// Give one device a role, named by the key the panel lists. The params are
+    /// a MessagePack [`crate::ffi::dtos::PartyRoleAssignment`].
+    SetPartyRole = 15,
+    /// Clear the in-memory Party Mode refusal log.
+    ClearPartyRefusals = 16,
 }
 
 impl HostCommandType {
@@ -386,6 +401,9 @@ impl HostCommandType {
             11 => Some(Self::RevokeWebPairings),
             12 => Some(Self::RevokeWebPairing),
             13 => Some(Self::RenameWebPairing),
+            14 => Some(Self::SetPartyMode),
+            15 => Some(Self::SetPartyRole),
+            16 => Some(Self::ClearPartyRefusals),
             _ => None,
         }
     }
@@ -504,6 +522,7 @@ mod tests {
             (4, HostQueryType::UpdateStatus),
             (5, HostQueryType::CaptureStatus),
             (6, HostQueryType::WebStatus),
+            (7, HostQueryType::PartyModeStatus),
         ];
         for (value, expected) in queries {
             assert_eq!(
@@ -529,6 +548,9 @@ mod tests {
             (11, HostCommandType::RevokeWebPairings),
             (12, HostCommandType::RevokeWebPairing),
             (13, HostCommandType::RenameWebPairing),
+            (14, HostCommandType::SetPartyMode),
+            (15, HostCommandType::SetPartyRole),
+            (16, HostCommandType::ClearPartyRefusals),
         ];
         for (value, expected) in commands {
             assert_eq!(

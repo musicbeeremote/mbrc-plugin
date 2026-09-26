@@ -497,6 +497,32 @@ namespace MusicBeePlugin.Ffi
         /// </summary>
         public bool GenerateWebPairingCode() => Command(HostCommandType.GenerateWebPairingCode);
 
+        /// <summary>Mint a pairing code that grants <paramref name="role" /> (host, dj, guest or listener).</summary>
+        public bool GeneratePairingCode(string role) =>
+            Command(HostCommandType.GenerateWebPairingCode, Msgpack.Serialize(new PartyRoleChoice { role = role ?? string.Empty }));
+
+        /// <summary>
+        ///     Party Mode for the settings panel: the switch, the devices and their
+        ///     roles, the outstanding code and the role it grants, and recent
+        ///     refusals. Null if the core is not initialized.
+        /// </summary>
+        public PartyModeStatus ReadPartyModeStatus() => Query<PartyModeStatus>(HostQueryType.PartyModeStatus);
+
+        /// <summary>Switch Party Mode now; the core also saves it for the next start.</summary>
+        public bool SetPartyMode(bool enabled) =>
+            Command(HostCommandType.SetPartyMode, Msgpack.Serialize(new PartyModeSwitch { enabled = enabled }));
+
+        /// <summary>Give the device the panel lists under <paramref name="key" /> a role.</summary>
+        public bool SetPartyRole(string key, string role) =>
+            Command(HostCommandType.SetPartyRole, Msgpack.Serialize(new PartyRoleAssignment
+            {
+                key = key ?? string.Empty,
+                role = role ?? string.Empty
+            }));
+
+        /// <summary>Clear the core's in-memory Party Mode refusal log.</summary>
+        public bool ClearPartyRefusals() => Command(HostCommandType.ClearPartyRefusals);
+
         /// <summary>Drop every browser token, so each has to pair again.</summary>
         public bool RevokeWebPairings() => Command(HostCommandType.RevokeWebPairings);
 

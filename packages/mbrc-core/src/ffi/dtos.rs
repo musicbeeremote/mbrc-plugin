@@ -344,3 +344,65 @@ pub struct PairedBrowserName {
     pub id: String,
     pub label: String,
 }
+
+/// Party Mode as the panel's group shows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartyModeStatus {
+    pub enabled: bool,
+    /// The pairing code still inside its window, or empty when none is.
+    pub pairing_code: String,
+    pub pairing_code_expires_in: i32,
+    /// The role that code grants, or empty with no code.
+    pub pairing_code_role: String,
+    /// Whether the last code was voided by too many wrong attempts.
+    pub pairing_code_voided: bool,
+    pub devices: Vec<PartyDevice>,
+    /// Newest first.
+    pub refusals: Vec<PartyRefusal>,
+}
+
+/// One client the host can give a role to.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartyDevice {
+    /// What `SetPartyRole` names it by.
+    pub key: String,
+    /// `app`, `browser` or `android`.
+    pub kind: String,
+    pub label: String,
+    /// Unix seconds, or zero when not seen since MusicBee started.
+    pub last_seen: i64,
+    pub role: String,
+    /// Known by a plain-text id with no token, so anyone who reads it off the
+    /// network can claim its role.
+    pub weaker_trust: bool,
+}
+
+/// One request Party Mode refused.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartyRefusal {
+    pub unix_ms: i64,
+    pub client: String,
+    pub op: String,
+    /// The capability it needed, or empty for an op the map does not know.
+    pub capability: String,
+    pub message: String,
+}
+
+/// Switches Party Mode (`SetPartyMode`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PartyModeSwitch {
+    pub enabled: bool,
+}
+
+/// The role a new pairing code grants (`GenerateWebPairingCode`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PartyRoleChoice {
+    pub role: String,
+}
+
+/// Gives one device a role (`SetPartyRole`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PartyRoleAssignment {
+    pub key: String,
+    pub role: String,
+}

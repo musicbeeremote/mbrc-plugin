@@ -142,6 +142,7 @@ namespace MusicBeePlugin.Ffi.Generated
         UpdateStatus = 4,
         CaptureStatus = 5,
         WebStatus = 6,
+        PartyModeStatus = 7,
     }
 
     public enum HostCommandType
@@ -159,6 +160,9 @@ namespace MusicBeePlugin.Ffi.Generated
         RevokeWebPairings = 11,
         RevokeWebPairing = 12,
         RenameWebPairing = 13,
+        SetPartyMode = 14,
+        SetPartyRole = 15,
+        ClearPartyRefusals = 16,
     }
 
     public enum HostEventType

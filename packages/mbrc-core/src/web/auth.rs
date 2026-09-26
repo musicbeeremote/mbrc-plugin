@@ -253,6 +253,15 @@ impl Pairing {
         code
     }
 
+    /// The role the outstanding code grants, if one is still inside its window.
+    pub fn current_code_role(&self) -> Option<Role> {
+        self.lock()
+            .code
+            .as_ref()
+            .filter(|live| live.issued.elapsed() < CODE_TTL)
+            .map(|live| live.role)
+    }
+
     /// Whether the last code was voided because too many wrong codes were tried.
     pub fn code_voided(&self) -> bool {
         self.lock().voided

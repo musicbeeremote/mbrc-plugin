@@ -379,7 +379,8 @@ impl V6Session {
 
         let token = data.get("client_token").and_then(Value::as_str);
         let proven = clients.is_some_and(ClientIdentities::verifies);
-        let issued = match clients.map(|c| c.identify(&client_id, token)) {
+        let name = data.get("client_name").and_then(Value::as_str);
+        let issued = match clients.map(|c| c.identify(&client_id, token, name)) {
             Some(Identity::Refused) => {
                 tracing::info!(
                     client_id = %crate::logging::redact_frame(&client_id, None),

@@ -162,6 +162,21 @@ namespace MusicBeePlugin.Host
 
         public bool GenerateWebPairingCode() => _bridge.GenerateWebPairingCode();
 
+        /// <inheritdoc cref="NativeBridge.GeneratePairingCode" />
+        public bool GeneratePairingCode(string role) => _bridge.GeneratePairingCode(role);
+
+        /// <inheritdoc cref="NativeBridge.ReadPartyModeStatus" />
+        public PartyModeStatus ReadPartyModeStatus() => _bridge.ReadPartyModeStatus();
+
+        /// <inheritdoc cref="NativeBridge.SetPartyMode" />
+        public bool SetPartyMode(bool enabled) => _bridge.SetPartyMode(enabled);
+
+        /// <inheritdoc cref="NativeBridge.SetPartyRole" />
+        public bool SetPartyRole(string key, string role) => _bridge.SetPartyRole(key, role);
+
+        /// <inheritdoc cref="NativeBridge.ClearPartyRefusals" />
+        public bool ClearPartyRefusals() => _bridge.ClearPartyRefusals();
+
         public bool RevokeWebPairings() => _bridge.RevokeWebPairings();
 
         /// <summary>Unpair a single browser by the id the panel shows.</summary>

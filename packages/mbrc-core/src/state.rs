@@ -362,6 +362,7 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
         // a Diagnostics group instead of a blank one.
         HostQueryType::CaptureStatus => crate::diagnostics::capture::status_bytes(),
         HostQueryType::WebStatus => web_status_bytes(),
+        HostQueryType::PartyModeStatus => party_mode_status_bytes(),
     }
 }
 
@@ -395,8 +396,17 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
                 MbrcResult::InvalidArgument
             }
         },
-        HostCommandType::GenerateWebPairingCode => with_core(|core| {
-            core.pairing.new_code();
+        HostCommandType::GenerateWebPairingCode => match code_role(params) {
+            Some(role) => with_core(|core| {
+                core.pairing.new_code_for(role);
+                MbrcResult::Ok
+            }),
+            None => MbrcResult::InvalidArgument,
+        },
+        HostCommandType::SetPartyMode => switch_party_mode(params),
+        HostCommandType::SetPartyRole => assign_party_role(params),
+        HostCommandType::ClearPartyRefusals => with_core(|core| {
+            core.party_mode.clear_refusals();
             MbrcResult::Ok
         }),
         HostCommandType::RevokeWebPairings => with_core(|core| {
@@ -498,6 +508,144 @@ fn recent_blocked_bytes() -> Option<Vec<u8>> {
 /// IPv4s + the bound port) as MessagePack for the settings panel. `None` if the
 /// core is not initialized; an interface-less host yields an empty address list.
 /// The Web remote group's state for the settings panel.
+/// The role a `GenerateWebPairingCode` asks for: Host for empty params.
+fn code_role(params: &[u8]) -> Option<crate::server::permissions::Role> {
+    if params.is_empty() {
+        return Some(crate::server::permissions::Role::Host);
+    }
+    let choice = rmp_serde::from_slice::<crate::ffi::dtos::PartyRoleChoice>(params).ok()?;
+    crate::server::permissions::Role::parse(&choice.role)
+}
+
+/// `SetPartyMode`: switches Party Mode at once and saves it for the next start.
+fn switch_party_mode(params: &[u8]) -> MbrcResult {
+    match rmp_serde::from_slice::<crate::ffi::dtos::PartyModeSwitch>(params) {
+        Ok(switch) => match set_party_mode(switch.enabled) {
+            Ok(()) => MbrcResult::Ok,
+            Err(error) => {
+                tracing::warn!(error = %error, "party mode switched but not saved");
+                MbrcResult::RuntimeError
+            }
+        },
+        Err(error) => {
+            tracing::warn!(error = %error, "ignoring a malformed party mode switch");
+            MbrcResult::InvalidArgument
+        }
+    }
+}
+
+/// `SetPartyRole`: decodes the assignment and applies it.
+fn assign_party_role(params: &[u8]) -> MbrcResult {
+    match rmp_serde::from_slice::<crate::ffi::dtos::PartyRoleAssignment>(params) {
+        Ok(assignment) => with_core(|core| set_party_role(&core, &assignment)),
+        Err(error) => {
+            tracing::warn!(error = %error, "ignoring a malformed role assignment");
+            MbrcResult::InvalidArgument
+        }
+    }
+}
+
+/// Gives the device a `SetPartyRole` names its role; Guest returns it to the default.
+fn set_party_role(core: &Core, assignment: &crate::ffi::dtos::PartyRoleAssignment) -> MbrcResult {
+    use crate::server::permissions::{Principal, Role};
+    let (Some(principal), Some(role)) = (
+        Principal::from_key(&assignment.key),
+        Role::parse(&assignment.role),
+    ) else {
+        return MbrcResult::InvalidArgument;
+    };
+    if role == Role::Guest {
+        core.party_mode.unassign_role(&principal);
+    } else {
+        core.party_mode.assign_role(&principal, role);
+    }
+    MbrcResult::Ok
+}
+
+fn party_mode_status_bytes() -> Option<Vec<u8>> {
+    let core = core_handle()?;
+    rmp_serde::to_vec_named(&party_mode_status(&core)).ok()
+}
+
+/// Everything the panel's Party Mode group renders.
+fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
+    use crate::ffi::dtos::{PartyDevice, PartyModeStatus, PartyRefusal};
+    use crate::server::permissions::Principal;
+
+    let gate = &core.party_mode;
+    let device = |principal: Principal, kind: &str, label: String, last_seen: i64| PartyDevice {
+        key: principal.key().unwrap_or_default(),
+        kind: kind.to_owned(),
+        label,
+        last_seen,
+        role: gate.role_of(&principal).as_str().to_owned(),
+        weaker_trust: matches!(principal, Principal::LegacyDevice(_)),
+    };
+    let short = |id: &str| id.chars().take(8).collect::<String>();
+
+    let mut devices: Vec<PartyDevice> = core
+        .clients
+        .seen()
+        .into_iter()
+        .map(|app| {
+            let label = if app.name.is_empty() {
+                format!("App {}", short(&app.client_id))
+            } else {
+                app.name
+            };
+            device(
+                Principal::App(app.client_id),
+                "app",
+                label,
+                app.last_seen_ms / 1000,
+            )
+        })
+        .collect();
+    devices.extend(core.pairing.paired().into_iter().map(|browser| {
+        device(
+            Principal::Browser(browser.id),
+            "browser",
+            browser.label,
+            browser.last_seen,
+        )
+    }));
+    let mut android = gate.legacy_devices();
+    android.sort_by_key(|(_, last_seen)| std::cmp::Reverse(*last_seen));
+    devices.extend(android.into_iter().map(|(id, last_seen)| {
+        let label = format!("Android {}", short(&id));
+        device(Principal::LegacyDevice(id), "android", label, last_seen)
+    }));
+
+    let refusals = gate
+        .recent_refusals()
+        .into_iter()
+        .map(|refusal| PartyRefusal {
+            unix_ms: refusal.unix_ms,
+            client: refusal.client,
+            op: refusal.op,
+            capability: refusal
+                .capability
+                .map(|c| c.as_str().to_owned())
+                .unwrap_or_default(),
+            message: refusal.message,
+        })
+        .collect();
+
+    PartyModeStatus {
+        enabled: gate.is_enabled(),
+        pairing_code: core.pairing.current_code().unwrap_or_default(),
+        pairing_code_expires_in: core.pairing.code_expires_in(),
+        pairing_code_role: core
+            .pairing
+            .current_code_role()
+            .map(|role| role.as_str().to_owned())
+            .unwrap_or_default(),
+        pairing_code_voided: core.pairing.code_voided(),
+        devices,
+        refusals,
+    }
+}
+
 fn web_status_bytes() -> Option<Vec<u8>> {
     let guard = lock();
     let core = &guard.as_ref()?.core;
@@ -760,6 +908,7 @@ mod tests {
         an_empty_blocked_log_queries_as_an_empty_array();
         listening_addresses_reports_the_port_the_core_is_bound_to();
         party_mode_switches_live_and_is_remembered(&dir);
+        the_party_mode_panel_round_trips_through_host_calls();
 
         let _ = shutdown();
     }
@@ -837,6 +986,73 @@ mod tests {
                 .unwrap();
         assert!(on_disk.party_mode_enabled);
         set_party_mode(false).expect("switch off");
+    }
+
+    fn party_status() -> crate::ffi::dtos::PartyModeStatus {
+        rmp_serde::from_slice(&host_query(HostQueryType::PartyModeStatus, &[]).unwrap()).unwrap()
+    }
+
+    fn msgpack(value: serde_json::Value) -> Vec<u8> {
+        rmp_serde::to_vec_named(&value).unwrap()
+    }
+
+    /// Every Party Mode control the panel has, driven through the FFI entry points.
+    fn the_party_mode_panel_round_trips_through_host_calls() {
+        let code_for = |role: &str| {
+            host_command(
+                HostCommandType::GenerateWebPairingCode,
+                &msgpack(serde_json::json!({ "role": role })),
+            )
+        };
+        assert_eq!(code_for("dj"), MbrcResult::Ok);
+        let status = party_status();
+        assert_eq!(status.pairing_code_role, "dj");
+        assert!(!status.pairing_code.is_empty());
+        assert_eq!(code_for("admin"), MbrcResult::InvalidArgument);
+        assert_eq!(
+            host_command(HostCommandType::GenerateWebPairingCode, &[]),
+            MbrcResult::Ok
+        );
+        assert_eq!(
+            party_status().pairing_code_role,
+            "host",
+            "empty params mean Host"
+        );
+
+        let set_role = |key: &str, role: &str| {
+            host_command(
+                HostCommandType::SetPartyRole,
+                &msgpack(serde_json::json!({ "key": key, "role": role })),
+            )
+        };
+        assert_eq!(set_role("v4:phone", "dj"), MbrcResult::Ok);
+        let phone = party_status()
+            .devices
+            .into_iter()
+            .find(|d| d.key == "v4:phone")
+            .expect("a promoted Android device is listed");
+        assert_eq!(
+            (phone.kind.as_str(), phone.role.as_str()),
+            ("android", "dj")
+        );
+        assert!(phone.weaker_trust);
+        assert_eq!(set_role("v4:phone", "guest"), MbrcResult::Ok);
+        assert!(party_status().devices.iter().all(|d| d.key != "v4:phone"));
+        assert_eq!(set_role("nobody", "dj"), MbrcResult::InvalidArgument);
+
+        let switch = |enabled: bool| {
+            host_command(
+                HostCommandType::SetPartyMode,
+                &msgpack(serde_json::json!({ "enabled": enabled })),
+            )
+        };
+        assert_eq!(switch(true), MbrcResult::Ok);
+        assert!(party_status().enabled);
+        assert_eq!(switch(false), MbrcResult::Ok);
+        assert_eq!(
+            host_command(HostCommandType::ClearPartyRefusals, &[]),
+            MbrcResult::Ok
+        );
     }
 
     /// `Some` holding an empty array, never `None`. Filling the log needs the

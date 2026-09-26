@@ -55,7 +55,21 @@ struct Record {
     token_hash: String,
     first_seen_ms: i64,
     last_seen_ms: i64,
+    /// What the app calls its device, from the handshake's `client_name`.
+    #[serde(default)]
+    name: String,
 }
+
+/// A known app, for the panel's device list. The token hash stays behind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownApp {
+    pub client_id: String,
+    pub name: String,
+    pub last_seen_ms: i64,
+}
+
+/// Longest device name kept; it is a display string in a narrow column.
+const MAX_NAME_LEN: usize = 64;
 
 /// The identity store, backed by the shared redb database.
 pub struct ClientIdentities {
@@ -74,7 +88,7 @@ impl ClientIdentities {
     /// every id is [`Identity::Known`]: an identity store that cannot persist
     /// would refuse every returning client on the next restart, which is worse
     /// than not enforcing at all.
-    pub fn identify(&self, client_id: &str, token: Option<&str>) -> Identity {
+    pub fn identify(&self, client_id: &str, token: Option<&str>, name: Option<&str>) -> Identity {
         if !self.db.is_active() {
             return Identity::Known;
         }
@@ -92,6 +106,10 @@ impl ClientIdentities {
         match existing.flatten() {
             Some(record) => match token {
                 Some(token) if hash(token) == record.token_hash => {
+                    let mut record = record;
+                    if let Some(name) = name {
+                        record.name = clamp_name(name);
+                    }
                     self.touch(client_id, record, now);
                     Identity::Known
                 }
@@ -103,6 +121,7 @@ impl ClientIdentities {
                     token_hash: hash(&token),
                     first_seen_ms: now,
                     last_seen_ms: now,
+                    name: name.map(clamp_name).unwrap_or_default(),
                 };
                 self.store(client_id, &record, now);
                 Identity::Issued(token)
@@ -137,7 +156,7 @@ impl ClientIdentities {
 
     /// Every identity the store holds, newest contact first. For the diagnostics
     /// report and the settings panel; the token hash is never exposed.
-    pub fn seen(&self) -> Vec<(String, i64)> {
+    pub fn seen(&self) -> Vec<KnownApp> {
         let mut all = self
             .db
             .read(|txn| {
@@ -149,13 +168,17 @@ impl ClientIdentities {
                 for entry in table.range::<&str>(..)? {
                     let (id, value) = entry?;
                     if let Ok(record) = rmp_serde::from_slice::<Record>(value.value()) {
-                        out.push((id.value().to_owned(), record.last_seen_ms));
+                        out.push(KnownApp {
+                            client_id: id.value().to_owned(),
+                            name: record.name,
+                            last_seen_ms: record.last_seen_ms,
+                        });
                     }
                 }
                 Ok(out)
             })
             .unwrap_or_default();
-        all.sort_by_key(|(_, last_seen)| std::cmp::Reverse(*last_seen));
+        all.sort_by_key(|app| std::cmp::Reverse(app.last_seen_ms));
         all
     }
 }
@@ -195,6 +218,15 @@ fn prune(txn: &redb::WriteTransaction, now: i64) -> Result<(), redb::Error> {
         }
     }
     Ok(())
+}
+
+/// A device name as it is kept: trimmed, bounded, no control characters.
+fn clamp_name(name: &str) -> String {
+    name.trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_NAME_LEN)
+        .collect()
 }
 
 /// A 160-bit token, hex encoded, from the OS entropy source.
@@ -240,11 +272,14 @@ mod tests {
     fn first_contact_is_issued_a_token_and_the_token_lets_it_back_in() {
         let (clients, _dir) = store("issue");
 
-        let Identity::Issued(token) = clients.identify("install-a", None) else {
+        let Identity::Issued(token) = clients.identify("install-a", None, None) else {
             panic!("first contact should be issued a token");
         };
         assert!(!token.is_empty());
-        assert_eq!(clients.identify("install-a", Some(&token)), Identity::Known);
+        assert_eq!(
+            clients.identify("install-a", Some(&token), None),
+            Identity::Known
+        );
     }
 
     /// The restored-backup case: a second install carrying the same persisted id
@@ -252,17 +287,20 @@ mod tests {
     #[test]
     fn a_known_id_without_its_token_is_refused() {
         let (clients, _dir) = store("refuse");
-        let Identity::Issued(token) = clients.identify("install-b", None) else {
+        let Identity::Issued(token) = clients.identify("install-b", None, None) else {
             panic!("first contact should be issued a token");
         };
 
-        assert_eq!(clients.identify("install-b", None), Identity::Refused);
+        assert_eq!(clients.identify("install-b", None, None), Identity::Refused);
         assert_eq!(
-            clients.identify("install-b", Some("not-the-token")),
+            clients.identify("install-b", Some("not-the-token"), None),
             Identity::Refused
         );
         // The rightful owner is unaffected by the attempts.
-        assert_eq!(clients.identify("install-b", Some(&token)), Identity::Known);
+        assert_eq!(
+            clients.identify("install-b", Some(&token), None),
+            Identity::Known
+        );
     }
 
     /// Without a database there is nothing to remember a token with, so enforcing
@@ -270,9 +308,9 @@ mod tests {
     #[test]
     fn without_a_database_every_id_is_known() {
         let clients = ClientIdentities::new(Db::disabled());
-        assert_eq!(clients.identify("install-c", None), Identity::Known);
+        assert_eq!(clients.identify("install-c", None, None), Identity::Known);
         assert_eq!(
-            clients.identify("install-c", Some("anything")),
+            clients.identify("install-c", Some("anything"), None),
             Identity::Known
         );
     }
@@ -283,7 +321,7 @@ mod tests {
     fn the_store_is_capped_and_evicts_the_least_recently_seen() {
         let (clients, _dir) = store("cap");
         for i in 0..(MAX_IDENTITIES + 20) {
-            clients.identify(&format!("install-{i:04}"), None);
+            clients.identify(&format!("install-{i:04}"), None, None);
         }
         let seen = clients.seen();
         assert!(
@@ -292,7 +330,7 @@ mod tests {
             seen.len()
         );
         // The survivors are the newest: the first ids inserted are the ones gone.
-        assert!(!seen.iter().any(|(id, _)| id == "install-0000"));
+        assert!(!seen.iter().any(|app| app.client_id == "install-0000"));
     }
 
     /// Its token is what keeps an app's role from being claimed, so an app with
@@ -309,18 +347,42 @@ mod tests {
         let roles = Roles::default();
         roles.open(db);
 
-        clients.identify("install-host", None);
+        clients.identify("install-host", None, None);
         roles.assign(&Principal::App("install-host".into()), Role::Host);
         for i in 0..(MAX_IDENTITIES + 20) {
-            clients.identify(&format!("install-{i:04}"), None);
+            clients.identify(&format!("install-{i:04}"), None, None);
         }
-        assert!(clients.seen().iter().any(|(id, _)| id == "install-host"));
+        assert!(
+            clients
+                .seen()
+                .iter()
+                .any(|app| app.client_id == "install-host")
+        );
+    }
+
+    #[test]
+    fn a_handshake_name_is_kept_bounded_and_a_later_one_replaces_it() {
+        let (clients, _dir) = store("name");
+        let Identity::Issued(token) = clients.identify("install-n", None, Some("  Pixel 8\n "))
+        else {
+            panic!("first contact should be issued a token");
+        };
+        assert_eq!(clients.seen()[0].name, "Pixel 8");
+        clients.identify("install-n", Some(&token), None);
+        assert_eq!(
+            clients.seen()[0].name,
+            "Pixel 8",
+            "no name keeps the old one"
+        );
+        let long = "x".repeat(MAX_NAME_LEN + 10);
+        clients.identify("install-n", Some(&token), Some(&long));
+        assert_eq!(clients.seen()[0].name.len(), MAX_NAME_LEN);
     }
 
     #[test]
     fn tokens_are_not_stored_in_the_clear() {
         let (clients, _dir) = store("hashing");
-        let Identity::Issued(token) = clients.identify("install-d", None) else {
+        let Identity::Issued(token) = clients.identify("install-d", None, None) else {
             panic!("first contact should be issued a token");
         };
         assert_ne!(hash(&token), token);

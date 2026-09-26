@@ -490,6 +490,11 @@ impl Conn {
             self.shutdown.clone(),
         ) {
             Admit::Admitted => {
+                if meta.protocol < 6
+                    && let Some(client_id) = meta.client_id.as_deref()
+                {
+                    core.party_mode.saw_legacy_device(client_id);
+                }
                 tracing::debug!(
                     platform = meta.platform.as_deref().unwrap_or("unknown"),
                     protocol = meta.protocol,

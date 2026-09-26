@@ -437,4 +437,50 @@ namespace MusicBeePlugin.Ffi
         public string label { get; set; }
     }
 
+    public class PartyModeStatus
+    {
+        public bool enabled { get; set; }
+        public string pairing_code { get; set; }
+        public int pairing_code_expires_in { get; set; }
+        public string pairing_code_role { get; set; }
+        public bool pairing_code_voided { get; set; }
+        public List<PartyDevice> devices { get; set; }
+        public List<PartyRefusal> refusals { get; set; }
+    }
+
+    public class PartyDevice
+    {
+        public string key { get; set; }
+        public string kind { get; set; }
+        public string label { get; set; }
+        public long last_seen { get; set; }
+        public string role { get; set; }
+        public bool weaker_trust { get; set; }
+    }
+
+    public class PartyRefusal
+    {
+        public long unix_ms { get; set; }
+        public string client { get; set; }
+        public string op { get; set; }
+        public string capability { get; set; }
+        public string message { get; set; }
+    }
+
+    public class PartyModeSwitch
+    {
+        public bool enabled { get; set; }
+    }
+
+    public class PartyRoleChoice
+    {
+        public string role { get; set; }
+    }
+
+    public class PartyRoleAssignment
+    {
+        public string key { get; set; }
+        public string role { get; set; }
+    }
+
 }
