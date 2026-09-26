@@ -7,11 +7,14 @@
 //! It handles the handshake (`player`, `protocol`), keepalive and health
 //! (`ping`, `pong`, `verifyconnection`), and dispatch for every other context.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 
 use mbrc_wire::parse_lenient;
 
 use super::commands;
+use super::permissions::{self, PartyMode, Role};
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
@@ -50,6 +53,10 @@ pub struct Session {
     /// at close is the signature of a client control/event socket that never
     /// handshaked.
     pub dropped_pre_handshake: u32,
+    /// The Party Mode gate every command passes; absent in unit tests.
+    pub party_mode: Option<Arc<PartyMode>>,
+    /// The role Party Mode judges this connection by.
+    pub role: Role,
 }
 
 /// What the IO layer should do with a frame: which raw JSON replies to send
@@ -210,37 +217,17 @@ impl Session {
         if let Some(cache) = metadata_cache {
             ctx = ctx.with_metadata_cache(cache);
         }
+        if self.is_refused(context, data, version) {
+            return Outcome {
+                replies: frame_replies(refusal_replies(&ctx, context), seq),
+                close: false,
+            };
+        }
         match commands::dispatch(&ctx, context, data) {
-            Some(Ok(replies)) => {
-                let framed: Vec<String> = replies.into_iter().map(|(c, d)| frame(&c, d)).collect();
-                for f in &framed {
-                    // s2c list/browse responses are the verbose ones: DEBUG caps
-                    // the body to a sample + schema; TRACE keeps it whole.
-                    if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
-                        tracing::trace!(
-                            target: "mbrc::wire",
-                            dir = "s2c",
-                            reply_to = seq,
-                            bytes = f.len(),
-                            "{}",
-                            crate::logging::redact_frame(f, None)
-                        );
-                    } else {
-                        tracing::debug!(
-                            target: "mbrc::wire",
-                            dir = "s2c",
-                            reply_to = seq,
-                            bytes = f.len(),
-                            "{}",
-                            crate::logging::redact_frame(f, Some(crate::logging::WIRE_LIST_SAMPLE))
-                        );
-                    }
-                }
-                Outcome {
-                    replies: framed,
-                    close: false,
-                }
-            }
+            Some(Ok(replies)) => Outcome {
+                replies: frame_replies(replies, seq),
+                close: false,
+            },
             Some(Err(e)) => {
                 tracing::warn!(context, error = %e, "command handler error");
                 Outcome::nothing()
@@ -250,6 +237,25 @@ impl Session {
                 Outcome::nothing()
             }
         }
+    }
+
+    /// Attaches the Party Mode gate. Builder-style.
+    pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
+        self.party_mode = Some(Arc::clone(gate));
+        self
+    }
+
+    fn is_refused(&self, context: &str, data: &Value, version: ProtocolVersion) -> bool {
+        let Some(gate) = &self.party_mode else {
+            return false;
+        };
+        let action = permissions::v4::action(context, data, version.codec());
+        let client = self
+            .client_id
+            .as_deref()
+            .or(self.platform.as_deref())
+            .unwrap_or("v4");
+        gate.check(self.role, context, action, client).is_err()
     }
 
     /// Registration metadata once the handshake completes (`None` before). A
@@ -334,6 +340,50 @@ fn parse_handshake(data: &Value) -> Handshake {
 }
 
 /// Builds a raw `{"context":..,"data":..}` frame (the IO layer adds CRLF).
+/// What a V4 client refused by Party Mode is sent.
+///
+/// `commandunavailable` makes Android 1.6 show a toast; older clients ignore it.
+/// A refused set is followed by the current value, as if the client had asked.
+fn refusal_replies(ctx: &commands::Ctx, context: &str) -> Vec<(String, Value)> {
+    let mut replies = vec![("commandunavailable".to_string(), json!(""))];
+    if permissions::v4::GET_OR_SET.contains(&context)
+        && let Some(Ok(state)) = commands::dispatch(ctx, context, &Value::Null)
+    {
+        replies.extend(state);
+    }
+    replies
+}
+
+/// Frames handler replies, logging each at the wire level.
+///
+/// List and browse replies are the verbose ones: DEBUG caps the body to a sample
+/// and schema, TRACE keeps it whole.
+fn frame_replies(replies: Vec<(String, Value)>, seq: u64) -> Vec<String> {
+    let framed: Vec<String> = replies.into_iter().map(|(c, d)| frame(&c, d)).collect();
+    for f in &framed {
+        if tracing::enabled!(target: "mbrc::wire", tracing::Level::TRACE) {
+            tracing::trace!(
+                target: "mbrc::wire",
+                dir = "s2c",
+                reply_to = seq,
+                bytes = f.len(),
+                "{}",
+                crate::logging::redact_frame(f, None)
+            );
+        } else {
+            tracing::debug!(
+                target: "mbrc::wire",
+                dir = "s2c",
+                reply_to = seq,
+                bytes = f.len(),
+                "{}",
+                crate::logging::redact_frame(f, Some(crate::logging::WIRE_LIST_SAMPLE))
+            );
+        }
+    }
+    framed
+}
+
 fn frame(context: &str, data: Value) -> String {
     serde_json::to_string(&json!({ "context": context, "data": data }))
         .expect("serializing a server frame cannot fail")
@@ -556,6 +606,76 @@ mod tests {
             s.handle_frame("this is not json", &NullProviders, None, None, None),
             Outcome::nothing()
         );
+    }
+
+    /// A handshaked V4 session behind a Party Mode gate that is switched on.
+    fn at_a_party(role: Role) -> Session {
+        let gate = Arc::new(PartyMode::default());
+        gate.set_enabled(true);
+        Session {
+            protocol_version: Some(4),
+            role,
+            ..Session::default().with_party_mode(&gate)
+        }
+    }
+
+    fn contexts(out: &Outcome) -> Vec<String> {
+        out.replies.iter().map(|r| ctx(r).0).collect()
+    }
+
+    fn send(s: &mut Session, context: &str, data: Value) -> Outcome {
+        let line = json!({ "context": context, "data": data }).to_string();
+        s.handle_frame(&line, &NullProviders, None, None, None)
+    }
+
+    #[test]
+    fn a_refused_command_answers_commandunavailable_only() {
+        let mut s = at_a_party(Role::Guest);
+        let out = send(&mut s, "playernext", json!(""));
+        assert_eq!(
+            out.replies,
+            vec![r#"{"context":"commandunavailable","data":""}"#]
+        );
+        assert!(!out.close);
+    }
+
+    #[test]
+    fn a_refused_set_is_followed_by_the_current_value() {
+        let mut s = at_a_party(Role::Guest);
+        let out = send(&mut s, "playervolume", json!(90));
+        assert_eq!(contexts(&out), ["commandunavailable", "playervolume"]);
+    }
+
+    #[test]
+    fn a_query_passes_the_gate_in_any_role() {
+        let mut s = at_a_party(Role::Listener);
+        let out = send(&mut s, "playervolume", Value::Null);
+        assert_eq!(contexts(&out), ["playervolume"]);
+    }
+
+    #[test]
+    fn a_guest_may_queue_one_track_at_the_end() {
+        let mut s = at_a_party(Role::Guest);
+        let one = send(
+            &mut s,
+            "nowplayingqueue",
+            json!({ "queue": "last", "data": ["a"] }),
+        );
+        assert_eq!(contexts(&one), ["nowplayingqueue"]);
+        let two = send(
+            &mut s,
+            "nowplayingqueue",
+            json!({ "queue": "last", "data": ["a", "b"] }),
+        );
+        assert_eq!(contexts(&two), ["commandunavailable"]);
+    }
+
+    #[test]
+    fn with_party_mode_off_a_guest_is_not_stopped() {
+        let mut s = at_a_party(Role::Guest);
+        s.party_mode.as_ref().unwrap().set_enabled(false);
+        let out = send(&mut s, "playervolume", json!(90));
+        assert_eq!(contexts(&out), ["playervolume"]);
     }
 
     #[test]

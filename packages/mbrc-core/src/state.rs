@@ -55,6 +55,8 @@ pub struct Core {
     /// Recent rejected connection attempts (address filter / caps), surfaced to
     /// the settings panel. In-memory ring buffer, not persisted.
     pub blocked: BlockedLog,
+    /// Party Mode's switch and refusal log, checked before every command.
+    pub party_mode: Arc<crate::server::permissions::PartyMode>,
     conn_counter: AtomicU64,
     /// Wakes the background library Scanner to run a delta sooner. A library
     /// change notification (`FileAddedToLibrary`) is a debounced nudge on this,
@@ -101,6 +103,7 @@ impl Core {
             registry,
             clients,
             blocked: BlockedLog::default(),
+            party_mode: Arc::default(),
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
             stopping: Arc::new(AtomicBool::new(false)),

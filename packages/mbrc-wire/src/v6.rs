@@ -88,6 +88,8 @@ pub enum ErrorCode {
     Unauthorized,
     /// The connection is not permitted (address filter / connection cap).
     NotAllowed,
+    /// Party Mode is on and this client's role does not allow the op.
+    Forbidden,
     /// The `client_id` is already held by an installation that presented a
     /// different token, so this handshake cannot claim it.
     InvalidToken,
@@ -114,6 +116,7 @@ impl ErrorCode {
             Self::UnknownOp => "unknown_op",
             Self::Unauthorized => "unauthorized",
             Self::NotAllowed => "not_allowed",
+            Self::Forbidden => "forbidden",
             Self::InvalidToken => "invalid_token",
             Self::StaleList => "stale_list",
             Self::Internal => "internal_error",

@@ -9,8 +9,11 @@
 //! walk every advertised V6 op and every dispatched V4 context, so a new op
 //! cannot ship without a place in the map.
 
+pub mod gate;
 pub mod v4;
 pub mod v6;
+
+pub use gate::{PartyMode, Refusal};
 
 use crate::protocol::messages::QueueType;
 
@@ -50,6 +53,22 @@ impl Capability {
         Capability::PlaylistEdit,
         Capability::Output,
     ];
+
+    /// The name clients and the panel see.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Capability::Playback => "playback",
+            Capability::QueueAdd => "queue_add",
+            Capability::QueueInsert => "queue_insert",
+            Capability::QueueReplace => "queue_replace",
+            Capability::QueueEdit => "queue_edit",
+            Capability::Volume => "volume",
+            Capability::Modes => "modes",
+            Capability::LibraryEdit => "library_edit",
+            Capability::PlaylistEdit => "playlist_edit",
+            Capability::Output => "output",
+        }
+    }
 
     /// The capability that queueing at `placement` needs.
     pub fn for_queue(placement: QueueType) -> Self {
@@ -131,6 +150,14 @@ pub enum Action {
 }
 
 impl Action {
+    /// The capability this action needs; `None` for a read.
+    pub fn capability(&self) -> Option<Capability> {
+        match *self {
+            Action::Read => None,
+            Action::Change(capability) | Action::Queue { capability, .. } => Some(capability),
+        }
+    }
+
     /// Queueing `tracks` at `placement`.
     pub fn queue(placement: QueueType, tracks: Option<usize>) -> Self {
         Action::Queue {

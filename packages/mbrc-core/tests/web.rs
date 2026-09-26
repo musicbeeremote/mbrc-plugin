@@ -37,9 +37,18 @@ const BIND_ATTEMPTS: u32 = 16;
 /// what closes that window: the alternative is a suite that fails on a race
 /// nobody introduced, roughly one Windows run in ten.
 fn start_on_free_port(config: impl Fn(u16) -> Config) -> (u16, server::NetHandle) {
+    start_prepared(config, |_| {})
+}
+
+/// [`start_on_free_port`], with `prepare` run on the core before it serves.
+fn start_prepared(
+    config: impl Fn(u16) -> Config,
+    prepare: impl Fn(&Core),
+) -> (u16, server::NetHandle) {
     for _ in 0..BIND_ATTEMPTS {
         let port = free_port();
         let core = Arc::new(Core::new(Arc::new(NullProviders), config(port)));
+        prepare(&core);
         match server::start(core) {
             Ok(net) => return (port, net),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
@@ -157,6 +166,22 @@ fn an_unknown_op_is_a_404_carrying_the_v6_error_code() {
     assert!(status.starts_with("HTTP/1.1 404"), "status was {status}");
     let value: Value = serde_json::from_str(&body).expect("error body is JSON");
     assert_eq!(value["error"]["code"], "unknown_op");
+}
+
+#[test]
+fn party_mode_refuses_an_unpaired_caller_with_a_403_forbidden() {
+    let (port, net) = start_prepared(Config::for_test, |core| core.party_mode.set_enabled(true));
+
+    let (status, body) = request(
+        port,
+        "POST /api/v6/player_next HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\n\
+         Content-Type: application/json\r\nConnection: close\r\n\r\n{}",
+    );
+    net.stop();
+
+    assert!(status.starts_with("HTTP/1.1 403"), "status was {status}");
+    let value: Value = serde_json::from_str(&body).expect("error body is JSON");
+    assert_eq!(value["error"]["code"], "forbidden");
 }
 
 #[test]

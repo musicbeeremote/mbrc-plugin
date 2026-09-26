@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::ErrorCode;
 
 use crate::server::commands_v6::{self, V6Error};
+use crate::server::permissions::{self, Role};
 use crate::web::router::WebState;
 
 /// Ops the session state machine answers itself. They are meaningless without a
@@ -32,7 +33,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         | ErrorCode::InvalidField
         | ErrorCode::UnsupportedVersion => StatusCode::BAD_REQUEST,
         ErrorCode::Unauthorized | ErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
-        ErrorCode::NotAllowed => StatusCode::FORBIDDEN,
+        ErrorCode::NotAllowed | ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::UnknownOp | ErrorCode::NotFound => StatusCode::NOT_FOUND,
         ErrorCode::StaleList => StatusCode::CONFLICT,
         ErrorCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
@@ -61,6 +62,14 @@ pub async fn call(
     }
 
     let data = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
+    let action = permissions::v6::action(&op, &data);
+    if let Err(refusal) = state
+        .core
+        .party_mode
+        .check(Role::default(), &op, action, "http")
+    {
+        return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
+    }
     let core = state.core.clone();
     let outcome = tokio::task::spawn_blocking(move || {
         commands_v6::dispatch(
@@ -98,6 +107,7 @@ mod tests {
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(status_for(ErrorCode::NotAllowed), StatusCode::FORBIDDEN);
+        assert_eq!(status_for(ErrorCode::Forbidden), StatusCode::FORBIDDEN);
         assert_eq!(status_for(ErrorCode::NotFound), StatusCode::NOT_FOUND);
         assert_eq!(status_for(ErrorCode::StaleList), StatusCode::CONFLICT);
         assert_eq!(
@@ -120,6 +130,7 @@ mod tests {
             ErrorCode::UnknownOp,
             ErrorCode::Unauthorized,
             ErrorCode::NotAllowed,
+            ErrorCode::Forbidden,
             ErrorCode::InvalidToken,
             ErrorCode::StaleList,
             ErrorCode::Internal,

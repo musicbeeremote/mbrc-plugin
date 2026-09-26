@@ -39,7 +39,7 @@ async fn run(mut socket: WebSocket, state: WebState) {
     let conn_id = core.next_conn_id();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
 
-    let mut session = V6Session::default();
+    let mut session = V6Session::default().with_party_mode(&core.party_mode);
     let mut subscribed = false;
 
     tracing::debug!(%peer, conn_id, "websocket opened");

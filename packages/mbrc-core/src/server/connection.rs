@@ -436,12 +436,12 @@ impl Conn {
     fn route(&self, proto: &mut Proto, line: &str) -> bool {
         match route::detect(line) {
             Route::Legacy => {
-                *proto = Proto::Legacy(Session::default());
+                *proto = Proto::Legacy(Session::default().with_party_mode(&self.core.party_mode));
                 let _ = self.terminator.set("\r\n");
                 true
             }
             Route::V6 => {
-                *proto = Proto::V6(V6Session::default());
+                *proto = Proto::V6(V6Session::default().with_party_mode(&self.core.party_mode));
                 let _ = self.terminator.set("\n");
                 true
             }

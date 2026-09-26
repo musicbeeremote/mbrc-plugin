@@ -10,6 +10,21 @@ use super::{Action, Capability};
 use crate::server::commands::{as_bool_lenient, as_int_lenient, as_set_string};
 use crate::wire::WireCodec;
 
+/// The contexts that set a value when given one and answer it when not.
+///
+/// A refused set is answered with the current value, so the client's control
+/// snaps back instead of showing a value that never applied.
+pub const GET_OR_SET: &[&str] = &[
+    "playervolume",
+    "playermute",
+    "scrobbler",
+    "playershuffle",
+    "playerrepeat",
+    "nowplayingposition",
+    "nowplayingrating",
+    "nowplayinglfmrating",
+];
+
 /// The action a V4 request performs. `None` for a context the map does not know.
 pub fn action(context: &str, data: &Value, codec: &dyn WireCodec) -> Option<Action> {
     use Capability::*;
@@ -118,16 +133,7 @@ mod tests {
 
     #[test]
     fn a_get_or_set_context_queried_is_a_read() {
-        for context in [
-            "playervolume",
-            "playermute",
-            "scrobbler",
-            "playershuffle",
-            "playerrepeat",
-            "nowplayingposition",
-            "nowplayingrating",
-            "nowplayinglfmrating",
-        ] {
+        for context in GET_OR_SET {
             assert_eq!(act(context, Value::Null), Action::Read, "{context} null");
             assert_eq!(act(context, json!({})), Action::Read, "{context} object");
         }

@@ -83,7 +83,7 @@ a browser, a proxy and `curl` all read it correctly:
 |---|---|
 | `malformed_frame`, `missing_field`, `invalid_field`, `unsupported_version` | 400 |
 | `unauthorized`, `invalid_token` | 401 |
-| `not_allowed` | 403 |
+| `not_allowed`, `forbidden` | 403 |
 | `unknown_op`, `not_found` | 404 |
 | `stale_list` | 409 |
 | `unavailable` | 503 |
@@ -286,6 +286,7 @@ offending input directly. Its absence means the error is not about a single fiel
 | `unknown_op` | no such op |
 | `unauthorized` | op sent before the handshake |
 | `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |
+| `forbidden` | Party Mode is on and this client's role does not allow the op; the message names the capability it needs |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
 | `stale_list` | the queue or playlist moved since the `version` the request carried |
 | `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account) |

@@ -12,12 +12,15 @@
 //!   `kind`/`op`); *ignore* unknown additive keys inside `data`.
 //! - Success `{id, kind:"response", data}` XOR failure `{id, kind:"response", error}`.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 
 use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
 
 use super::clients::{ClientIdentities, Identity, MAX_CLIENT_ID_LEN};
 use super::commands_v6;
+use super::permissions::{self, PartyMode, Role};
 use super::session::Outcome;
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
@@ -38,6 +41,10 @@ pub struct V6Session {
     no_broadcast: bool,
     /// Inbound frame counter, for wire-log correlation.
     frames_in: u64,
+    /// The Party Mode gate every op passes; absent in unit tests.
+    party_mode: Option<Arc<PartyMode>>,
+    /// The role Party Mode judges this connection by.
+    role: Role,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -100,6 +107,12 @@ fn log_s2c(reply_to: u64, frame: &str) {
 }
 
 impl V6Session {
+    /// Attaches the Party Mode gate. Builder-style.
+    pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
+        self.party_mode = Some(Arc::clone(gate));
+        self
+    }
+
     /// Process one inbound V6 wire line. `providers`/`now_playing` are the same
     /// read/write context the legacy `Session` gets; op handlers use them.
     #[allow(clippy::too_many_arguments)]
@@ -253,6 +266,16 @@ impl V6Session {
         // Echo the request data back, proving id-correlated round-trips.
         if req.op == "ping" {
             return Outcome::reply(v6::response_ok(req.id, req.data));
+        }
+        if let Some(gate) = &self.party_mode {
+            let action = permissions::v6::action(&req.op, &req.data);
+            if let Err(refusal) = gate.check(self.role, &req.op, action, &self.client_id) {
+                return Outcome::reply(v6::response_error(
+                    req.id,
+                    ErrorCode::Forbidden,
+                    &refusal.message,
+                ));
+            }
         }
         match commands_v6::dispatch(
             &req.op,
@@ -473,6 +496,48 @@ mod tests {
         let mut s = V6Session::default();
         feed(&mut s, GOOD_HANDSHAKE);
         s
+    }
+
+    /// A handshaked guest behind a Party Mode gate that is switched on.
+    fn guest_at_a_party() -> V6Session {
+        let gate = Arc::new(PartyMode::default());
+        gate.set_enabled(true);
+        let mut s = V6Session::default().with_party_mode(&gate);
+        feed(&mut s, GOOD_HANDSHAKE);
+        s
+    }
+
+    #[test]
+    fn an_op_the_role_lacks_is_forbidden_and_names_the_capability() {
+        let mut s = guest_at_a_party();
+        let reply = feed(
+            &mut s,
+            r#"{"id":3,"kind":"request","op":"player_next","data":{}}"#,
+        );
+        let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
+        assert_eq!(v["id"], 3);
+        assert_eq!(v["error"]["code"], "forbidden");
+        assert!(
+            v["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("`playback`")
+        );
+        assert!(!reply.close);
+    }
+
+    #[test]
+    fn a_guest_may_read_and_append_one_track() {
+        let mut s = guest_at_a_party();
+        for line in [
+            r#"{"id":4,"kind":"request","op":"player_status","data":{}}"#,
+            r#"{"id":5,"kind":"request","op":"now_playing_queue","data":{"paths":["a"],"mode":"last"}}"#,
+            r#"{"id":6,"kind":"request","op":"ping","data":{}}"#,
+        ] {
+            let reply = feed(&mut s, line);
+            let v: Value = serde_json::from_str(&reply.replies[0]).expect("a JSON frame");
+            assert_ne!(v["error"]["code"], "forbidden", "{line}");
+        }
     }
 
     /// A client cannot act on a validation failure it has to read as prose.
