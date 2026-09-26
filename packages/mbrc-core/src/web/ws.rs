@@ -76,6 +76,9 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
                 }
                 if !subscribed && session.reg_meta().is_some_and(|m| m.is_main) {
                     core.v6_broadcaster.register(conn_id, out_tx.clone());
+                    if let Some((principal, told)) = session.permissions_watch() {
+                        core.party_mode.watch(principal, told, out_tx.clone());
+                    }
                     subscribed = true;
                 }
                 if outcome.close {

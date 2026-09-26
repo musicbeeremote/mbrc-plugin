@@ -44,6 +44,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "cover_cache_changed",
     "library_changed",
     "server_shutdown",
+    crate::server::permissions::gate::PERMISSIONS_CHANGED,
 ];
 
 /// The capability set advertised in the handshake response.

@@ -161,8 +161,15 @@ pub fn unauthorized() -> Response {
         .into_response()
 }
 
-async fn capabilities() -> Json<Value> {
-    Json(crate::server::commands_v6::capabilities())
+/// The V6 catalog, plus what this caller may do.
+async fn capabilities(
+    State(state): State<WebState>,
+    headers: axum::http::HeaderMap,
+) -> Json<Value> {
+    let mut capabilities = crate::server::commands_v6::capabilities();
+    let principal = state.principal(&headers, None);
+    capabilities["permissions"] = state.core.party_mode.permissions(&principal);
+    Json(capabilities)
 }
 
 /// Tells an unpaired browser whether it needs to pair at all, so the UI can skip
@@ -188,8 +195,7 @@ async fn pair(State(state): State<WebState>, Json(body): Json<Value>) -> Respons
             state
                 .core
                 .party_mode
-                .roles
-                .assign(&Principal::Browser(paired.id), paired.role);
+                .assign_role(&Principal::Browser(paired.id), paired.role);
             (
                 [(header::SET_COOKIE, token_cookie(&paired.token))],
                 Json(json!({ "token": paired.token, "role": paired.role.as_str() })),

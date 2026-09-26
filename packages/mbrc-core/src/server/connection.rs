@@ -414,6 +414,15 @@ impl Conn {
             if !*registered && let Some(meta) = proto.reg_meta() {
                 *registered = true;
                 refused = !self.register_and_subscribe(&meta);
+                if !refused
+                    && meta.is_main
+                    && let Proto::V6(session) = &*proto
+                    && let Some((principal, told)) = session.permissions_watch()
+                {
+                    self.core
+                        .party_mode
+                        .watch(principal, told, self.out_tx.clone());
+                }
             }
             if refused && let Some(frame) = proto.cap_refusal() {
                 let _ = self.out_tx.send(frame);

@@ -32,9 +32,12 @@ pub async fn stream(
         return crate::web::router::unauthorized();
     }
 
+    let principal = state.principal(&headers, params.get("token").map(String::as_str));
     let core = state.core;
     let conn_id = core.next_conn_id();
     let (tx, rx) = mpsc::unbounded_channel();
+    let told = core.party_mode.permissions(&principal);
+    core.party_mode.watch(principal, told, tx.clone());
     core.v6_broadcaster.register(conn_id, tx);
     tracing::debug!(peer = %state.peer, conn_id, "event stream opened");
 

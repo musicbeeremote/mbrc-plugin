@@ -621,8 +621,7 @@ mod tests {
     fn at_a_party(role: Role) -> Session {
         let gate = Arc::new(PartyMode::default());
         gate.set_enabled(true);
-        gate.roles
-            .assign(&Principal::LegacyDevice("phone".into()), role);
+        gate.assign_role(&Principal::LegacyDevice("phone".into()), role);
         Session {
             protocol_version: Some(4),
             client_id: Some("phone".into()),

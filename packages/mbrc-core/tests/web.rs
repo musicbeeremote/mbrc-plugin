@@ -105,6 +105,10 @@ fn capabilities_are_served_over_http_on_the_command_port() {
 
     assert!(status.starts_with("HTTP/1.1 200"), "status was {status}");
     let value: Value = serde_json::from_str(&body).expect("capabilities are JSON");
+    assert_eq!(
+        value["permissions"]["party_mode"], false,
+        "the caller is told what it may do: {body}"
+    );
     assert!(
         value["ops"]
             .as_array()

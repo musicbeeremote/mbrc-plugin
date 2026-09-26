@@ -217,6 +217,10 @@ pub struct Config {
     /// already use.
     #[serde(default = "default_web_auth_required")]
     pub web_auth_required: bool,
+    /// Whether Party Mode is on at startup. The panel switches it live; this is
+    /// what that switch persists.
+    #[serde(default)]
+    pub party_mode_enabled: bool,
     /// Whether the core checks for plugin updates *on its own*. A check is a
     /// request to github.com, so it is opt-in: this defaults to off, and the
     /// panel's "Check now" runs regardless of it.
@@ -279,6 +283,7 @@ impl Default for Config {
             mdns_enabled: default_mdns_enabled(),
             web_enabled: default_web_enabled(),
             web_auth_required: default_web_auth_required(),
+            party_mode_enabled: false,
             update_check_enabled: default_update_check_enabled(),
             update_channel: UpdateChannel::default(),
             update_check_interval_hours: default_update_check_interval_hours(),

@@ -3,14 +3,25 @@
 //!
 //! Refusals are kept in memory only, like the blocked-connections log. Allowed
 //! requests are not logged: at a party that is every tap.
+//!
+//! Every change that can alter what a client may do (the switch, a role) bumps
+//! one counter. Each V6 client with an event stream watches it, recomputes its
+//! own [`permissions`](PartyMode::permissions), and is sent `permissions_changed`
+//! only when those differ from what it was last told.
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde_json::{Value, json};
+use tokio::sync::{mpsc, watch};
 
 use super::{Action, Capability, Principal, Role, Roles};
 use crate::store::Db;
+
+/// The event a client is sent when what it may do changes.
+pub const PERMISSIONS_CHANGED: &str = "permissions_changed";
 
 /// How many recent refusals to keep. Older entries are dropped.
 const MAX_REFUSALS: usize = 50;
@@ -30,11 +41,24 @@ pub struct Refusal {
 }
 
 /// Party Mode's runtime state, shared by every connection.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PartyMode {
     enabled: AtomicBool,
     refusals: Mutex<VecDeque<Refusal>>,
-    pub roles: Roles,
+    roles: Roles,
+    /// Bumped by every change that can alter a client's permissions.
+    changes: watch::Sender<u64>,
+}
+
+impl Default for PartyMode {
+    fn default() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            refusals: Mutex::default(),
+            roles: Roles::default(),
+            changes: watch::Sender::new(0),
+        }
+    }
 }
 
 impl PartyMode {
@@ -48,7 +72,97 @@ impl PartyMode {
     }
 
     pub fn set_enabled(&self, enabled: bool) {
-        self.enabled.store(enabled, Ordering::Relaxed);
+        if self.enabled.swap(enabled, Ordering::Relaxed) != enabled {
+            tracing::info!(enabled, "party mode switched");
+            self.changed();
+        }
+    }
+
+    /// The role `principal` holds while Party Mode is on.
+    pub fn role_of(&self, principal: &Principal) -> Role {
+        self.roles.role_of(principal)
+    }
+
+    /// Gives `principal` a role. False for a principal that cannot hold one.
+    pub fn assign_role(&self, principal: &Principal, role: Role) -> bool {
+        let assigned = self.roles.assign(principal, role);
+        if assigned {
+            self.changed();
+        }
+        assigned
+    }
+
+    /// Returns `principal` to the default role.
+    pub fn unassign_role(&self, principal: &Principal) {
+        self.roles.unassign(principal);
+        self.changed();
+    }
+
+    /// Returns every paired browser to the default role.
+    pub fn unassign_browsers(&self) {
+        self.roles.unassign_browsers();
+        self.changed();
+    }
+
+    /// What `principal` may do, in the shape the handshake, the capabilities
+    /// route and `permissions_changed` all carry.
+    ///
+    /// With Party Mode off every client is told it is the host with every
+    /// capability, which is what it can do.
+    pub fn permissions(&self, principal: &Principal) -> Value {
+        if !self.is_enabled() {
+            return json!({
+                "party_mode": false,
+                "role": Role::Host.as_str(),
+                "allowed": capability_names(Capability::ALL),
+            });
+        }
+        let role = self.role_of(principal);
+        let mut permissions = json!({
+            "party_mode": true,
+            "role": role.as_str(),
+            "allowed": capability_names(role.capabilities()),
+        });
+        if let Some(max) = role.max_tracks_per_add() {
+            permissions["max_tracks_per_add"] = json!(max);
+        }
+        permissions
+    }
+
+    /// Sends `permissions_changed` frames down `tx` whenever `principal`'s
+    /// permissions stop matching `told`, until `tx` closes.
+    ///
+    /// Checks once straight away, so a change that landed between the
+    /// handshake and this call is not lost.
+    pub fn watch(
+        self: &Arc<Self>,
+        principal: Principal,
+        told: Value,
+        tx: mpsc::UnboundedSender<String>,
+    ) {
+        let gate = Arc::clone(self);
+        let mut changes = self.changes.subscribe();
+        tokio::spawn(async move {
+            let mut told = told;
+            loop {
+                let now = gate.permissions(&principal);
+                if now != told {
+                    let frame = mbrc_wire::v6::event(PERMISSIONS_CHANGED, now.clone());
+                    if tx.send(frame).is_err() {
+                        break;
+                    }
+                    told = now;
+                }
+                tokio::select! {
+                    changed = changes.changed() => if changed.is_err() { break },
+                    () = tx.closed() => break,
+                }
+            }
+        });
+    }
+
+    fn changed(&self) {
+        self.changes.send_modify(|n| *n = n.wrapping_add(1));
     }
 
     /// Whether `principal` may carry out `op`, which the map classified as `action`.
@@ -108,6 +222,10 @@ impl PartyMode {
     }
 }
 
+fn capability_names(capabilities: &[Capability]) -> Vec<&'static str> {
+    capabilities.iter().map(|c| c.as_str()).collect()
+}
+
 fn refusal_message(role: Role, op: &str, action: Option<Action>) -> String {
     match action {
         None => format!("`{op}` is not available in Party Mode"),
@@ -137,7 +255,7 @@ mod tests {
     fn with_role(role: Role) -> (PartyMode, Principal) {
         let gate = on();
         let who = Principal::App(format!("{role:?}"));
-        gate.roles.assign(&who, role);
+        gate.assign_role(&who, role);
         (gate, who)
     }
     use crate::protocol::messages::QueueType;
@@ -200,9 +318,90 @@ mod tests {
     fn an_unmapped_op_passes_only_for_the_host() {
         let (gate, host) = with_role(Role::Host);
         let dj = Principal::App("dj".into());
-        gate.roles.assign(&dj, Role::Dj);
+        gate.assign_role(&dj, Role::Dj);
         assert!(gate.check(&host, "mystery", None, "c").is_ok());
         assert!(gate.check(&dj, "mystery", None, "c").is_err());
+    }
+
+    #[test]
+    fn with_party_mode_off_everyone_is_told_they_are_the_host() {
+        let permissions = PartyMode::default().permissions(&Principal::Anonymous);
+        assert_eq!(permissions["party_mode"], false);
+        assert_eq!(permissions["role"], "host");
+        assert_eq!(
+            permissions["allowed"].as_array().unwrap().len(),
+            Capability::ALL.len()
+        );
+        assert!(permissions.get("max_tracks_per_add").is_none());
+    }
+
+    #[test]
+    fn a_guest_is_told_its_one_capability_and_its_track_limit() {
+        let permissions = on().permissions(&Principal::Anonymous);
+        assert_eq!(
+            permissions,
+            json!({
+                "party_mode": true,
+                "role": "guest",
+                "allowed": ["queue_add"],
+                "max_tracks_per_add": 1,
+            })
+        );
+    }
+
+    #[test]
+    fn a_dj_has_no_track_limit_to_be_told() {
+        let (gate, dj) = with_role(Role::Dj);
+        let permissions = gate.permissions(&dj);
+        assert_eq!(permissions["role"], "dj");
+        assert!(permissions.get("max_tracks_per_add").is_none());
+    }
+
+    /// The next frame the watcher sends, or `None` if it sends nothing promptly.
+    async fn next_frame(rx: &mut mpsc::UnboundedReceiver<String>) -> Option<Value> {
+        let frame = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+            .await
+            .ok()??;
+        Some(serde_json::from_str(&frame).unwrap())
+    }
+
+    #[tokio::test]
+    async fn switching_party_mode_on_tells_a_watching_client() {
+        let gate = Arc::new(PartyMode::default());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        gate.watch(
+            Principal::Anonymous,
+            gate.permissions(&Principal::Anonymous),
+            tx,
+        );
+        gate.set_enabled(true);
+        let event = next_frame(&mut rx).await.expect("an event");
+        assert_eq!(event["event"], PERMISSIONS_CHANGED);
+        assert_eq!(event["data"]["role"], "guest");
+    }
+
+    #[tokio::test]
+    async fn a_change_to_someone_else_tells_this_client_nothing() {
+        let gate = Arc::new(on());
+        let me = Principal::App("me".into());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        gate.watch(me.clone(), gate.permissions(&me), tx);
+        gate.assign_role(&Principal::App("them".into()), Role::Dj);
+        assert_eq!(next_frame(&mut rx).await, None);
+
+        gate.assign_role(&me, Role::Dj);
+        let event = next_frame(&mut rx).await.expect("an event");
+        assert_eq!(event["data"]["role"], "dj");
+    }
+
+    #[tokio::test]
+    async fn a_change_before_the_watch_began_is_caught_up() {
+        let gate = Arc::new(PartyMode::default());
+        let told = gate.permissions(&Principal::Anonymous);
+        gate.set_enabled(true);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        gate.watch(Principal::Anonymous, told, tx);
+        assert!(next_frame(&mut rx).await.is_some());
     }
 
     #[test]
@@ -210,7 +409,7 @@ mod tests {
         let (gate, who) = with_role(Role::Listener);
         let skip = Some(Action::Change(Capability::Playback));
         assert!(gate.check(&who, "player_next", skip, "c").is_err());
-        gate.roles.assign(&who, Role::Dj);
+        gate.assign_role(&who, Role::Dj);
         assert!(gate.check(&who, "player_next", skip, "c").is_ok());
     }
 

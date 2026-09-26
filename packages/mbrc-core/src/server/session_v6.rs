@@ -51,6 +51,8 @@ pub struct V6Session {
     /// The pairing state the `pair` op redeems codes against, and the address
     /// its wrong-code limits are kept for; absent in unit tests.
     pairing: Option<(Arc<Pairing>, IpAddr)>,
+    /// The permissions this client was last told, in its handshake reply.
+    told: Option<Value>,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -117,6 +119,14 @@ impl V6Session {
     pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
         self.party_mode = Some(Arc::clone(gate));
         self
+    }
+
+    /// Who to watch Party Mode for, and what they were told at the handshake.
+    ///
+    /// `None` before the handshake, or without a gate. The transport hands this
+    /// to [`PartyMode::watch`] for a connection that takes events.
+    pub fn permissions_watch(&self) -> Option<(Principal, Value)> {
+        Some((self.principal.clone()?, self.told.clone()?))
     }
 
     /// Lets the `pair` op redeem codes, as offered from `peer`. Builder-style.
@@ -384,7 +394,7 @@ impl V6Session {
         if issued.is_some()
             && let Some(gate) = &self.party_mode
         {
-            gate.roles.unassign(&Principal::App(client_id.clone()));
+            gate.unassign_role(&Principal::App(client_id.clone()));
         }
         if self.principal.is_none() {
             self.principal = Some(if proven {
@@ -411,6 +421,11 @@ impl V6Session {
         });
         if let Some(token) = issued {
             reply["client_token"] = json!(token);
+        }
+        if let (Some(gate), Some(principal)) = (&self.party_mode, &self.principal) {
+            let permissions = gate.permissions(principal);
+            reply["permissions"] = permissions.clone();
+            self.told = Some(permissions);
         }
         Outcome::reply(v6::response_ok(0, reply))
     }
@@ -462,7 +477,7 @@ impl V6Session {
         };
         match pairing.take_code(code, *peer) {
             Ok(role) => {
-                gate.roles.assign(&Principal::App(client_id), role);
+                gate.assign_role(&Principal::App(client_id), role);
                 v6::response_ok(id, json!({ "role": role.as_str() }))
             }
             Err(refused) => v6::response_error(id, ErrorCode::Unauthorized, &refused.message()),
@@ -655,8 +670,7 @@ mod tests {
             .as_str()
             .expect("first contact is issued a token")
             .to_owned();
-        gate.roles
-            .assign(&Principal::App("install-1".into()), permissions::Role::Dj);
+        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Dj);
 
         let mut back = V6Session::default().with_party_mode(&gate);
         handshake_with(&mut back, &clients, Some(&token));
@@ -666,8 +680,7 @@ mod tests {
     #[test]
     fn an_id_that_nothing_verified_is_anonymous_whatever_is_assigned() {
         let gate = party_gate();
-        gate.roles
-            .assign(&Principal::App("install-1".into()), permissions::Role::Host);
+        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Host);
         let unverified = ClientIdentities::new(crate::store::Db::disabled());
         let mut s = V6Session::default().with_party_mode(&gate);
         handshake_with(&mut s, &unverified, None);
@@ -678,8 +691,7 @@ mod tests {
     fn a_freshly_issued_id_does_not_inherit_a_role_left_on_it() {
         let clients = identities("role-stale");
         let gate = party_gate();
-        gate.roles
-            .assign(&Principal::App("install-1".into()), permissions::Role::Host);
+        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Host);
         let mut s = V6Session::default().with_party_mode(&gate);
         handshake_with(&mut s, &clients, None);
         assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
@@ -690,7 +702,7 @@ mod tests {
         let clients = identities("role-browser");
         let gate = party_gate();
         let browser = Principal::Browser("paired".into());
-        gate.roles.assign(&browser, permissions::Role::Dj);
+        gate.assign_role(&browser, permissions::Role::Dj);
         let mut s = V6Session::default()
             .with_party_mode(&gate)
             .with_principal(browser);
@@ -703,6 +715,18 @@ mod tests {
     fn pair_with(s: &mut V6Session, code: &str) -> Value {
         let line = format!(r#"{{"id":8,"kind":"request","op":"pair","data":{{"code":"{code}"}}}}"#);
         parse(&feed(s, &line).replies[0])
+    }
+
+    #[test]
+    fn the_handshake_tells_the_client_its_permissions_and_offers_a_watch() {
+        let clients = identities("perm-handshake");
+        let gate = party_gate();
+        let mut s = V6Session::default().with_party_mode(&gate);
+        let reply = handshake_with(&mut s, &clients, None);
+        assert_eq!(reply["data"]["permissions"]["role"], "guest");
+        let (principal, told) = s.permissions_watch().expect("a watch");
+        assert_eq!(principal, Principal::App("install-1".into()));
+        assert_eq!(told, reply["data"]["permissions"]);
     }
 
     #[test]

@@ -92,6 +92,7 @@ impl Core {
         pairing.open(db.clone());
         let party_mode = Arc::new(crate::server::permissions::PartyMode::default());
         party_mode.open(db.clone());
+        party_mode.set_enabled(config.party_mode_enabled);
         Self {
             providers,
             config,
@@ -212,9 +213,27 @@ pub fn initialize(providers: Arc<dyn Providers>, config: Config) -> MbrcResult {
 /// separately.
 pub fn read_settings_bytes() -> Option<Vec<u8>> {
     let guard = lock();
-    let config = &guard.as_ref()?.core.config;
+    let core = &guard.as_ref()?.core;
+    let config = Config {
+        party_mode_enabled: core.party_mode.is_enabled(),
+        ..core.config.clone()
+    };
     // Named maps so the C# contractless resolver reads by property name.
-    rmp_serde::to_vec_named(config).ok()
+    rmp_serde::to_vec_named(&config).ok()
+}
+
+/// Switches Party Mode now and persists the choice for the next start.
+///
+/// Live, unlike the rest of the settings: clients are told their new
+/// permissions the moment it changes, not after the host re-inits.
+///
+/// # Errors
+/// The core is not initialized, or the setting could not be written.
+pub fn set_party_mode(enabled: bool) -> Result<(), String> {
+    let core = core_handle().ok_or("core not initialized")?;
+    core.party_mode.set_enabled(enabled);
+    let patch = serde_json::json!({ "party_mode_enabled": enabled });
+    write_settings_bytes(&rmp_serde::to_vec_named(&patch).map_err(|e| e.to_string())?)
 }
 
 /// Validates and persists new settings (MessagePack from the host) to
@@ -382,14 +401,14 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
         }),
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
-            core.party_mode.roles.unassign_browsers();
+            core.party_mode.unassign_browsers();
             MbrcResult::Ok
         }),
         HostCommandType::RevokeWebPairing => {
             match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserRef>(params) {
                 Ok(named) => with_core(|core| {
                     if core.pairing.revoke(&named.id) {
-                        core.party_mode.roles.unassign(
+                        core.party_mode.unassign_role(
                             &crate::server::permissions::Principal::Browser(named.id.clone()),
                         );
                         MbrcResult::Ok
@@ -740,6 +759,7 @@ mod tests {
         a_panel_payload_leaves_unknown_fields_alone(&dir);
         an_empty_blocked_log_queries_as_an_empty_array();
         listening_addresses_reports_the_port_the_core_is_bound_to();
+        party_mode_switches_live_and_is_remembered(&dir);
 
         let _ = shutdown();
     }
@@ -803,6 +823,20 @@ mod tests {
         assert_eq!(saved.log_level, crate::config::LogLevel::Debug);
         assert_eq!(saved.bind_address, "127.0.0.1", "not reset to the default");
         assert_eq!(saved.tcp_keepalive_secs, 99, "not reset to the default");
+    }
+
+    /// The switch applies at once, reads back through the settings the panel
+    /// sees, and is on disk for the next start.
+    fn party_mode_switches_live_and_is_remembered(dir: &std::path::Path) {
+        set_party_mode(true).expect("switch on");
+        assert!(core_handle().unwrap().party_mode.is_enabled());
+        let read: Config = rmp_serde::from_slice(&read_settings_bytes().unwrap()).unwrap();
+        assert!(read.party_mode_enabled);
+        let on_disk: Config =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("core_settings.json")).unwrap())
+                .unwrap();
+        assert!(on_disk.party_mode_enabled);
+        set_party_mode(false).expect("switch off");
     }
 
     /// `Some` holding an empty array, never `None`. Filling the log needs the

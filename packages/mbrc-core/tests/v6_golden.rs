@@ -26,6 +26,7 @@ use serde_json::{Value, json};
 
 use mbrc_core::providers::Providers;
 use mbrc_core::server::commands_v6;
+use mbrc_core::server::permissions::{PartyMode, Principal};
 use mbrc_wire::v6::{self, ErrorCode};
 
 use common::FixtureProviders;
@@ -221,6 +222,7 @@ fn handshake_record() -> String {
         json!({
             "server_version": v6::PROTOCOL_VERSION,
             "capabilities": commands_v6::capabilities(),
+            "permissions": PartyMode::default().permissions(&Principal::Anonymous),
         }),
     );
     record("handshake", &request, &response)
