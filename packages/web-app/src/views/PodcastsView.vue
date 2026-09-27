@@ -14,13 +14,20 @@ import EmptyState from '../components/EmptyState.vue'
 import QueueMenu from '../components/QueueMenu.vue'
 import { openPodcastFromRoute, podcastsRoute } from '../router/locations'
 import { usePodcastStore } from '../stores/podcast'
+import { usePermissionsStore } from '../stores/permissions'
 
 const route = useRoute()
 const router = useRouter()
 const podcast = usePodcastStore()
+const permissions = usePermissionsStore()
 
 /** The placements an episode has. One episode is not a list to add all of. */
 const EPISODE_MODES = [QueueMode.Now, QueueMode.Next, QueueMode.Last]
+
+/** Tapping an episode plays it now, for a role that may replace the queue. */
+function playEpisode(index: number) {
+  if (permissions.canQueue(QueueMode.Now, 1)) void podcast.play(index)
+}
 
 const openId = computed(() => openPodcastFromRoute(route.query))
 
@@ -172,7 +179,7 @@ function published(episode: PodcastEpisode): string {
             class="flex items-center gap-3 border-b border-surface-2 px-3 py-3 transition-colors hover:bg-surface-2/40"
             :class="{ 'opacity-50': episode.has_been_played }"
           >
-            <button class="min-w-0 flex-1 text-left" @click="podcast.play(episode.index)">
+            <button class="min-w-0 flex-1 text-left" @click="playEpisode(episode.index)">
               <p class="truncate text-sm font-medium">{{ episode.title }}</p>
               <!-- Who made it, when the list mixes shows and the title alone
                    does not say. A feed's own episodes are all by the same one. -->

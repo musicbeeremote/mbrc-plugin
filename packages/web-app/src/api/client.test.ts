@@ -173,6 +173,31 @@ describe('a refused token', () => {
   })
 })
 
+describe('permissions', () => {
+  it('passes on what the handshake said this browser may do', () => {
+    const client = new V6Client()
+    const seen: unknown[] = []
+    client.on(WireEvent.PermissionsChanged, (permissions) => seen.push(permissions))
+    client.connect()
+    const socket = FakeSocket.last as FakeSocket
+    socket.open()
+    const permissions = { party_mode: true, role: 'guest', allowed: ['queue_add'], max_tracks_per_add: 1 }
+    socket.receive({ id: 0, kind: 'response', data: { permissions } })
+    expect(seen).toStrictEqual([permissions])
+  })
+
+  // Pairing changes who the server thinks this browser is, but only on a new
+  // upgrade; the old socket closing must not start a second reconnect.
+  it('opens a fresh socket on reconnect without the old one scheduling another', () => {
+    const { client, socket } = connectHandshaked()
+    const timeout = vi.spyOn(window, 'setTimeout')
+    client.reconnect()
+    expect(FakeSocket.last).not.toBe(socket)
+    expect(timeout).not.toHaveBeenCalled()
+    expect(client.connected).toBe(false)
+  })
+})
+
 describe('reconnect backoff', () => {
   // A proxy in front of a server that is down accepts the socket and drops it
   // at once. Resetting the backoff on `open` would read that as success and

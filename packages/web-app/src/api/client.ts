@@ -11,10 +11,12 @@ import { MAX_ATTEMPTS, delayFor } from './backoff'
 import { isAuthFailure, isIdentityRefusal } from './refusals'
 import { EventStream } from './event-stream'
 import { callOverHttp } from './http'
+import { WireEvent } from './ops'
 import type { EventName, Op, OpRequests } from './ops'
 import { EventPayloadSchemas } from './responses'
 import type { EventPayloads, OpResponses } from './responses'
 import { OpError, decodeJson, parseError, parseResponse } from './parse'
+import { permissionsIn } from './permissions'
 import { installId, keepIssuedToken, renewIdentity, storedClientToken } from './session'
 import { ErrorCode } from './types'
 
@@ -80,6 +82,7 @@ export class V6Client {
       this.receive(String(event.data))
     })
     socket.addEventListener('close', () => {
+      if (this.socket !== socket) return
       this.handshaked = false
       this.failAllPending(new Error('connection closed'))
       if (this.closedDeliberately) {
@@ -104,6 +107,14 @@ export class V6Client {
     }
     this.socket?.close()
     this.socket = null
+  }
+
+  /** A fresh socket at once: the server settles who a WebSocket is when it upgrades. */
+  reconnect(): void {
+    this.disconnect()
+    this.handshaked = false
+    this.failAllPending(new Error('reconnecting'))
+    this.connect()
   }
 
   get connected(): boolean {
@@ -178,6 +189,7 @@ export class V6Client {
       this.handshaked = frame.error === undefined
       if (this.handshaked) {
         keepIssuedToken(frame.data)
+        this.dispatchEvent(WireEvent.PermissionsChanged, permissionsIn(frame.data))
         // Reset here rather than on `open`: a proxy in front of a server that is
         // down accepts the socket and drops it immediately, and treating that as
         // success would hold the backoff at its first step forever.

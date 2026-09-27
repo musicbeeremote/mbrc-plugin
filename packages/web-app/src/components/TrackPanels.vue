@@ -12,9 +12,11 @@ import IconStopAfter from '~icons/lucide/circle-stop'
 import { activeLyricLine } from '../composables/lyrics'
 import { useOutputStore } from '../stores/output'
 import { usePlayerStore } from '../stores/player'
+import { usePermissionsStore } from '../stores/permissions'
 
 import EmptyState from './EmptyState.vue'
 import PanelSheet from './PanelSheet.vue'
+import { Capability } from '../api/permissions'
 
 /**
  * The four things about playback worth more than a row of their own.
@@ -37,6 +39,7 @@ import PanelSheet from './PanelSheet.vue'
 const { t } = useI18n()
 const player = usePlayerStore()
 const output = useOutputStore()
+const permissions = usePermissionsStore()
 
 const showLyrics = ref(false)
 const showDetails = ref(false)
@@ -138,7 +141,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       {{ $t('player.panel.details') }}
     </button>
 
-    <div ref="playbackRoot" class="relative">
+    <div v-if="permissions.can(Capability.Modes)" ref="playbackRoot" class="relative">
       <button
         class="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-2xs transition-colors"
         :class="
@@ -173,7 +176,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       </div>
     </div>
 
-    <div ref="outputRoot" class="relative">
+    <div v-if="permissions.can(Capability.Output)" ref="outputRoot" class="relative">
       <button
         class="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-2xs transition-colors"
         :class="showOutput ? 'bg-accent-soft text-accent' : 'text-outline hover:text-ink'"

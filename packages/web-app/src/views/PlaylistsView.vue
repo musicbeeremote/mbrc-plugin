@@ -17,6 +17,7 @@ import IconSearch from '~icons/lucide/search'
 import IconTrash from '~icons/lucide/trash-2'
 
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
+import { Capability } from '../api/permissions'
 import { QueryField, QueueMode } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
@@ -38,6 +39,7 @@ import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
 import { usePlaylistPicker } from '../stores/playlistPicker'
+import { usePermissionsStore } from '../stores/permissions'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -45,6 +47,7 @@ const router = useRouter()
 const library = useLibraryStore()
 const player = usePlayerStore()
 const playlist = usePlaylistStore()
+const permissions = usePermissionsStore()
 const runTime = useRunTime()
 const picker = usePlaylistPicker()
 
@@ -104,7 +107,11 @@ const selection = useQueueSelection(
  * list: under a search, the row two places down is not the slot two places down.
  */
 const canReorder = computed(
-  () => playlist.editable && playlist.query === '' && !selection.active.value,
+  () =>
+    playlist.editable &&
+    playlist.query === '' &&
+    !selection.active.value &&
+    permissions.can(Capability.PlaylistEdit),
 )
 
 const drag = useDragSort(
@@ -250,7 +257,7 @@ function queueTrack(src: string, mode: QueueMode) {
 
 function onRowPress(src: string, order: number, event: MouseEvent) {
   if (selection.active.value) selection.toggle(order, event.shiftKey)
-  else queueTrack(src, QueueMode.Now)
+  else if (permissions.canQueue(QueueMode.Now, 1)) queueTrack(src, QueueMode.Now)
 }
 
 /** What the open playlist holds: how many tracks, and how long they run. */
@@ -297,7 +304,7 @@ const summary = computed(() => {
           <IconSearch class="size-4" />
         </button>
         <button
-          v-if="playlist.editable && playlist.total > 0"
+          v-if="playlist.editable && playlist.total > 0 && permissions.can(Capability.PlaylistEdit)"
           class="rounded-control p-2 text-ink-soft transition-colors hover:bg-surface-2/60"
           :class="{ 'text-accent': selection.active.value }"
           :aria-label="$t('queue.select.start')"
@@ -308,6 +315,7 @@ const summary = computed(() => {
           <IconListChecks class="size-4" />
         </button>
         <button
+          v-if="permissions.can(Capability.PlaylistEdit)"
           class="flex items-center gap-1 rounded-control p-2 text-xs transition-colors hover:bg-surface-2/60"
           :class="deleteArmed ? 'text-rose-500' : 'text-ink-soft'"
           :aria-label="deleteArmed ? $t('playlists.action.deleteConfirm') : $t('playlists.action.delete')"
@@ -318,6 +326,7 @@ const summary = computed(() => {
           <span v-if="deleteArmed">{{ $t('playlists.action.deleteConfirm') }}</span>
         </button>
         <button
+          v-if="permissions.can(Capability.QueueReplace)"
           class="rounded-control p-2 text-accent transition-colors hover:bg-surface-2/60"
           :aria-label="$t('playlists.action.play', { name: playlist.name })"
           @click="library.playPlaylist(openUrl)"
@@ -326,7 +335,7 @@ const summary = computed(() => {
         </button>
       </template>
       <button
-        v-else
+        v-else-if="permissions.can(Capability.PlaylistEdit)"
         class="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm transition-colors hover:bg-surface-2/60"
         @click="newPlaylist"
       >
@@ -432,6 +441,7 @@ const summary = computed(() => {
           <span class="min-w-0 flex-1 truncate">{{ playlistLabel(entry) }}</span>
         </button>
         <button
+          v-if="permissions.can(Capability.QueueReplace)"
           class="mr-2 rounded-control p-2 text-accent transition-colors hover:bg-surface-2/60"
           :aria-label="$t('playlists.action.play', { name: playlistLabel(entry) })"
           @click="library.playPlaylist(entry.url)"

@@ -4,9 +4,12 @@ import { onMounted } from 'vue'
 import IconRadio from '~icons/lucide/radio'
 
 import EmptyState from '../components/EmptyState.vue'
+import { QueueMode } from '../api/types'
+import { usePermissionsStore } from '../stores/permissions'
 import { useRadioStore } from '../stores/radio'
 
 const radio = useRadioStore()
+const permissions = usePermissionsStore()
 
 onMounted(() => {
   void radio.load()
@@ -25,6 +28,7 @@ onMounted(() => {
         <li v-for="station in radio.stations" :key="station.url">
           <button
             class="flex w-full items-center gap-3 border-b border-surface-2 px-3 py-3 text-left transition-colors hover:bg-surface-2/40 active:bg-surface-2/70"
+            :disabled="!permissions.canQueue(QueueMode.Now, 1)"
             @click="radio.play(station.url)"
           >
             <IconRadio class="size-5 shrink-0 text-outline" />

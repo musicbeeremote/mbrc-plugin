@@ -8,9 +8,11 @@ import IconSkipBack from '~icons/lucide/skip-back'
 import IconSkipForward from '~icons/lucide/skip-forward'
 
 import { coverUrl } from '../api/display'
+import { Capability } from '../api/permissions'
 import { PlayState } from '../api/types'
 import { useSwipe } from '../composables/useSwipe'
 import { usePlayerStore } from '../stores/player'
+import { usePermissionsStore } from '../stores/permissions'
 
 /**
  * The compact transport strip shown on a phone while another tab is open.
@@ -29,6 +31,7 @@ const swipe = useSwipe(() => emit('open'))
 const lift = computed(() => Math.max(Math.min(swipe.offset.value, 0), -24))
 
 const player = usePlayerStore()
+const permissions = usePermissionsStore()
 const cover = computed(() => coverUrl(player.track?.cover_hash))
 const progress = computed(() =>
   player.durationMs > 0 ? (player.positionMs / player.durationMs) * 100 : 0,
@@ -61,6 +64,7 @@ const progress = computed(() =>
         </div>
       </button>
       <button
+        v-if="permissions.can(Capability.Playback)"
         class="p-2 transition-transform active:scale-90"
         :aria-label="$t('player.action.previous')"
         @click="player.previous()"
@@ -68,6 +72,7 @@ const progress = computed(() =>
         <IconSkipBack class="size-5 fill-current" />
       </button>
       <button
+        v-if="permissions.can(Capability.Playback)"
         class="rounded-full bg-accent p-2 text-white transition-transform active:scale-90"
         :aria-label="$t('player.action.playPause')"
         @click="player.playPause()"
@@ -76,6 +81,7 @@ const progress = computed(() =>
         <IconPlay v-else class="size-5 fill-current" />
       </button>
       <button
+        v-if="permissions.can(Capability.Playback)"
         class="p-2 transition-transform active:scale-90"
         :aria-label="$t('player.action.next')"
         @click="player.next()"

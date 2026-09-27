@@ -29,6 +29,7 @@ import {
   EmptySchema,
   TrackSchema,
 } from './types'
+import { PermissionsSchema } from './permissions'
 
 export const PlayerStatusSchema = z.object({
   play_state: PlayStateSchema,
@@ -208,6 +209,8 @@ export const EventPayloadSchemas = {
   cover_cache_changed: z.object({ building: z.boolean() }),
   library_changed: EmptySchema,
   server_shutdown: EmptySchema,
+  /** Also raised by the client itself with what the handshake reported. */
+  permissions_changed: PermissionsSchema,
 }
 
 /** The payload each event carries, projected from the schemas above. */

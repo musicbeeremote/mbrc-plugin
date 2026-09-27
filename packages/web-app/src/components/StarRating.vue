@@ -18,7 +18,12 @@ import IconStar from '~icons/lucide/star'
  * Choosing the value already set clears the rating, which is the only way back
  * to unrated once something has been rated.
  */
-const props = defineProps<{ rating: number | null; label: (stars: number) => string }>()
+/** `readonly` shows the rating to a Party Mode role that may not change it. */
+const props = defineProps<{
+  rating: number | null
+  label: (stars: number) => string
+  readonly?: boolean
+}>()
 const emit = defineEmits<{ set: [rating: number | null] }>()
 
 const STARS = [1, 2, 3, 4, 5]
@@ -49,10 +54,12 @@ function choose(value: number) {
 }
 
 function onMove(event: PointerEvent) {
+  if (props.readonly) return
   preview.value = valueAt(event.clientX)
 }
 
 function onDown(event: PointerEvent) {
+  if (props.readonly) return
   onMove(event)
   try {
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
@@ -62,6 +69,7 @@ function onDown(event: PointerEvent) {
 }
 
 function onUp(event: PointerEvent) {
+  if (props.readonly) return
   const value = valueAt(event.clientX)
   preview.value = null
   choose(value)
@@ -90,11 +98,13 @@ function onUp(event: PointerEvent) {
 
       <button
         class="pointer-events-none absolute inset-y-0 left-0 w-1/2"
+        :disabled="readonly"
         :aria-label="label(star - 0.5)"
         @click="choose(star - 0.5)"
       />
       <button
         class="pointer-events-none absolute inset-y-0 right-0 w-1/2"
+        :disabled="readonly"
         :aria-label="label(star)"
         @click="choose(star)"
       />

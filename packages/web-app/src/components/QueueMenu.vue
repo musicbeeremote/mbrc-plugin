@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import IconMore from '~icons/lucide/ellipsis-vertical'
 
+import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
+import { usePermissionsStore } from '../stores/permissions'
 
 /**
  * The four ways to queue something, on any row that can be queued.
@@ -17,13 +19,25 @@ import { QueueMode } from '../api/types'
  * lift the menu over the navigation bar - so it is positioned against the
  * button from outside instead.
  */
-const { label, modes, playlist } = defineProps<{
+const {
+  label,
+  modes,
+  playlist,
+  tracks = () => 1,
+} = defineProps<{
   label: string
   modes?: QueueMode[]
   /** Offer "Add to playlist" after the placements, for a row whose tracks can go in one. */
   playlist?: boolean
+  /**
+   * How many tracks a placement queues: one for a track, `null` for a scope
+   * whose size only the server knows. Party Mode judges a placement by it.
+   */
+  tracks?: (mode: QueueMode) => number | null
 }>()
 const emit = defineEmits<{ select: [mode: QueueMode]; playlist: [] }>()
+
+const permissions = usePermissionsStore()
 
 const open = ref(false)
 const trigger = ref<HTMLElement | null>(null)
@@ -44,20 +58,27 @@ const LABELS: Record<QueueMode, string> = {
 }
 
 /**
- * The placements offered, all four unless a caller names fewer.
+ * The placements offered: all four unless a caller names fewer, less any this
+ * browser's Party Mode role may not use.
  *
  * A row that stands for one track has no "add all" to offer, and a menu
  * entry that does nothing distinct is worse than one that is not there.
  */
 const entries = computed(() =>
-  (modes ?? [QueueMode.Now, QueueMode.Next, QueueMode.Last, QueueMode.AddAll]).map((mode) => ({
-    mode,
-    label: LABELS[mode],
-  })),
+  (modes ?? [QueueMode.Now, QueueMode.Next, QueueMode.Last, QueueMode.AddAll])
+    .filter((mode) => permissions.canQueue(mode, tracks(mode)))
+    .map((mode) => ({ mode, label: LABELS[mode] })),
 )
 
+const offersPlaylist = computed(() => playlist && permissions.can(Capability.PlaylistEdit))
+
+/** A menu with nothing in it is not drawn, rather than drawn empty. */
+const offersAnything = computed(() => entries.value.length > 0 || offersPlaylist.value)
+
 /** Matches the menu's own padding plus one row per entry. */
-const menuHeight = computed(() => (entries.value.length + (playlist ? 1 : 0)) * 40 + 8)
+const menuHeight = computed(
+  () => (entries.value.length + (offersPlaylist.value ? 1 : 0)) * 40 + 8,
+)
 
 /** Under whatever opened it, or above when the window has no room below. */
 function place() {
@@ -88,6 +109,7 @@ function toggle() {
  * than duplicated.
  */
 function openAt(event: MouseEvent) {
+  if (!offersAnything.value) return
   from.value = { top: event.clientY, left: event.clientX + MENU_WIDTH }
   open.value = true
   place()
@@ -143,7 +165,7 @@ onBeforeUnmount(() => {
        fall on screen at all, and 8px is the least that does it; the left is what
        keeps the count beside it from reading as part of the button. Both are
        carried here so a row only has to place the menu. -->
-  <div class="shrink-0 pr-2 pl-1">
+  <div v-if="offersAnything" class="shrink-0 pr-2 pl-1">
     <button
       ref="trigger"
       class="tap-target rounded-control p-2 text-outline transition-colors hover:text-ink"
@@ -173,7 +195,7 @@ onBeforeUnmount(() => {
           {{ $t(entry.label) }}
         </button>
         <button
-          v-if="playlist"
+          v-if="offersPlaylist"
           role="menuitem"
           class="block w-full border-t border-surface-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60"
           @click.stop="choosePlaylist"

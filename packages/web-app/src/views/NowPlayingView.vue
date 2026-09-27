@@ -19,12 +19,14 @@ import IconVolume from '~icons/lucide/volume-2'
 import IconVolumeOff from '~icons/lucide/volume-x'
 
 import { formatDuration, nowPlayingCoverUrl } from '../api/display'
+import { Capability } from '../api/permissions'
 import { LastfmStatus, PlayState, RepeatMode, ShuffleMode } from '../api/types'
 import StarRating from '../components/StarRating.vue'
 import TrackPanels from '../components/TrackPanels.vue'
 import { useCoverAccent } from '../composables/useCoverAccent'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistPicker } from '../stores/playlistPicker'
+import { usePermissionsStore } from '../stores/permissions'
 
 const { t } = useI18n()
 
@@ -33,6 +35,7 @@ const expanded = ref(false)
 
 
 const player = usePlayerStore()
+const permissions = usePermissionsStore()
 const picker = usePlaylistPicker()
 
 // The server pushes no position events, so the bar is advanced locally and
@@ -189,7 +192,7 @@ function cycleRepeat() {
           min="0"
           :max="player.durationMs || 1"
           v-model.number="seekValue"
-          :disabled="!player.durationMs"
+          :disabled="!player.durationMs || !permissions.can(Capability.Playback)"
           @pointerdown="seeking = true"
           @change="commitSeek"
         />
@@ -204,6 +207,7 @@ function cycleRepeat() {
 
       <div class="flex w-full max-w-sm items-center justify-center gap-5 sm:gap-6 lg:max-w-lg">
         <button
+          v-if="permissions.can(Capability.Modes)"
           class="p-2 transition-colors"
           :class="
             player.shuffle !== ShuffleMode.Off
@@ -219,6 +223,7 @@ function cycleRepeat() {
           <IconShuffle v-else class="size-5" />
         </button>
         <button
+          v-if="permissions.can(Capability.Playback)"
           class="p-2 transition-transform active:scale-90"
           :aria-label="$t('player.action.previous')"
           @click="player.previous()"
@@ -226,6 +231,7 @@ function cycleRepeat() {
           <IconSkipBack class="size-7 fill-current" />
         </button>
         <button
+          v-if="permissions.can(Capability.Playback)"
           class="rounded-full bg-accent p-4 text-white shadow-lg transition-transform active:scale-95"
           :aria-label="$t('player.action.playPause')"
           @click="player.playPause()"
@@ -234,6 +240,7 @@ function cycleRepeat() {
           <IconPlay v-else class="size-7 fill-current" />
         </button>
         <button
+          v-if="permissions.can(Capability.Playback)"
           class="p-2 transition-transform active:scale-90"
           :aria-label="$t('player.action.next')"
           @click="player.next()"
@@ -241,6 +248,7 @@ function cycleRepeat() {
           <IconSkipForward class="size-7 fill-current" />
         </button>
         <button
+          v-if="permissions.can(Capability.Modes)"
           class="p-2 transition-colors"
           :class="
             player.repeat !== RepeatMode.None
@@ -260,6 +268,7 @@ function cycleRepeat() {
         <button
           class="text-outline transition-colors hover:text-ink"
           :aria-label="$t('player.action.mute')"
+          :disabled="!permissions.can(Capability.Volume)"
           @click="player.setMuted(!player.muted)"
         >
           <IconVolumeOff v-if="player.muted" class="size-5" />
@@ -271,6 +280,7 @@ function cycleRepeat() {
           min="0"
           max="100"
           v-model.number="volumeValue"
+          :disabled="!permissions.can(Capability.Volume)"
           @change="player.setVolume(volumeValue)"
         />
         <span class="w-8 text-right text-2xs tabular-nums text-outline">
@@ -282,6 +292,7 @@ function cycleRepeat() {
         <StarRating
           :rating="player.rating"
           :label="(stars) => $t('player.action.rate', { stars })"
+          :readonly="!permissions.can(Capability.LibraryEdit)"
           @set="player.setRating"
         />
         <span class="mx-2 h-5 w-px bg-outline/50"></span>
@@ -297,6 +308,7 @@ function cycleRepeat() {
           "
           :aria-pressed="player.lastfm === LastfmStatus.Love"
           :aria-label="$t('player.action.love')"
+          :disabled="!permissions.can(Capability.LibraryEdit)"
           @click="player.setLastfm(LastfmStatus.Love)"
         >
           <IconHeart
@@ -309,6 +321,7 @@ function cycleRepeat() {
           :class="player.lastfm === LastfmStatus.Ban ? 'text-ink' : 'text-outline hover:text-ink'"
           :aria-pressed="player.lastfm === LastfmStatus.Ban"
           :aria-label="$t('player.action.ban')"
+          :disabled="!permissions.can(Capability.LibraryEdit)"
           @click="player.setLastfm(LastfmStatus.Ban)"
         >
           <IconBan class="size-5" />
@@ -323,13 +336,14 @@ function cycleRepeat() {
           :aria-pressed="player.scrobbling"
           :aria-label="$t('player.action.scrobble')"
           :title="player.scrobblingRefusal ?? $t('player.action.scrobble')"
+          :disabled="!permissions.can(Capability.Modes)"
           @click="player.setScrobbling(!player.scrobbling)"
         >
           <IconScrobble class="size-5" />
         </button>
 
         <button
-          v-if="player.track?.src"
+          v-if="player.track?.src && permissions.can(Capability.PlaylistEdit)"
           class="ml-auto p-1 text-outline transition-colors hover:text-ink"
           :aria-label="$t('playlists.action.addTo')"
           :title="$t('playlists.action.addTo')"

@@ -13,6 +13,7 @@ import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
+import { Capability } from '../api/permissions'
 import { ShuffleMode } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
@@ -24,8 +25,10 @@ import { useLazyRows } from '../composables/useLazyRows'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistPicker } from '../stores/playlistPicker'
 import { useQueueStore } from '../stores/queue'
+import { usePermissionsStore } from '../stores/permissions'
 
 const queue = useQueueStore()
+const permissions = usePermissionsStore()
 const player = usePlayerStore()
 const { t } = useI18n()
 const runTime = useRunTime()
@@ -69,7 +72,16 @@ const selection = useQueueSelection(
  * moved two places down there names no storage slot to move it to.
  */
 const canReorder = computed(
-  () => !queue.upNext && term.value === '' && !selection.active.value,
+  () =>
+    !queue.upNext &&
+    term.value === '' &&
+    !selection.active.value &&
+    permissions.can(Capability.QueueEdit),
+)
+
+/** Selecting is only worth offering when something can be done with a selection. */
+const canSelect = computed(
+  () => permissions.can(Capability.QueueEdit) || permissions.can(Capability.PlaylistEdit),
 )
 
 /** Select all takes every row the view shows, so the rows not paged in yet are read first. */
@@ -99,7 +111,7 @@ function addSelectedTo() {
 
 function onRowPress(order: number, event: MouseEvent) {
   if (selection.active.value) selection.toggle(order, event.shiftKey)
-  else void queue.play(order)
+  else if (permissions.can(Capability.Playback)) void queue.play(order)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -212,6 +224,7 @@ const drag = useDragSort(
         {{ selection.allPicked.value ? $t('queue.select.none') : $t('queue.select.all') }}
       </button>
       <button
+        v-if="permissions.can(Capability.PlaylistEdit)"
         class="ml-auto flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm transition-colors disabled:opacity-40"
         :disabled="selection.count.value === 0"
         @click="addSelectedTo"
@@ -220,6 +233,7 @@ const drag = useDragSort(
         {{ $t('playlists.select.addTo') }}
       </button>
       <button
+        v-if="permissions.can(Capability.QueueEdit)"
         class="flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors disabled:opacity-40"
         :class="selection.count.value > 0 ? 'bg-rose-500 text-white' : 'bg-surface-2'"
         :disabled="selection.count.value === 0"
@@ -258,7 +272,7 @@ const drag = useDragSort(
       </button>
       <span class="ml-auto text-xs text-outline">{{ summary }}</span>
       <button
-        v-if="queue.total > 0"
+        v-if="queue.total > 0 && permissions.can(Capability.QueueEdit)"
         class="tap-target flex items-center gap-1 rounded-control p-1 text-xs transition-colors"
         :class="clearArmed ? 'text-accent' : 'text-outline hover:text-ink'"
         :aria-label="clearArmed ? $t('queue.action.clearConfirm') : $t('queue.action.clear')"
@@ -268,7 +282,7 @@ const drag = useDragSort(
         <span v-if="clearArmed">{{ $t('queue.action.clearConfirm') }}</span>
       </button>
       <button
-        v-if="queue.total > 0"
+        v-if="queue.total > 0 && permissions.can(Capability.PlaylistEdit)"
         class="tap-target rounded-control p-1 text-outline transition-colors hover:text-ink"
         :aria-label="$t('queue.action.saveAs')"
         :title="$t('queue.action.saveAs')"
@@ -277,7 +291,7 @@ const drag = useDragSort(
         <IconListPlus class="size-4" />
       </button>
       <button
-        v-if="queue.total > 0"
+        v-if="queue.total > 0 && canSelect"
         class="tap-target rounded-control p-1 text-outline transition-colors hover:text-ink"
         :aria-label="$t('queue.select.start')"
         :title="$t('queue.select.start')"
@@ -393,7 +407,7 @@ const drag = useDragSort(
           {{ formatDuration(item.duration_ms) }}
         </span>
         <button
-          v-if="!selection.active.value"
+          v-if="!selection.active.value && permissions.can(Capability.QueueEdit)"
           class="tap-target p-2 text-outline transition-colors hover:text-rose-500"
           :aria-label="$t('queue.action.remove', { title: item.title })"
           @click="queue.remove([item.order])"

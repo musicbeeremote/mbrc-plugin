@@ -230,6 +230,7 @@ export const WireEvent = {
   CoverCacheChanged: 'cover_cache_changed',
   LibraryChanged: 'library_changed',
   ServerShutdown: 'server_shutdown',
+  PermissionsChanged: 'permissions_changed',
 } as const
 
 export type EventName = (typeof WireEvent)[keyof typeof WireEvent]

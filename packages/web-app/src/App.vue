@@ -13,12 +13,14 @@ import IconRadio from '~icons/lucide/radio'
 
 import { client } from './api/client'
 import { WireEvent } from './api/ops'
+import { Capability } from './api/permissions'
 import AddToPlaylistSheet from './components/AddToPlaylistSheet.vue'
 import NowPlayingBar from './components/NowPlayingBar.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
 import { useShortcuts } from './composables/useShortcuts'
 import { useUpdateWatch } from './composables/useUpdateWatch'
 import { useLibraryStore } from './stores/library'
+import { usePermissionsStore } from './stores/permissions'
 import { usePlayerStore } from './stores/player'
 import { useQueueStore } from './stores/queue'
 import { RouteName, wideRedirect } from './router/locations'
@@ -50,20 +52,48 @@ const tab = computed(() => route.name as RouteName)
 
 const needsPairing = ref(false)
 const ready = ref(false)
+/** Pairing to gain a Party Mode role, which the app works without. */
+const pairingForRole = ref(false)
 
 const player = usePlayerStore()
 const update = useUpdateWatch()
 const queue = useQueueStore()
 const library = useLibraryStore()
+const permissions = usePermissionsStore()
+
+/** Keys do only what the buttons for them would, so a refused key is a quiet one. */
+function when(capability: Capability, action: () => void): () => void {
+  return () => {
+    if (permissions.can(capability)) action()
+  }
+}
 
 useShortcuts(() => ({
-  playPause: () => void player.playPause(),
-  next: () => void player.next(),
-  previous: () => void player.previous(),
+  playPause: when(Capability.Playback, () => void player.playPause()),
+  next: when(Capability.Playback, () => void player.next()),
+  previous: when(Capability.Playback, () => void player.previous()),
   volume: player.volume,
-  setVolume: (value) => void player.setVolume(value),
-  toggleMute: () => void player.setMuted(!player.muted),
+  setVolume: (value) => {
+    if (permissions.can(Capability.Volume)) void player.setVolume(value)
+  },
+  toggleMute: when(Capability.Volume, () => void player.setMuted(!player.muted)),
 }))
+
+const PARTY_NOTES: Record<string, string> = {
+  guest: 'common.party.guest',
+  dj: 'common.party.dj',
+  listener: 'common.party.listener',
+}
+
+/** Why controls are missing, for a browser Party Mode has limited. */
+const partyNote = computed(() => PARTY_NOTES[permissions.role] ?? 'common.party.on')
+
+/** The server judges a socket by who it was when it opened, so a new role needs a new one. */
+function onPairedForRole() {
+  pairingForRole.value = false
+  client.reconnect()
+  void permissions.refresh()
+}
 
 // Now playing owns the right rail on a wide screen, so it is not a destination
 // there. A phone rotated into a tablet layout on the Playing tab would
@@ -112,6 +142,7 @@ function start() {
   queue.bind()
   library.bind()
   update.bind()
+  permissions.bind()
   client.on(WireEvent.AuthRequired, async () => {
     // A refusal is only the user's to fix while pairing is enforced. With it off
     // there is no code to enter, so reconnect rather than show a screen that
@@ -153,6 +184,12 @@ function onPaired() {
 
 <template>
   <PairingView v-if="needsPairing" @paired="onPaired" />
+  <PairingView
+    v-else-if="pairingForRole"
+    optional
+    @paired="onPairedForRole"
+    @cancel="pairingForRole = false"
+  />
 
   <!-- Installed, the app draws under the status bar (iOS asks for that, so the
        artwork reaches the top edge), so the shell keeps the inset clear. -->
@@ -175,6 +212,18 @@ function onPaired() {
     >
       {{ $t('common.state.disconnected') }}
     </button>
+
+    <!-- Party Mode hid some controls; say so, and offer the way to more. -->
+    <p
+      v-if="permissions.mayPair"
+      class="flex items-center justify-center gap-2 bg-surface-2 p-1.5 text-center text-2xs text-ink-soft"
+      role="status"
+    >
+      {{ $t(partyNote) }}
+      <button class="text-accent underline" @click="pairingForRole = true">
+        {{ $t('pairing.title') }}
+      </button>
+    </p>
 
     <!-- The plugin was replaced under this page, so what it is running is a
          build the server no longer serves. Reloading is the whole fix. -->

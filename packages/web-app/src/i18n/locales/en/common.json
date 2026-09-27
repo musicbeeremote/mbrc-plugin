@@ -9,6 +9,12 @@
     "updated": "MusicBee Remote {version} is running. Tap to reload.",
     "disconnected": "Not connected to MusicBee. Tap to try again."
   },
+  "party": {
+    "on": "Party Mode is on.",
+    "guest": "Party Mode: you can add a song to the end of the queue.",
+    "dj": "Party Mode: you can run the queue and playback.",
+    "listener": "Party Mode: you can browse and listen."
+  },
   "nav": {
     "playing": "Playing",
     "queue": "Queue",

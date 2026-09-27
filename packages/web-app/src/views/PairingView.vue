@@ -4,7 +4,14 @@ import { useI18n } from 'vue-i18n'
 
 import { thisBrowser } from '../composables/describeBrowser'
 
-const emit = defineEmits<{ paired: [] }>()
+/**
+ * `optional` is pairing to gain a Party Mode role: the app works without it,
+ * so the screen can be left, and it must not close itself just because the
+ * server does not insist on pairing.
+ */
+const props = defineProps<{ optional?: boolean }>()
+
+const emit = defineEmits<{ paired: []; cancel: [] }>()
 
 const { t } = useI18n()
 
@@ -36,6 +43,7 @@ const MAX_NAME = 64
 let recheck: number | undefined = undefined
 
 onMounted(() => {
+  if (props.optional) return
   recheck = window.setInterval(async () => {
     const response = await fetch('/api/pair/status').catch(() => null)
     const status = (await response?.json().catch(() => null)) as { auth_required?: boolean } | null
@@ -74,7 +82,7 @@ async function submit() {
 
 <template>
   <div class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-    <h1 class="text-xl font-semibold">Pair this browser</h1>
+    <h1 class="text-xl font-semibold">{{ $t('pairing.title') }}</h1>
     <i18n-t keypath="pairing.help" tag="p" class="max-w-xs text-sm text-outline" scope="global">
       <template #button>
         <strong>{{ $t('pairing.button') }}</strong>
@@ -106,6 +114,9 @@ async function submit() {
       @click="submit"
     >
       {{ $t('pairing.submit') }}
+    </button>
+    <button v-if="optional" class="text-sm text-outline underline" @click="emit('cancel')">
+      {{ $t('pairing.cancel') }}
     </button>
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
   </div>

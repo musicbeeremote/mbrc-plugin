@@ -16,6 +16,7 @@ import IconClear from '~icons/lucide/x'
 import type { LibraryScope } from '../api/ops'
 import type { AlbumEntry, ArtistEntry, GenreEntry, Track } from '../api/types'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
+import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
@@ -38,12 +39,15 @@ import { libraryRoute, positionFromRoute } from '../router/locations'
 import { useLibraryStore, LibraryLevel } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistPicker } from '../stores/playlistPicker'
+import { usePermissionsStore } from '../stores/permissions'
+import { queueTrack, trackOrLevel, wholeScope } from '../composables/queueTracks'
 
 const { t } = useI18n()
 const isWide = useMediaQuery('(min-width: 768px)')
 const route = useRoute()
 const router = useRouter()
 const library = useLibraryStore()
+const permissions = usePermissionsStore()
 const player = usePlayerStore()
 
 const TABS: LibraryLevel[] = [
@@ -230,18 +234,6 @@ async function queueScope(add: LibraryScope, mode: QueueMode) {
 // A row's tracks for a playlist are scoped exactly as its queue actions scope them.
 const picker = usePlaylistPicker()
 
-/**
- * A track's own queue actions.
- *
- * Three of them name this one track. The fourth means "start here and take the
- * rest with you", which is the whole scope rather than the page of it on screen,
- * so the server resolves it from the same filters this level is reading.
- */
-async function queueTrack(src: string, mode: QueueMode) {
-  await (mode === QueueMode.AddAll
-    ? library.queueScope({}, { mode, play: src })
-    : library.queue([src], mode))
-}
 
 const flatRows = computed<FlatRow[]>(() => {
   if (library.level === LibraryLevel.Genres) return library.genres
@@ -375,6 +367,7 @@ function onGridScroll(event: Event) {
       />
 
       <button
+        v-if="permissions.can(Capability.QueueReplace)"
         class="tap-target rounded-control p-2 text-outline transition-colors hover:text-ink"
         :aria-label="playAllLabel"
         :title="playAllLabel"
@@ -383,6 +376,7 @@ function onGridScroll(event: Event) {
         <IconPlay class="size-4 fill-current" />
       </button>
       <button
+        v-if="permissions.can(Capability.QueueReplace)"
         class="tap-target rounded-control p-2 text-outline transition-colors hover:text-ink"
         :aria-label="shuffleAllLabel"
         :title="shuffleAllLabel"
@@ -464,6 +458,7 @@ function onGridScroll(event: Event) {
               class="-mt-1.5 -mr-2"
               :label="$t('library.action.more', { title: entry.album })"
               playlist
+              :tracks="wholeScope"
               @select="(mode) => queueScope(albumScope(entry), mode)"
               @playlist="picker.show({ ...library.scope, ...albumScope(entry) })"
             />
@@ -497,6 +492,7 @@ function onGridScroll(event: Event) {
               :label="$t('library.action.more', { title: row.data.genre })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
               playlist
+              :tracks="wholeScope"
               @select="(mode) => queueScope({ genre: (row.data as GenreEntry).genre }, mode)"
               @playlist="picker.show({ ...library.scope, genre: (row.data as GenreEntry).genre })"
             />
@@ -516,6 +512,7 @@ function onGridScroll(event: Event) {
               :label="$t('library.action.more', { title: row.data.artist })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
               playlist
+              :tracks="wholeScope"
               @select="(mode) => queueScope({ artist: (row.data as ArtistEntry).artist }, mode)"
               @playlist="picker.show({ ...library.scope, artist: (row.data as ArtistEntry).artist })"
             />
@@ -587,6 +584,7 @@ function onGridScroll(event: Event) {
               :label="$t('library.action.more', { title: row.data.title })"
               :ref="(el) => (rowMenus[row.index] = el as InstanceType<typeof QueueMenu>)"
               playlist
+              :tracks="trackOrLevel"
               @select="(mode) => queueTrack((row.data as Track).src, mode)"
               @playlist="picker.show({ paths: [(row.data as Track).src] })"
             />

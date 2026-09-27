@@ -82,6 +82,7 @@ export const ErrorCode = {
   UnknownOp: 'unknown_op',
   Unauthorized: 'unauthorized',
   NotAllowed: 'not_allowed',
+  Forbidden: 'forbidden',
   InvalidToken: 'invalid_token',
   StaleList: 'stale_list',
   Internal: 'internal',
