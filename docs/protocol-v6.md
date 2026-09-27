@@ -89,11 +89,13 @@ a browser, a proxy and `curl` all read it correctly:
 | `unavailable` | 503 |
 | `internal` | 500 |
 
-**`handshake` and `ping` are not offered here.** They are meaningless without a
-connection to hold their state; asking for either is `unknown_op`.
+**`handshake`, `ping` and `pair` are not offered here.** The first two are meaningless
+without a connection to hold their state, and a browser pairs through `POST /api/pair`;
+asking for any of them is `unknown_op`.
 
 `GET /api/v6/capabilities` returns the same capability object the handshake carries,
-so an HTTP-only client can discover the surface without a socket.
+plus this caller's [`permissions`](#what-a-client-is-told), so an HTTP-only client can
+discover the surface without a socket.
 
 ### 3. WebSocket - `GET /ws`
 
@@ -138,14 +140,30 @@ cannot read, so asking is the only way a browser can know whether it already has
 A client should skip its pairing screen entirely when `auth_required` is false.
 
 **Redeem a code.** The user reads a six-digit code out of MusicBee's Configure panel;
-it lasts two minutes. `POST /api/pair` with `{"code":"123456","label":"Firefox"}`
-answers `{"token":"..."}` and sets it as a cookie:
+it lasts two minutes, and grants the [Party Mode role](#party-mode) it was made for.
+`POST /api/pair` with `{"code":"123456","label":"Firefox"}` answers
+`{"token":"...","role":"host"}` and sets the token as a cookie:
 
 ```
 Set-Cookie: mbrc_token=<token>; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000
 ```
 
-A wrong or expired code is 401. A spent code is refused: redeeming is one-shot.
+A wrong or expired code is 401. A spent code is refused: redeeming is one-shot. Pairing
+works whether or not `web_auth_required` is on: with it off, a browser pairs to gain a
+Party Mode role rather than to get in at all.
+
+#### Wrong codes
+
+A code that grants Host is worth guessing, so wrong codes are limited, and browser pairing
+and the V6 [`pair`](#pair) op share the count:
+
+- **Per address:** three wrong codes are free. After that the address must wait 5 seconds,
+  doubling with each further wrong code up to 5 minutes, and while it waits even the right
+  code is refused without being looked at. The right code clears the address's count.
+- **Per code:** the tenth wrong code from any mix of addresses voids the live code, and the
+  panel says so. That bounds a guess at ten in a million per code.
+
+A refusal while waiting is still 401 / `unauthorized`, with a message saying how long.
 
 **Present it.** A token is accepted three ways, checked in this order:
 
@@ -179,6 +197,103 @@ can still point a name they control at this address:
   is not admitted: `.box` is delegated, so a `fritz.box` is a name someone else can
   come to hold. A rejected Host is 421.
 - a **CSP** admitting only this origin.
+
+## Party Mode
+
+Party Mode lets the person running MusicBee hand the remote to a room full of guests
+without handing over the whole player. **With it off, nothing changes**: every client may
+do everything, and is told so. It is switched in MusicBee's Configure panel (and persisted
+as `party_mode_enabled` in `core_settings.json`); no client op can switch it or change a
+role, not even a host's.
+
+### Roles and capabilities
+
+Every client has a role. A client nobody assigned has the default role, **Guest**.
+
+| Role | Capabilities |
+|------|--------------|
+| `host` | all of them |
+| `dj` | `playback`, `queue_add`, `queue_insert`, `queue_replace`, `queue_edit`, `volume`, `modes` |
+| `guest` | `queue_add`, limited to **one track per request** |
+| `listener` | none |
+
+Reads (status, browsing, lists, covers, lyrics) are allowed in every role.
+
+| Capability | Ops |
+|------------|-----|
+| `playback` | `player_play`, `player_pause`, `player_play_pause`, `player_stop`, `player_next`, `player_previous`, `now_playing_seek`, `now_playing_list_play`, `now_playing_list_search` |
+| `queue_add` | `now_playing_queue`, `library_queue`, `podcast_episode_play` with mode `last` |
+| `queue_insert` | the same three with mode `next` |
+| `queue_replace` | the same three with mode `now` or `add_all`; `library_play_all`, `playlist_play` |
+| `queue_edit` | `now_playing_list_remove`, `now_playing_list_move`, `now_playing_list_clear` |
+| `volume` | `player_set_volume`, `player_set_mute` |
+| `modes` | `player_set_shuffle`, `player_set_repeat`, `player_set_stop_after_current`, `player_set_scrobbling` |
+| `library_edit` | `now_playing_set_rating`, `now_playing_set_lfm`, `now_playing_set_tag` |
+| `playlist_edit` | `playlist_create`, `playlist_delete`, `playlist_add_tracks`, `playlist_remove_tracks`, `playlist_move_tracks`, `playlist_set_tracks` |
+| `output` | `player_set_output` |
+
+A queueing op is judged by its **effective** mode, defaults included: `now_playing_queue`
+defaults to `next`, `library_queue` to `last`, `podcast_episode_play` to `now`. A `mode` the
+op would reject counts as `queue_replace`. A guest may queue exactly one track to the end:
+`now_playing_queue` with `mode:"last"` and one path, or `podcast_episode_play` with
+`mode:"last"`. `library_queue` names a scope whose size only the server knows, so a guest may
+not use it at all.
+
+A refused op answers `forbidden` (HTTP 403 on HTTP-RPC) with a message naming the capability
+it needed, or the one-track limit:
+
+```json
+{"id":7,"kind":"response","error":{"code":"forbidden","message":"`player_next` needs the `playback` permission, which this client does not have"}}
+```
+
+### Who is who
+
+A role rests on something a guest cannot copy.
+
+| Client | Known by | Gains a role by |
+|--------|----------|-----------------|
+| V6 app on a socket | `client_id`, once its `client_token` checked out | the `pair` op |
+| Browser (WebSocket, HTTP-RPC, SSE) | its pairing token | `POST /api/pair` |
+| Android 1.6 (V4) | its plain-text `client_id` | the Configure panel; weaker trust, since anyone who reads the id off the network can claim it |
+| iOS, Android 1.5 and older (V4) | nothing | cannot: always the default role |
+
+A WebSocket is judged by the pairing token it presented when it upgraded, never by the
+`client_id` its page makes up, so a browser that has just paired opens a new socket. A V6
+identity with a role is never pruned from the server's identity store, and an id that is
+issued a fresh token loses any role left on it.
+
+### What a client is told
+
+The handshake reply and `GET /api/v6/capabilities` carry the caller's `permissions`:
+
+```json
+"permissions": {"party_mode": true, "role": "guest", "allowed": ["queue_add"], "max_tracks_per_add": 1}
+```
+
+With Party Mode off it is `{"party_mode": false, "role": "host", "allowed": [<every capability>]}`.
+`max_tracks_per_add` is present only for a role that has the limit. A client should draw
+only what `allowed` permits, and treat a capability it does not recognize as gating nothing.
+
+`permissions_changed` carries the same object, sent to a connection that takes events when
+its own permissions change: Party Mode switched, or its role changed. A change to another
+client's role sends nothing.
+
+### `pair`
+
+A V6 app on a socket gains a role by redeeming a pairing code. The code is made in the
+Configure panel with the role it grants (Host preselected) and lasts two minutes.
+
+```json
+→ {"id":3,"kind":"request","op":"pair","data":{"code":"123456"}}
+← {"id":3,"kind":"response","data":{"role":"dj"}}
+```
+
+`pair` is answered whatever the caller's role, since pairing is how a guest stops being
+one. A wrong or expired code, or an address that must wait (see
+[wrong codes](#wrong-codes)), is `unauthorized`. An app whose `client_id` the server cannot
+prove (it runs without a database) gets `unavailable` and the code stays live. On a
+browser's WebSocket it is `not_allowed`: a browser pairs through `POST /api/pair`. It is not
+offered over HTTP-RPC.
 
 ## Discovery
 
@@ -215,11 +330,13 @@ The first frame must be the handshake, `id:0`:
 | `client_token` | after the first | the token this server issued for that `client_id` - see below |
 | `client_type` | yes | one of `android`, `ios`, `desktop`, `web`, `cli` |
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
+| `client_name` | no | what the device is called, for the Configure panel's device list ("Pixel 8"); trimmed and cut at 64 chars; a later handshake's name replaces it |
 
-Success replies with the server version and its capability surface:
+Success replies with the server version, its capability surface, and what this client may
+do under [Party Mode](#what-a-client-is-told):
 
 ```json
-{"id":0,"kind":"response","data":{"server_version":6,"capabilities":{"ops":["handshake","ping",...],"events":["play_state_changed",...]}}}
+{"id":0,"kind":"response","data":{"server_version":6,"capabilities":{"ops":["handshake","ping","pair",...],"events":["play_state_changed",...]},"permissions":{"party_mode":false,"role":"host","allowed":[...]}}}
 ```
 
 The client should use `capabilities.ops` / `capabilities.events` to degrade gracefully rather
@@ -263,10 +380,11 @@ them is the original. The server issues one on first contact and remembers it.
    backup, is exactly true. A new id is a new installation identity, which is what you are. Do
    not retry the same id: it will be refused every time.
 
-**This is not authentication.** It protects nothing and nothing may be built on it: anyone who
-can reach the port can already control the player, token or no token. It resolves an identity
-collision, and that is the whole of its job. If something permission-bearing is ever added
-(Party Mode, a known-clients list), it needs a real credential of its own.
+**The token is not authentication on its own.** Anyone who can reach the port can make up a
+new `client_id` and be issued a token for it, so the token proves only that you are the
+installation that first claimed this id. That is enough to **hold** a [Party Mode](#party-mode)
+role once pairing has granted one: nobody else can present your token, and a made-up id only
+ever gets the default role. An identity with a role is never pruned from the store.
 
 ## Error codes
 
@@ -370,6 +488,7 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | Op | Request `data` | Response |
 |----|----------------|----------|
 | `system_info` | `{}` | `{"plugin_version":"<real build version>","protocol_version":6}` (unlike V4's pinned `pluginversion`, this is the actual plugin build) |
+| `pair` | `{"code":"123456"}` | `{"role":"host"}` - see [`pair`](#pair); socket only |
 
 ### Player
 
@@ -718,6 +837,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{}` | the library changed (add/scan/switch) -> re-browse |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
+| `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 
 **Clients MUST ignore events they do not recognize.** The catalog grows additively, so an
 unknown `event` name is skipped, never treated as an error. Without this rule no event can

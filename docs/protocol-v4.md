@@ -324,6 +324,30 @@ All maintained V4 contexts, organized by category.
 |---------|-------------|
 | `error` | Error occurred processing a request |
 | `notallowed` | Operation not permitted (authentication required) |
+| `commandunavailable` | Party Mode refused the command for this client (see below) |
+
+### Party Mode
+
+V4 clients cannot be told their permissions up front; they learn by being refused. The roles,
+capabilities and op map are the V6 ones (`protocol-v6.md`, *Party Mode*), with each V4 context
+mapped to the capability of its V6 counterpart. Only the **set** form of a get-or-set context
+(`playervolume`, `playermute`, `playershuffle`, `playerrepeat`, `scrobbler`,
+`nowplayingposition`, `nowplayingrating`, `nowplayinglfmrating`) needs a capability; the query
+form is a read, allowed in every role.
+
+- An **Android 1.6** client is known by the `client_id` it sends in `protocol`, and can be given
+  a role in the Configure panel. The id travels in plain text with no token, so that role is
+  weaker trust. **iOS and Android 1.5 and older** send no id and always have the default role,
+  Guest.
+- A guest may send `nowplayingqueue` with `queue:"last"` and one path. More than one path, or
+  any other `queue` value (an unknown one means `next`), is refused.
+- A refused command gets `{"context":"commandunavailable","data":""}` **on that connection
+  only**. Android 1.6 shows "Command unavailable in party mode"; older Android and iOS ignore
+  an unknown context.
+- A refused set is followed by the current value, exactly as if the client had queried it, so
+  a slider or toggle snaps back instead of showing a value that never applied.
+- `notallowed` is never used for this: it disconnects Android, and it stays reserved for the
+  address filter.
 
 ---
 
