@@ -48,15 +48,25 @@ you attach it to a public issue.
 
 ## Where the logs live
 
-Press **Open log folder** in the Configure window's Advanced group, or go to:
+Press **Open log folder** in the Configure window's Advanced group, or go to the
+storage folder for your install:
 
-```
-%APPDATA%\MusicBee\mb_remote\
-```
+| Install | Storage folder |
+|---|---|
+| Installer | `%APPDATA%\MusicBee\mb_remote\` |
+| Portable | `<MusicBee folder>\AppData\mb_remote\` |
+| Microsoft Store | `%LOCALAPPDATA%\Packages\<MusicBee package>\LocalCache\Roaming\MusicBee\mb_remote\` |
 
-- `mbrc-core.log` - the plugin's main log, capped at 10 MB
+On a Store install the log lines show the unredirected `%APPDATA%` path, because
+Windows redirects it inside the package. That folder does not exist in Explorer;
+use the `Packages` path above.
+
+- `mbrc-core.log` - the plugin's main log, capped at 10 MB. C# lines go here too
 - `mbrc-core.1.log.gz` .. `mbrc-core.3.log.gz` - the three previous rolled logs
 - `mbrc-bootstrap.log` - the earliest startup lines, before the main log opens
+- `initialization_error.log` - only present if the plugin failed to start
+- `mbrc-helper.log` - the update helper's log (falls back to `%TEMP%` if the
+  helper cannot reach the storage folder)
 - `core_settings.json` - your settings
 
 ## Log levels
@@ -70,6 +80,23 @@ The **Log level** dropdown in the Advanced group sets what is recorded normally:
 
 You do not need to change this to file a report - a capture raises it for you and
 puts it back. Leave it on Normal unless someone asks otherwise.
+
+### Setting it without the panel
+
+If MusicBee crashes before you can open the Configure window, close MusicBee, open
+`core_settings.json` in the storage folder above, and set `log_level`:
+
+```json
+{
+  "log_level": "debug"
+}
+```
+
+The values are `"info"` (Normal), `"debug"` and `"trace"`, in lower case. Change
+only that key (or add it, keeping the commas between entries) and start MusicBee;
+the core reads it at startup. The file must stay valid JSON: if the core cannot
+parse it, it ignores the whole file and starts with default settings. Set it back
+to `"info"` when you are done.
 
 ## Common problems
 
