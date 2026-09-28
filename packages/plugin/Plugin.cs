@@ -139,14 +139,14 @@ namespace MusicBeePlugin
 
                 InitializeHost();
 
-                // A Tools menu entry opens the same settings dialog as the Configure
-                // button, matching the classic plugin's layout.
+                // A MusicBee Remote submenu under Tools: Settings opens the same
+                // dialog as the Configure button, Party Mode its own window.
                 _menuItems.Add(_api.MB_AddMenuItem(
-                    "mnuTools/MusicBee Remote",
+                    "mnuTools/MusicBee Remote/Settings",
                     "MusicBee Remote: open settings",
                     (sender, args) => OpenSettingsDialog()));
                 _menuItems.Add(_api.MB_AddMenuItem(
-                    "mnuTools/MusicBee Remote Party Mode",
+                    "mnuTools/MusicBee Remote/Party Mode",
                     "MusicBee Remote: Party Mode",
                     (sender, args) => OpenPartyMode()));
             }
@@ -451,10 +451,19 @@ namespace MusicBeePlugin
             }
         }
 
+        /// <summary>Removes one entry, and the submenu it sat in once nothing else does.</summary>
         private static void DetachMenuItem(ToolStrip owner, ToolStripItem item)
         {
             owner.Items.Remove(item);
             item.Dispose();
+
+            var submenu = (owner as ToolStripDropDown)?.OwnerItem;
+            var parent = submenu?.Owner;
+            if (owner.Items.Count == 0 && parent != null)
+            {
+                parent.Items.Remove(submenu);
+                submenu.Dispose();
+            }
         }
 
         /// <summary>

@@ -583,10 +583,12 @@ fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
     };
     let short = |id: &str| id.chars().take(8).collect::<String>();
 
+    // A browser is known by its pairing, so its V6 identity holds no role.
     let mut devices: Vec<PartyDevice> = core
         .clients
         .seen()
         .into_iter()
+        .filter(|app| app.client_type != "web")
         .map(|app| {
             let label = if app.name.is_empty() {
                 format!("App {}", short(&app.client_id))
@@ -1039,6 +1041,16 @@ mod tests {
         assert_eq!(set_role("v4:phone", "guest"), MbrcResult::Ok);
         assert!(party_status().devices.iter().all(|d| d.key != "v4:phone"));
         assert_eq!(set_role("nobody", "dj"), MbrcResult::InvalidArgument);
+
+        let clients = &core_handle().unwrap().clients;
+        clients.identify("a-browser", None, None, "web");
+        clients.identify("a-phone", None, None, "android");
+        let keys: Vec<String> = party_status().devices.into_iter().map(|d| d.key).collect();
+        assert!(keys.contains(&"app:a-phone".to_owned()));
+        assert!(
+            !keys.contains(&"app:a-browser".to_owned()),
+            "a browser is known by its pairing"
+        );
 
         let switch = |enabled: bool| {
             host_command(

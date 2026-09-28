@@ -380,17 +380,18 @@ impl V6Session {
         let token = data.get("client_token").and_then(Value::as_str);
         let proven = clients.is_some_and(ClientIdentities::verifies);
         let name = data.get("client_name").and_then(Value::as_str);
-        let issued = match clients.map(|c| c.identify(&client_id, token, name)) {
-            Some(Identity::Refused) => {
-                tracing::info!(
-                    client_id = %crate::logging::redact_frame(&client_id, None),
-                    "v6 handshake refused: client_id held by another installation"
-                );
-                return self.reject_handshake(ErrorCode::InvalidToken, "client_token");
-            }
-            Some(Identity::Issued(token)) => Some(token),
-            Some(Identity::Known) | None => None,
-        };
+        let issued =
+            match clients.map(|c| c.identify(&client_id, token, name, client_type.as_str())) {
+                Some(Identity::Refused) => {
+                    tracing::info!(
+                        client_id = %crate::logging::redact_frame(&client_id, None),
+                        "v6 handshake refused: client_id held by another installation"
+                    );
+                    return self.reject_handshake(ErrorCode::InvalidToken, "client_token");
+                }
+                Some(Identity::Issued(token)) => Some(token),
+                Some(Identity::Known) | None => None,
+            };
 
         if issued.is_some()
             && let Some(gate) = &self.party_mode
