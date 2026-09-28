@@ -80,6 +80,7 @@ function onUp(event: PointerEvent) {
   <div
     ref="row"
     class="flex touch-none items-center select-none"
+    :class="{ 'opacity-40': readonly }"
     @pointerdown="onDown"
     @pointermove="onMove"
     @pointerup="onUp"

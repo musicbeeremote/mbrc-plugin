@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
@@ -33,12 +34,12 @@ namespace MusicBeePlugin
         private ConfigurationPanel _configPanel;
 
         /// <summary>
-        ///     The Tools menu entry, kept so an uninstall can take it back out.
+        ///     The Tools menu entries, kept so an uninstall can take them back out.
         ///     MusicBee hands the item back when it is added and never removes it
         ///     itself, so without this the entry stays in the menu - pointing at a
         ///     plugin that is gone - until MusicBee is restarted.
         /// </summary>
-        private ToolStripItem _menuItem;
+        private readonly List<ToolStripItem> _menuItems = new List<ToolStripItem>();
 
         /// <summary>Plugin version string, shown in the preferences panel.</summary>
         private string _version;
@@ -140,10 +141,14 @@ namespace MusicBeePlugin
 
                 // A Tools menu entry opens the same settings dialog as the Configure
                 // button, matching the classic plugin's layout.
-                _menuItem = _api.MB_AddMenuItem(
+                _menuItems.Add(_api.MB_AddMenuItem(
                     "mnuTools/MusicBee Remote",
                     "MusicBee Remote: open settings",
-                    (sender, args) => OpenSettingsDialog());
+                    (sender, args) => OpenSettingsDialog()));
+                _menuItems.Add(_api.MB_AddMenuItem(
+                    "mnuTools/MusicBee Remote Party Mode",
+                    "MusicBee Remote: Party Mode",
+                    (sender, args) => OpenPartyMode()));
             }
             catch (Exception ex)
             {
@@ -173,6 +178,22 @@ namespace MusicBeePlugin
             catch (Exception ex)
             {
                 LogToFallback("Settings window failed", ex);
+            }
+        }
+
+        /// <summary>Open the Party Mode window. No-op if the host failed to start.</summary>
+        private void OpenPartyMode()
+        {
+            if (_host == null)
+                return;
+
+            try
+            {
+                PartyModeWindow.Open(_host);
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Party Mode window failed", ex);
             }
         }
 
@@ -300,9 +321,10 @@ namespace MusicBeePlugin
             // crash dialog on exit, after the user has already asked to leave.
             try
             {
-                // Before the host goes: the window polls the core on a timer, so
-                // it must not outlive what it reads through.
+                // Before the host goes: the windows poll the core on a timer, so
+                // they must not outlive what they read through.
                 SettingsWindow.CloseIfOpen();
+                PartyModeWindow.CloseIfOpen();
                 _host?.Dispose();
             }
             catch (Exception ex)
@@ -338,11 +360,12 @@ namespace MusicBeePlugin
             // The entry is the one visible trace of the plugin, so it goes early:
             // leaving it until after the teardown means it points at nothing for
             // as long as that takes.
-            RemoveMenuItem();
+            RemoveMenuItems();
 
             try
             {
                 SettingsWindow.CloseIfOpen();
+                PartyModeWindow.CloseIfOpen();
                 _host?.Dispose();
             }
             catch (Exception ex)
@@ -387,15 +410,21 @@ namespace MusicBeePlugin
         };
 
         /// <summary>
-        ///     Takes the Tools entry back out of the menu it was added to.
+        ///     Takes the Tools entries back out of the menu they were added to.
         ///     MusicBee returns the item when it is added and offers no way to remove
         ///     one, so this goes through the item's own owner. Never throws: an
         ///     uninstall that fails here has still uninstalled everything else.
         /// </summary>
-        private void RemoveMenuItem()
+        private void RemoveMenuItems()
         {
-            var item = _menuItem;
-            _menuItem = null;
+            var items = _menuItems.ToArray();
+            _menuItems.Clear();
+            foreach (var item in items)
+                RemoveMenuItem(item);
+        }
+
+        private void RemoveMenuItem(ToolStripItem item)
+        {
             if (item == null) return;
 
             try

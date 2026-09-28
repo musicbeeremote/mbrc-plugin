@@ -38,15 +38,6 @@ namespace MusicBeePlugin.Settings
             ("Videos", 64),
         };
 
-        // Display label + the role name the core round-trips, in order of trust.
-        private static readonly (string Label, string Value)[] PartyRoles =
-        {
-            ("Host", "host"),
-            ("DJ", "dj"),
-            ("Guest", "guest"),
-            ("Listener", "listener"),
-        };
-
         // Display label + the log_level value the core round-trips. Order is the
         // combo-box order (increasing verbosity).
         private static readonly (string Label, string Value)[] LogLevels =
@@ -117,17 +108,7 @@ namespace MusicBeePlugin.Settings
         /// </summary>
         private bool _renaming;
         private ListView _webPaired;
-        private CheckBox _partyEnabled;
-        private ListView _partyDevices;
-        private Label _partyTrustNote;
-        private ComboBox _partyRole;
-        private Button _partySetRoleBtn;
-        private ComboBox _partyCodeRole;
-        private Label _partyCodeStatus;
-        private ListView _partyRefusals;
-
-        /// <summary>True while the Party Mode controls are filled from the core.</summary>
-        private bool _partyLoading;
+        private Label _partyStatus;
 
         /// <summary>
         ///     Ticks while a pairing code is outstanding, so the panel counts it
@@ -213,6 +194,8 @@ namespace MusicBeePlugin.Settings
             {
                 LoadBlockedCount();
                 LoadPartyMode();
+                // A code made in the Party Mode window shows here too, counting down.
+                LoadWebStatus();
                 if (_captureState == CaptureStates.Capturing) LoadCaptureStatus();
             };
             _blockedTimer.Start();
@@ -760,12 +743,10 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
             };
 
+            // Codes are made in the Party Mode window, which picks the role a code
+            // grants; Host is preselected there, which is what web pairing needs.
             _webPairBtn = new Button { Text = "Show pairing code", AutoSize = true };
-            _webPairBtn.Click += (s, e) =>
-            {
-                _host.GenerateWebPairingCode();
-                LoadWebStatus();
-            };
+            _webPairBtn.Click += (s, e) => PartyModeWindow.Open(_host);
             _webCopyCodeBtn = new Button { Text = "Copy code", AutoSize = true, Visible = false };
             _webCopyCodeBtn.Click += (s, e) => CopyPairingCode();
             _webRevokeBtn = new Button { Text = "Unpair all browsers", AutoSize = true };
@@ -849,7 +830,7 @@ namespace MusicBeePlugin.Settings
                     CultureInfo.CurrentCulture,
                     "Enter {0} in the browser - {1} left",
                     status.pairing_code,
-                    Countdown(status.pairing_code_expires_in));
+                    PanelText.Countdown(status.pairing_code_expires_in));
                 StartPairingTick();
             }
             else
@@ -910,14 +891,6 @@ namespace MusicBeePlugin.Settings
             return paired == 1 ? "1 browser paired" : paired + " browsers paired";
         }
 
-        private static string Countdown(int seconds)
-        {
-            if (seconds <= 0) return "no time";
-            return seconds >= 60
-                ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", seconds / 60, seconds % 60)
-                : seconds + "s";
-        }
-
         /// <summary>Fills the list, keeping the selection where it still exists.</summary>
         private void ShowPairedBrowsers(List<PairedBrowser> paired)
         {
@@ -932,12 +905,12 @@ namespace MusicBeePlugin.Settings
             {
                 var label = string.IsNullOrEmpty(browser.label) ? "browser" : browser.label;
                 var row = new ListViewItem(label) { Tag = browser.id ?? string.Empty };
-                row.SubItems.Add(Ago(browser.paired_at));
-                row.SubItems.Add(Ago(browser.last_seen));
+                row.SubItems.Add(PanelText.Ago(browser.paired_at));
+                row.SubItems.Add(PanelText.Ago(browser.last_seen));
                 // The whole row on hover, for a name wider than its column.
                 row.ToolTipText = string.Format(CultureInfo.CurrentCulture,
                     "{0} - paired {1}, last seen {2}",
-                    label, Ago(browser.paired_at), Ago(browser.last_seen));
+                    label, PanelText.Ago(browser.paired_at), PanelText.Ago(browser.last_seen));
                 if ((string)row.Tag == selected) row.Selected = true;
                 _webPaired.Items.Add(row);
             }
@@ -993,28 +966,12 @@ namespace MusicBeePlugin.Settings
             LoadWebStatus();
         }
 
-        /// <summary>How long ago a moment was, for a column that has to be short.</summary>
-        private static string Ago(long unixSeconds)
-        {
-            if (unixSeconds <= 0) return "never";
-            var when = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime();
-            var elapsed = DateTimeOffset.Now - when;
-            if (elapsed.TotalSeconds < 60) return "just now";
-            if (elapsed.TotalMinutes < 60) return (int)elapsed.TotalMinutes + " min ago";
-            if (elapsed.TotalHours < 24) return (int)elapsed.TotalHours + "h ago";
-            return when.ToString("d MMM HH:mm", CultureInfo.CurrentCulture);
-        }
-
         private void StartPairingTick()
         {
             if (_pairingTick == null)
             {
                 _pairingTick = new System.Windows.Forms.Timer { Interval = 1000 };
-                _pairingTick.Tick += (s, e) =>
-                {
-                    LoadWebStatus();
-                    LoadPartyMode();
-                };
+                _pairingTick.Tick += (s, e) => LoadWebStatus();
             }
             _pairingTick.Start();
         }
@@ -1043,253 +1000,61 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>
-        ///     The Party Mode group: the switch, the devices and their roles,
-        ///     pairing with a chosen role, and what was refused. The switch and
-        ///     every role apply at once, not on Save.
+        ///     The Party Mode group: whether it is on, and the way to its own window,
+        ///     where everything applies at once rather than on Save.
         /// </summary>
         private Control BuildPartyGroup()
         {
-            _partyEnabled = new CheckBox
-            {
-                Text = "Guests may only browse and add a song (applies at once)",
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-            };
-            _partyEnabled.CheckedChanged += (s, e) =>
-            {
-                if (_partyLoading) return;
-                if (!_host.SetPartyMode(_partyEnabled.Checked))
-                    SetStatus("Party Mode could not be saved; it may revert on restart.", false);
-                LoadPartyMode();
-            };
-
-            _partyDevices = new ListView
-            {
-                View = View.Details,
-                FullRowSelect = true,
-                MultiSelect = false,
-                HideSelection = false,
-                HeaderStyle = ColumnHeaderStyle.Nonclickable,
-                ShowItemToolTips = true,
-                Height = 110,
-                Width = 360,
-                Margin = new Padding(0, 2, 0, 2),
-            };
-            _partyDevices.Columns.Add("Device", 140);
-            _partyDevices.Columns.Add("Kind", 70);
-            _partyDevices.Columns.Add("Role", 60);
-            _partyDevices.Columns.Add("Last seen", 85);
-            _partyDevices.SelectedIndexChanged += (s, e) => FollowPartySelection();
-
-            _partyTrustNote = new Label
-            {
-                Text = "Android devices are known by an unverified id: anyone who reads it off the network can claim its role.",
-                AutoSize = true,
-                MaximumSize = new Size(StatusWidth, 0),
-                ForeColor = SystemColors.GrayText,
-                Anchor = AnchorStyles.Left,
-                Visible = false,
-            };
-
-            _partyRole = RoleCombo();
-            _partySetRoleBtn = new Button { Text = "Set role", AutoSize = true, Enabled = false };
-            _partySetRoleBtn.Click += (s, e) => SetSelectedRole();
-            var roleRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0) };
-            roleRow.Controls.Add(_partyRole);
-            roleRow.Controls.Add(_partySetRoleBtn);
-
-            _partyCodeRole = RoleCombo();
-            _partyCodeRole.SelectedIndex = 0;
-            var pairBtn = new Button { Text = "Show pairing code", AutoSize = true };
-            pairBtn.Click += (s, e) =>
-            {
-                _host.GeneratePairingCode(PartyRoles[_partyCodeRole.SelectedIndex].Value);
-                LoadWebStatus();
-                LoadPartyMode();
-            };
-            var pairRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0) };
-            pairRow.Controls.Add(_partyCodeRole);
-            pairRow.Controls.Add(pairBtn);
-
-            _partyCodeStatus = new Label
+            _partyStatus = new Label
             {
                 AutoSize = true,
-                MaximumSize = new Size(StatusWidth, 0),
                 Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 4, 0, 0),
+                Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
             };
-
-            _partyRefusals = new ListView
-            {
-                View = View.Details,
-                FullRowSelect = true,
-                HeaderStyle = ColumnHeaderStyle.Nonclickable,
-                ShowItemToolTips = true,
-                Height = 74,
-                Width = 360,
-                Margin = new Padding(0, 2, 0, 2),
-            };
-            _partyRefusals.Columns.Add("Time", 60);
-            _partyRefusals.Columns.Add("Client", 110);
-            _partyRefusals.Columns.Add("Request", 110);
-            _partyRefusals.Columns.Add("Needs", 75);
-            var clearBtn = new Button { Text = "Clear", AutoSize = true };
-            clearBtn.Click += (s, e) =>
-            {
-                _host.ClearPartyRefusals();
-                LoadPartyMode();
-            };
+            var open = new Button { Text = "Open Party Mode...", AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
+            open.Click += (s, e) => PartyModeWindow.Open(_host);
 
             var layout = GroupLayout();
-            AddRow(layout, "Party Mode", _partyEnabled);
-            AddRow(layout, "Devices", _partyDevices);
-            AddRow(layout, string.Empty, _partyTrustNote);
-            AddRow(layout, "Selected device", roleRow);
-            AddRow(layout, "Pair as", pairRow);
-            AddRow(layout, string.Empty, _partyCodeStatus);
-            AddRow(layout, "Refused", _partyRefusals);
-            AddRow(layout, string.Empty, clearBtn);
+            AddRow(layout, "Party Mode", Row(open, _partyStatus));
             return WrapGroup("Party Mode", layout);
         }
 
-        private static ComboBox RoleCombo()
+        private static FlowLayoutPanel Row(params Control[] controls)
         {
-            var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
-            combo.Items.AddRange(PartyRoles.Select(x => (object)x.Label).ToArray());
-            return combo;
+            var row = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0),
+            };
+            row.Controls.AddRange(controls);
+            return row;
         }
 
-        /// <summary>Render the core's Party Mode state, keeping the device selection.</summary>
+        /// <summary>Summarize Party Mode: off, or on with how many devices hold a role.</summary>
         private void LoadPartyMode()
         {
             var status = _host.ReadPartyModeStatus();
-            _partyLoading = true;
-            try
-            {
-                _partyEnabled.Checked = status != null && status.enabled;
-                _partyEnabled.Enabled = status != null;
-                ShowPartyDevices(status?.devices);
-                ShowPartyCode(status);
-                ShowRefusals(status?.refusals);
-            }
-            finally
-            {
-                _partyLoading = false;
-            }
-        }
-
-        private void ShowPartyDevices(List<PartyDevice> devices)
-        {
-            var selected = SelectedDeviceKey();
-            var anyAndroid = false;
-
-            _partyDevices.BeginUpdate();
-            _partyDevices.Items.Clear();
-            foreach (var device in devices ?? new List<PartyDevice>())
-            {
-                var row = new ListViewItem(device.label ?? string.Empty) { Tag = device };
-                row.SubItems.Add(KindLabel(device.kind));
-                row.SubItems.Add(RoleLabel(device.role));
-                row.SubItems.Add(device.last_seen > 0 ? Ago(device.last_seen) : "not yet");
-                row.ToolTipText = device.weaker_trust
-                    ? device.label + " - known by an unverified id (weaker trust)"
-                    : device.label;
-                if (device.key == selected) row.Selected = true;
-                anyAndroid |= device.weaker_trust;
-                _partyDevices.Items.Add(row);
-            }
-
-            _partyDevices.EndUpdate();
-            _partyTrustNote.Visible = anyAndroid;
-            _partySetRoleBtn.Enabled = _partyDevices.SelectedItems.Count > 0;
-        }
-
-        /// <summary>The role picker follows the chosen device, so Set role starts from its current role.</summary>
-        private void FollowPartySelection()
-        {
-            var device = SelectedDevice();
-            _partySetRoleBtn.Enabled = device != null;
-            if (device == null) return;
-            var index = Array.FindIndex(PartyRoles, r => r.Value == device.role);
-            if (index >= 0) _partyRole.SelectedIndex = index;
-        }
-
-        private void SetSelectedRole()
-        {
-            var device = SelectedDevice();
-            if (device == null || _partyRole.SelectedIndex < 0) return;
-            if (!_host.SetPartyRole(device.key, PartyRoles[_partyRole.SelectedIndex].Value))
-                SetStatus("That role could not be set.", false);
-            LoadPartyMode();
-        }
-
-        private PartyDevice SelectedDevice()
-        {
-            return _partyDevices.SelectedItems.Count > 0
-                ? (PartyDevice)_partyDevices.SelectedItems[0].Tag
-                : null;
-        }
-
-        private string SelectedDeviceKey() => SelectedDevice()?.key;
-
-        private void ShowPartyCode(PartyModeStatus status)
-        {
             if (status == null)
             {
-                _partyCodeStatus.Text = "Not running";
-            }
-            else if (!string.IsNullOrEmpty(status.pairing_code))
-            {
-                _partyCodeStatus.Text = string.Format(
-                    CultureInfo.CurrentCulture,
-                    "Enter {0} on the device - grants {1} - {2} left",
-                    status.pairing_code,
-                    RoleLabel(status.pairing_code_role),
-                    Countdown(status.pairing_code_expires_in));
-                StartPairingTick();
-            }
-            else
-            {
-                _partyCodeStatus.Text = status.pairing_code_voided
-                    ? "That code was voided after too many wrong attempts - show another."
-                    : "The code grants the role picked here. Browsers and apps pair with the same code.";
-            }
-        }
-
-        private void ShowRefusals(List<PartyRefusal> refusals)
-        {
-            _partyRefusals.BeginUpdate();
-            _partyRefusals.Items.Clear();
-            foreach (var refusal in refusals ?? new List<PartyRefusal>())
-            {
-                var when = DateTimeOffset.FromUnixTimeMilliseconds(refusal.unix_ms).ToLocalTime();
-                var row = new ListViewItem(when.ToString("HH:mm:ss", CultureInfo.CurrentCulture));
-                row.SubItems.Add(refusal.client ?? string.Empty);
-                row.SubItems.Add(refusal.op ?? string.Empty);
-                row.SubItems.Add(string.IsNullOrEmpty(refusal.capability) ? "-" : refusal.capability);
-                row.ToolTipText = refusal.message;
-                _partyRefusals.Items.Add(row);
+                _partyStatus.Text = "Not running";
+                return;
             }
 
-            _partyRefusals.EndUpdate();
-        }
-
-        private static string RoleLabel(string role)
-        {
-            var index = Array.FindIndex(PartyRoles, r => r.Value == role);
-            return index >= 0 ? PartyRoles[index].Label : role ?? string.Empty;
-        }
-
-        private static string KindLabel(string kind)
-        {
-            switch (kind)
+            if (!status.enabled)
             {
-                case "app": return "App";
-                case "browser": return "Browser";
-                case "android": return "Android";
-                default: return kind ?? string.Empty;
+                _partyStatus.Text = "Off";
+                return;
             }
+
+            var promoted = (status.devices ?? new List<PartyDevice>()).Count(d => d.role != "guest");
+            _partyStatus.Text = promoted == 1
+                ? "On - 1 device has a role"
+                : "On - " + promoted + " devices have a role";
         }
 
         private static Control WrapGroup(string title, Control content)

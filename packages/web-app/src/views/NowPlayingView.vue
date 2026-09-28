@@ -188,7 +188,7 @@ function cycleRepeat() {
       <div v-else class="w-full max-w-sm lg:max-w-lg">
         <input
           type="range"
-          class="w-full"
+          class="w-full disabled:opacity-40"
           min="0"
           :max="player.durationMs || 1"
           v-model.number="seekValue"
@@ -266,7 +266,7 @@ function cycleRepeat() {
 
       <div class="flex w-full max-w-sm items-center gap-3 lg:max-w-lg">
         <button
-          class="text-outline transition-colors hover:text-ink"
+          class="text-outline transition-colors hover:text-ink disabled:opacity-40"
           :aria-label="$t('player.action.mute')"
           :disabled="!permissions.can(Capability.Volume)"
           @click="player.setMuted(!player.muted)"
@@ -276,7 +276,7 @@ function cycleRepeat() {
         </button>
         <input
           type="range"
-          class="flex-1"
+          class="flex-1 disabled:opacity-40"
           min="0"
           max="100"
           v-model.number="volumeValue"
@@ -300,7 +300,7 @@ function cycleRepeat() {
              or without a last.fm account, and a track already loved shows it
              rather than making you remember. -->
         <button
-          class="p-1 transition-colors"
+          class="p-1 transition-colors disabled:opacity-40"
           :class="
             player.lastfm === LastfmStatus.Love
               ? 'text-rose-500'
@@ -317,7 +317,7 @@ function cycleRepeat() {
           />
         </button>
         <button
-          class="p-1 transition-colors"
+          class="p-1 transition-colors disabled:opacity-40"
           :class="player.lastfm === LastfmStatus.Ban ? 'text-ink' : 'text-outline hover:text-ink'"
           :aria-pressed="player.lastfm === LastfmStatus.Ban"
           :aria-label="$t('player.action.ban')"
@@ -331,7 +331,7 @@ function cycleRepeat() {
              on the track, and the only one the server can refuse, since it is
              the only one that needs an account. -->
         <button
-          class="p-1 transition-colors"
+          class="p-1 transition-colors disabled:opacity-40"
           :class="player.scrobbling ? 'text-accent' : 'text-outline hover:text-ink'"
           :aria-pressed="player.scrobbling"
           :aria-label="$t('player.action.scrobble')"
