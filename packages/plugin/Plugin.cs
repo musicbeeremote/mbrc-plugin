@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
@@ -34,12 +33,12 @@ namespace MusicBeePlugin
         private ConfigurationPanel _configPanel;
 
         /// <summary>
-        ///     The Tools menu entries, kept so an uninstall can take them back out.
+        ///     The Tools submenu, kept so an uninstall can take it back out.
         ///     MusicBee hands the item back when it is added and never removes it
         ///     itself, so without this the entry stays in the menu - pointing at a
         ///     plugin that is gone - until MusicBee is restarted.
         /// </summary>
-        private readonly List<ToolStripItem> _menuItems = new List<ToolStripItem>();
+        private ToolStripItem _menuItem;
 
         /// <summary>Plugin version string, shown in the preferences panel.</summary>
         private string _version;
@@ -139,16 +138,7 @@ namespace MusicBeePlugin
 
                 InitializeHost();
 
-                // A MusicBee Remote submenu under Tools: Settings opens the same
-                // dialog as the Configure button, Party Mode its own window.
-                _menuItems.Add(_api.MB_AddMenuItem(
-                    "mnuTools/MusicBee Remote/Settings",
-                    "MusicBee Remote: open settings",
-                    (sender, args) => OpenSettingsDialog()));
-                _menuItems.Add(_api.MB_AddMenuItem(
-                    "mnuTools/MusicBee Remote/Party Mode",
-                    "MusicBee Remote: Party Mode",
-                    (sender, args) => OpenPartyMode()));
+                AddToolsMenu();
             }
             catch (Exception ex)
             {
@@ -179,6 +169,24 @@ namespace MusicBeePlugin
             {
                 LogToFallback("Settings window failed", ex);
             }
+        }
+
+        /// <summary>
+        ///     A "MusicBee Remote" submenu under Tools: Settings opens the same
+        ///     dialog as the Configure button, Party Mode its own window.
+        /// </summary>
+        /// <remarks>
+        ///     MusicBee's API adds one item per call and does not read a nested
+        ///     path as a submenu, so the two entries are added to the item it
+        ///     returns.
+        /// </remarks>
+        private void AddToolsMenu()
+        {
+            _menuItem = _api.MB_AddMenuItem("mnuTools/MusicBee Remote", null, (sender, args) => { });
+            if (!(_menuItem is ToolStripMenuItem submenu))
+                return;
+            submenu.DropDownItems.Add("Settings", null, (sender, args) => OpenSettingsDialog());
+            submenu.DropDownItems.Add("Party Mode", null, (sender, args) => OpenPartyMode());
         }
 
         /// <summary>Open the Party Mode window. No-op if the host failed to start.</summary>
@@ -360,7 +368,7 @@ namespace MusicBeePlugin
             // The entry is the one visible trace of the plugin, so it goes early:
             // leaving it until after the teardown means it points at nothing for
             // as long as that takes.
-            RemoveMenuItems();
+            RemoveMenuItem();
 
             try
             {
@@ -410,21 +418,15 @@ namespace MusicBeePlugin
         };
 
         /// <summary>
-        ///     Takes the Tools entries back out of the menu they were added to.
+        ///     Takes the Tools entry back out of the menu it was added to.
         ///     MusicBee returns the item when it is added and offers no way to remove
         ///     one, so this goes through the item's own owner. Never throws: an
         ///     uninstall that fails here has still uninstalled everything else.
         /// </summary>
-        private void RemoveMenuItems()
+        private void RemoveMenuItem()
         {
-            var items = _menuItems.ToArray();
-            _menuItems.Clear();
-            foreach (var item in items)
-                RemoveMenuItem(item);
-        }
-
-        private void RemoveMenuItem(ToolStripItem item)
-        {
+            var item = _menuItem;
+            _menuItem = null;
             if (item == null) return;
 
             try
@@ -451,19 +453,10 @@ namespace MusicBeePlugin
             }
         }
 
-        /// <summary>Removes one entry, and the submenu it sat in once nothing else does.</summary>
         private static void DetachMenuItem(ToolStrip owner, ToolStripItem item)
         {
             owner.Items.Remove(item);
             item.Dispose();
-
-            var submenu = (owner as ToolStripDropDown)?.OwnerItem;
-            var parent = submenu?.Owner;
-            if (owner.Items.Count == 0 && parent != null)
-            {
-                parent.Items.Remove(submenu);
-                submenu.Dispose();
-            }
         }
 
         /// <summary>
