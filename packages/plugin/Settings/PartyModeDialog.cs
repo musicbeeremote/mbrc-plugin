@@ -146,7 +146,7 @@ namespace MusicBeePlugin.Settings
             _role = RoleCombo();
             _setRole = new Button { Text = "Set role", AutoSize = true, Enabled = false };
             _setRole.Click += (s, e) => SetSelectedRole();
-            var roleRow = Flow(new Label { Text = "Selected device:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, _role, _setRole);
+            var roleRow = Flow(Caption("Selected device:"), _role, _setRole);
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1 };
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -180,7 +180,7 @@ namespace MusicBeePlugin.Settings
             };
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 1, AutoSize = true };
-            layout.Controls.Add(Flow(new Label { Text = "Grants:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, _codeRole, show, _copyCode));
+            layout.Controls.Add(Flow(Caption("Grants:"), _codeRole, show, _copyCode));
             layout.Controls.Add(_codeStatus);
             return Group("Pairing", layout, fill: false);
         }
@@ -236,12 +236,20 @@ namespace MusicBeePlugin.Settings
             return box;
         }
 
+        /// <summary>
+        ///     A row of controls centred on its tallest one: a control anchored Left
+        ///     only is centred vertically in a flow row, which a top padding would undo.
+        /// </summary>
         private static FlowLayoutPanel Flow(params Control[] controls)
         {
             var row = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0), WrapContents = false };
+            foreach (var control in controls)
+                control.Anchor = AnchorStyles.Left;
             row.Controls.AddRange(controls);
             return row;
         }
+
+        private static Label Caption(string text) => new Label { Text = text, AutoSize = true };
 
         private static ComboBox RoleCombo()
         {

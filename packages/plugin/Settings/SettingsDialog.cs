@@ -1005,11 +1005,11 @@ namespace MusicBeePlugin.Settings
         /// </summary>
         private Control BuildPartyGroup()
         {
+            // Anchored Left only, so the row centres it on the button beside it.
             _partyStatus = new Label
             {
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
             };
             var open = new Button { Text = "Open Party Mode...", AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
