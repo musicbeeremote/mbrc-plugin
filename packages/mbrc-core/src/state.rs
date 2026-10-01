@@ -573,14 +573,16 @@ fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
     use crate::server::permissions::Principal;
 
     let gate = &core.party_mode;
-    let device = |principal: Principal, kind: &str, label: String, last_seen: i64| PartyDevice {
-        key: principal.key().unwrap_or_default(),
-        kind: kind.to_owned(),
-        label,
-        last_seen,
-        role: gate.role_of(&principal).as_str().to_owned(),
-        weaker_trust: matches!(principal, Principal::LegacyDevice(_)),
-    };
+    let device =
+        |principal: Principal, kind: &str, label: String, seen: (i64, String)| PartyDevice {
+            key: principal.key().unwrap_or_default(),
+            kind: kind.to_owned(),
+            label,
+            last_seen: seen.0,
+            address: seen.1,
+            role: gate.role_of(&principal).as_str().to_owned(),
+            weaker_trust: matches!(principal, Principal::LegacyDevice(_)),
+        };
     let short = |id: &str| id.chars().take(8).collect::<String>();
 
     // A browser is known by its pairing, so its V6 identity holds no role.
@@ -599,7 +601,7 @@ fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
                 Principal::App(app.client_id),
                 "app",
                 label,
-                app.last_seen_ms / 1000,
+                (app.last_seen_ms / 1000, app.address),
             )
         })
         .collect();
@@ -608,15 +610,21 @@ fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
             Principal::Browser(browser.id),
             "browser",
             browser.label,
-            browser.last_seen,
+            (browser.last_seen, browser.address),
         )
     }));
-    let mut android = gate.legacy_devices();
-    android.sort_by_key(|(_, last_seen)| std::cmp::Reverse(*last_seen));
-    devices.extend(android.into_iter().map(|(id, last_seen)| {
+    devices.extend(gate.legacy_devices().into_iter().map(|(id, seen)| {
         let label = format!("Android {}", short(&id));
-        device(Principal::LegacyDevice(id), "android", label, last_seen)
+        let from = seen.from.map(|a| a.to_string()).unwrap_or_default();
+        device(
+            Principal::LegacyDevice(id),
+            "android",
+            label,
+            (seen.at, from),
+        )
     }));
+    // Whoever is here now comes first, whatever kind of client it is.
+    devices.sort_by_key(|d| std::cmp::Reverse(d.last_seen));
 
     let refusals = gate
         .recent_refusals()
@@ -1043,13 +1051,32 @@ mod tests {
         assert_eq!(set_role("nobody", "dj"), MbrcResult::InvalidArgument);
 
         let clients = &core_handle().unwrap().clients;
-        clients.identify("a-browser", None, None, "web");
-        clients.identify("a-phone", None, None, "android");
+        clients.identify(
+            "a-browser",
+            None,
+            &crate::server::clients::Introduction {
+                client_type: "web",
+                ..Default::default()
+            },
+        );
+        clients.identify(
+            "a-phone",
+            None,
+            &crate::server::clients::Introduction {
+                client_type: "android",
+                ..Default::default()
+            },
+        );
         let keys: Vec<String> = party_status().devices.into_iter().map(|d| d.key).collect();
         assert!(keys.contains(&"app:a-phone".to_owned()));
         assert!(
             !keys.contains(&"app:a-browser".to_owned()),
             "a browser is known by its pairing"
+        );
+        let seen: Vec<i64> = party_status().devices.iter().map(|d| d.last_seen).collect();
+        assert!(
+            seen.windows(2).all(|w| w[0] >= w[1]),
+            "most recently seen first: {seen:?}"
         );
 
         let switch = |enabled: bool| {

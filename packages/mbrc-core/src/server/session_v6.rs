@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
 
-use super::clients::{ClientIdentities, Identity, MAX_CLIENT_ID_LEN};
+use super::clients::{ClientIdentities, Identity, Introduction, MAX_CLIENT_ID_LEN};
 use super::commands_v6;
 use super::permissions::{self, PartyMode, Principal};
 use super::session::Outcome;
@@ -380,18 +380,22 @@ impl V6Session {
         let token = data.get("client_token").and_then(Value::as_str);
         let proven = clients.is_some_and(ClientIdentities::verifies);
         let name = data.get("client_name").and_then(Value::as_str);
-        let issued =
-            match clients.map(|c| c.identify(&client_id, token, name, client_type.as_str())) {
-                Some(Identity::Refused) => {
-                    tracing::info!(
-                        client_id = %crate::logging::redact_frame(&client_id, None),
-                        "v6 handshake refused: client_id held by another installation"
-                    );
-                    return self.reject_handshake(ErrorCode::InvalidToken, "client_token");
-                }
-                Some(Identity::Issued(token)) => Some(token),
-                Some(Identity::Known) | None => None,
-            };
+        let about = Introduction {
+            name,
+            client_type: client_type.as_str(),
+            address: self.pairing.as_ref().map(|(_, peer)| *peer),
+        };
+        let issued = match clients.map(|c| c.identify(&client_id, token, &about)) {
+            Some(Identity::Refused) => {
+                tracing::info!(
+                    client_id = %crate::logging::redact_frame(&client_id, None),
+                    "v6 handshake refused: client_id held by another installation"
+                );
+                return self.reject_handshake(ErrorCode::InvalidToken, "client_token");
+            }
+            Some(Identity::Issued(token)) => Some(token),
+            Some(Identity::Known) | None => None,
+        };
 
         if issued.is_some()
             && let Some(gate) = &self.party_mode

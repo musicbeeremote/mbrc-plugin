@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -37,6 +37,13 @@ namespace MusicBeePlugin.Settings
         private readonly Timer _timer;
         private CheckBox _enabled;
         private ListView _devices;
+        private TextBox _search;
+
+        /// <summary>The devices the core last reported, before the search narrows them.</summary>
+        private List<PartyDevice> _allDevices = new List<PartyDevice>();
+
+        /// <summary>What the list shows, so a refresh that changes nothing leaves it alone.</summary>
+        private string _shown;
         private Label _trustNote;
         private ComboBox _role;
         private Button _setRole;
@@ -127,11 +134,19 @@ namespace MusicBeePlugin.Settings
                 ShowItemToolTips = true,
                 Dock = DockStyle.Fill,
             };
-            _devices.Columns.Add("Device", 200);
-            _devices.Columns.Add("Kind", 80);
-            _devices.Columns.Add("Role", 80);
-            _devices.Columns.Add("Last seen", 110);
+            _devices.Columns.Add("Device", 150);
+            _devices.Columns.Add("Kind", 65);
+            _devices.Columns.Add("Role", 65);
+            _devices.Columns.Add("Address", 110);
+            _devices.Columns.Add("Last seen", 95);
             _devices.SelectedIndexChanged += (s, e) => FollowSelection();
+
+            _search = new TextBox { Width = 240 };
+            _search.TextChanged += (s, e) => ShowDevices();
+            var refresh = new Button { Text = "Refresh", AutoSize = true };
+            refresh.Click += (s, e) => Reload();
+            var searchRow = Flow(Caption("Search:"), _search, refresh);
+            searchRow.Margin = new Padding(0, 0, 0, 6);
 
             _trustNote = new Label
             {
@@ -149,9 +164,11 @@ namespace MusicBeePlugin.Settings
             var roleRow = Flow(Caption("Selected device:"), _role, _setRole);
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1 };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.Controls.Add(searchRow);
             layout.Controls.Add(_devices);
             layout.Controls.Add(_trustNote);
             layout.Controls.Add(roleRow);
@@ -276,7 +293,8 @@ namespace MusicBeePlugin.Settings
             {
                 _enabled.Enabled = status != null;
                 _enabled.Checked = status != null && status.enabled;
-                ShowDevices(status?.devices);
+                _allDevices = status?.devices ?? new List<PartyDevice>();
+                ShowDevices();
                 ShowCode(status);
                 ShowRefusals(status?.refusals);
             }
@@ -288,30 +306,64 @@ namespace MusicBeePlugin.Settings
             _timer.Interval = string.IsNullOrEmpty(_code) ? IdleRefreshMs : CountdownRefreshMs;
         }
 
-        private void ShowDevices(List<PartyDevice> devices)
+        /// <summary>
+        ///     Fills the list with the devices the search matches, keeping the
+        ///     selection and the scroll position.
+        /// </summary>
+        /// <remarks>
+        ///     Skipped when the rows would come out the same: the list refreshes on a
+        ///     timer, and rebuilding it each time threw away the place being read.
+        /// </remarks>
+        private void ShowDevices()
         {
+            var rows = _allDevices
+                .Where(Matches)
+                .Select(device => new
+                {
+                    Device = device,
+                    Cells = new[]
+                    {
+                        device.label ?? string.Empty,
+                        KindLabel(device.kind),
+                        RoleLabel(device.role),
+                        device.address ?? string.Empty,
+                        device.last_seen > 0 ? PanelText.Ago(device.last_seen) : "not yet",
+                    },
+                })
+                .ToList();
+            var shown = string.Join("\n", rows.Select(r => r.Device.key + "\t" + string.Join("\t", r.Cells)));
+            _trustNote.Visible = _allDevices.Any(d => d.weaker_trust);
+            if (shown == _shown) return;
+            _shown = shown;
+
             var selected = SelectedDevice()?.key;
-            var anyAndroid = false;
+            var top = (_devices.TopItem?.Tag as PartyDevice)?.key;
 
             _devices.BeginUpdate();
             _devices.Items.Clear();
-            foreach (var device in devices ?? new List<PartyDevice>())
+            foreach (var row in rows)
             {
-                var row = new ListViewItem(device.label ?? string.Empty) { Tag = device };
-                row.SubItems.Add(KindLabel(device.kind));
-                row.SubItems.Add(RoleLabel(device.role));
-                row.SubItems.Add(device.last_seen > 0 ? PanelText.Ago(device.last_seen) : "not yet");
-                row.ToolTipText = device.weaker_trust
-                    ? device.label + " - known by an unverified id (weaker trust)"
-                    : device.label;
-                if (device.key == selected) row.Selected = true;
-                anyAndroid |= device.weaker_trust;
-                _devices.Items.Add(row);
+                var item = new ListViewItem(row.Cells) { Tag = row.Device };
+                item.ToolTipText = row.Device.weaker_trust
+                    ? row.Device.label + " - known by an unverified id (weaker trust)"
+                    : row.Device.label;
+                if (row.Device.key == selected) item.Selected = true;
+                _devices.Items.Add(item);
             }
 
             _devices.EndUpdate();
-            _trustNote.Visible = anyAndroid;
+            var keep = _devices.Items.Cast<ListViewItem>().FirstOrDefault(i => ((PartyDevice)i.Tag).key == top);
+            if (keep != null) _devices.TopItem = keep;
             _setRole.Enabled = _devices.SelectedItems.Count > 0;
+        }
+
+        /// <summary>Whether a device matches the search, by name, kind, role or address.</summary>
+        private bool Matches(PartyDevice device)
+        {
+            var term = _search.Text.Trim();
+            if (term.Length == 0) return true;
+            return new[] { device.label, KindLabel(device.kind), RoleLabel(device.role), device.address }
+                .Any(text => (text ?? string.Empty).IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         /// <summary>The role picker follows the chosen device, so Set role starts from its current role.</summary>

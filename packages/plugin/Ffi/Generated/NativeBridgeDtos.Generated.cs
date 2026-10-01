@@ -454,6 +454,7 @@ namespace MusicBeePlugin.Ffi
         public string kind { get; set; }
         public string label { get; set; }
         public long last_seen { get; set; }
+        public string address { get; set; }
         public string role { get; set; }
         public bool weaker_trust { get; set; }
     }

@@ -10,6 +10,7 @@
 //! only when those differ from what it was last told.
 
 use std::collections::{HashMap, VecDeque};
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -25,6 +26,14 @@ pub const PERMISSIONS_CHANGED: &str = "permissions_changed";
 
 /// How many recent refusals to keep. Older entries are dropped.
 const MAX_REFUSALS: usize = 50;
+
+/// When and where a device was last seen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Sighting {
+    /// Unix seconds, zero for a device not seen since start.
+    pub at: i64,
+    pub from: Option<IpAddr>,
+}
 
 /// How many Android devices seen this session the panel can list.
 const MAX_LEGACY_SEEN: usize = 200;
@@ -51,8 +60,8 @@ pub struct PartyMode {
     roles: Roles,
     /// Bumped by every change that can alter a client's permissions.
     changes: watch::Sender<u64>,
-    /// Android 1.6 `client_id`s seen since start, with when, in unix seconds.
-    legacy_seen: Mutex<HashMap<String, i64>>,
+    /// Android 1.6 devices seen since start, by `client_id`.
+    legacy_seen: Mutex<HashMap<String, Sighting>>,
 }
 
 impl Default for PartyMode {
@@ -171,31 +180,36 @@ impl PartyMode {
     ///
     /// Kept in memory only: a device that holds a role is listed from the roles
     /// table anyway, and one that does not is only worth listing while it is around.
-    pub fn saw_legacy_device(&self, client_id: &str) {
+    pub fn saw_legacy_device(&self, client_id: &str, from: IpAddr) {
         let now = now_unix_ms() / 1000;
         let mut seen = self.legacy_seen.lock().unwrap_or_else(|p| p.into_inner());
         if seen.len() >= MAX_LEGACY_SEEN
             && !seen.contains_key(client_id)
             && let Some(oldest) = seen
                 .iter()
-                .min_by_key(|(_, at)| **at)
+                .min_by_key(|(_, seen)| seen.at)
                 .map(|(id, _)| id.clone())
         {
             seen.remove(&oldest);
         }
-        seen.insert(client_id.to_owned(), now);
+        seen.insert(
+            client_id.to_owned(),
+            Sighting {
+                at: now,
+                from: Some(from),
+            },
+        );
     }
 
-    /// Every Android 1.6 device worth listing: seen this session, or holding a
-    /// role. Unix seconds of the last sighting, zero for one not seen yet.
-    pub fn legacy_devices(&self) -> Vec<(String, i64)> {
-        let mut devices: HashMap<String, i64> = self
+    /// Every Android 1.6 device worth listing: seen this session, or holding a role.
+    pub fn legacy_devices(&self) -> Vec<(String, Sighting)> {
+        let mut devices: HashMap<String, Sighting> = self
             .legacy_seen
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .clone();
         for id in self.roles.legacy_devices() {
-            devices.entry(id).or_insert(0);
+            devices.entry(id).or_default();
         }
         devices.into_iter().collect()
     }
@@ -365,21 +379,22 @@ mod tests {
     #[test]
     fn an_android_device_with_a_role_is_listed_before_it_is_seen() {
         let gate = PartyMode::default();
-        gate.saw_legacy_device("seen");
+        gate.saw_legacy_device("seen", IpAddr::from([10, 0, 0, 7]));
         gate.assign_role(&Principal::LegacyDevice("promoted".into()), Role::Dj);
         let mut devices = gate.legacy_devices();
-        devices.sort();
+        devices.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(devices.len(), 2);
-        assert_eq!(devices[0], ("promoted".to_owned(), 0));
+        assert_eq!(devices[0], ("promoted".to_owned(), Sighting::default()));
         assert_eq!(devices[1].0, "seen");
-        assert!(devices[1].1 > 0);
+        assert!(devices[1].1.at > 0);
+        assert_eq!(devices[1].1.from, Some(IpAddr::from([10, 0, 0, 7])));
     }
 
     #[test]
     fn the_android_devices_seen_are_bounded() {
         let gate = PartyMode::default();
         for n in 0..MAX_LEGACY_SEEN + 5 {
-            gate.saw_legacy_device(&format!("device-{n}"));
+            gate.saw_legacy_device(&format!("device-{n}"), IpAddr::from([10, 0, 0, 1]));
         }
         assert_eq!(gate.legacy_devices().len(), MAX_LEGACY_SEEN);
     }

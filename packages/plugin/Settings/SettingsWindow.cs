@@ -1,4 +1,4 @@
-using MusicBeePlugin.Host;
+﻿using MusicBeePlugin.Host;
 
 namespace MusicBeePlugin.Settings
 {

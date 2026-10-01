@@ -76,6 +76,8 @@ pub struct PairedClient {
     pub paired_at: i64,
     /// Unix seconds of the last request this token was accepted on.
     pub last_seen: i64,
+    /// Where that request came from; empty when unknown.
+    pub address: String,
 }
 
 /// What is written down about a paired browser.
@@ -88,6 +90,8 @@ struct Record {
     label: String,
     paired_at: i64,
     last_seen: i64,
+    #[serde(default)]
+    address: String,
 }
 
 /// Why a pairing code was not accepted.
@@ -194,6 +198,7 @@ impl Pairing {
                     label: record.label,
                     paired_at: record.paired_at,
                     last_seen: record.last_seen,
+                    address: record.address,
                 },
             );
         }
@@ -208,6 +213,7 @@ impl Pairing {
             label: client.label.clone(),
             paired_at: client.paired_at,
             last_seen: client.last_seen,
+            address: client.address.clone(),
         };
         let Ok(bytes) = rmp_serde::to_vec_named(&record) else {
             return;
@@ -353,6 +359,7 @@ impl Pairing {
             label: clamp_label(label),
             paired_at: now,
             last_seen: now,
+            address: from.to_string(),
         };
         state.tokens.insert(client.id.clone(), client.clone());
         drop(state);
@@ -370,17 +377,20 @@ impl Pairing {
     /// Records the moment as well: a list of paired browsers that cannot say
     /// which are still in use is a list nobody can act on.
     pub fn is_paired(&self, token: &str) -> bool {
-        self.paired_id(token).is_some()
+        self.paired_id(token, None).is_some()
     }
 
     /// The id of the paired browser a token names, recording the moment as
-    /// [`is_paired`](Self::is_paired) does.
-    pub fn paired_id(&self, token: &str) -> Option<String> {
+    /// [`is_paired`](Self::is_paired) does, and `from` when it is known.
+    pub fn paired_id(&self, token: &str, from: Option<IpAddr>) -> Option<String> {
         let updated = {
             let mut state = self.lock();
             match state.tokens.get_mut(&client_id(token)) {
                 Some(client) => {
                     client.last_seen = now_unix_seconds();
+                    if let Some(from) = from {
+                        client.address = from.to_string();
+                    }
                     Some(client.clone())
                 }
                 None => None,

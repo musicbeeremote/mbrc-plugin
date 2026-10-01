@@ -63,7 +63,7 @@ impl WebState {
         [cookie.as_deref(), bearer(headers), query]
             .into_iter()
             .flatten()
-            .find_map(|token| self.core.pairing.paired_id(token))
+            .find_map(|token| self.core.pairing.paired_id(token, Some(self.peer.ip())))
             .map_or(Principal::Anonymous, Principal::Browser)
     }
 }

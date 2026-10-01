@@ -371,6 +371,8 @@ pub struct PartyDevice {
     pub label: String,
     /// Unix seconds, or zero when not seen since MusicBee started.
     pub last_seen: i64,
+    /// Where it was last seen from; empty when unknown.
+    pub address: String,
     pub role: String,
     /// Known by a plain-text id with no token, so anyone who reads it off the
     /// network can claim its role.
