@@ -113,7 +113,7 @@ impl PairingRefused {
             }
             PairingRefused::Backoff(wait) => format!(
                 "too many wrong pairing codes from this address; try again in {} s",
-                wait.as_secs().max(1)
+                wait.as_millis().div_ceil(1000).max(1)
             ),
         }
     }
@@ -760,6 +760,12 @@ mod tests {
             pairing.take_code_at(&code, LAN, now),
             Err(PairingRefused::Backoff(FIRST_BACKOFF * 2))
         );
+    }
+
+    #[test]
+    fn the_wait_is_told_rounded_up() {
+        let message = PairingRefused::Backoff(Duration::from_millis(4_200)).message();
+        assert!(message.contains("in 5 s"), "{message}");
     }
 
     #[test]
