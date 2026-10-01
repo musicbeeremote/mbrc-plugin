@@ -30,6 +30,9 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg", "p
 # build's bottleneck, and this is several times faster than image's scalar
 # `imageops::resize`. Pure Rust with runtime CPU detection, so i686 stays clean.
 fast_image_resize = "=6.1.0"
+# Decodes a JPEG at 1/2 to 1/8 scale, so a large cover bound for a thumbnail
+# never exists at full size in a 32-bit process (#223).
+jpeg-decoder = { version = "=0.3.2", default-features = false }
 base64 = "=0.23.1"
 # Embedded key-value store backing the durable caches (album-cover index +
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C

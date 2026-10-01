@@ -408,6 +408,16 @@ pub fn rss_mib() -> Option<u64> {
     memory_stats::memory_stats().map(|s| (s.physical_mem / (1024 * 1024)) as u64)
 }
 
+/// Physical and committed memory in MiB, or `None` if the platform query fails.
+///
+/// Committed (private) memory is the one that matters for a 32-bit host: it is
+/// what runs into the address-space ceiling, while physical memory can sit far
+/// below it as pages are trimmed.
+pub fn memory_mib() -> Option<(u64, u64)> {
+    memory_stats::memory_stats()
+        .map(|s| ((s.physical_mem >> 20) as u64, (s.virtual_mem >> 20) as u64))
+}
+
 /// Emits a log line forwarded from C#. `level`: 0=trace .. 4=error.
 pub fn log(level: i32, target: &str, message: &str) {
     match level {

@@ -470,7 +470,7 @@ fn build_cover_cache(
 
     let build_started = std::time::Instant::now();
     let providers = core.providers.clone();
-    let stats = core.cover_store.build_until(
+    let stats = core.cover_store.build_reporting(
         |path| {
             let b64 = providers.artwork_raw(path).ok()?;
             if b64.is_empty() {
@@ -480,7 +480,9 @@ fn build_cover_cache(
         },
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
+        &|at| note_cover_progress(core, at),
     );
+    core.session.note("running");
 
     tracing::info!(
         albums = album_count,
@@ -498,6 +500,15 @@ fn build_cover_cache(
         total_ms = started.elapsed().as_millis(),
         "cover cache build complete"
     );
+}
+
+/// Records where a cover build has got to, for the next start to report if
+/// this session dies before it finishes.
+fn note_cover_progress(core: &Core, at: &crate::cover::store::BuildProgress<'_>) {
+    core.session.note(&format!(
+        "building the cover cache: album {} of {}, {}",
+        at.done, at.total, at.path
+    ));
 }
 
 /// Tells the host UI, and network clients when covers are in scope, that a
@@ -553,7 +564,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
     let dropped = before.saturating_sub(kept);
 
     let providers = core.providers.clone();
-    let stats = core.cover_store.build_until(
+    let stats = core.cover_store.build_reporting(
         |path| {
             let b64 = providers.artwork_raw(path).ok()?;
             if b64.is_empty() {
@@ -563,7 +574,9 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
         },
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
+        &|at| note_cover_progress(core, at),
     );
+    core.session.note("running");
 
     let changed = cover_set_changed(dropped, stats.stored);
     tracing::debug!(

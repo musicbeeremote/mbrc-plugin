@@ -20,14 +20,39 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::Receiver;
+use std::sync::{Mutex, RwLock};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
-use super::{CACHE_SIZE, resize_to_jpeg, sha1_hex};
+use super::{CACHE_SIZE, resize_cover, sha1_hex};
 use crate::store::{COVER_COVERS, COVER_META, COVER_SIZE, Db, LAST_CHECK};
+
+/// How many newly stored covers are saved together during a build.
+///
+/// A build that dies keeps everything up to its last checkpoint, so the next
+/// start resumes rather than starting over and dying at the same place.
+const CHECKPOINT_EVERY: usize = 200;
+
+/// How often a build reports its progress at INFO: every this many albums...
+const PROGRESS_EVERY: usize = 250;
+
+/// ...or this long, whichever comes first.
+const PROGRESS_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Where a build has got to, for its progress report.
+#[derive(Debug, Clone, Copy)]
+pub struct BuildProgress<'a> {
+    /// Albums fetched so far.
+    pub done: usize,
+    pub total: usize,
+    pub stored: usize,
+    pub failed: usize,
+    /// The album being fetched: its representative track.
+    pub path: &'a str,
+}
 
 /// One album's identity ingredients, provided by the host.
 ///
@@ -72,6 +97,8 @@ pub struct BuildStats {
     /// The build stopped early because it was asked to - the core is shutting
     /// down. Not a failure: what was built is kept and the next build resumes.
     pub stopped: bool,
+    /// The largest source image seen, as width and height.
+    pub largest: (u32, u32),
 }
 
 pub struct CoverStore {
@@ -166,20 +193,28 @@ impl CoverStore {
     /// # Errors
     /// The artwork does not resize, or the cover file cannot be written.
     pub fn cache_cover(&self, key: &str, raw: &[u8]) -> Result<String, String> {
-        let hash = self.store_cover(raw)?;
+        let (hash, _) = self.store_cover(raw)?;
         self.write_covers().insert(key.to_string(), hash.clone());
         Ok(hash)
     }
 
-    /// Resizes raw artwork to the cache thumbnail, hash it, write the file, and
-    /// return the content hash. The file name IS the hash (content-addressed).
-    fn store_cover(&self, raw: &[u8]) -> Result<String, String> {
-        let jpeg = resize_to_jpeg(raw, CACHE_SIZE, CACHE_SIZE)?;
-        let hash = sha1_hex(&jpeg);
+    /// Resizes raw artwork to the cache thumbnail, hashes it, writes the file,
+    /// and returns the content hash with the source's size. The file name IS the
+    /// hash (content-addressed).
+    fn store_cover(&self, raw: &[u8]) -> Result<(String, (u32, u32)), String> {
+        let resized = resize_cover(raw, CACHE_SIZE, CACHE_SIZE)?;
+        let hash = sha1_hex(&resized.jpeg);
         let dir = self.covers_dir();
         std::fs::create_dir_all(&dir).map_err(|e| format!("create covers dir: {e}"))?;
-        std::fs::write(self.cover_file(&hash), &jpeg).map_err(|e| format!("write cover: {e}"))?;
-        Ok(hash)
+        std::fs::write(self.cover_file(&hash), &resized.jpeg)
+            .map_err(|e| format!("write cover: {e}"))?;
+        tracing::debug!(
+            source = %format_args!("{}x{}", resized.source.0, resized.source.1),
+            reduced = resized.reduced,
+            bytes = raw.len(),
+            "cover stored"
+        );
+        Ok((hash, resized.source))
     }
 
     /// Warms the cache from the host's album list: record the key->path map,
@@ -262,10 +297,25 @@ impl CoverStore {
     where
         F: Fn(&str) -> Option<Vec<u8>>,
     {
+        self.build_reporting(fetch_raw, verbose, stop, &|_| {})
+    }
+
+    /// As [`Self::build_until`], also logging progress at INFO and handing each
+    /// report to `progress`, so the caller can note where the build has got to.
+    pub fn build_reporting<F>(
+        &self,
+        fetch_raw: F,
+        verbose: bool,
+        stop: &dyn Fn() -> bool,
+        progress: &dyn Fn(&BuildProgress<'_>),
+    ) -> BuildStats
+    where
+        F: Fn(&str) -> Option<Vec<u8>>,
+    {
         if self.building.swap(true, Ordering::AcqRel) {
             return BuildStats::default(); // a build is already running
         }
-        let stats = self.build_inner(fetch_raw, verbose, stop);
+        let stats = self.build_inner(fetch_raw, verbose, stop, progress);
         self.building.store(false, Ordering::Release);
         stats
     }
@@ -276,7 +326,14 @@ impl CoverStore {
     /// stays on this thread as the producer; storing (decode, resize, encode,
     /// write) is CPU-bound and ~90% of per-cover time, so it fans out. The queue
     /// is bounded, which caps how many decoded images are in memory at once.
-    fn build_inner<F>(&self, fetch_raw: F, verbose: bool, stop: &dyn Fn() -> bool) -> BuildStats
+    /// New covers are saved every [`CHECKPOINT_EVERY`], not only at the end.
+    fn build_inner<F>(
+        &self,
+        fetch_raw: F,
+        verbose: bool,
+        stop: &dyn Fn() -> bool,
+        progress: &dyn Fn(&BuildProgress<'_>),
+    ) -> BuildStats
     where
         F: Fn(&str) -> Option<Vec<u8>>,
     {
@@ -297,73 +354,50 @@ impl CoverStore {
             attempted: missing.len(),
             ..BuildStats::default()
         };
+        // Stale entries leave the table now, so a checkpoint cannot make them look valid.
+        self.persist_at(now_unix_secs());
+        let shared = Shared::default();
 
         let workers = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4)
             .clamp(1, 8);
 
-        // (key, path, raw artwork bytes, fetch_ms) handed from producer to workers.
-        let (tx, rx) =
-            std::sync::mpsc::sync_channel::<(String, String, Vec<u8>, u128)>(workers * 2);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Fetched>(workers * 2);
         let rx = std::sync::Mutex::new(rx);
 
         std::thread::scope(|scope| {
             let handles: Vec<_> = (0..workers)
                 .map(|_| {
-                    let rx = &rx;
-                    scope.spawn(move || {
-                        let mut local = BuildStats::default();
-                        loop {
-                            // Held only to pull one item, never across the store.
-                            let item = rx.lock().expect("cover queue mutex poisoned").recv();
-                            let Ok((key, path, raw, fetch_ms)) = item else {
-                                break; // producer dropped the sender: queue drained
-                            };
-
-                            let store_start = Instant::now();
-                            let result = self.store_cover(&raw);
-                            let store_ms = store_start.elapsed().as_millis();
-                            local.store_ms += store_ms;
-
-                            match result {
-                                Ok(hash) => {
-                                    self.write_covers().insert(key, hash);
-                                    local.stored += 1;
-                                }
-                                Err(e) => {
-                                    local.failed += 1;
-                                    tracing::debug!(%path, error = %e, "cover build: store failed");
-                                }
-                            }
-
-                            let total_ms = fetch_ms + store_ms;
-                            if total_ms > local.slowest_ms {
-                                local.slowest_ms = total_ms;
-                                local.slowest_path = path.clone();
-                            }
-                            if verbose {
-                                // INFO, not DEBUG: `verbose` is already the gate.
-                                tracing::info!(
-                                    %path,
-                                    fetch_ms,
-                                    store_ms,
-                                    bytes = raw.len(),
-                                    "cover build: timing"
-                                );
-                            }
-                        }
-                        local
-                    })
+                    let (rx, shared) = (&rx, &shared);
+                    scope.spawn(move || self.work(rx, shared, verbose))
                 })
                 .collect();
 
             // Producer: sequential FFI fetches feed the queue, and `send`
             // blocking at the bound is the back-pressure.
-            for (key, path) in missing {
+            let total = missing.len();
+            let mut last_report = Instant::now();
+            for (done, (key, path)) in missing.into_iter().enumerate() {
                 if stop() {
                     stats.stopped = true;
                     break;
+                }
+                if done > 0
+                    && (done % PROGRESS_EVERY == 0 || last_report.elapsed() >= PROGRESS_INTERVAL)
+                {
+                    last_report = Instant::now();
+                    report_progress(
+                        &BuildProgress {
+                            done,
+                            total,
+                            stored: shared.stored.load(Ordering::Relaxed),
+                            failed: shared.failed.load(Ordering::Relaxed),
+                            path: &path,
+                        },
+                        shared.largest(),
+                        progress,
+                    );
                 }
                 let fetch_start = Instant::now();
                 let raw = fetch_raw(&path);
@@ -389,10 +423,60 @@ impl CoverStore {
                 }
             }
         });
+        stats.largest = shared.largest();
 
         self.prune_orphans();
         self.persist();
         stats
+    }
+
+    /// One worker: stores covers off the queue until the producer closes it.
+    fn work(&self, rx: &Mutex<Receiver<Fetched>>, shared: &Shared, verbose: bool) -> BuildStats {
+        let mut local = BuildStats::default();
+        loop {
+            // Held only to pull one item, never across the store.
+            let item = rx.lock().expect("cover queue mutex poisoned").recv();
+            let Ok((key, path, raw, fetch_ms)) = item else {
+                break; // producer dropped the sender: queue drained
+            };
+
+            let store_start = Instant::now();
+            let result = self.store_cover(&raw);
+            let store_ms = store_start.elapsed().as_millis();
+            local.store_ms += store_ms;
+
+            match result {
+                Ok((hash, source)) => {
+                    self.write_covers().insert(key.clone(), hash.clone());
+                    local.stored += 1;
+                    shared.stored.fetch_add(1, Ordering::Relaxed);
+                    shared.note_largest(source);
+                    self.checkpoint(&shared.pending, (key, hash));
+                }
+                Err(e) => {
+                    local.failed += 1;
+                    shared.failed.fetch_add(1, Ordering::Relaxed);
+                    tracing::debug!(%path, error = %e, "cover build: store failed");
+                }
+            }
+
+            let total_ms = fetch_ms + store_ms;
+            if total_ms > local.slowest_ms {
+                local.slowest_ms = total_ms;
+                local.slowest_path = path.clone();
+            }
+            if verbose {
+                // INFO, not DEBUG: `verbose` is already the gate.
+                tracing::info!(
+                    %path,
+                    fetch_ms,
+                    store_ms,
+                    bytes = raw.len(),
+                    "cover build: timing"
+                );
+            }
+        }
+        local
     }
 
     /// Deletes cover files that are no longer referenced by any album key.
@@ -453,8 +537,12 @@ impl CoverStore {
     /// keys dropped by warm-up/prune don't linger - the same whole-map semantics
     /// the old `state.json` rewrite had, but crash-safe via redb's commit.
     fn persist(&self) {
+        self.persist_at(now_unix_secs());
+    }
+
+    /// As [`Self::persist`], recording `last` as the last check.
+    fn persist_at(&self, last: i64) {
         let covers = self.read_covers().clone();
-        let last = now_unix_secs();
         self.db.write(Durability::Immediate, |txn| {
             txn.delete_table(COVER_COVERS)?;
             {
@@ -466,6 +554,28 @@ impl CoverStore {
             {
                 let mut meta = txn.open_table(COVER_META)?;
                 meta.insert(LAST_CHECK, last)?;
+            }
+            Ok(())
+        });
+    }
+
+    /// Queues one newly stored cover, saving the batch once it is full.
+    ///
+    /// Appends only: the table was rewritten at the start of the build, so
+    /// everything in it is already valid.
+    fn checkpoint(&self, pending: &Mutex<Vec<(String, String)>>, entry: (String, String)) {
+        let batch = {
+            let mut pending = pending.lock().unwrap_or_else(|e| e.into_inner());
+            pending.push(entry);
+            if pending.len() < CHECKPOINT_EVERY {
+                return;
+            }
+            std::mem::take(&mut *pending)
+        };
+        self.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(COVER_COVERS)?;
+            for (key, hash) in &batch {
+                table.insert(key.as_str(), hash.as_str())?;
             }
             Ok(())
         });
@@ -488,6 +598,57 @@ impl CoverStore {
     fn state_last_check(&self) -> i64 {
         self.load_state().1
     }
+}
+
+/// One fetched album handed from the producer to a worker: key, path, raw
+/// artwork bytes, and how long the fetch took in milliseconds.
+type Fetched = (String, String, Vec<u8>, u128);
+
+/// What the workers of one build share with each other and with the producer.
+#[derive(Default)]
+struct Shared {
+    stored: AtomicUsize,
+    failed: AtomicUsize,
+    /// The largest source image stored so far.
+    largest: Mutex<(u32, u32)>,
+    /// Stored covers not yet saved by a checkpoint.
+    pending: Mutex<Vec<(String, String)>>,
+}
+
+impl Shared {
+    fn largest(&self) -> (u32, u32) {
+        *self.largest.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Keeps the larger of the recorded and `source` sizes, by pixel count.
+    fn note_largest(&self, source: (u32, u32)) {
+        let mut largest = self.largest.lock().unwrap_or_else(|e| e.into_inner());
+        let area = |(w, h): (u32, u32)| u64::from(w) * u64::from(h);
+        if area(source) > area(*largest) {
+            *largest = source;
+        }
+    }
+}
+
+/// Logs where a build has got to, with the memory a 32-bit host runs out of.
+fn report_progress(
+    at: &BuildProgress<'_>,
+    largest: (u32, u32),
+    progress: &dyn Fn(&BuildProgress<'_>),
+) {
+    let (physical_mib, committed_mib) = crate::logging::memory_mib().unwrap_or_default();
+    tracing::info!(
+        done = at.done,
+        total = at.total,
+        stored = at.stored,
+        failed = at.failed,
+        physical_mib,
+        committed_mib,
+        largest = %format_args!("{}x{}", largest.0, largest.1),
+        path = at.path,
+        "cover cache build progress"
+    );
+    progress(at);
 }
 
 fn now_unix_secs() -> i64 {
@@ -664,6 +825,115 @@ mod tests {
             None,
             "a new size rebuilds them all"
         );
+    }
+
+    fn albums(count: usize, modified: i64) -> Vec<AlbumIdentity> {
+        (0..count)
+            .map(|n| AlbumIdentity {
+                key: format!("alb{n}"),
+                path: format!("/{n}.mp3"),
+                modified,
+            })
+            .collect()
+    }
+
+    /// Waits up to two seconds for the saved table to reach `at_least` covers.
+    fn saved_reaches(store: &CoverStore, at_least: usize) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if store.load_state().0.len() >= at_least {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
+    /// The crash this guards against kills the process mid-build, so nothing
+    /// after the build runs; what was checkpointed is all the next start gets.
+    #[test]
+    fn a_build_saves_covers_as_it_goes_not_only_at_the_end() {
+        let (db, dir) = temp_storage("checkpoints");
+        let store = CoverStore::new(db.clone(), &dir);
+        let total = CHECKPOINT_EVERY * 2 + 50;
+        store.warm_up(&albums(total, 0));
+
+        let art = jpeg_bytes(8, 8);
+        let fetched = AtomicUsize::new(0);
+        let saved_mid_build = std::sync::atomic::AtomicBool::new(false);
+        store.build(
+            |_| {
+                if fetched.fetch_add(1, Ordering::AcqRel) == total - 1 {
+                    saved_mid_build
+                        .store(saved_reaches(&store, CHECKPOINT_EVERY), Ordering::Release);
+                }
+                Some(art.clone())
+            },
+            false,
+        );
+
+        assert!(
+            saved_mid_build.load(Ordering::Acquire),
+            "a checkpoint was on disk before the build finished"
+        );
+        assert_eq!(
+            store.load_state().0.len(),
+            total,
+            "and everything at the end"
+        );
+    }
+
+    #[test]
+    fn a_stale_cover_leaves_the_saved_table_before_the_build_writes_anything() {
+        let (db, dir) = temp_storage("checkpoint-stale");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(2, 0));
+        let art = jpeg_bytes(8, 8);
+        store.build(|_| Some(art.clone()), false);
+
+        // alb0's track changes, so warm-up drops its cover...
+        let mut changed = albums(2, 0);
+        changed[0].modified = now_unix_secs() + 60;
+        store.warm_up(&changed);
+        let table_at_first_fetch = Mutex::new(None);
+        store.build(
+            |_| {
+                table_at_first_fetch
+                    .lock()
+                    .unwrap()
+                    .get_or_insert_with(|| store.load_state().0);
+                Some(art.clone())
+            },
+            false,
+        );
+
+        // ...and it is gone from disk too before any new cover is written, so a
+        // later checkpoint cannot leave it looking valid.
+        let table = table_at_first_fetch.lock().unwrap().take().unwrap();
+        assert!(!table.contains_key("alb0"));
+        assert!(table.contains_key("alb1"));
+    }
+
+    #[test]
+    fn a_long_build_reports_its_progress() {
+        let (db, dir) = temp_storage("progress");
+        let store = CoverStore::new(db.clone(), &dir);
+        let total = PROGRESS_EVERY + 10;
+        store.warm_up(&albums(total, 0));
+        let art = jpeg_bytes(8, 8);
+        let reports = Mutex::new(Vec::new());
+        let stats = store.build_reporting(|_| Some(art.clone()), false, &|| false, &|at| {
+            reports
+                .lock()
+                .unwrap()
+                .push((at.done, at.total, at.path.to_owned()))
+        });
+
+        let reports = reports.into_inner().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!((reports[0].0, reports[0].1), (PROGRESS_EVERY, total));
+        assert!(reports[0].2.ends_with(".mp3"));
+        assert_eq!(stats.largest, (8, 8));
     }
 
     #[test]

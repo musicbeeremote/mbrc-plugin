@@ -55,6 +55,8 @@ pub struct Core {
     /// Recent rejected connection attempts (address filter / caps), surfaced to
     /// the settings panel. In-memory ring buffer, not persisted.
     pub blocked: BlockedLog,
+    /// Tells the next start whether this session ended cleanly, and where it was.
+    pub session: crate::session::SessionMarker,
     /// Party Mode's switch and refusal log, checked before every command.
     pub party_mode: Arc<crate::server::permissions::PartyMode>,
     conn_counter: AtomicU64,
@@ -93,6 +95,7 @@ impl Core {
         let party_mode = Arc::new(crate::server::permissions::PartyMode::default());
         party_mode.open(db.clone());
         party_mode.set_enabled(config.party_mode_enabled);
+        let session = crate::session::SessionMarker::open(&config.storage_path);
         Self {
             providers,
             config,
@@ -107,6 +110,7 @@ impl Core {
             clients,
             blocked: BlockedLog::default(),
             party_mode,
+            session,
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
             stopping: Arc::new(AtomicBool::new(false)),
@@ -842,6 +846,7 @@ pub fn shutdown() -> MbrcResult {
                 broadcast_server_shutdown(&runtime.core);
                 net.stop();
             }
+            runtime.core.session.close();
             MbrcResult::Ok
         }
         None => MbrcResult::NotInitialized,

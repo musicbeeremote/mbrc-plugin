@@ -36,7 +36,9 @@ const JPEG_QUALITY: u8 = 80;
 /// so the decode is untrusted. Real album art is far under these; the resize
 /// target is only a few hundred pixels.
 const MAX_DECODE_DIM: u32 = 12_000;
-const MAX_DECODE_ALLOC: u64 = 256 * 1024 * 1024;
+/// The most one full-size decode may allocate. A JPEG is decoded at reduced
+/// scale and never comes near it; this bounds the formats that cannot be.
+const MAX_DECODE_ALLOC: u64 = 64 * 1024 * 1024;
 
 /// The SHA1 of empty input: 40 zeros (matches C# `HashingUtilities.EmptyHash`).
 pub const EMPTY_SHA1: &str = "0000000000000000000000000000000000000000";
@@ -90,53 +92,159 @@ pub fn cover_identifier(artist: &str, album: &str) -> String {
     ))
 }
 
-/// Resizes raw image bytes to fit within `max_w` x `max_h`, preserving aspect and
+/// A resized cover, and what it was made from.
+#[derive(Debug, Clone)]
+pub struct Resized {
+    /// The resized JPEG: the cache file and the hash input.
+    pub jpeg: Vec<u8>,
+    /// The source image's width and height.
+    pub source: (u32, u32),
+    /// Whether the JPEG was decoded at reduced scale rather than full size.
+    pub reduced: bool,
+}
+
+/// Resizes raw artwork to fit within `max_w` x `max_h`, preserving aspect and
 /// never upscaling (mirrors C# `CalculateScaledSize`), re-encoding as JPEG.
-/// Decode an image with allocation + dimension limits enforced, so an untrusted
-/// payload can't trigger a huge allocation (a decompression bomb: a tiny file
-/// whose header claims enormous dimensions). Dimensions over the cap are rejected
-/// against the header, before the pixel buffer is allocated.
-fn decode_limited(raw: &[u8]) -> Result<image::DynamicImage, String> {
-    let mut reader = image::ImageReader::new(Cursor::new(raw))
-        .with_guessed_format()
-        .map_err(|e| format!("image format: {e}"))?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_DECODE_DIM);
-    limits.max_image_height = Some(MAX_DECODE_DIM);
-    limits.max_alloc = Some(MAX_DECODE_ALLOC);
-    reader.limits(limits);
-    reader.decode().map_err(|e| format!("image decode: {e}"))
+///
+/// A JPEG is decoded at the smallest DCT scale (1/1 to 1/8) that still covers
+/// the target, so a 3000 px cover bound for 250 px never exists at full size.
+/// Anything else, or a JPEG the scaled decoder cannot read, takes the full
+/// decode, which first checks that its memory can be had at all.
+///
+/// # Errors
+/// The bytes do not decode as a supported image, exceed the decode limits, need
+/// more memory than is available, or fail to re-encode as JPEG.
+pub fn resize_cover(raw: &[u8], max_w: u32, max_h: u32) -> Result<Resized, String> {
+    if let Some(jpeg) = decode_jpeg_reduced(raw, max_w, max_h) {
+        let target = scaled_size(jpeg.source.0, jpeg.source.1, max_w, max_h);
+        return Ok(Resized {
+            jpeg: encode_resized(jpeg.rgb, jpeg.decoded, target)?,
+            source: jpeg.source,
+            reduced: jpeg.decoded != jpeg.source,
+        });
+    }
+
+    let img = decode_limited(raw)?;
+    let source = (img.width(), img.height());
+    let target = scaled_size(source.0, source.1, max_w, max_h);
+    // Flatten to RGB8 once; JPEG has no alpha, and GDI+ flattened too.
+    let rgb = img.into_rgb8().into_raw();
+    Ok(Resized {
+        jpeg: encode_resized(rgb, source, target)?,
+        source,
+        reduced: false,
+    })
 }
 
 /// Returns the resized JPEG bytes (used for the content hash + on-disk file).
 ///
-/// Pipeline: decode with `image` (any supported format) -> flatten to RGB8 (JPEG
-/// has no alpha; GDI+ flattened too) -> downscale with SIMD `fast_image_resize`
-/// (the measured bottleneck; several times faster than `image`'s scalar resize)
-/// -> JPEG-encode. Bilinear convolution: at a 150px thumbnail it is visually
-/// indistinguishable from bicubic/Lanczos while being the cheapest filter.
+/// # Errors
+/// As [`resize_cover`].
+pub fn resize_to_jpeg(raw: &[u8], max_w: u32, max_h: u32) -> Result<Vec<u8>, String> {
+    resize_cover(raw, max_w, max_h).map(|resized| resized.jpeg)
+}
+
+/// A JPEG decoded at reduced scale.
+struct ReducedJpeg {
+    /// RGB8 pixels at `decoded` size.
+    rgb: Vec<u8>,
+    decoded: (u32, u32),
+    /// The full size the JPEG declares.
+    source: (u32, u32),
+}
+
+/// Decodes a JPEG at the smallest scale that still covers the target, as RGB8.
+///
+/// `None` when the bytes are not a JPEG this decoder handles (arithmetic coding,
+/// CMYK, 16-bit), which sends the caller to the full decode instead.
+fn decode_jpeg_reduced(raw: &[u8], max_w: u32, max_h: u32) -> Option<ReducedJpeg> {
+    if !raw.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut decoder = jpeg_decoder::Decoder::new(Cursor::new(raw));
+    decoder.read_info().ok()?;
+    let info = decoder.info()?;
+    let source = (u32::from(info.width), u32::from(info.height));
+    if source.0 > MAX_DECODE_DIM || source.1 > MAX_DECODE_DIM {
+        return None;
+    }
+    let (tw, th) = scaled_size(source.0, source.1, max_w, max_h);
+    let (sw, sh) = decoder
+        .scale(u16::try_from(tw).ok()?, u16::try_from(th).ok()?)
+        .ok()?;
+    let pixels = decoder.decode().ok()?;
+    let decoded = (u32::from(sw), u32::from(sh));
+    let rgb = match decoder.info()?.pixel_format {
+        jpeg_decoder::PixelFormat::RGB24 => pixels,
+        jpeg_decoder::PixelFormat::L8 => pixels.iter().flat_map(|&l| [l, l, l]).collect(),
+        _ => return None,
+    };
+    (rgb.len() == decoded.0 as usize * decoded.1 as usize * 3).then_some(ReducedJpeg {
+        rgb,
+        decoded,
+        source,
+    })
+}
+
+/// Decodes an image at full size with allocation + dimension limits enforced.
+///
+/// The limits stop an untrusted payload whose header claims enormous dimensions
+/// (a decompression bomb) before its pixel buffer is allocated. Within them, the
+/// memory is reserved fallibly first, so a 32-bit process short of address space
+/// gets an error back rather than an allocation failure, which aborts.
+fn decode_limited(raw: &[u8]) -> Result<image::DynamicImage, String> {
+    let reader = || {
+        let mut reader = image::ImageReader::new(Cursor::new(raw))
+            .with_guessed_format()
+            .map_err(|e| format!("image format: {e}"))?;
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(MAX_DECODE_DIM);
+        limits.max_image_height = Some(MAX_DECODE_DIM);
+        limits.max_alloc = Some(MAX_DECODE_ALLOC);
+        reader.limits(limits);
+        Ok::<_, String>(reader)
+    };
+    let (w, h) = reader()?
+        .into_dimensions()
+        .map_err(|e| format!("image header: {e}"))?;
+    ensure_room(full_decode_bytes(w, h))?;
+    reader()?.decode().map_err(|e| format!("image decode: {e}"))
+}
+
+/// The most a full decode of a `w` x `h` image holds at once: the decoded pixels
+/// (up to four 8-bit channels) plus the RGB8 copy the encoder is fed.
+fn full_decode_bytes(w: u32, h: u32) -> usize {
+    (w as usize)
+        .saturating_mul(h as usize)
+        .saturating_mul(4 + 3)
+}
+
+/// Checks that `bytes` can be allocated, without keeping them.
 ///
 /// # Errors
-/// The bytes do not decode as a supported image, exceed the decode cap, or
-/// fail to re-encode as JPEG.
-pub fn resize_to_jpeg(raw: &[u8], max_w: u32, max_h: u32) -> Result<Vec<u8>, String> {
-    let img = decode_limited(raw)?;
-    let (w, h) = (img.width(), img.height());
-    let (tw, th) = scaled_size(w, h, max_w, max_h);
+/// The allocation would fail; the cover is then reported too large rather than
+/// taking the process down.
+fn ensure_room(bytes: usize) -> Result<(), String> {
+    Vec::<u8>::new()
+        .try_reserve_exact(bytes)
+        .map_err(|_| format!("too large to decode: needs {} MiB", bytes / (1024 * 1024)))
+}
 
-    // Flatten to RGB8 once; both the no-resample and resample paths encode from it.
-    let rgb = img.into_rgb8().into_raw();
-
-    let pixels = if (tw, th) == (w, h) {
-        // Identical target = no resample (avoids a needless re-filter of small art).
-        rgb
+/// Scales RGB8 `pixels` of size `from` to `to`, then JPEG-encodes them.
+///
+/// Bilinear convolution: at a thumbnail size it is visually indistinguishable
+/// from bicubic or Lanczos while being the cheapest filter. Identical sizes skip
+/// the resample, so small art is not re-filtered for nothing.
+fn encode_resized(pixels: Vec<u8>, from: (u32, u32), to: (u32, u32)) -> Result<Vec<u8>, String> {
+    let pixels = if from == to {
+        pixels
     } else {
         use fast_image_resize::images::Image;
         use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 
-        let src = Image::from_vec_u8(w, h, rgb, PixelType::U8x3)
+        let src = Image::from_vec_u8(from.0, from.1, pixels, PixelType::U8x3)
             .map_err(|e| format!("resize source: {e}"))?;
-        let mut dst = Image::new(tw, th, PixelType::U8x3);
+        let mut dst = Image::new(to.0, to.1, PixelType::U8x3);
         Resizer::new()
             .resize(
                 &src,
@@ -151,7 +259,7 @@ pub fn resize_to_jpeg(raw: &[u8], max_w: u32, max_h: u32) -> Result<Vec<u8>, Str
     // default is 75. Encoders differ, so bytes never matched anyway.
     let mut out = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut out), JPEG_QUALITY)
-        .encode(&pixels, tw, th, image::ExtendedColorType::Rgb8)
+        .encode(&pixels, to.0, to.1, image::ExtendedColorType::Rgb8)
         .map_err(|e| format!("jpeg encode: {e}"))?;
     Ok(out)
 }
@@ -288,6 +396,100 @@ mod tests {
         // Empty input -> 40 zeros (C# EmptyHash), NOT the real SHA1 of "".
         assert_eq!(sha1_hex(&[]), EMPTY_SHA1);
         assert_eq!(sha1_hex_str(""), EMPTY_SHA1);
+    }
+
+    /// A smooth gradient, so a reduced and a full decode can be compared pixel
+    /// for pixel; the test pattern above is too busy for any two resizes to agree.
+    fn gradient_jpeg(w: u32, h: u32, grey: bool) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            let r = (x * 255 / w) as u8;
+            let g = (y * 255 / h) as u8;
+            if grey {
+                image::Rgb([r, r, r])
+            } else {
+                image::Rgb([r, g, 128])
+            }
+        });
+        let img = if grey {
+            image::DynamicImage::ImageLuma8(image::DynamicImage::ImageRgb8(img).into_luma8())
+        } else {
+            image::DynamicImage::ImageRgb8(img)
+        };
+        let mut buf = Vec::new();
+        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Jpeg)
+            .unwrap();
+        buf
+    }
+
+    /// The same resize the full-size path produces, for comparison.
+    fn full_decode_resize(raw: &[u8], max: u32) -> image::RgbImage {
+        let img = image::load_from_memory(raw).unwrap();
+        let (w, h) = (img.width(), img.height());
+        let target = scaled_size(w, h, max, max);
+        let jpeg = encode_resized(img.into_rgb8().into_raw(), (w, h), target).unwrap();
+        image::load_from_memory(&jpeg).unwrap().into_rgb8()
+    }
+
+    fn mean_abs_diff(a: &image::RgbImage, b: &image::RgbImage) -> f64 {
+        assert_eq!(a.dimensions(), b.dimensions());
+        let total: u64 = a
+            .as_raw()
+            .iter()
+            .zip(b.as_raw())
+            .map(|(x, y)| u64::from(x.abs_diff(*y)))
+            .sum();
+        total as f64 / a.as_raw().len() as f64
+    }
+
+    #[test]
+    fn a_large_jpeg_is_decoded_at_reduced_scale_and_looks_the_same() {
+        let raw = gradient_jpeg(2000, 1600, false);
+        let resized = resize_cover(&raw, CACHE_SIZE, CACHE_SIZE).unwrap();
+        assert!(
+            resized.reduced,
+            "a 2000 px source for 250 px decodes at 1/4 or 1/8"
+        );
+        assert_eq!(resized.source, (2000, 1600));
+        let out = image::load_from_memory(&resized.jpeg).unwrap().into_rgb8();
+        assert_eq!(out.dimensions(), (250, 200));
+        let diff = mean_abs_diff(&out, &full_decode_resize(&raw, CACHE_SIZE));
+        assert!(diff < 4.0, "mean difference per channel {diff}");
+    }
+
+    #[test]
+    fn a_grayscale_jpeg_is_decoded_at_reduced_scale_too() {
+        let resized =
+            resize_cover(&gradient_jpeg(1600, 1600, true), CACHE_SIZE, CACHE_SIZE).unwrap();
+        assert!(resized.reduced);
+        let out = image::load_from_memory(&resized.jpeg).unwrap().into_rgb8();
+        assert_eq!(out.dimensions(), (250, 250));
+    }
+
+    #[test]
+    fn a_jpeg_already_small_enough_is_not_reduced() {
+        let resized = resize_cover(&test_jpeg_bytes(200, 150), CACHE_SIZE, CACHE_SIZE).unwrap();
+        assert!(!resized.reduced);
+        assert_eq!(resized.source, (200, 150));
+    }
+
+    #[test]
+    fn a_png_takes_the_full_decode() {
+        let img = image::RgbImage::from_pixel(800, 600, image::Rgb([10, 20, 30]));
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let resized = resize_cover(&png, CACHE_SIZE, CACHE_SIZE).unwrap();
+        assert!(!resized.reduced);
+        assert_eq!(resized.source, (800, 600));
+    }
+
+    #[test]
+    fn memory_that_cannot_be_had_is_an_error_not_an_abort() {
+        let error = ensure_room(usize::MAX).unwrap_err();
+        assert!(error.starts_with("too large to decode"), "{error}");
+        assert!(ensure_room(1024).is_ok());
+        assert_eq!(full_decode_bytes(u32::MAX, u32::MAX), usize::MAX);
     }
 
     #[test]
