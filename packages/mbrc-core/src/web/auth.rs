@@ -300,9 +300,10 @@ impl Pairing {
 
     /// Checks a code offered from `from`, consuming it and returning its role when right.
     ///
-    /// Rate limited, because a code that grants Host is worth guessing: see
-    /// [`FREE_WRONG_CODES`] and [`MAX_WRONG_PER_CODE`]. An address that must wait
-    /// is refused without its code being looked at.
+    /// Rate limited, because a code that grants Host is worth guessing: an
+    /// address gets a few wrong codes free and then a doubling wait, and a code
+    /// dies after ten wrong attempts in all. An address that must wait is refused
+    /// without its code being looked at.
     pub fn take_code(&self, offered: &str, from: IpAddr) -> Result<Role, PairingRefused> {
         self.take_code_at(offered, from, Instant::now())
     }
