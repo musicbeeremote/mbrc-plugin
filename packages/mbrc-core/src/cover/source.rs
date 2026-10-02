@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 
 use lofty::config::{ParseOptions, ParsingMode};
-use lofty::file::TaggedFileExt;
+use lofty::file::{TaggedFile, TaggedFileExt};
 use lofty::probe::Probe;
 
 /// MusicBee's `PictureLocations` flag for artwork embedded in the track.
@@ -62,18 +62,11 @@ impl Source {
 ///
 /// MusicBee is asked for picture index 0; the core takes the first picture the
 /// file carries, which the build's parity check compares against MusicBee's.
-/// Parsed relaxed: an MP3 whose audio frames confuse the strict parser still
-/// has a perfectly readable tag, and the picture is all that is wanted.
+/// Parsed relaxed, then again in lofty's best-attempt mode if that fails: each
+/// reads tags the other rejects, and the picture is all that is wanted.
 fn first_picture(path: &Path) -> Result<Vec<u8>, String> {
-    let tagged = Probe::open(path)
-        .map_err(|e| format!("open track: {e}"))?
-        .options(
-            ParseOptions::new()
-                .read_properties(false)
-                .parsing_mode(ParsingMode::Relaxed),
-        )
-        .read()
-        .map_err(|e| format!("read tags: {e}"))?;
+    let tagged = read_tags(path, ParsingMode::Relaxed)
+        .or_else(|_| read_tags(path, ParsingMode::BestAttempt))?;
     tagged
         .primary_tag()
         .into_iter()
@@ -82,6 +75,21 @@ fn first_picture(path: &Path) -> Result<Vec<u8>, String> {
         .next()
         .map(|picture| picture.data().to_vec())
         .ok_or_else(|| "the tags hold no picture".to_owned())
+}
+
+/// A track's tags without its audio properties or lofty's ID3v2.4 conversions,
+/// which only add ways to fail.
+fn read_tags(path: &Path, mode: ParsingMode) -> Result<TaggedFile, String> {
+    Probe::open(path)
+        .map_err(|e| format!("open track: {e}"))?
+        .options(
+            ParseOptions::new()
+                .read_properties(false)
+                .parsing_mode(mode)
+                .implicit_conversions(false),
+        )
+        .read()
+        .map_err(|e| format!("read tags: {e}"))
 }
 
 #[cfg(test)]
@@ -156,6 +164,38 @@ mod tests {
     fn an_embedded_picture_is_read_from_the_tags() {
         let picture = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
         let path = mp3_with_picture("embedded", &picture);
+        assert_eq!(Source::Embedded(path.clone()).read().unwrap(), picture);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// An ID3v2.3 frame: id, big-endian size, no flags, then `content`.
+    fn id3v23_frame(id: &[u8; 4], content: &[u8]) -> Vec<u8> {
+        let mut frame = id.to_vec();
+        frame.extend(u32::try_from(content.len()).unwrap().to_be_bytes());
+        frame.extend([0, 0]);
+        frame.extend(content);
+        frame
+    }
+
+    #[test]
+    fn a_picture_after_an_empty_ufid_is_still_read() {
+        let picture = [0xFF, 0xD8, 0xFF, 0xE0, 9, 8, 7, 0xFF, 0xD9];
+        let mut apic = b"\0image/jpeg\0\x03\0".to_vec(); // Latin-1, front cover, no description
+        apic.extend(picture);
+        let ufid = id3v23_frame(b"UFID", &[0]); // no owner, no identifier
+        let frames = [ufid, id3v23_frame(b"APIC", &apic)].concat();
+        let mut bytes = b"ID3\x03\x00\x00".to_vec();
+        bytes.extend(
+            (0..4)
+                .rev()
+                .map(|i| ((frames.len() >> (7 * i)) & 0x7F) as u8),
+        );
+        bytes.extend(frames);
+        bytes.extend([0xFF, 0xFB, 0x90, 0x00]);
+        bytes.extend(std::iter::repeat_n(0u8, 413));
+        let path =
+            std::env::temp_dir().join(format!("mbrc-source-ufid-{}.mp3", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
         assert_eq!(Source::Embedded(path.clone()).read().unwrap(), picture);
         let _ = std::fs::remove_file(path);
     }
