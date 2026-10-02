@@ -11,7 +11,11 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [
+    # A compile-time macro under lofty, which declined to swap it for a fork
+    # (lofty-rs#559): no code from it reaches the binary.
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained, not vulnerable" },
+]
 
 [licenses]
 version = 2
