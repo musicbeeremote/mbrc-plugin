@@ -599,7 +599,7 @@ async fn writer_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::test_support::capture_wire_lines;
+    use crate::logging::test_support::{capture_wire_lines, with_subscriber};
 
     /// Attribution has to survive a level change: a span born at INFO can never
     /// be revived, so connections predating a capture would lose their `conn_id`
@@ -611,7 +611,7 @@ mod tests {
             .with_writer(std::io::sink)
             .finish();
 
-        tracing::subscriber::with_default(at_info, || {
+        with_subscriber(at_info, || {
             assert!(
                 !conn_span(1).is_disabled(),
                 "the conn span must be live at INFO, or a capture cannot attribute \

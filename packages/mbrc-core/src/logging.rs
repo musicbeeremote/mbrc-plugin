@@ -529,13 +529,22 @@ pub mod test_support {
         }
     }
 
-    /// Held for the length of a capture, so only one runs at a time.
+    /// Held while any test runs under a scoped subscriber, so only one does.
     ///
     /// `with_default` raises tracing's global maximum level on entry and puts it
     /// back when its guard drops. That maximum is what `enabled!` consults, so a
-    /// capture finishing on one thread switches the wire logging off under a
-    /// capture still running on another, which comes back holding nothing.
+    /// scoped subscriber coming or going on one thread switches the wire logging
+    /// off under a capture running on another, which comes back holding nothing.
     static CAPTURING: Mutex<()> = Mutex::new(());
+
+    /// Runs `f` under `subscriber`, never alongside a capture.
+    pub fn with_subscriber<S>(subscriber: S, f: impl FnOnce())
+    where
+        S: Subscriber + Send + Sync + 'static,
+    {
+        let _serialised = CAPTURING.lock().unwrap_or_else(|held| held.into_inner());
+        tracing::subscriber::with_default(subscriber, f);
+    }
 
     /// Runs `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
     /// and above, and return what it captured.
