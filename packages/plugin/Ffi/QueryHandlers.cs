@@ -236,10 +236,14 @@ namespace MusicBeePlugin.Ffi
                     modified = a.Modified,
                 }).ToList();
 
-        private string BuildArtworkRaw(PathParams p)
+        /// <summary>
+        ///     The image bytes as MusicBee holds them, sent as MessagePack <c>bin</c>:
+        ///     a base64 string would cost the cover build three more large copies
+        ///     per album on the large-object heap.
+        /// </summary>
+        private byte[] BuildArtworkRaw(PathParams p)
         {
-            var data = _library.GetArtworkDataForTrack(p.path ?? string.Empty);
-            return data?.Length > 0 ? Convert.ToBase64String(data) : string.Empty;
+            return _library.GetArtworkDataForTrack(p.path ?? string.Empty) ?? Array.Empty<byte>();
         }
 
         private List<TrackMetadata> BuildBatchMetadata(BatchMetadataParams p) =>

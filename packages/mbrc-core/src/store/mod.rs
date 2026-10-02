@@ -30,6 +30,9 @@ const CACHE_SIZE: usize = 64 * 1024 * 1024;
 /// album_key -> content_hash (the resized cover's SHA1). Replaces the `covers`
 /// map in the old `state.json`.
 pub const COVER_COVERS: TableDefinition<&str, &str> = TableDefinition::new("cover_covers");
+/// Albums found to have no artwork: album_key -> when (unix seconds), so they
+/// are not fetched again every build. Owned by `cover::store`.
+pub const COVER_NO_ART: TableDefinition<&str, i64> = TableDefinition::new("cover_no_art");
 /// Cover-cache scalars keyed by name. `"last_check"` -> unix seconds (the former
 /// `state.json` `paths` field - a legacy naming quirk, dropped now that the value
 /// is its own row).

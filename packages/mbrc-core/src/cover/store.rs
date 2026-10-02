@@ -22,13 +22,29 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Condvar, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
-use super::{CACHE_SIZE, resize_cover, sha1_hex};
-use crate::store::{COVER_COVERS, COVER_META, COVER_SIZE, Db, LAST_CHECK};
+use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
+use crate::store::{COVER_COVERS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK};
+
+/// The most decode workers a build runs.
+///
+/// Fetching from MusicBee is one thread at about 25 ms a cover, which two
+/// workers already keep up with for all but large progressive JPEGs; more only
+/// multiplies the memory those hold at once.
+const MAX_WORKERS: usize = 4;
+
+/// The memory all workers' decodes may hold at once, by [`decode_cost`].
+const DECODE_BUDGET: usize = 64 * 1024 * 1024;
+
+/// How long "this album has no artwork" is believed before it is asked again.
+///
+/// A folder image can be added without touching the track, so the track's
+/// modification time alone would never retry it.
+const NO_ART_RETRY_SECS: i64 = 7 * 24 * 60 * 60;
 
 /// How many newly stored covers are saved together during a build.
 ///
@@ -52,6 +68,22 @@ pub struct BuildProgress<'a> {
     pub failed: usize,
     /// The album being fetched: its representative track.
     pub path: &'a str,
+}
+
+/// What fetching one album's artwork found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Artwork {
+    Found(Vec<u8>),
+    /// The album has no artwork; remembered, so it is not asked again every build.
+    Missing,
+    /// The fetch itself failed; asked again next build.
+    Unavailable,
+}
+
+impl From<Option<Vec<u8>>> for Artwork {
+    fn from(raw: Option<Vec<u8>>) -> Self {
+        raw.map_or(Self::Missing, Self::Found)
+    }
 }
 
 /// One album's identity ingredients, provided by the host.
@@ -112,6 +144,8 @@ pub struct CoverStore {
     /// album_key -> representative track path (artwork source). Derived each
     /// `warm_up`; never persisted (rebuilt from the host's album list).
     paths: RwLock<HashMap<String, String>>,
+    /// album_key -> when it was found to have no artwork (unix seconds).
+    no_art: RwLock<HashMap<String, i64>>,
     building: AtomicBool,
 }
 
@@ -122,6 +156,7 @@ impl CoverStore {
             db,
             covers: RwLock::new(HashMap::new()),
             paths: RwLock::new(HashMap::new()),
+            no_art: RwLock::new(HashMap::new()),
             building: AtomicBool::new(false),
         }
     }
@@ -233,6 +268,20 @@ impl CoverStore {
         *self.write_paths() = path_map;
 
         let (persisted, last_check) = self.load_state();
+        let now = now_unix_secs();
+        let modified: HashMap<&str, i64> = albums
+            .iter()
+            .map(|a| (a.key.as_str(), a.modified))
+            .collect();
+        let no_art: HashMap<String, i64> = self
+            .load_no_art()
+            .into_iter()
+            .filter(|(key, at)| {
+                now - at < NO_ART_RETRY_SECS
+                    && modified.get(key.as_str()).is_some_and(|m| *m < last_check)
+            })
+            .collect();
+        *self.no_art.write().unwrap_or_else(|e| e.into_inner()) = no_art;
         let resized = self.stored_cover_size() != Some(CACHE_SIZE);
         let mut covers = self.write_covers();
         covers.clear();
@@ -272,6 +321,16 @@ impl CoverStore {
         });
     }
 
+    /// Forgets which albums were found to have no artwork, so the next build
+    /// asks again. A manual rebuild does this; it is what a user reaches for
+    /// after adding a folder image.
+    pub fn forget_missing_art(&self) {
+        self.no_art
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+
     /// Builds missing covers: fetch each album's artwork, resize+hash+store it,
     /// then prune orphaned files and persist.
     ///
@@ -279,9 +338,10 @@ impl CoverStore {
     /// immediately rather than building twice. `verbose` logs a timing line per
     /// cover at info, which is opt-in because a full library is 1400+ lines. The
     /// returned [`BuildStats`] splits the wall-clock into fetch and store.
-    pub fn build<F>(&self, fetch_raw: F, verbose: bool) -> BuildStats
+    pub fn build<F, A>(&self, fetch_raw: F, verbose: bool) -> BuildStats
     where
-        F: Fn(&str) -> Option<Vec<u8>>,
+        F: Fn(&str) -> A,
+        A: Into<Artwork>,
     {
         self.build_until(fetch_raw, verbose, &|| false)
     }
@@ -293,16 +353,22 @@ impl CoverStore {
     /// is still pruned and persisted, and the next build picks up the rest -
     /// "missing" is recomputed from what is actually on disk every time, so a
     /// half-finished build is a resumable one rather than a broken cache.
-    pub fn build_until<F>(&self, fetch_raw: F, verbose: bool, stop: &dyn Fn() -> bool) -> BuildStats
+    pub fn build_until<F, A>(
+        &self,
+        fetch_raw: F,
+        verbose: bool,
+        stop: &dyn Fn() -> bool,
+    ) -> BuildStats
     where
-        F: Fn(&str) -> Option<Vec<u8>>,
+        F: Fn(&str) -> A,
+        A: Into<Artwork>,
     {
         self.build_reporting(fetch_raw, verbose, stop, &|_| {})
     }
 
     /// As [`Self::build_until`], also logging progress at INFO and handing each
     /// report to `progress`, so the caller can note where the build has got to.
-    pub fn build_reporting<F>(
+    pub fn build_reporting<F, A>(
         &self,
         fetch_raw: F,
         verbose: bool,
@@ -310,7 +376,8 @@ impl CoverStore {
         progress: &dyn Fn(&BuildProgress<'_>),
     ) -> BuildStats
     where
-        F: Fn(&str) -> Option<Vec<u8>>,
+        F: Fn(&str) -> A,
+        A: Into<Artwork>,
     {
         if self.building.swap(true, Ordering::AcqRel) {
             return BuildStats::default(); // a build is already running
@@ -327,7 +394,7 @@ impl CoverStore {
     /// write) is CPU-bound and ~90% of per-cover time, so it fans out. The queue
     /// is bounded, which caps how many decoded images are in memory at once.
     /// New covers are saved every [`CHECKPOINT_EVERY`], not only at the end.
-    fn build_inner<F>(
+    fn build_inner<F, A>(
         &self,
         fetch_raw: F,
         verbose: bool,
@@ -335,13 +402,16 @@ impl CoverStore {
         progress: &dyn Fn(&BuildProgress<'_>),
     ) -> BuildStats
     where
-        F: Fn(&str) -> Option<Vec<u8>>,
+        F: Fn(&str) -> A,
+        A: Into<Artwork>,
     {
         // Self-healing: an entry whose file is gone still counts as missing.
         let missing: Vec<(String, String)> = {
             let covers = self.read_covers();
+            let no_art = self.no_art.read().unwrap_or_else(|e| e.into_inner());
             self.read_paths()
                 .iter()
+                .filter(|(k, _)| !no_art.contains_key(*k))
                 .filter(|(k, _)| match covers.get(*k) {
                     None => true,
                     Some(hash) => !self.cover_file(hash).exists(),
@@ -360,8 +430,8 @@ impl CoverStore {
 
         let workers = std::thread::available_parallelism()
             .map(|n| n.get())
-            .unwrap_or(4)
-            .clamp(1, 8);
+            .unwrap_or(MAX_WORKERS)
+            .clamp(1, MAX_WORKERS);
 
         let (tx, rx) = std::sync::mpsc::sync_channel::<Fetched>(workers * 2);
         let rx = std::sync::Mutex::new(rx);
@@ -400,14 +470,21 @@ impl CoverStore {
                     );
                 }
                 let fetch_start = Instant::now();
-                let raw = fetch_raw(&path);
+                let artwork = fetch_raw(&path).into();
                 let fetch_ms = fetch_start.elapsed().as_millis();
                 stats.fetch_ms += fetch_ms;
-                match raw {
-                    Some(raw) => {
+                match artwork {
+                    Artwork::Found(raw) => {
                         let _ = tx.send((key, path, raw, fetch_ms));
                     }
-                    None => stats.no_art += 1, // no artwork for this track
+                    Artwork::Missing => {
+                        stats.no_art += 1;
+                        self.remember_no_art(&shared.pending, key);
+                    }
+                    Artwork::Unavailable => {
+                        stats.failed += 1;
+                        tracing::debug!(%path, "cover build: artwork fetch failed");
+                    }
                 }
             }
             drop(tx); // close the queue so workers exit once it drains
@@ -432,6 +509,7 @@ impl CoverStore {
 
     /// One worker: stores covers off the queue until the producer closes it.
     fn work(&self, rx: &Mutex<Receiver<Fetched>>, shared: &Shared, verbose: bool) -> BuildStats {
+        below_normal_priority();
         let mut local = BuildStats::default();
         loop {
             // Held only to pull one item, never across the store.
@@ -440,9 +518,11 @@ impl CoverStore {
                 break; // producer dropped the sender: queue drained
             };
 
+            let permit = shared.budget.reserve(decode_cost(&raw, CACHE_SIZE));
             let store_start = Instant::now();
             let result = self.store_cover(&raw);
             let store_ms = store_start.elapsed().as_millis();
+            drop(permit);
             local.store_ms += store_ms;
 
             match result {
@@ -451,7 +531,7 @@ impl CoverStore {
                     local.stored += 1;
                     shared.stored.fetch_add(1, Ordering::Relaxed);
                     shared.note_largest(source);
-                    self.checkpoint(&shared.pending, (key, hash));
+                    self.checkpoint(&shared.pending, |pending| pending.covers.push((key, hash)));
                 }
                 Err(e) => {
                     local.failed += 1;
@@ -543,12 +623,24 @@ impl CoverStore {
     /// As [`Self::persist`], recording `last` as the last check.
     fn persist_at(&self, last: i64) {
         let covers = self.read_covers().clone();
+        let no_art = self
+            .no_art
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         self.db.write(Durability::Immediate, |txn| {
             txn.delete_table(COVER_COVERS)?;
             {
                 let mut table = txn.open_table(COVER_COVERS)?;
                 for (key, hash) in &covers {
                     table.insert(key.as_str(), hash.as_str())?;
+                }
+            }
+            txn.delete_table(COVER_NO_ART)?;
+            {
+                let mut table = txn.open_table(COVER_NO_ART)?;
+                for (key, at) in &no_art {
+                    table.insert(key.as_str(), *at)?;
                 }
             }
             {
@@ -559,26 +651,59 @@ impl CoverStore {
         });
     }
 
-    /// Queues one newly stored cover, saving the batch once it is full.
+    /// Records an album with no artwork, in memory and at the next checkpoint.
+    fn remember_no_art(&self, pending: &Mutex<Pending>, key: String) {
+        let now = now_unix_secs();
+        self.no_art
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.clone(), now);
+        self.checkpoint(pending, |pending| pending.no_art.push((key, now)));
+    }
+
+    /// Queues one result with `add`, saving the batch once it is full.
     ///
-    /// Appends only: the table was rewritten at the start of the build, so
-    /// everything in it is already valid.
-    fn checkpoint(&self, pending: &Mutex<Vec<(String, String)>>, entry: (String, String)) {
+    /// Appends only: the tables were rewritten at the start of the build, so
+    /// everything in them is already valid.
+    fn checkpoint(&self, pending: &Mutex<Pending>, add: impl FnOnce(&mut Pending)) {
         let batch = {
             let mut pending = pending.lock().unwrap_or_else(|e| e.into_inner());
-            pending.push(entry);
+            add(&mut pending);
             if pending.len() < CHECKPOINT_EVERY {
                 return;
             }
             std::mem::take(&mut *pending)
         };
         self.db.write(Durability::Immediate, |txn| {
-            let mut table = txn.open_table(COVER_COVERS)?;
-            for (key, hash) in &batch {
-                table.insert(key.as_str(), hash.as_str())?;
+            let mut covers = txn.open_table(COVER_COVERS)?;
+            for (key, hash) in &batch.covers {
+                covers.insert(key.as_str(), hash.as_str())?;
+            }
+            let mut no_art = txn.open_table(COVER_NO_ART)?;
+            for (key, at) in &batch.no_art {
+                no_art.insert(key.as_str(), *at)?;
             }
             Ok(())
         });
+    }
+
+    /// The albums found to have no artwork, with when, as persisted.
+    fn load_no_art(&self) -> HashMap<String, i64> {
+        self.db
+            .read(|txn| {
+                let table = match txn.open_table(COVER_NO_ART) {
+                    Ok(t) => t,
+                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(HashMap::new()),
+                    Err(e) => return Err(e.into()),
+                };
+                let mut map = HashMap::new();
+                for entry in table.iter()? {
+                    let (k, v) = entry?;
+                    map.insert(k.value().to_string(), v.value());
+                }
+                Ok(map)
+            })
+            .unwrap_or_default()
     }
 
     fn read_covers(&self) -> std::sync::RwLockReadGuard<'_, HashMap<String, String>> {
@@ -611,8 +736,69 @@ struct Shared {
     failed: AtomicUsize,
     /// The largest source image stored so far.
     largest: Mutex<(u32, u32)>,
-    /// Stored covers not yet saved by a checkpoint.
-    pending: Mutex<Vec<(String, String)>>,
+    /// Stored covers and no-art albums not yet saved by a checkpoint.
+    pending: Mutex<Pending>,
+    budget: Budget,
+}
+
+/// What the next checkpoint will save.
+#[derive(Default)]
+struct Pending {
+    covers: Vec<(String, String)>,
+    no_art: Vec<(String, i64)>,
+}
+
+impl Pending {
+    fn len(&self) -> usize {
+        self.covers.len() + self.no_art.len()
+    }
+}
+
+/// The memory decodes may hold at once, shared by a build's workers.
+///
+/// A worker reserves its decode's estimated cost before starting and gives it
+/// back when done; a decode larger than the whole budget waits for all of it,
+/// so it runs alone rather than never.
+struct Budget {
+    free: Mutex<usize>,
+    returned: Condvar,
+}
+
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            free: Mutex::new(DECODE_BUDGET),
+            returned: Condvar::new(),
+        }
+    }
+}
+
+impl Budget {
+    fn reserve(&self, cost: usize) -> Permit<'_> {
+        let amount = cost.min(DECODE_BUDGET);
+        let mut free = self.free.lock().unwrap_or_else(|e| e.into_inner());
+        while *free < amount {
+            free = self.returned.wait(free).unwrap_or_else(|e| e.into_inner());
+        }
+        *free -= amount;
+        Permit {
+            budget: self,
+            amount,
+        }
+    }
+}
+
+/// A share of the [`Budget`], given back when dropped.
+struct Permit<'a> {
+    budget: &'a Budget,
+    amount: usize,
+}
+
+impl Drop for Permit<'_> {
+    fn drop(&mut self) {
+        *self.budget.free.lock().unwrap_or_else(|e| e.into_inner()) += self.amount;
+        self.budget.returned.notify_all();
+    }
 }
 
 impl Shared {
@@ -649,6 +835,22 @@ fn report_progress(
         "cover cache build progress"
     );
     progress(at);
+}
+
+/// Lowers the calling thread below MusicBee's own, so a cold build does not
+/// compete with playback or the UI for the CPU.
+fn below_normal_priority() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+        };
+        // SAFETY: GetCurrentThread returns a pseudo-handle valid for this call,
+        // and SetThreadPriority only changes this thread's scheduling.
+        unsafe {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+        }
+    }
 }
 
 fn now_unix_secs() -> i64 {
@@ -934,6 +1136,88 @@ mod tests {
         assert_eq!((reports[0].0, reports[0].1), (PROGRESS_EVERY, total));
         assert!(reports[0].2.ends_with(".mp3"));
         assert_eq!(stats.largest, (8, 8));
+    }
+
+    /// Builds `albums` with a fetch that counts its calls and answers `answer`.
+    fn build_counting(store: &CoverStore, answer: fn() -> Artwork) -> usize {
+        let calls = AtomicUsize::new(0);
+        store.build(
+            |_| {
+                calls.fetch_add(1, Ordering::AcqRel);
+                answer()
+            },
+            false,
+        );
+        calls.into_inner()
+    }
+
+    #[test]
+    fn an_album_without_artwork_is_asked_once_and_remembered_across_restarts() {
+        let (db, dir) = temp_storage("no-art");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(3, 0));
+        assert_eq!(build_counting(&store, || Artwork::Missing), 3);
+        store.warm_up(&albums(3, 0));
+        assert_eq!(build_counting(&store, || Artwork::Missing), 0);
+
+        let restarted = CoverStore::new(db.clone(), &dir);
+        restarted.warm_up(&albums(3, 0));
+        assert_eq!(build_counting(&restarted, || Artwork::Missing), 0);
+    }
+
+    #[test]
+    fn a_failed_fetch_is_not_remembered_as_no_artwork() {
+        let (db, dir) = temp_storage("no-art-failed");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(2, 0));
+        let stats_calls = build_counting(&store, || Artwork::Unavailable);
+        assert_eq!(stats_calls, 2);
+        store.warm_up(&albums(2, 0));
+        assert_eq!(build_counting(&store, || Artwork::Unavailable), 2);
+    }
+
+    #[test]
+    fn no_artwork_is_asked_again_after_a_week_a_track_change_or_a_manual_rebuild() {
+        let (db, dir) = temp_storage("no-art-retry");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(3, 0));
+        build_counting(&store, || Artwork::Missing);
+
+        // alb0 was found bare more than a week ago...
+        db.write(Durability::Immediate, |txn| {
+            txn.open_table(COVER_NO_ART)?
+                .insert("alb0", now_unix_secs() - NO_ART_RETRY_SECS - 1)?;
+            Ok(())
+        });
+        // ...and alb1's track has changed since.
+        let mut changed = albums(3, 0);
+        changed[1].modified = now_unix_secs() + 60;
+        store.warm_up(&changed);
+        assert_eq!(build_counting(&store, || Artwork::Missing), 2);
+
+        store.forget_missing_art();
+        assert_eq!(build_counting(&store, || Artwork::Missing), 3);
+    }
+
+    #[test]
+    fn a_decode_bigger_than_the_whole_budget_still_runs_alone() {
+        let budget = Budget::default();
+        let half = budget.reserve(DECODE_BUDGET / 2);
+        std::thread::scope(|s| {
+            let waiting = s.spawn(|| {
+                let _whole = budget.reserve(DECODE_BUDGET * 4);
+                *budget.free.lock().unwrap()
+            });
+            std::thread::sleep(Duration::from_millis(50));
+            assert!(!waiting.is_finished(), "it waits for the half still out");
+            drop(half);
+            assert_eq!(waiting.join().unwrap(), 0, "and then holds all of it");
+        });
+        assert_eq!(
+            *budget.free.lock().unwrap(),
+            DECODE_BUDGET,
+            "all given back"
+        );
     }
 
     #[test]

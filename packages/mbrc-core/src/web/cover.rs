@@ -81,7 +81,11 @@ pub async fn now_playing(
         .filter(|hash| is_content_hash(hash))
         .cloned();
     let rendered = tokio::task::spawn_blocking(move || {
-        let from_file = crate::cover::from_base64(&core.providers.artwork_raw(&path).ok()?)
+        let from_file = core
+            .providers
+            .artwork_raw(&path)
+            .ok()
+            .filter(|raw| !raw.is_empty())
             .and_then(|raw| {
                 crate::cover::resize_to_jpeg(&raw, NOW_PLAYING_SIZE, NOW_PLAYING_SIZE).ok()
             });

@@ -27,7 +27,7 @@ namespace MusicBeePlugin.Ffi
     public sealed class NativeBridge : IDisposable
     {
         /// <summary>Must equal MBRC_ABI_VERSION in mbrc-core/src/ffi/types.rs.</summary>
-        private const int MbrcAbiVersion = 1;
+        private const int MbrcAbiVersion = 2;
 
         #region FFI delegate types (match MbrcCallbacks in ffi/types.rs)
 

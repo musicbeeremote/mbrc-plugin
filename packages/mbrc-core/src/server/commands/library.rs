@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::{Ctx, HandlerResult, as_bool_lenient, as_set_string, pagination, reply_dto};
-use crate::cover::{cover_identifier, from_base64, store::CoverStore};
+use crate::cover::{cover_identifier, store::CoverStore};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
 use crate::providers::Providers;
@@ -515,14 +515,9 @@ fn serve_cover(store: &CoverStore, client_hash: &str, hash: &str) -> AlbumCover 
     }
 }
 
-/// Fetches a track's raw artwork through the host (base64) and decodes it. `None`
-/// when there is no artwork or the payload is unusable.
+/// Fetches a track's raw artwork through the host. `None` when there is none.
 fn fetch_raw_artwork(p: &dyn Providers, path: &str) -> Option<Vec<u8>> {
-    let b64 = p.artwork_raw(path).ok()?;
-    if b64.is_empty() {
-        return None;
-    }
-    from_base64(&b64)
+    p.artwork_raw(path).ok().filter(|raw| !raw.is_empty())
 }
 
 /// A status-only cover reply (`{status}`), for 304/400/404.
@@ -949,7 +944,7 @@ mod tests {
         }]);
         // The host returns this track's raw artwork as base64.
         let m = MockProviders {
-            artwork_raw: crate::cover::to_base64(&test_jpeg_bytes(300, 300)),
+            artwork_raw: test_jpeg_bytes(300, 300),
             ..Default::default()
         };
 

@@ -14,7 +14,7 @@
 /// Bump this on ANY incompatible change to the exports, `MbrcCallbacks`, or the
 /// enum numbering, so a mismatched `mbrc_core.dll` next to the shim (or a dev
 /// build skew) is rejected up front.
-pub const MBRC_ABI_VERSION: i32 = 1;
+pub const MBRC_ABI_VERSION: i32 = 2;
 
 /// Result codes for all FFI functions. `0` = success, negative = error.
 #[repr(i32)]

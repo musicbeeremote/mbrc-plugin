@@ -393,8 +393,8 @@ impl Providers for FixtureProviders {
             modified: 0,
         }])
     }
-    fn artwork_raw(&self, _path: &str) -> Result<String, String> {
-        Ok(String::new())
+    fn artwork_raw(&self, _path: &str) -> Result<Vec<u8>, String> {
+        Ok(Vec::new())
     }
     fn batch_metadata(&self, _paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
         Ok(vec![TrackMetadata {

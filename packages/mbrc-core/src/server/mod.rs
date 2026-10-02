@@ -388,6 +388,10 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
             }
 
             if scope.does_covers() {
+                // A manual rebuild is what a user reaches for after adding art.
+                if scope == RebuildScope::Covers {
+                    core.cover_store.forget_missing_art();
+                }
                 build_cover_cache(core, &identities, started);
             }
         }
@@ -458,8 +462,6 @@ fn build_cover_cache(
     identities: &[crate::cover::store::AlbumIdentity],
     started: std::time::Instant,
 ) {
-    use crate::cover::from_base64;
-
     let album_count = identities.len();
     core.cover_store.warm_up(identities);
     tracing::info!(
@@ -471,13 +473,7 @@ fn build_cover_cache(
     let build_started = std::time::Instant::now();
     let providers = core.providers.clone();
     let stats = core.cover_store.build_reporting(
-        |path| {
-            let b64 = providers.artwork_raw(path).ok()?;
-            if b64.is_empty() {
-                return None;
-            }
-            from_base64(&b64)
-        },
+        |path| fetch_artwork(providers.as_ref(), path),
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
         &|at| note_cover_progress(core, at),
@@ -500,6 +496,23 @@ fn build_cover_cache(
         total_ms = started.elapsed().as_millis(),
         "cover cache build complete"
     );
+}
+
+/// One album's artwork for a cover build: what MusicBee holds, nothing, or a
+/// failed fetch, which unlike "nothing" is asked again next build.
+fn fetch_artwork(
+    providers: &dyn crate::providers::Providers,
+    path: &str,
+) -> crate::cover::store::Artwork {
+    use crate::cover::store::Artwork;
+    match providers.artwork_raw(path) {
+        Ok(raw) if raw.is_empty() => Artwork::Missing,
+        Ok(raw) => Artwork::Found(raw),
+        Err(error) => {
+            tracing::debug!(path, %error, "cover build: artwork fetch failed");
+            Artwork::Unavailable
+        }
+    }
 }
 
 /// Records where a cover build has got to, for the next start to report if
@@ -541,7 +554,7 @@ fn notify_reconcile(core: &Core, scope: RebuildScope, building: bool) {
 /// The caller must already hold the reconcile single-flight guard (the Scanner
 /// does), so this cannot race an init, a library switch, or a manual rebuild.
 pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
-    use crate::cover::{cover_identifier, from_base64, store::AlbumIdentity};
+    use crate::cover::{cover_identifier, store::AlbumIdentity};
 
     let identities: Vec<AlbumIdentity> = match core.providers.album_identifiers() {
         Ok(identifiers) => identifiers
@@ -565,13 +578,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
 
     let providers = core.providers.clone();
     let stats = core.cover_store.build_reporting(
-        |path| {
-            let b64 = providers.artwork_raw(path).ok()?;
-            if b64.is_empty() {
-                return None;
-            }
-            from_base64(&b64)
-        },
+        |path| fetch_artwork(providers.as_ref(), path),
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
         &|at| note_cover_progress(core, at),
@@ -708,7 +715,7 @@ mod cover_delta_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mock = MockProviders {
             album_identifiers: albums,
-            artwork_raw: crate::cover::to_base64(&crate::cover::test_jpeg_bytes(300, 300)),
+            artwork_raw: crate::cover::test_jpeg_bytes(300, 300),
             ..MockProviders::default()
         };
         let config = Config {

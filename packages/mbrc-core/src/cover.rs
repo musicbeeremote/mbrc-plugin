@@ -186,6 +186,103 @@ fn decode_jpeg_reduced(raw: &[u8], max_w: u32, max_h: u32) -> Option<ReducedJpeg
     })
 }
 
+/// What a JPEG's frame header declares, read without decoding anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct JpegFrame {
+    width: u32,
+    height: u32,
+    /// Progressive (SOF2 and kin): every coefficient is held until the last scan.
+    progressive: bool,
+    /// Samples across all components, after chroma subsampling.
+    samples: u64,
+}
+
+/// Reads the frame header (SOFn) of a JPEG, walking its segments from the start.
+///
+/// `None` for anything that is not a well-formed JPEG up to its frame header.
+fn jpeg_frame(raw: &[u8]) -> Option<JpegFrame> {
+    if !raw.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut at = 2;
+    loop {
+        if *raw.get(at)? != 0xFF {
+            return None;
+        }
+        let marker = *raw.get(at + 1)?;
+        at += 2;
+        match marker {
+            0xFF => at -= 1,         // a fill byte before the real marker
+            0x01 | 0xD0..=0xD7 => {} // markers with no length
+            _ => {
+                let len = usize::from(u16::from_be_bytes([*raw.get(at)?, *raw.get(at + 1)?]));
+                let segment = raw.get(at + 2..at + len)?;
+                if matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+                    return frame_from_sof(marker, segment);
+                }
+                at += len;
+            }
+        }
+    }
+}
+
+/// Parses a start-of-frame segment body: precision, height, width, then one
+/// (id, sampling, table) triple per component.
+fn frame_from_sof(marker: u8, segment: &[u8]) -> Option<JpegFrame> {
+    let height = u32::from(u16::from_be_bytes([*segment.get(1)?, *segment.get(2)?]));
+    let width = u32::from(u16::from_be_bytes([*segment.get(3)?, *segment.get(4)?]));
+    let count = usize::from(*segment.get(5)?);
+    let components = segment.get(6..6 + count * 3)?;
+    let sampling: Vec<(u64, u64)> = components
+        .chunks(3)
+        .map(|c| (u64::from(c[1] >> 4), u64::from(c[1] & 0x0F)))
+        .collect();
+    let h_max = sampling.iter().map(|s| s.0).max()?.max(1);
+    let v_max = sampling.iter().map(|s| s.1).max()?.max(1);
+    let samples = sampling
+        .iter()
+        .map(|(h, v)| (u64::from(width) * h / h_max) * (u64::from(height) * v / v_max))
+        .sum();
+    Some(JpegFrame {
+        width,
+        height,
+        progressive: matches!(marker, 0xC2 | 0xC6 | 0xCA | 0xCE),
+        samples,
+    })
+}
+
+/// How much memory resizing `raw` to fit `max` x `max` will take at its peak.
+///
+/// A budget, not an exact figure: a baseline JPEG decodes at reduced scale, so
+/// it costs about its reduced output; a progressive one holds two bytes per
+/// coefficient for the whole image until its last scan; anything else is
+/// decoded at full size.
+pub fn decode_cost(raw: &[u8], max: u32) -> usize {
+    const OVERHEAD: u64 = 1024 * 1024;
+    let bytes = match jpeg_frame(raw) {
+        Some(frame) if frame.progressive => frame.samples * 2 + OVERHEAD,
+        Some(frame) => {
+            let (tw, th) = scaled_size(frame.width, frame.height, max, max);
+            let scale = [8u64, 4, 2, 1]
+                .into_iter()
+                .find(|k| {
+                    u64::from(frame.width).div_ceil(*k) >= u64::from(tw)
+                        && u64::from(frame.height).div_ceil(*k) >= u64::from(th)
+                })
+                .unwrap_or(1);
+            frame.samples / (scale * scale) * 2 + OVERHEAD
+        }
+        None => image::ImageReader::new(Cursor::new(raw))
+            .with_guessed_format()
+            .ok()
+            .and_then(|reader| reader.into_dimensions().ok())
+            .map_or(16 * OVERHEAD, |(w, h)| {
+                full_decode_bytes(w, h) as u64 + OVERHEAD
+            }),
+    };
+    usize::try_from(bytes).unwrap_or(usize::MAX)
+}
+
 /// Decodes an image at full size with allocation + dimension limits enforced.
 ///
 /// The limits stop an untrusted payload whose header claims enormous dimensions
@@ -482,6 +579,59 @@ mod tests {
         let resized = resize_cover(&png, CACHE_SIZE, CACHE_SIZE).unwrap();
         assert!(!resized.reduced);
         assert_eq!(resized.source, (800, 600));
+    }
+
+    /// A minimal JPEG up to its frame header: SOI, an APP0, then SOFn with the
+    /// given components as (horizontal, vertical) sampling.
+    fn jpeg_header(marker: u8, w: u16, h: u16, sampling: &[(u8, u8)]) -> Vec<u8> {
+        let mut out = vec![
+            0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0xAB, 0xCD, 0xFF, 0xFF, marker,
+        ];
+        let len = 8 + sampling.len() * 3;
+        out.extend((len as u16).to_be_bytes());
+        out.push(8);
+        out.extend(h.to_be_bytes());
+        out.extend(w.to_be_bytes());
+        out.push(sampling.len() as u8);
+        for (n, (hs, vs)) in sampling.iter().enumerate() {
+            out.extend([n as u8 + 1, (hs << 4) | vs, 0]);
+        }
+        out
+    }
+
+    #[test]
+    fn a_frame_header_is_read_past_other_segments_and_fill_bytes() {
+        let frame = jpeg_frame(&jpeg_header(0xC2, 3000, 2000, &[(2, 2), (1, 1), (1, 1)])).unwrap();
+        assert_eq!(
+            (frame.width, frame.height, frame.progressive),
+            (3000, 2000, true)
+        );
+        // 4:2:0: full luma plus two quarter-size chroma planes.
+        assert_eq!(frame.samples, 3000 * 2000 + 2 * 1500 * 1000);
+        let baseline = jpeg_frame(&jpeg_header(0xC0, 100, 100, &[(1, 1)])).unwrap();
+        assert!(!baseline.progressive);
+        assert_eq!(jpeg_frame(&[0xFF, 0xD8, 0xFF]), None);
+        assert_eq!(jpeg_frame(b"not a jpeg"), None);
+    }
+
+    #[test]
+    fn a_progressive_jpeg_costs_its_whole_image_and_a_baseline_one_its_reduced_size() {
+        let progressive = jpeg_header(0xC2, 3000, 3000, &[(2, 2), (1, 1), (1, 1)]);
+        let baseline = jpeg_header(0xC0, 3000, 3000, &[(2, 2), (1, 1), (1, 1)]);
+        // Measured at about 27 MB per progressive 3000 px 4:2:0 cover.
+        let mib = |bytes: usize| bytes / (1024 * 1024);
+        assert_eq!(mib(decode_cost(&progressive, CACHE_SIZE)), 26);
+        assert!(mib(decode_cost(&baseline, CACHE_SIZE)) <= 2, "1/8 scale");
+    }
+
+    #[test]
+    fn a_png_costs_a_full_decode() {
+        let img = image::RgbImage::from_pixel(1000, 1000, image::Rgb([1, 2, 3]));
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        assert!(decode_cost(&png, CACHE_SIZE) >= full_decode_bytes(1000, 1000));
     }
 
     #[test]

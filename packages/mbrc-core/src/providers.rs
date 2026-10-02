@@ -148,7 +148,8 @@ pub trait Providers: Send + Sync {
     // hash and cache. `album_identifiers` folds one library scan into per-album
     // identities.
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String>;
-    fn artwork_raw(&self, path: &str) -> Result<String, String>;
+    /// A track's artwork as the image bytes MusicBee holds; empty when it has none.
+    fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String>;
     fn batch_metadata(&self, paths: Vec<String>) -> Result<Vec<TrackMetadata>, String>;
 
     // Library cache. `track_paths` returns every track path in
@@ -205,6 +206,31 @@ pub struct FfiProviders {
 impl FfiProviders {
     pub fn new(callbacks: SafeCallbacks) -> Self {
         Self { callbacks }
+    }
+}
+
+/// A MessagePack `bin` payload, read as bytes.
+///
+/// `Vec<u8>` alone deserializes from an array of integers and refuses `bin`,
+/// which is what the host's `byte[]` becomes.
+struct Bytes(Vec<u8>);
+
+impl<'de> serde::Deserialize<'de> for Bytes {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = Bytes;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a byte array")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, bytes: &[u8]) -> Result<Bytes, E> {
+                Ok(Bytes(bytes.to_vec()))
+            }
+            fn visit_byte_buf<E: serde::de::Error>(self, bytes: Vec<u8>) -> Result<Bytes, E> {
+                Ok(Bytes(bytes))
+            }
+        }
+        deserializer.deserialize_bytes(Visitor)
     }
 }
 
@@ -530,13 +556,15 @@ impl Providers for FfiProviders {
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
         self.callbacks.query_no_params(QueryType::AlbumIdentifiers)
     }
-    fn artwork_raw(&self, path: &str) -> Result<String, String> {
-        self.callbacks.query(
-            QueryType::ArtworkRawForPath,
-            &PathParams {
-                path: path.to_string(),
-            },
-        )
+    fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String> {
+        self.callbacks
+            .query::<_, Bytes>(
+                QueryType::ArtworkRawForPath,
+                &PathParams {
+                    path: path.to_string(),
+                },
+            )
+            .map(|bytes| bytes.0)
     }
     fn batch_metadata(&self, paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
         self.callbacks
@@ -860,8 +888,8 @@ impl Providers for NullProviders {
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
         Ok(Vec::new())
     }
-    fn artwork_raw(&self, _path: &str) -> Result<String, String> {
-        Ok(String::new())
+    fn artwork_raw(&self, _path: &str) -> Result<Vec<u8>, String> {
+        Ok(Vec::new())
     }
     fn batch_metadata(&self, _paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
         Ok(Vec::new())
@@ -956,7 +984,7 @@ pub struct MockProviders {
     pub cover_cache_status: bool,
     pub has_lastfm_account: bool,
     pub album_identifiers: Vec<AlbumIdentifier>,
-    pub artwork_raw: String,
+    pub artwork_raw: Vec<u8>,
     pub batch_metadata: Vec<TrackMetadata>,
     pub track_paths: Vec<String>,
     pub tracks_for_paths: Vec<Track>,
@@ -1251,7 +1279,7 @@ impl Providers for MockProviders {
         self.record("album_identifiers");
         Ok(self.album_identifiers.clone())
     }
-    fn artwork_raw(&self, path: &str) -> Result<String, String> {
+    fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String> {
         self.record(format!("artwork_raw({path})"));
         Ok(self.artwork_raw.clone())
     }
@@ -1358,5 +1386,24 @@ impl Providers for MockProviders {
     fn set_background_task_message(&self, message: &str) -> Result<(), String> {
         self.record(format!("set_background_task_message({message})"));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod bytes_tests {
+    use super::Bytes;
+
+    #[test]
+    fn a_messagepack_bin_reads_as_its_bytes() {
+        // bin8 holding three bytes, as MessagePack-CSharp writes a byte[].
+        let bytes: Bytes = rmp_serde::from_slice(&[0xC4, 0x03, 0xFF, 0xD8, 0x01]).unwrap();
+        assert_eq!(bytes.0, [0xFF, 0xD8, 0x01]);
+        let empty: Bytes = rmp_serde::from_slice(&[0xC4, 0x00]).unwrap();
+        assert!(empty.0.is_empty());
+    }
+
+    #[test]
+    fn a_string_is_not_taken_for_bytes() {
+        assert!(rmp_serde::from_slice::<Bytes>(&[0xA2, b'h', b'i']).is_err());
     }
 }
