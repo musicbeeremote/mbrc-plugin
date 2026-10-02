@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use lofty::config::ParseOptions;
+use lofty::config::{ParseOptions, ParsingMode};
 use lofty::file::TaggedFileExt;
 use lofty::probe::Probe;
 
@@ -62,10 +62,16 @@ impl Source {
 ///
 /// MusicBee is asked for picture index 0; the core takes the first picture the
 /// file carries, which the build's parity check compares against MusicBee's.
+/// Parsed relaxed: an MP3 whose audio frames confuse the strict parser still
+/// has a perfectly readable tag, and the picture is all that is wanted.
 fn first_picture(path: &Path) -> Result<Vec<u8>, String> {
     let tagged = Probe::open(path)
         .map_err(|e| format!("open track: {e}"))?
-        .options(ParseOptions::new().read_properties(false))
+        .options(
+            ParseOptions::new()
+                .read_properties(false)
+                .parsing_mode(ParsingMode::Relaxed),
+        )
         .read()
         .map_err(|e| format!("read tags: {e}"))?;
     tagged

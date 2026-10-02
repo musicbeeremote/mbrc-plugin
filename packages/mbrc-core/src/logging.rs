@@ -202,7 +202,8 @@ pub fn init(storage_path: &str) {
     } else {
         "info"
     };
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(fallback));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(with_quiet_dependencies(fallback)));
 
     // Stashed so `set_level` can swap the filter live.
     let (filter_layer, handle) = reload::Layer::new(filter);
@@ -418,6 +419,14 @@ pub fn memory_mib() -> Option<(u64, u64)> {
         .map(|s| ((s.physical_mem >> 20) as u64, (s.virtual_mem >> 20) as u64))
 }
 
+/// `directive` with dependencies held to errors whatever level the core logs at.
+///
+/// `lofty` warns about every duplicated tag frame it meets, which in a real
+/// library is a few hundred harmless lines per cover build.
+fn with_quiet_dependencies(directive: &str) -> String {
+    format!("{directive},lofty=error")
+}
+
 /// Emits a log line forwarded from C#. `level`: 0=trace .. 4=error.
 pub fn log(level: i32, target: &str, message: &str) {
     match level {
@@ -435,7 +444,8 @@ pub fn log(level: i32, target: &str, message: &str) {
 /// the handle installed by [`init`]. If logging was never initialized (unit
 /// tests), it just validates.
 pub fn set_level(directive: &str) -> Result<(), String> {
-    let filter = EnvFilter::try_new(directive).map_err(|e| e.to_string())?;
+    let filter =
+        EnvFilter::try_new(with_quiet_dependencies(directive)).map_err(|e| e.to_string())?;
     match RELOAD_HANDLE.get() {
         Some(handle) => handle.reload(filter).map_err(|e| e.to_string()),
         None => Ok(()),
@@ -677,6 +687,7 @@ mod tests {
         assert!(set_level("mbrc_core=debug,info").is_ok());
         // A target with an unparseable level is rejected.
         assert!(set_level("mbrc_core=notalevel").is_err());
+        assert_eq!(with_quiet_dependencies("info"), "info,lofty=error");
     }
 
     #[test]
