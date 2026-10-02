@@ -132,11 +132,14 @@ pub struct BuildStats {
     /// Total time spent fetching raw artwork over the FFI, in milliseconds.
     /// Single-threaded (the producer), so this is also wall-clock for fetch.
     pub fetch_ms: u128,
+    /// Time the workers spent reading artwork the core reads itself, summed
+    /// across them: the share of a build that waits on the disk, not the CPU.
+    pub read_ms: u128,
     /// Total CPU time spent decoding + resizing + encoding + writing, summed
     /// across worker threads - so with a parallel build it exceeds the wall-clock
     /// spent storing. Compare against `build_ms` (wall-clock) to see the speedup.
     pub store_ms: u128,
-    /// The slowest single cover's total (fetch + store) time, in milliseconds.
+    /// The slowest single cover's total (fetch, read and store) time, in milliseconds.
     pub slowest_ms: u128,
     /// The slowest single cover's track path.
     pub slowest_path: String,
@@ -526,6 +529,7 @@ impl CoverStore {
                 let local = handle.join().unwrap_or_default();
                 stats.stored += local.stored;
                 stats.failed += local.failed;
+                stats.read_ms += local.read_ms;
                 stats.store_ms += local.store_ms;
                 if local.slowest_ms > stats.slowest_ms {
                     stats.slowest_ms = local.slowest_ms;
@@ -568,7 +572,8 @@ impl CoverStore {
                     }
                 },
             };
-            local.store_ms += read_start.elapsed().as_millis();
+            let read_ms = read_start.elapsed().as_millis();
+            local.read_ms += read_ms;
 
             let permit = shared.budget.reserve(decode_cost(&raw, CACHE_SIZE));
             let store_start = Instant::now();
@@ -592,7 +597,7 @@ impl CoverStore {
                 }
             }
 
-            let total_ms = fetch_ms + store_ms;
+            let total_ms = fetch_ms + read_ms + store_ms;
             if total_ms > local.slowest_ms {
                 local.slowest_ms = total_ms;
                 local.slowest_path = path.clone();
@@ -602,6 +607,7 @@ impl CoverStore {
                 tracing::info!(
                     %path,
                     fetch_ms,
+                    read_ms,
                     store_ms,
                     bytes = raw.len(),
                     "cover build: timing"

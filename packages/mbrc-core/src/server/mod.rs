@@ -489,6 +489,7 @@ fn build_cover_cache(
         no_art = stats.no_art,
         failed = stats.failed,
         fetch_ms = stats.fetch_ms,
+        read_ms = stats.read_ms,
         store_ms = stats.store_ms,
         slowest_ms = stats.slowest_ms,
         slowest_path = %stats.slowest_path,
