@@ -202,6 +202,10 @@ pub enum QueryType {
     PlaylistCatalog = 47,
     // Creates a playlist and answers its url; empty when the host refused.
     PlaylistCreate = 48,
+    // Where a track's artwork is (embedded, or a linked image file and its
+    // path), without its bytes: MusicBee answers this almost for free, and the
+    // core reads the picture itself (#232).
+    ArtworkLocationForPath = 49,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

@@ -142,12 +142,21 @@ pub struct AlbumCoverParams {
     pub client_hash: String,
 }
 
-/// `ArtworkRawForPath` query: the representative track path whose raw MusicBee
-/// artwork the host returns (base64). The core decodes, resizes, hashes, and
-/// stores it during a cover-cache build.
+/// A query naming one track path: `ArtworkRawForPath` (the host answers the
+/// artwork's raw bytes) and `ArtworkLocationForPath` (it answers where they are).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PathParams {
     pub path: String,
+}
+
+/// Where a track's artwork is (`ArtworkLocationForPath`), as MusicBee reports it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtworkLocation {
+    /// MusicBee's `PictureLocations` flags: 1 embedded, 2 organised copy,
+    /// 4 linked to source, 8 folder thumbnail; 0 when it knows of none.
+    pub location: i32,
+    /// The image file's path for linked artwork; empty for embedded.
+    pub url: String,
 }
 
 /// `BatchMetadata` query: the track paths to resolve to `{artist, album}` in one

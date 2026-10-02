@@ -27,6 +27,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
+use super::source::Source;
 use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
 use crate::store::{COVER_COVERS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK};
 
@@ -80,6 +81,19 @@ pub enum Artwork {
     Unavailable,
 }
 
+/// What the build's producer learned about one album's artwork.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Lookup {
+    /// Settled already: the bytes, no artwork, or a failed fetch.
+    Done(Artwork),
+    /// For a worker to read; MusicBee is asked for the bytes only if that fails.
+    Read(Source),
+}
+
+/// How many albums at the start of a build are read both ways at DEBUG, to
+/// check that the core picks the same picture MusicBee would.
+const PARITY_SAMPLE: usize = 50;
+
 impl From<Option<Vec<u8>>> for Artwork {
     fn from(raw: Option<Vec<u8>>) -> Self {
         raw.map_or(Self::Missing, Self::Found)
@@ -131,6 +145,10 @@ pub struct BuildStats {
     pub stopped: bool,
     /// The largest source image seen, as width and height.
     pub largest: (u32, u32),
+    /// Covers whose artwork the core read itself rather than through MusicBee.
+    pub read_in_core: usize,
+    /// Albums the core could not read, fetched through MusicBee instead.
+    pub fell_back: usize,
 }
 
 pub struct CoverStore {
@@ -379,10 +397,34 @@ impl CoverStore {
         F: Fn(&str) -> A,
         A: Into<Artwork>,
     {
+        self.build_located(
+            |path| Lookup::Done(fetch_raw(path).into()),
+            |path| fetch_raw(path).into(),
+            verbose,
+            stop,
+            progress,
+        )
+    }
+
+    /// As [`Self::build_reporting`], asking `locate` where each album's artwork
+    /// is and letting the workers read it; `fetch` gets the bytes from MusicBee
+    /// for what they cannot read.
+    pub fn build_located<L, F>(
+        &self,
+        locate: L,
+        fetch: F,
+        verbose: bool,
+        stop: &dyn Fn() -> bool,
+        progress: &dyn Fn(&BuildProgress<'_>),
+    ) -> BuildStats
+    where
+        L: Fn(&str) -> Lookup,
+        F: Fn(&str) -> Artwork,
+    {
         if self.building.swap(true, Ordering::AcqRel) {
             return BuildStats::default(); // a build is already running
         }
-        let stats = self.build_inner(fetch_raw, verbose, stop, progress);
+        let stats = self.build_inner(&locate, &fetch, verbose, stop, progress);
         self.building.store(false, Ordering::Release);
         stats
     }
@@ -394,17 +436,14 @@ impl CoverStore {
     /// write) is CPU-bound and ~90% of per-cover time, so it fans out. The queue
     /// is bounded, which caps how many decoded images are in memory at once.
     /// New covers are saved every [`CHECKPOINT_EVERY`], not only at the end.
-    fn build_inner<F, A>(
+    fn build_inner(
         &self,
-        fetch_raw: F,
+        locate: &dyn Fn(&str) -> Lookup,
+        fetch: &dyn Fn(&str) -> Artwork,
         verbose: bool,
         stop: &dyn Fn() -> bool,
         progress: &dyn Fn(&BuildProgress<'_>),
-    ) -> BuildStats
-    where
-        F: Fn(&str) -> A,
-        A: Into<Artwork>,
-    {
+    ) -> BuildStats {
         // Self-healing: an entry whose file is gone still counts as missing.
         let missing: Vec<(String, String)> = {
             let covers = self.read_covers();
@@ -427,6 +466,7 @@ impl CoverStore {
         // Stale entries leave the table now, so a checkpoint cannot make them look valid.
         self.persist_at(now_unix_secs());
         let shared = Shared::default();
+        let mut parity = Parity::new();
 
         let workers = std::thread::available_parallelism()
             .map(|n| n.get())
@@ -470,21 +510,14 @@ impl CoverStore {
                     );
                 }
                 let fetch_start = Instant::now();
-                let artwork = fetch_raw(&path).into();
+                let job = match locate(&path) {
+                    Lookup::Read(source) => Some(parity.check(source, &path, fetch)),
+                    Lookup::Done(artwork) => self.settle(artwork, &key, &path, &shared, &mut stats),
+                };
                 let fetch_ms = fetch_start.elapsed().as_millis();
                 stats.fetch_ms += fetch_ms;
-                match artwork {
-                    Artwork::Found(raw) => {
-                        let _ = tx.send((key, path, raw, fetch_ms));
-                    }
-                    Artwork::Missing => {
-                        stats.no_art += 1;
-                        self.remember_no_art(&shared.pending, key);
-                    }
-                    Artwork::Unavailable => {
-                        stats.failed += 1;
-                        tracing::debug!(%path, "cover build: artwork fetch failed");
-                    }
+                if let Some(job) = job {
+                    let _ = tx.send((key, path, job, fetch_ms));
                 }
             }
             drop(tx); // close the queue so workers exit once it drains
@@ -501,6 +534,9 @@ impl CoverStore {
             }
         });
         stats.largest = shared.largest();
+        stats.read_in_core = shared.read_in_core.load(Ordering::Relaxed);
+        self.fall_back(fetch, stop, &shared, &mut stats);
+        parity.report();
 
         self.prune_orphans();
         self.persist();
@@ -514,9 +550,25 @@ impl CoverStore {
         loop {
             // Held only to pull one item, never across the store.
             let item = rx.lock().expect("cover queue mutex poisoned").recv();
-            let Ok((key, path, raw, fetch_ms)) = item else {
+            let Ok((key, path, job, fetch_ms)) = item else {
                 break; // producer dropped the sender: queue drained
             };
+            let read_start = Instant::now();
+            let raw = match job {
+                Job::Bytes(raw) => raw,
+                Job::Read(source) => match source.read() {
+                    Ok(raw) => {
+                        shared.read_in_core.fetch_add(1, Ordering::Relaxed);
+                        raw
+                    }
+                    Err(e) => {
+                        tracing::debug!(%path, error = %e, "cover build: reading artwork failed; asking MusicBee");
+                        shared.lock_fallback().push((key, path));
+                        continue;
+                    }
+                },
+            };
+            local.store_ms += read_start.elapsed().as_millis();
 
             let permit = shared.budget.reserve(decode_cost(&raw, CACHE_SIZE));
             let store_start = Instant::now();
@@ -557,6 +609,66 @@ impl CoverStore {
             }
         }
         local
+    }
+
+    /// Handles an album the producer settled itself: queues its bytes for a
+    /// worker, or records that it has no artwork or could not be fetched.
+    fn settle(
+        &self,
+        artwork: Artwork,
+        key: &str,
+        path: &str,
+        shared: &Shared,
+        stats: &mut BuildStats,
+    ) -> Option<Job> {
+        match artwork {
+            Artwork::Found(raw) => return Some(Job::Bytes(raw)),
+            Artwork::Missing => {
+                stats.no_art += 1;
+                self.remember_no_art(&shared.pending, key.to_owned());
+            }
+            Artwork::Unavailable => {
+                stats.failed += 1;
+                tracing::debug!(%path, "cover build: artwork fetch failed");
+            }
+        }
+        None
+    }
+
+    /// Fetches through MusicBee what the workers could not read, then stores it.
+    ///
+    /// On the producer's thread, after the workers have finished: MusicBee's
+    /// callbacks stay on one thread, and a fallback is the exception.
+    fn fall_back(
+        &self,
+        fetch: &dyn Fn(&str) -> Artwork,
+        stop: &dyn Fn() -> bool,
+        shared: &Shared,
+        stats: &mut BuildStats,
+    ) {
+        let pending = std::mem::take(&mut *shared.lock_fallback());
+        stats.fell_back = pending.len();
+        for (key, path) in pending {
+            if stop() {
+                stats.stopped = true;
+                break;
+            }
+            let Some(Job::Bytes(raw)) = self.settle(fetch(&path), &key, &path, shared, stats)
+            else {
+                continue;
+            };
+            match self.store_cover(&raw) {
+                Ok((hash, _)) => {
+                    self.write_covers().insert(key.clone(), hash.clone());
+                    stats.stored += 1;
+                    self.checkpoint(&shared.pending, |pending| pending.covers.push((key, hash)));
+                }
+                Err(e) => {
+                    stats.failed += 1;
+                    tracing::debug!(%path, error = %e, "cover build: store failed");
+                }
+            }
+        }
     }
 
     /// Deletes cover files that are no longer referenced by any album key.
@@ -725,9 +837,91 @@ impl CoverStore {
     }
 }
 
-/// One fetched album handed from the producer to a worker: key, path, raw
-/// artwork bytes, and how long the fetch took in milliseconds.
-type Fetched = (String, String, Vec<u8>, u128);
+/// One album handed from the producer to a worker: key, path, what to do, and
+/// how long the producer took over it in milliseconds.
+type Fetched = (String, String, Job, u128);
+
+/// A worker's task for one album.
+enum Job {
+    /// Bytes the producer already has.
+    Bytes(Vec<u8>),
+    /// Artwork the worker reads itself.
+    Read(Source),
+}
+
+/// Whether the core's own read of an album's artwork matches MusicBee's.
+///
+/// Sampled at the start of a build, and only when DEBUG is on: each sampled
+/// album costs a second, MusicBee-side fetch.
+struct Parity {
+    left: usize,
+    matched: usize,
+    differed: usize,
+    unreadable: usize,
+}
+
+impl Parity {
+    fn new() -> Self {
+        let left = if tracing::enabled!(tracing::Level::DEBUG) {
+            PARITY_SAMPLE
+        } else {
+            0
+        };
+        Self {
+            left,
+            matched: 0,
+            differed: 0,
+            unreadable: 0,
+        }
+    }
+
+    /// Turns a source into a job, reading it both ways first while sampling.
+    fn check(&mut self, source: Source, path: &str, fetch: &dyn Fn(&str) -> Artwork) -> Job {
+        if self.left == 0 {
+            return Job::Read(source);
+        }
+        self.left -= 1;
+        let ours = source.read();
+        let theirs = fetch(path);
+        match (&ours, &theirs) {
+            (Ok(ours), Artwork::Found(theirs)) if ours == theirs => self.matched += 1,
+            (Ok(ours), theirs) => {
+                self.differed += 1;
+                let theirs_len = match theirs {
+                    Artwork::Found(raw) => raw.len(),
+                    _ => 0,
+                };
+                tracing::debug!(
+                    path,
+                    ours = ours.len(),
+                    theirs = theirs_len,
+                    "artwork parity: different bytes"
+                );
+            }
+            (Err(e), _) => {
+                self.unreadable += 1;
+                tracing::debug!(path, error = %e, "artwork parity: the core could not read it");
+            }
+        }
+        match ours {
+            Ok(raw) => Job::Bytes(raw),
+            Err(_) => Job::Read(source),
+        }
+    }
+
+    fn report(&self) {
+        let sampled = self.matched + self.differed + self.unreadable;
+        if sampled > 0 {
+            tracing::info!(
+                sampled,
+                matched = self.matched,
+                differed = self.differed,
+                unreadable = self.unreadable,
+                "artwork parity: the core's reads against MusicBee's"
+            );
+        }
+    }
+}
 
 /// What the workers of one build share with each other and with the producer.
 #[derive(Default)]
@@ -739,6 +933,9 @@ struct Shared {
     /// Stored covers and no-art albums not yet saved by a checkpoint.
     pending: Mutex<Pending>,
     budget: Budget,
+    read_in_core: AtomicUsize,
+    /// Albums a worker could not read, for MusicBee to fetch after the pass.
+    fallback: Mutex<Vec<(String, String)>>,
 }
 
 /// What the next checkpoint will save.
@@ -802,6 +999,10 @@ impl Drop for Permit<'_> {
 }
 
 impl Shared {
+    fn lock_fallback(&self) -> std::sync::MutexGuard<'_, Vec<(String, String)>> {
+        self.fallback.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn largest(&self) -> (u32, u32) {
         *self.largest.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -1217,6 +1418,114 @@ mod tests {
             *budget.free.lock().unwrap(),
             DECODE_BUDGET,
             "all given back"
+        );
+    }
+
+    /// Builds with `locate` and a MusicBee-side fetch that counts its calls.
+    fn build_with_lookup(
+        store: &CoverStore,
+        locate: impl Fn(&str) -> Lookup,
+        fetch_answer: fn() -> Artwork,
+    ) -> (BuildStats, usize) {
+        let fetched = AtomicUsize::new(0);
+        let stats = store.build_located(
+            locate,
+            |_| {
+                fetched.fetch_add(1, Ordering::AcqRel);
+                fetch_answer()
+            },
+            false,
+            &|| false,
+            &|_| {},
+        );
+        (stats, fetched.into_inner())
+    }
+
+    #[test]
+    fn linked_artwork_is_read_by_the_workers_without_asking_musicbee() {
+        let (db, dir) = temp_storage("read-in-core");
+        let image = dir.join("cover.jpg");
+        std::fs::write(&image, jpeg_bytes(300, 300)).unwrap();
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(3, 0));
+        let (stats, fetched) = build_with_lookup(
+            &store,
+            |_| Lookup::Read(Source::File(image.clone())),
+            || Artwork::Unavailable,
+        );
+        assert_eq!(
+            (stats.stored, stats.read_in_core, stats.fell_back),
+            (3, 3, 0)
+        );
+        assert_eq!(fetched, 0);
+        assert_eq!(store.cached_count(), 3);
+    }
+
+    #[test]
+    fn what_the_core_cannot_read_is_fetched_through_musicbee_once() {
+        let (db, dir) = temp_storage("read-fallback");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(2, 0));
+        let missing = dir.join("gone.jpg");
+        let (stats, fetched) = build_with_lookup(
+            &store,
+            |_| Lookup::Read(Source::File(missing.clone())),
+            || Artwork::Found(jpeg_bytes(300, 300)),
+        );
+        assert_eq!(
+            (stats.stored, stats.read_in_core, stats.fell_back),
+            (2, 0, 2)
+        );
+        assert_eq!(fetched, 2);
+        assert_eq!(store.cached_count(), 2);
+    }
+
+    #[test]
+    fn a_fallback_that_finds_no_artwork_is_remembered() {
+        let (db, dir) = temp_storage("read-fallback-bare");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(1, 0));
+        let missing = dir.join("gone.jpg");
+        let (stats, _) = build_with_lookup(
+            &store,
+            |_| Lookup::Read(Source::File(missing.clone())),
+            || Artwork::Missing,
+        );
+        assert_eq!(stats.no_art, 1);
+        store.warm_up(&albums(1, 0));
+        assert_eq!(build_counting(&store, || Artwork::Missing), 0);
+    }
+
+    #[test]
+    fn the_parity_check_counts_matches_differences_and_unreadable_files() {
+        let (_, dir) = temp_storage("parity");
+        let image = dir.join("cover.jpg");
+        std::fs::write(&image, [1u8, 2, 3]).unwrap();
+        let mut parity = Parity {
+            left: 3,
+            matched: 0,
+            differed: 0,
+            unreadable: 0,
+        };
+        let same = |_: &str| Artwork::Found(vec![1, 2, 3]);
+        let other = |_: &str| Artwork::Found(vec![9]);
+        assert!(matches!(
+            parity.check(Source::File(image.clone()), "a", &same),
+            Job::Bytes(_)
+        ));
+        parity.check(Source::File(image.clone()), "b", &other);
+        let gone = parity.check(Source::File(dir.join("gone.jpg")), "c", &same);
+        assert!(
+            matches!(gone, Job::Read(_)),
+            "an unreadable one still goes to a worker, to fall back"
+        );
+        assert_eq!(
+            (parity.matched, parity.differed, parity.unreadable),
+            (1, 1, 1)
+        );
+        assert!(
+            matches!(parity.check(Source::File(image), "d", &same), Job::Read(_)),
+            "sampling is over"
         );
     }
 

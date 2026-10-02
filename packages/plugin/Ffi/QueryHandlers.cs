@@ -85,6 +85,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.LibraryGenreTracks: return Pack(BuildGenreTracks(Q(p)));
                 case QueryType.AlbumIdentifiers: return Pack(BuildAlbumIdentifiers());
                 case QueryType.ArtworkRawForPath: return Pack(BuildArtworkRaw(Msgpack.Deserialize<PathParams>(p)));
+                case QueryType.ArtworkLocationForPath: return Pack(BuildArtworkLocation(Msgpack.Deserialize<PathParams>(p)));
                 case QueryType.BatchMetadata: return Pack(BuildBatchMetadata(Msgpack.Deserialize<BatchMetadataParams>(p)));
                 case QueryType.LibraryTrackPaths: return Pack(_library.GetAllTrackPaths());
                 case QueryType.LibraryTracksForPaths: return Pack(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
@@ -244,6 +245,15 @@ namespace MusicBeePlugin.Ffi
         private byte[] BuildArtworkRaw(PathParams p)
         {
             return _library.GetArtworkDataForTrack(p.path ?? string.Empty) ?? Array.Empty<byte>();
+        }
+
+        /// <summary>
+        ///     Where MusicBee keeps a track's artwork, without reading it, so the core
+        ///     can read the picture itself off MusicBee's thread.
+        /// </summary>
+        private ArtworkLocation BuildArtworkLocation(PathParams p)
+        {
+            return _library.GetArtworkLocationForTrack(p.path ?? string.Empty);
         }
 
         private List<TrackMetadata> BuildBatchMetadata(BatchMetadataParams p) =>

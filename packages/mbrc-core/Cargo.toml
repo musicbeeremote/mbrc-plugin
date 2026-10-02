@@ -33,6 +33,9 @@ fast_image_resize = "=6.1.0"
 # Decodes a JPEG at 1/2 to 1/8 scale, so a large cover bound for a thumbnail
 # never exists at full size in a 32-bit process (#223).
 jpeg-decoder = { version = "=0.3.2", default-features = false }
+# Reads embedded artwork from a track's tags, so the cover build fetches it
+# off MusicBee's thread instead of through its API lock (#232).
+lofty = "=0.25.4"
 base64 = "=0.23.1"
 # Embedded key-value store backing the durable caches (album-cover index +
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C

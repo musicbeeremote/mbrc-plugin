@@ -393,6 +393,12 @@ impl Providers for FixtureProviders {
             modified: 0,
         }])
     }
+    fn artwork_location(
+        &self,
+        _path: &str,
+    ) -> Result<mbrc_core::ffi::dtos::ArtworkLocation, String> {
+        Ok(mbrc_core::ffi::dtos::ArtworkLocation::default())
+    }
     fn artwork_raw(&self, _path: &str) -> Result<Vec<u8>, String> {
         Ok(Vec::new())
     }

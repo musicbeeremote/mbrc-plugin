@@ -93,6 +93,7 @@ namespace MusicBeePlugin.Ffi.Generated
         PodcastArtwork = 46,
         PlaylistCatalog = 47,
         PlaylistCreate = 48,
+        ArtworkLocationForPath = 49,
     }
 
     public enum CommandType

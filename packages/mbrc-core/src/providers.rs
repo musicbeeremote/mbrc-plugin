@@ -11,7 +11,7 @@
 
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::dtos::{
-    AlbumCoverParams, BatchMetadataParams, BrowseParams, IndexParams, MoveParams,
+    AlbumCoverParams, ArtworkLocation, BatchMetadataParams, BrowseParams, IndexParams, MoveParams,
     NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, PlaylistCreateParams,
     PlaylistFilesParams, PodcastEpisodeParams, PodcastEpisodesParams, QueryParams, SetBoolParams,
     SetIntParams, SetLfmRatingParams, SetRepeatParams, StringValueParams, SyncDeltaParams,
@@ -150,6 +150,8 @@ pub trait Providers: Send + Sync {
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String>;
     /// A track's artwork as the image bytes MusicBee holds; empty when it has none.
     fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String>;
+    /// Where a track's artwork is, without its bytes.
+    fn artwork_location(&self, path: &str) -> Result<ArtworkLocation, String>;
     fn batch_metadata(&self, paths: Vec<String>) -> Result<Vec<TrackMetadata>, String>;
 
     // Library cache. `track_paths` returns every track path in
@@ -556,6 +558,14 @@ impl Providers for FfiProviders {
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
         self.callbacks.query_no_params(QueryType::AlbumIdentifiers)
     }
+    fn artwork_location(&self, path: &str) -> Result<ArtworkLocation, String> {
+        self.callbacks.query(
+            QueryType::ArtworkLocationForPath,
+            &PathParams {
+                path: path.to_string(),
+            },
+        )
+    }
     fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String> {
         self.callbacks
             .query::<_, Bytes>(
@@ -887,6 +897,9 @@ impl Providers for NullProviders {
     }
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
         Ok(Vec::new())
+    }
+    fn artwork_location(&self, _path: &str) -> Result<ArtworkLocation, String> {
+        Ok(ArtworkLocation::default())
     }
     fn artwork_raw(&self, _path: &str) -> Result<Vec<u8>, String> {
         Ok(Vec::new())
@@ -1278,6 +1291,10 @@ impl Providers for MockProviders {
     fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
         self.record("album_identifiers");
         Ok(self.album_identifiers.clone())
+    }
+    fn artwork_location(&self, path: &str) -> Result<ArtworkLocation, String> {
+        self.record(format!("artwork_location({path})"));
+        Ok(ArtworkLocation::default())
     }
     fn artwork_raw(&self, path: &str) -> Result<Vec<u8>, String> {
         self.record(format!("artwork_raw({path})"));

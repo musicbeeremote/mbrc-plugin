@@ -382,6 +382,17 @@ namespace MusicBeePlugin.Providers
             return data;
         }
 
+        /// <summary>
+        ///     Where MusicBee keeps a track's artwork: its location flags and, for a
+        ///     linked image, the file path. Asking without the picture data costs
+        ///     next to nothing, unlike <see cref="GetArtworkDataForTrack" />.
+        /// </summary>
+        public Ffi.ArtworkLocation GetArtworkLocationForTrack(string trackPath)
+        {
+            _api.Library_GetArtworkEx(trackPath, 0, false, out var locations, out var url, out _);
+            return new Ffi.ArtworkLocation { location = (int)locations, url = url ?? string.Empty };
+        }
+
         #endregion
 
         #region Album Cover Cache Support

@@ -97,6 +97,9 @@ namespace MusicBeePlugin.Providers
         /// <returns>Artwork byte array</returns>
         byte[] GetArtworkDataForTrack(string trackPath);
 
+        /// <summary>Where MusicBee keeps a track's artwork, without reading it.</summary>
+        Ffi.ArtworkLocation GetArtworkLocationForTrack(string trackPath);
+
         // Album Cover Cache Support
 
         /// <summary>

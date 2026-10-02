@@ -348,6 +348,12 @@ namespace MusicBeePlugin.Ffi
         public string path { get; set; }
     }
 
+    public class ArtworkLocation
+    {
+        public int location { get; set; }
+        public string url { get; set; }
+    }
+
     public class BatchMetadataParams
     {
         public List<string> paths { get; set; }

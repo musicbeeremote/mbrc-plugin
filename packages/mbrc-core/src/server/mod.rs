@@ -472,7 +472,8 @@ fn build_cover_cache(
 
     let build_started = std::time::Instant::now();
     let providers = core.providers.clone();
-    let stats = core.cover_store.build_reporting(
+    let stats = core.cover_store.build_located(
+        |path| locate_artwork(providers.as_ref(), path),
         |path| fetch_artwork(providers.as_ref(), path),
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
@@ -491,11 +492,32 @@ fn build_cover_cache(
         store_ms = stats.store_ms,
         slowest_ms = stats.slowest_ms,
         slowest_path = %stats.slowest_path,
+        read_in_core = stats.read_in_core,
+        fell_back = stats.fell_back,
         stopped = stats.stopped,
         build_ms = build_started.elapsed().as_millis(),
         total_ms = started.elapsed().as_millis(),
         "cover cache build complete"
     );
+}
+
+/// Where one album's artwork is, for a cover build to read itself (#232).
+///
+/// Falls back to fetching the bytes when MusicBee knows of no location or the
+/// host is too old to answer the question.
+fn locate_artwork(
+    providers: &dyn crate::providers::Providers,
+    path: &str,
+) -> crate::cover::store::Lookup {
+    use crate::cover::{source::Source, store::Lookup};
+    providers
+        .artwork_location(path)
+        .ok()
+        .and_then(|at| Source::locate(path, at.location, &at.url))
+        .map_or_else(
+            || Lookup::Done(fetch_artwork(providers, path)),
+            Lookup::Read,
+        )
 }
 
 /// One album's artwork for a cover build: what MusicBee holds, nothing, or a
@@ -577,7 +599,8 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
     let dropped = before.saturating_sub(kept);
 
     let providers = core.providers.clone();
-    let stats = core.cover_store.build_reporting(
+    let stats = core.cover_store.build_located(
+        |path| locate_artwork(providers.as_ref(), path),
         |path| fetch_artwork(providers.as_ref(), path),
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
