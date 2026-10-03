@@ -1,4 +1,6 @@
-﻿using System.Xml.Linq;
+﻿using System.Text;
+using System.Xml;
+using System.Xml.Linq;
 using MusicBeePlugin.Models;
 
 namespace MusicBeePlugin.Utilities
@@ -29,12 +31,40 @@ namespace MusicBeePlugin.Utilities
                 var condition = new XElement("Condition",
                     new XAttribute("Field", tag),
                     new XAttribute("Comparison", isStrict ? "Is" : "Contains"),
-                    new XAttribute("Value", query));
+                    new XAttribute("Value", XmlCarriable(query)));
                 conditions.Add(condition);
             }
 
             filter.Add(conditions);
             return filter.ToString();
+        }
+
+        /// <summary>
+        ///     The query without characters XML 1.0 cannot represent, such as control
+        ///     characters, which would make <c>ToString</c> throw. No tag can match
+        ///     them through a filter anyway.
+        /// </summary>
+        private static string XmlCarriable(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+                return string.Empty;
+
+            var kept = new StringBuilder(query.Length);
+            for (var i = 0; i < query.Length; i++)
+            {
+                var c = query[i];
+                if (XmlConvert.IsXmlChar(c))
+                {
+                    kept.Append(c);
+                }
+                else if (i + 1 < query.Length && XmlConvert.IsXmlSurrogatePair(query[i + 1], c))
+                {
+                    kept.Append(c).Append(query[i + 1]);
+                    i++;
+                }
+            }
+
+            return kept.ToString();
         }
     }
 }

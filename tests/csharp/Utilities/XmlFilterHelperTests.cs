@@ -204,6 +204,28 @@ namespace MusicBeeRemote.Core.Tests.Utilities
         }
 
         [Fact]
+        public void CreateFilter_DropsCharactersXmlCannotCarry()
+        {
+            var tags = new[] { "Genre" };
+            var query = "Ro\u0000ck\u0001\u001f \U0001F3B5";
+
+            var result = XmlFilterHelper.CreateFilter(tags, query, true, SearchSource.Library);
+
+            var parsed = XElement.Parse(result);
+            var condition = parsed.Element("Conditions").Element("Condition");
+            condition.Attribute("Value").Value.Should().Be("Rock \U0001F3B5");
+        }
+
+        [Fact]
+        public void CreateFilter_TreatsNullQueryAsEmpty()
+        {
+            var result = XmlFilterHelper.CreateFilter(new[] { "Genre" }, null, true, SearchSource.Library);
+
+            var condition = XElement.Parse(result).Element("Conditions").Element("Condition");
+            condition.Attribute("Value").Value.Should().BeEmpty();
+        }
+
+        [Fact]
         public void CreateFilter_PreservesTagOrder()
         {
             // Arrange
