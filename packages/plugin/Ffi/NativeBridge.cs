@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -86,6 +87,7 @@ namespace MusicBeePlugin.Ffi
         // MusicBee's API is not thread-safe and its Library_Query* cursors are
         // process-global; serialize every provider access under one lock.
         private readonly object _apiLock = new object();
+        private readonly ApiLockStats _lockStats = new ApiLockStats(Stopwatch.Frequency);
 
         // Pinned so the GC cannot collect them while Rust holds their pointers.
         private QueryCallbackDelegate _queryDataCallback;
@@ -689,10 +691,17 @@ namespace MusicBeePlugin.Ffi
             {
                 var p = CopyParams(paramsBuf, paramsLen);
                 byte[] result;
+                string slow, summary;
+                var asked = Stopwatch.GetTimestamp();
                 lock (_apiLock)
                 {
+                    var acquired = Stopwatch.GetTimestamp();
                     result = _queries.Handle(queryType, p);
+                    var done = Stopwatch.GetTimestamp();
+                    _lockStats.Record(((QueryType)queryType).ToString(),
+                        acquired - asked, done - acquired, done, out slow, out summary);
                 }
+                LogLockStats(slow, summary);
                 if (result == null)
                 {
                     _logger.Warn("Unknown query type {0}", queryType);
@@ -718,10 +727,17 @@ namespace MusicBeePlugin.Ffi
             {
                 var p = CopyParams(paramsBuf, paramsLen);
                 bool ok;
+                string slow, summary;
+                var asked = Stopwatch.GetTimestamp();
                 lock (_apiLock)
                 {
+                    var acquired = Stopwatch.GetTimestamp();
                     ok = _commands.Handle(commandType, p);
+                    var done = Stopwatch.GetTimestamp();
+                    _lockStats.Record(((CommandType)commandType).ToString(),
+                        acquired - asked, done - acquired, done, out slow, out summary);
                 }
+                LogLockStats(slow, summary);
                 return ok ? 0 : 1;
             }
             catch (Exception ex)
@@ -729,6 +745,12 @@ namespace MusicBeePlugin.Ffi
                 _logger.LogError(ex, "Command callback error (type {0})", commandType);
                 return -1;
             }
+        }
+
+        private void LogLockStats(string slow, string summary)
+        {
+            if (slow != null) _logger.Debug(slow);
+            if (summary != null) _logger.Debug(summary);
         }
 
         private void OnFreeBuffer(IntPtr buf)

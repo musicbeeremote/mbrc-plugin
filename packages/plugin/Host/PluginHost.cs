@@ -87,6 +87,10 @@ namespace MusicBeePlugin.Host
             // host only provides raw MusicBee ingredients through the FFI.
         }
 
+        /// <summary>Logs a notification as MusicBee sent it, forwarded or not.</summary>
+        public void LogNotification(string type, string path) =>
+            _logger.Debug("musicbee notification: {0} {1}", type, path ?? string.Empty);
+
         /// <summary>Forward a MusicBee notification (already mapped to the core's type) to the core.</summary>
         public void HandleNotification(int notificationType, string path) =>
             _bridge.HandleNotification(notificationType, path);

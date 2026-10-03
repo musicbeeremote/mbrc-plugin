@@ -531,6 +531,8 @@ namespace MusicBeePlugin
             if (_host == null)
                 return;
 
+            _host.LogNotification(type.ToString(), sourceFileUrl);
+
             // Map MusicBee's notification to the core's NotificationType (the
             // generated FFI enum). Only the events the core re-queries are
             // forwarded; anything else is ignored.

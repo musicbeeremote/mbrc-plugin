@@ -1,0 +1,71 @@
+using AwesomeAssertions;
+using MusicBeePlugin.Ffi;
+using Xunit;
+
+namespace MusicBeeRemote.Core.Tests.Ffi
+{
+    /// <summary>
+    ///     A tick is a millisecond here, so the numbers in the lines read directly.
+    /// </summary>
+    public class ApiLockStatsTests
+    {
+        private const long Ms = 1;
+        private const long TicksPerSecond = 1000;
+
+        [Fact]
+        public void Record_ReportsALongHoldOnItsOwn()
+        {
+            var stats = new ApiLockStats(TicksPerSecond);
+
+            string slow, summary;
+            stats.Record("LibraryTrackTags", 40 * Ms, 250 * Ms, 0, out slow, out summary);
+
+            slow.Should().Be("api lock: LibraryTrackTags held 250ms after waiting 40ms");
+            summary.Should().BeNull();
+        }
+
+        [Fact]
+        public void Record_StaysQuietForAShortHold()
+        {
+            var stats = new ApiLockStats(TicksPerSecond);
+
+            string slow, summary;
+            stats.Record("PlayerState", 0, 2 * Ms, 0, out slow, out summary);
+
+            slow.Should().BeNull();
+        }
+
+        [Fact]
+        public void Record_SummarizesEachKindOnceAWindowHasPassed()
+        {
+            var stats = new ApiLockStats(TicksPerSecond);
+            string slow, summary;
+            stats.Record("PlayerState", 0, 2 * Ms, 0, out slow, out summary);
+            stats.Record("PlayerState", 10 * Ms, 4 * Ms, 30000 * Ms, out slow, out summary);
+            summary.Should().BeNull("the window is not over yet");
+
+            stats.Record("LibraryTrackPaths", 0, 600 * Ms, 60000 * Ms, out slow, out summary);
+
+            summary.Should().StartWith("api lock over 60s: held 606ms (1.0%)");
+            summary.Should().Contain("; LibraryTrackPaths n=1 hold avg 600.0 max 600 wait avg 0.0 max 0");
+            summary.Should().Contain("; PlayerState n=2 hold avg 3.0 max 4 wait avg 5.0 max 10");
+            summary.IndexOf("LibraryTrackPaths", System.StringComparison.Ordinal).Should().BeLessThan(
+                summary.IndexOf("PlayerState", System.StringComparison.Ordinal), "the kind that held the lock longest comes first");
+        }
+
+        [Fact]
+        public void Record_StartsAFreshWindowAfterASummary()
+        {
+            var stats = new ApiLockStats(TicksPerSecond);
+            string slow, summary;
+            stats.Record("PlayerState", 0, 1 * Ms, 0, out slow, out summary);
+            stats.Record("PlayerState", 0, 1 * Ms, 60000 * Ms, out slow, out summary);
+            summary.Should().NotBeNull();
+
+            stats.Record("CoverData", 0, 1 * Ms, 120000 * Ms, out slow, out summary);
+
+            summary.Should().Contain("CoverData n=1");
+            summary.Should().NotContain("PlayerState");
+        }
+    }
+}
