@@ -29,7 +29,9 @@ use redb::{Durability, ReadableTable};
 
 use super::source::Source;
 use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
-use crate::store::{COVER_COVERS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK};
+use crate::store::{
+    COVER_COVERS, COVER_ITEMS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK,
+};
 
 /// The most decode workers a build runs.
 ///
@@ -154,6 +156,17 @@ pub struct BuildStats {
     pub fell_back: usize,
 }
 
+/// A cover kept for one item rather than an album: a track with no album, or a
+/// podcast subscription.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemCover {
+    /// The content hash, or `None` when the item had no artwork.
+    pub hash: Option<String>,
+    /// The source's modified time when it was read, in unix seconds: a cover
+    /// read before the file last changed is stale.
+    pub modified: i64,
+}
+
 pub struct CoverStore {
     storage_path: PathBuf,
     /// The shared redb store, holding the durable album_key -> content_hash index
@@ -167,17 +180,21 @@ pub struct CoverStore {
     paths: RwLock<HashMap<String, String>>,
     /// album_key -> when it was found to have no artwork (unix seconds).
     no_art: RwLock<HashMap<String, i64>>,
+    /// item key -> its cover, loaded once and written through to redb.
+    items: RwLock<HashMap<String, ItemCover>>,
     building: AtomicBool,
 }
 
 impl CoverStore {
     pub fn new(db: Db, storage_path: impl Into<PathBuf>) -> Self {
+        let items = load_items(&db);
         Self {
             storage_path: storage_path.into(),
             db,
             covers: RwLock::new(HashMap::new()),
             paths: RwLock::new(HashMap::new()),
             no_art: RwLock::new(HashMap::new()),
+            items: RwLock::new(items),
             building: AtomicBool::new(false),
         }
     }
@@ -254,6 +271,49 @@ impl CoverStore {
         Ok(hash)
     }
 
+    /// The cover kept for one item, whether or not it is still current.
+    pub fn item_cover(&self, key: &str) -> Option<ItemCover> {
+        self.items
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned()
+    }
+
+    /// Keeps one item's cover, made from `raw`, or records that it has none,
+    /// as of `modified`. Returns the content hash when there is artwork.
+    ///
+    /// Item covers live apart from the album index, so an album build neither
+    /// drops them nor prunes their files.
+    ///
+    /// # Errors
+    /// The artwork does not resize, or the cover file cannot be written.
+    pub fn cache_item_cover(
+        &self,
+        key: &str,
+        raw: Option<&[u8]>,
+        modified: i64,
+    ) -> Result<Option<String>, String> {
+        let hash = raw
+            .map(|raw| self.store_cover(raw))
+            .transpose()?
+            .map(|(hash, _)| hash);
+        let cover = ItemCover {
+            hash: hash.clone(),
+            modified,
+        };
+        self.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(COVER_ITEMS)?;
+            table.insert(key, (cover.hash.as_deref().unwrap_or(""), modified))?;
+            Ok(())
+        });
+        self.items
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.to_owned(), cover);
+        Ok(hash)
+    }
+
     /// Resizes raw artwork to the cache thumbnail, hashes it, writes the file,
     /// and returns the content hash with the source's size. The file name IS the
     /// hash (content-addressed).
@@ -303,10 +363,15 @@ impl CoverStore {
             })
             .collect();
         *self.no_art.write().unwrap_or_else(|e| e.into_inner()) = no_art;
-        let resized = self.stored_cover_size() != Some(CACHE_SIZE);
+        let recorded = self.stored_cover_size();
+        let resized = recorded != Some(CACHE_SIZE);
         let mut covers = self.write_covers();
         covers.clear();
         if resized {
+            // Item covers are never older than the recorded size.
+            if recorded.is_some() {
+                self.forget_items();
+            }
             self.store_cover_size();
             return;
         }
@@ -342,14 +407,33 @@ impl CoverStore {
         });
     }
 
-    /// Forgets which albums were found to have no artwork, so the next build
-    /// asks again. A manual rebuild does this; it is what a user reaches for
-    /// after adding a folder image.
+    /// Forgets which albums and items were found to have no artwork, so they
+    /// are asked again. A manual rebuild does this; it is what a user reaches
+    /// for after adding a folder image.
     pub fn forget_missing_art(&self) {
         self.no_art
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+        let mut items = self.items.write().unwrap_or_else(|e| e.into_inner());
+        let missing: Vec<String> = items
+            .iter()
+            .filter(|(_, cover)| cover.hash.is_none())
+            .map(|(key, _)| key.clone())
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        self.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(COVER_ITEMS)?;
+            for key in &missing {
+                table.remove(key.as_str())?;
+            }
+            Ok(())
+        });
+        for key in &missing {
+            items.remove(key);
+        }
     }
 
     /// Builds missing covers: fetch each album's artwork, resize+hash+store it,
@@ -677,10 +761,29 @@ impl CoverStore {
         }
     }
 
-    /// Deletes cover files that are no longer referenced by any album key.
+    /// Drops every item cover, for a change of cover size.
+    fn forget_items(&self) {
+        self.items
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        self.db.write(Durability::Immediate, |txn| {
+            txn.delete_table(COVER_ITEMS)?;
+            Ok(())
+        });
+    }
+
+    /// Deletes cover files that no album key or item cover references.
     fn prune_orphans(&self) {
-        let referenced: std::collections::HashSet<String> =
+        let mut referenced: std::collections::HashSet<String> =
             self.read_covers().values().cloned().collect();
+        referenced.extend(
+            self.items
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .values()
+                .filter_map(|cover| cover.hash.clone()),
+        );
         let Ok(entries) = std::fs::read_dir(self.covers_dir()) else {
             return; // no covers dir yet
         };
@@ -853,6 +956,26 @@ enum Job {
     Bytes(Vec<u8>),
     /// Artwork the worker reads itself.
     Read(Source),
+}
+
+/// The item covers redb holds; none when the table or the store is missing.
+fn load_items(db: &Db) -> HashMap<String, ItemCover> {
+    db.read(|txn| {
+        let table = match txn.open_table(COVER_ITEMS) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(HashMap::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut map = HashMap::new();
+        for entry in table.iter()? {
+            let (key, value) = entry?;
+            let (hash, modified) = value.value();
+            let hash = (!hash.is_empty()).then(|| hash.to_owned());
+            map.insert(key.value().to_owned(), ItemCover { hash, modified });
+        }
+        Ok(map)
+    })
+    .unwrap_or_default()
 }
 
 /// Whether the core's own read of an album's artwork matches MusicBee's.
@@ -1201,6 +1324,47 @@ mod tests {
     /// cache size does not change a source file - so without a recorded size the
     /// whole cache stays at whatever it was first built at.
     #[test]
+    fn item_covers_survive_an_album_build_and_a_restart() {
+        let (db, dir) = temp_storage("items-survive");
+        let store = CoverStore::new(db.clone(), &dir);
+        let hash = store
+            .cache_item_cover("track:/single.mp3", Some(&jpeg_bytes(300, 300)), 7)
+            .unwrap()
+            .unwrap();
+        store.warm_up(&albums(1, 0));
+        store.build(|_| Some(jpeg_bytes(400, 400)), false);
+
+        let restarted = CoverStore::new(db, &dir);
+        assert_eq!(
+            restarted.item_cover("track:/single.mp3"),
+            Some(ItemCover {
+                hash: Some(hash.clone()),
+                modified: 7
+            })
+        );
+        assert!(
+            restarted.read_cover_bytes(&hash).is_some(),
+            "the build's prune keeps a file only an item references"
+        );
+    }
+
+    #[test]
+    fn a_manual_rebuild_asks_again_for_items_that_had_no_artwork() {
+        let (db, dir) = temp_storage("items-no-art");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.cache_item_cover("track:/bare.mp3", None, 1).unwrap();
+        store
+            .cache_item_cover("track:/art.mp3", Some(&jpeg_bytes(300, 300)), 1)
+            .unwrap();
+
+        store.forget_missing_art();
+
+        let restarted = CoverStore::new(db, &dir);
+        assert_eq!(restarted.item_cover("track:/bare.mp3"), None);
+        assert!(restarted.item_cover("track:/art.mp3").is_some());
+    }
+
+    #[test]
     fn warm_up_drops_everything_when_the_cache_size_changed() {
         let (db, dir) = temp_storage("resized");
         let store = CoverStore::new(db.clone(), &dir);
@@ -1228,7 +1392,11 @@ mod tests {
             Ok(())
         });
         let resized = CoverStore::new(db.clone(), &dir);
+        resized
+            .cache_item_cover("track:/single.mp3", Some(&jpeg_bytes(300, 300)), 0)
+            .unwrap();
         resized.warm_up(std::slice::from_ref(&album));
+        assert_eq!(resized.item_cover("track:/single.mp3"), None);
         assert_eq!(
             resized.hash_for("alb1"),
             None,

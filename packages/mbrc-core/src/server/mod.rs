@@ -538,6 +538,21 @@ fn fetch_artwork(
     }
 }
 
+/// One track's artwork outside a cover build: read in the core from where
+/// MusicBee says it is, and asked of MusicBee only when that read fails.
+pub(crate) fn track_artwork(
+    providers: &dyn crate::providers::Providers,
+    path: &str,
+) -> crate::cover::store::Artwork {
+    use crate::cover::store::{Artwork, Lookup};
+    match locate_artwork(providers, path) {
+        Lookup::Done(artwork) => artwork,
+        Lookup::Read(source) => source
+            .read()
+            .map_or_else(|_| fetch_artwork(providers, path), Artwork::Found),
+    }
+}
+
 /// Records where a cover build has got to, for the next start to report if
 /// this session dies before it finishes.
 fn note_cover_progress(core: &Core, at: &crate::cover::store::BuildProgress<'_>) {

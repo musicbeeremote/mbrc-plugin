@@ -137,12 +137,13 @@ fn tracks(
     let start = (offset.max(0) as usize).min(total);
     let take = if limit > 0 { limit as usize } else { total };
 
+    let covers = track::Covers::new(store, p);
     let items: Vec<Value> = if whole {
         rows[start..]
             .iter()
             .take(take)
             .enumerate()
-            .map(|(i, (order, t))| item_json(t, *order, start + i, store))
+            .map(|(i, (order, t))| item_json(t, *order, start + i, &covers))
             .collect()
     } else {
         let window: Vec<String> = files.paths[start..].iter().take(take).cloned().collect();
@@ -155,7 +156,7 @@ fn tracks(
             .map(|(i, path)| {
                 let untagged = untagged_track(path);
                 let t = by_path.get(path.as_str()).copied().unwrap_or(&untagged);
-                item_json(t, start + i, start + i, store)
+                item_json(t, start + i, start + i, &covers)
             })
             .collect()
     };
@@ -172,8 +173,8 @@ fn tracks(
 }
 
 /// A canonical track with the two indices every playlist row carries.
-fn item_json(t: &CachedTags, order: usize, position: usize, store: Option<&CoverStore>) -> Value {
-    let mut obj = track::cached_track_json(t, track::cached_cover_hash_for(store, t).as_deref());
+fn item_json(t: &CachedTags, order: usize, position: usize, covers: &track::Covers<'_>) -> Value {
+    let mut obj = track::cached_track_json(t, covers.cached(t).as_deref());
     obj["order"] = json!(order);
     obj["position"] = json!(position);
     obj

@@ -134,7 +134,7 @@ fn one_episode(data: &Value, p: &dyn Providers) -> Result<PodcastEpisode, V6Erro
 fn artwork_hash(p: &dyn Providers, store: Option<&CoverStore>, id: &str) -> Option<String> {
     let store = store?;
     let key = artwork_key(id);
-    if let Some(hash) = store.hash_for(&key) {
+    if let Some(hash) = store.item_cover(&key).and_then(|cover| cover.hash) {
         return Some(hash);
     }
     let raw = p.podcast_artwork(id).ok()?;
@@ -142,7 +142,7 @@ fn artwork_hash(p: &dyn Providers, store: Option<&CoverStore>, id: &str) -> Opti
         return None;
     }
     let bytes = crate::cover::from_base64(&raw)?;
-    store.cache_cover(&key, &bytes).ok()
+    store.cache_item_cover(&key, Some(&bytes), 0).ok().flatten()
 }
 
 /// The store key a subscription's artwork lives under.

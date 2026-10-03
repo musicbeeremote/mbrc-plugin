@@ -423,8 +423,8 @@ All enums are lowercase strings:
 
 Track objects are uniform across every domain (`track_get`, `now_playing_state`,
 `library_tracks`, `now_playing_list`, `playlist_tracks`). Base fields are always present; the
-four typed fields are `null` when unknown; `cover_hash` is omitted when the album has no
-cached cover.
+four typed fields are `null` when unknown; `cover_hash` is omitted when there is no cover
+to give (see below).
 
 A list may add index fields beside these - `order` and `position` on a playlist, plus
 `play_position` on the queue - but never changes the track's own shape.
@@ -438,11 +438,17 @@ A list may add index fields beside these - `order` and `position` on a playlist,
   "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")*
   "rating": 4.5,           // float | null (0-5)
   "date_added": "2024-01-02T03:04:05Z",  // ISO-8601 UTC | null
-  "cover_hash": "<sha1>"   // present only when a cached album cover exists
+  "cover_hash": "<sha1>"   // present only when a cover is known
 }
 ```
 
-`cover_hash` is an album-level content hash. Fetch the image with `cover_get` over any
+`cover_hash` is a content hash. A track on an album carries the album's cover. A track with no
+album carries its own, read the first time a page includes it and kept until its file changes,
+so two singles by one artist no longer share a picture. A server spends at most about half a
+second of a request reading those: a track past that comes back without `cover_hash` and gets
+one the next time a page includes it. A stream with no album has none.
+
+Fetch the image with `cover_get` over any
 transport, or - because it is content-addressed and so can be cached forever - straight from
 `GET /api/cover/{hash}`, which is what lets a browser put one in an `<img src>`.
 

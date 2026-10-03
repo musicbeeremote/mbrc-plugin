@@ -108,13 +108,14 @@ fn list(
     let tags = p.tracks_detailed_for_paths(paths).map_err(internal)?;
     let by_path: HashMap<&str, &TrackTags> = tags.iter().map(|t| (t.src.as_str(), t)).collect();
 
+    let covers = track::Covers::new(store, p);
     let items = page
         .data
         .iter()
         .enumerate()
         .map(|(i, npt)| {
             let mut obj = match by_path.get(npt.path.as_str()) {
-                Some(t) => track::track_json(t, track::cover_hash_for(store, t).as_deref()),
+                Some(t) => track::track_json(t, covers.track(t).as_deref()),
                 None => basic_track_json(npt),
             };
             let rank = offset + i as i64;

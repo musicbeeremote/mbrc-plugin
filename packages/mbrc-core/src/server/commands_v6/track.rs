@@ -8,13 +8,15 @@
 //! parsed, #112), `rating` (comma-or-dot float, #114). `date_added` is already
 //! ISO-8601 (formatted C#-side) and passes through.
 
+use std::time::{Duration, Instant, UNIX_EPOCH};
+
 use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
-use crate::cover::store::CoverStore;
+use crate::cover::store::{Artwork, CoverStore};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
@@ -44,7 +46,7 @@ fn track_get(data: &Value, p: &dyn Providers, cover_store: Option<&CoverStore>) 
         .into_iter()
         .next()
         .ok_or_else(|| V6Error::new(ErrorCode::NotFound, format!("no track for src: {src}")))?;
-    let cover_hash = cover_hash_for(cover_store, &tags);
+    let cover_hash = Covers::new(cover_store, p).track(&tags);
     Ok(track_json(&tags, cover_hash.as_deref()))
 }
 
@@ -73,19 +75,96 @@ fn cover_get(data: &Value, cover_store: Option<&CoverStore>) -> OpResult {
     }
 }
 
-/// Resolves a track's `cover_hash` from its album key: `album_artist` when
-/// present, else `artist`.
+/// How long one answer may spend reading albumless tracks' artwork before the
+/// rest of its tracks go without a `cover_hash`, to be read for a later page.
+const READ_BUDGET: Duration = Duration::from_millis(500);
+
+/// Resolves `cover_hash` for the tracks of one answer.
 ///
-/// The album-keyed store covers every track that belongs to an album. An
-/// albumless single has no hash here - it needs the per-src namespace of
-/// #136 §3.2, which the store does not hold.
-pub(crate) fn cover_hash_for(store: Option<&CoverStore>, tags: &TrackTags) -> Option<String> {
-    let artist = if tags.album_artist.is_empty() {
-        &tags.artist
+/// A track on an album takes the album's cover. A track with no album has a
+/// cover of its own (#136), read the first time an answer carries it and kept
+/// until its file changes: albumless tracks fold into one album per artist, so
+/// that album's cover would answer for every single the artist has. The work is
+/// bounded by the tracks a client is shown, never by the library.
+pub(crate) struct Covers<'a> {
+    store: Option<&'a CoverStore>,
+    providers: &'a dyn Providers,
+    deadline: Instant,
+}
+
+impl<'a> Covers<'a> {
+    pub(crate) fn new(store: Option<&'a CoverStore>, providers: &'a dyn Providers) -> Self {
+        Self {
+            store,
+            providers,
+            deadline: Instant::now() + READ_BUDGET,
+        }
+    }
+
+    pub(crate) fn track(&self, tags: &TrackTags) -> Option<String> {
+        self.resolve(
+            &tags.src,
+            album_key_artist(&tags.album_artist, &tags.artist),
+            &tags.album,
+        )
+    }
+
+    pub(crate) fn cached(&self, tags: &CachedTags) -> Option<String> {
+        self.resolve(
+            &tags.src,
+            album_key_artist(&tags.album_artist, &tags.artist),
+            &tags.album,
+        )
+    }
+
+    fn resolve(&self, src: &str, artist: &str, album: &str) -> Option<String> {
+        if album.is_empty() {
+            self.own(src)
+        } else {
+            album_cover_hash(self.store, artist, album)
+        }
+    }
+
+    /// An albumless track's own cover. A file the core cannot see the modified
+    /// time of, such as a stream, has none.
+    fn own(&self, src: &str) -> Option<String> {
+        let store = self.store?;
+        let modified = modified_secs(src)?;
+        let key = track_artwork_key(src);
+        if let Some(cover) = store.item_cover(&key).filter(|c| c.modified == modified) {
+            return cover.hash;
+        }
+        if Instant::now() >= self.deadline {
+            return None;
+        }
+        let raw = match crate::server::track_artwork(self.providers, src) {
+            Artwork::Found(raw) => Some(raw),
+            Artwork::Missing => None,
+            Artwork::Unavailable => return None,
+        };
+        store
+            .cache_item_cover(&key, raw.as_deref(), modified)
+            .unwrap_or_else(|error| {
+                tracing::debug!(src, %error, "track cover: store failed");
+                None
+            })
+    }
+}
+
+/// The artist half of the album key: the album artist, else the artist.
+fn album_key_artist<'t>(album_artist: &'t str, artist: &'t str) -> &'t str {
+    if album_artist.is_empty() {
+        artist
     } else {
-        &tags.album_artist
-    };
-    album_cover_hash(store, artist, &tags.album)
+        album_artist
+    }
+}
+
+/// A file's modified time in unix seconds, as the cover build records it.
+fn modified_secs(path: &str) -> Option<i64> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let secs = modified.duration_since(UNIX_EPOCH).ok()?.as_secs();
+    i64::try_from(secs).ok()
 }
 
 /// The `cover_hash` for the artwork MusicBee says is playing, which is not
@@ -94,35 +173,40 @@ pub(crate) fn cover_hash_for(store: Option<&CoverStore>, tags: &TrackTags) -> Op
 /// A track whose own art differs from the record it is on - a compilation, a
 /// podcast episode - gets the wrong picture from an album cache, or none. The
 /// bytes announced for the playing track are already cached, so this costs no
-/// host call: it stores them under the track's own key once and answers from
-/// the store after. The album is the fallback, for before MusicBee has spoken.
+/// host call: it stores them once and answers from the store after. Before
+/// MusicBee has spoken, the track's usual cover answers.
 pub(crate) fn playing_cover_hash(
-    store: Option<&CoverStore>,
+    covers: &Covers<'_>,
     tags: &TrackTags,
     artwork_b64: &str,
 ) -> Option<String> {
-    let album = || cover_hash_for(store, tags);
-    let store = match store {
+    let usual = || covers.track(tags);
+    let store = match covers.store {
         Some(store) => store,
-        None => return album(),
+        None => return usual(),
     };
     if artwork_b64.is_empty() {
-        return album();
+        return usual();
     }
-    let key = track_artwork_key(&tags.src);
+    let key = playing_artwork_key(&tags.src);
     if let Some(hash) = store.hash_for(&key) {
         return Some(hash);
     }
     let Some(bytes) = crate::cover::from_base64(artwork_b64) else {
-        return album();
+        return usual();
     };
-    store.cache_cover(&key, &bytes).ok().or_else(album)
+    store.cache_cover(&key, &bytes).ok().or_else(usual)
 }
 
-/// The store key one track's own artwork lives under, apart from the album keys
-/// so that neither can answer for the other.
+/// The store key an albumless track's own cover is kept under.
 fn track_artwork_key(src: &str) -> String {
     format!("track:{src}")
+}
+
+/// The key the playing track's announced artwork is kept under, apart from the
+/// album keys so that neither can answer for the other.
+fn playing_artwork_key(src: &str) -> String {
+    format!("playing:{src}")
 }
 
 /// Resolve an album's `cover_hash` from its `(artist, album)` key - the shared
@@ -183,19 +267,6 @@ pub(crate) fn cached_track_json(tags: &CachedTags, cover_hash: Option<&str>) -> 
         obj["cover_hash"] = json!(hash);
     }
     obj
-}
-
-/// A cached row's `cover_hash`, by the same album key [`cover_hash_for`] uses.
-pub(crate) fn cached_cover_hash_for(
-    store: Option<&CoverStore>,
-    tags: &CachedTags,
-) -> Option<String> {
-    let artist = if tags.album_artist.is_empty() {
-        &tags.artist
-    } else {
-        &tags.album_artist
-    };
-    album_cover_hash(store, artist, &tags.album)
 }
 
 /// The tags for a set of paths, answered from the shared cache and asked of the
@@ -428,15 +499,14 @@ mod tests {
 
         let mut tags = tags();
         tags.album = "An Album Nothing Cached".into();
-        let hash = playing_cover_hash(Some(&store), &tags, &artwork).unwrap();
+        let m = MockProviders::default();
+        let covers = Covers::new(Some(&store), &m);
+        let hash = playing_cover_hash(&covers, &tags, &artwork).unwrap();
 
         assert!(store.read_cover_bytes(&hash).is_some());
         // Answered from the store the second time, so a client polling the
         // playing track does not re-hash the same image on every read.
-        assert_eq!(
-            playing_cover_hash(Some(&store), &tags, &artwork),
-            Some(hash)
-        );
+        assert_eq!(playing_cover_hash(&covers, &tags, &artwork), Some(hash));
     }
 
     /// Before MusicBee has announced the artwork there is nothing to hash, and
@@ -456,7 +526,110 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(playing_cover_hash(Some(&store), &tags, ""), Some(album));
+        let m = MockProviders::default();
+        let covers = Covers::new(Some(&store), &m);
+        assert_eq!(playing_cover_hash(&covers, &tags, ""), Some(album));
+    }
+
+    /// A store, and an albumless track whose file exists, under a fresh dir.
+    fn albumless(name: &str) -> (CoverStore, TrackTags) {
+        let dir = std::env::temp_dir().join(format!("mbrc-v6-albumless-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("single.mp3");
+        std::fs::write(&src, b"audio").unwrap();
+        let store = CoverStore::open_at(&dir);
+        let mut tags = tags();
+        tags.src = src.to_string_lossy().into_owned();
+        tags.album = String::new();
+        (store, tags)
+    }
+
+    fn artwork_reads(m: &MockProviders) -> usize {
+        m.recorded()
+            .iter()
+            .filter(|call| call.starts_with("artwork_raw"))
+            .count()
+    }
+
+    #[test]
+    fn an_albumless_track_has_its_own_cover_not_its_artists_singles() {
+        let (store, tags) = albumless("own");
+        let artists_singles = store
+            .cache_cover(
+                &cover_identifier(&tags.album_artist, ""),
+                &test_jpeg_bytes(200, 200),
+            )
+            .unwrap();
+        let m = MockProviders {
+            artwork_raw: test_jpeg_bytes(90, 90),
+            ..Default::default()
+        };
+
+        let own = Covers::new(Some(&store), &m).track(&tags).unwrap();
+
+        assert_ne!(own, artists_singles);
+        assert!(store.read_cover_bytes(&own).is_some());
+    }
+
+    #[test]
+    fn an_albumless_cover_is_read_once_until_its_file_changes() {
+        let (store, tags) = albumless("once");
+        let m = MockProviders {
+            artwork_raw: test_jpeg_bytes(90, 90),
+            ..Default::default()
+        };
+        let first = Covers::new(Some(&store), &m).track(&tags);
+        assert_eq!(Covers::new(Some(&store), &m).track(&tags), first);
+        assert_eq!(artwork_reads(&m), 1);
+
+        let later = std::time::SystemTime::now() + Duration::from_secs(120);
+        std::fs::File::options()
+            .write(true)
+            .open(&tags.src)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        Covers::new(Some(&store), &m).track(&tags);
+        assert_eq!(artwork_reads(&m), 2, "a changed file is read again");
+    }
+
+    #[test]
+    fn an_albumless_track_without_artwork_is_not_asked_again() {
+        let (store, tags) = albumless("none");
+        let m = MockProviders::default(); // no artwork
+        assert_eq!(Covers::new(Some(&store), &m).track(&tags), None);
+        assert_eq!(Covers::new(Some(&store), &m).track(&tags), None);
+        assert_eq!(artwork_reads(&m), 1);
+    }
+
+    #[test]
+    fn past_the_read_budget_an_albumless_track_waits_for_a_later_page() {
+        let (store, tags) = albumless("budget");
+        let m = MockProviders {
+            artwork_raw: test_jpeg_bytes(90, 90),
+            ..Default::default()
+        };
+        let spent = Covers {
+            store: Some(&store),
+            providers: &m,
+            deadline: Instant::now(),
+        };
+        assert_eq!(spent.track(&tags), None);
+        assert_eq!(artwork_reads(&m), 0);
+        assert!(Covers::new(Some(&store), &m).track(&tags).is_some());
+    }
+
+    #[test]
+    fn a_stream_with_no_album_has_no_cover_and_costs_no_read() {
+        let (store, mut tags) = albumless("stream");
+        tags.src = "http://radio.example/stream".into();
+        let m = MockProviders {
+            artwork_raw: test_jpeg_bytes(90, 90),
+            ..Default::default()
+        };
+        assert_eq!(Covers::new(Some(&store), &m).track(&tags), None);
+        assert_eq!(artwork_reads(&m), 0);
     }
 
     #[test]

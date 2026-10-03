@@ -250,9 +250,10 @@ fn tracks(
     // One batch read for the page's typed tags -> canonical tracks.
     let tags = p.tracks_detailed_for_paths(page_paths).map_err(internal)?;
     cache_browse_tags(cache, &tags);
+    let covers = track::Covers::new(store, p);
     let items = tags
         .iter()
-        .map(|t| track::track_json(t, track::cover_hash_for(store, t).as_deref()))
+        .map(|t| track::track_json(t, covers.track(t).as_deref()))
         .collect();
     Ok(page_json(total, offset, items))
 }
