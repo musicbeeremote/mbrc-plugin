@@ -2,11 +2,11 @@
 
 use serde_json::{Value, json};
 
-use super::{HandlerResult, pagination, reply_dto};
+use super::{HandlerResult, LIST_PAGE, page_request, reply_dto};
 use crate::providers::Providers;
 
 pub fn list(data: &Value, p: &dyn Providers) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     reply_dto("playlistlist", &p.playlists(offset, limit)?)
 }
 

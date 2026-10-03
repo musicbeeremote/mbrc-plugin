@@ -144,12 +144,29 @@ pub type Reply = (String, Value);
 /// A handler's result: reply frames, or an error (logged; no reply sent).
 pub type HandlerResult = Result<Vec<Reply>, String>;
 
+/// The page a V4 library list gets when the request names no positive `limit`.
+///
+/// The C# core that the Rust one replaced defaulted to this, and no shipped
+/// client relies on it: every traced client sends an explicit limit.
+pub const LIST_PAGE: i32 = 4000;
+
+/// The default page for the now-playing list and for album covers, whose items
+/// are heavier. Covers are what clients page 100 at a time.
+pub const SHORT_PAGE: i32 = 100;
+
+/// `{offset, limit}` from a V4 list request, with a missing, zero or negative
+/// `limit` replaced by `default_limit` rather than read as "everything".
+pub fn page_request(data: &Value, default_limit: i32) -> (i32, i32) {
+    let (offset, limit) = pagination(data);
+    (offset, if limit > 0 { limit } else { default_limit })
+}
+
 /// Extract `{offset, limit}` from a paginated request payload (0 when absent).
 ///
 /// Values outside `i32` saturate rather than truncate. A cast would wrap
 /// `u32::MAX - 5` to `-6`, which the store then clamps to 0, so a request far
 /// past the end of the library answered with its first page.
-pub fn pagination(data: &Value) -> (i32, i32) {
+fn pagination(data: &Value) -> (i32, i32) {
     let field = |key: &str| {
         data.get(key)
             .and_then(Value::as_i64)
@@ -384,6 +401,23 @@ mod audit {
 
         assert_eq!(pagination(&json!({"offset": 10, "limit": 5})), (10, 5));
         assert_eq!(pagination(&json!({})), (0, 0));
+    }
+
+    #[test]
+    fn a_list_request_without_a_positive_limit_gets_the_default_page() {
+        for data in [
+            json!({}),
+            json!({"limit": 0}),
+            json!({"limit": -5}),
+            json!(7),
+            Value::Null,
+        ] {
+            assert_eq!(page_request(&data, LIST_PAGE), (0, LIST_PAGE), "{data}");
+        }
+        assert_eq!(
+            page_request(&json!({"offset": 3, "limit": 800}), LIST_PAGE),
+            (3, 800)
+        );
     }
 
     #[test]

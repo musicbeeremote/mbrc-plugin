@@ -4,7 +4,9 @@
 
 use serde_json::{Value, json};
 
-use super::{Ctx, HandlerResult, Platform, as_int_lenient, as_set_string, pagination};
+use super::{
+    Ctx, HandlerResult, Platform, SHORT_PAGE, as_int_lenient, as_set_string, page_request,
+};
 use crate::providers::Providers;
 
 /// Reads an index from either a bare int (or stringified int) or an
@@ -17,7 +19,7 @@ fn index_of(data: &Value) -> i32 {
 }
 
 pub fn list(data: &Value, ctx: &Ctx) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, SHORT_PAGE);
     // iOS gets the current-index-anchored "ordered" list; Android the
     // sequential page. The wire codec then shapes the item per platform.
     let page = if ctx.platform == Platform::Ios {

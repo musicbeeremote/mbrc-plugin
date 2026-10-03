@@ -456,8 +456,8 @@ impl MetadataCache {
 
     /// The track paths for the browse page `[offset, offset+limit)`, read straight
     /// from the ordinal index via a redb range - O(page), never the whole library.
-    /// `limit <= 0` means "the rest from offset" (matches C# `Paginate`). Empty
-    /// when disabled/unvalidated so the caller falls back to the provider.
+    /// `limit <= 0` means "the rest from offset". Empty when disabled or
+    /// unvalidated, so the caller falls back to the provider.
     pub fn track_page_paths(&self, offset: i32, limit: i32) -> Vec<String> {
         if !self.is_validated() {
             return Vec::new();

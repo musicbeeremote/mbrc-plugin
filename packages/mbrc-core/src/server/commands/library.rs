@@ -10,7 +10,10 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use super::{Ctx, HandlerResult, as_bool_lenient, as_set_string, pagination, reply_dto};
+use super::{
+    Ctx, HandlerResult, LIST_PAGE, SHORT_PAGE, as_bool_lenient, as_set_string, page_request,
+    reply_dto,
+};
 use crate::cover::{cover_identifier, store::CoverStore};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
@@ -35,7 +38,7 @@ pub(crate) fn key_browse_artists(album_artists: bool) -> String {
 // `Paginate`. Offset 0 / limit 0 fetches everything from the provider.
 
 pub fn browse_genres(data: &Value, ctx: &Ctx) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     let page = flat_browse(ctx, KEY_BROWSE_GENRES, offset, limit, || {
         ctx.providers.browse_genres(0, 0)
     })?;
@@ -43,7 +46,7 @@ pub fn browse_genres(data: &Value, ctx: &Ctx) -> HandlerResult {
 }
 
 pub fn browse_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     let album_artists = data
         .get("album_artists")
         .and_then(Value::as_bool)
@@ -56,7 +59,7 @@ pub fn browse_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
 }
 
 pub fn browse_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     let page = flat_browse(ctx, KEY_BROWSE_ALBUMS, offset, limit, || {
         ctx.providers.browse_albums(0, 0)
     })?;
@@ -64,7 +67,7 @@ pub fn browse_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
 }
 
 pub fn browse_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     // Fast path: one redb range plus one FFI batch for the page misses. With
     // no index yet, fall back to the whole list, sliced and left uncached.
     let page = match ctx.metadata_cache {
@@ -302,7 +305,7 @@ pub fn album_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
 /// Serves a flat browse list. On a cache hit the stored FULL list is sliced to
 /// the requested page; on a miss (cache disabled, not yet validated, or first
 /// fetch) `fetch_full` pulls the whole list from the provider once, caches it
-/// (when validated), and slices. The slice mirrors C# `Paginate`.
+/// (when validated), and slices it with [`slice_page`].
 fn flat_browse<T, F>(
     ctx: &Ctx,
     key: &str,
@@ -329,9 +332,9 @@ where
     Ok(slice_page(full, offset, limit))
 }
 
-/// Slices a full list into the requested page, byte-for-byte as C# `Paginate`:
-/// `total` = the full list count, `data` = `skip(offset).take(limit)`, where a
-/// non-positive `limit` means "the rest from offset".
+/// Slices a full list into the requested page: `total` = the full list count,
+/// `data` = `skip(offset).take(limit)`. V4 handlers pass a positive limit (see
+/// [`page_request`]); a non-positive one still means "the rest from offset".
 fn slice_page<T>(full: Page<T>, offset: i32, limit: i32) -> Page<T> {
     let total = full.total;
     let start = (offset.max(0) as usize).min(full.data.len());
@@ -369,13 +372,6 @@ where
 
 // ── Covers, radio, play-all ──
 
-/// The cover page served when a request names no positive `limit`.
-///
-/// Every other V4 list keeps C#'s "the rest from offset" for that case, but each
-/// cover is an image, so "the rest" of a large library is one frame past the
-/// frame cap. Shipped clients page covers 100 at a time, so this is their page.
-const DEFAULT_COVER_PAGE: i32 = 100;
-
 /// Paginated when `offset`/`limit` present, else a single cover by artist/album.
 ///
 /// Covers are served from the core's `CoverStore` (resize/hash/cache all live in
@@ -386,8 +382,7 @@ const DEFAULT_COVER_PAGE: i32 = 100;
 /// The provider call failed, or the cover could not be read from the store.
 pub fn album_cover(data: &Value, ctx: &Ctx) -> HandlerResult {
     if data.get("offset").is_some() || data.get("limit").is_some() {
-        let (offset, limit) = pagination(data);
-        let limit = if limit > 0 { limit } else { DEFAULT_COVER_PAGE };
+        let (offset, limit) = page_request(data, SHORT_PAGE);
         let page = match ctx.cover_store {
             Some(store) => store_cover_page(store, ctx.providers, offset, limit),
             None => ctx.providers.album_cover_page(offset, limit)?,
@@ -542,7 +537,7 @@ fn status_cover(status: i32) -> AlbumCover {
 }
 
 pub fn radio_stations(data: &Value, p: &dyn Providers) -> HandlerResult {
-    let (offset, limit) = pagination(data);
+    let (offset, limit) = page_request(data, LIST_PAGE);
     reply_dto("radiostations", &p.radio_stations(offset, limit)?)
 }
 
