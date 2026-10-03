@@ -13,7 +13,7 @@
          it stays net48-compatible; the contractless resolver + Serialize/Deserialize
          surface is unchanged from 2.5.x. Needs a live FFI round-trip smoke test in
          MusicBee to confirm the merged single-DLL still deserializes core payloads. -->
-    <PackageVersion Include="MessagePack" Version="3.1.8" />
+    <PackageVersion Include="MessagePack" Version="3.1.10" />
 
     <!-- Plugin packaging (Costura embeds managed deps into mb_remote.dll) -->
     <PackageVersion Include="Costura.Fody" Version="6.2.0" />
@@ -22,7 +22,7 @@
     <!-- Analyzers (build-time only) -->
     <PackageVersion Include="AsyncFixer" Version="2.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.400" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.401" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
 
     <!-- Test. AwesomeAssertions replaces FluentAssertions (v7+ is the Xceed
@@ -35,8 +35,8 @@
          VSTest adapter, no Microsoft.NET.Test.Sdk, and coverage comes from the
          MTP extension rather than a VSTest data collector. global.json is what
          points `dotnet test` at that runner. -->
-    <PackageVersion Include="xunit.v3" Version="4.0.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
   </ItemGroup>
