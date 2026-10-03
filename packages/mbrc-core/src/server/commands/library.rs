@@ -369,6 +369,13 @@ where
 
 // ── Covers, radio, play-all ──
 
+/// The cover page served when a request names no positive `limit`.
+///
+/// Every other V4 list keeps C#'s "the rest from offset" for that case, but each
+/// cover is an image, so "the rest" of a large library is one frame past the
+/// frame cap. Shipped clients page covers 100 at a time, so this is their page.
+const DEFAULT_COVER_PAGE: i32 = 100;
+
 /// Paginated when `offset`/`limit` present, else a single cover by artist/album.
 ///
 /// Covers are served from the core's `CoverStore` (resize/hash/cache all live in
@@ -380,6 +387,7 @@ where
 pub fn album_cover(data: &Value, ctx: &Ctx) -> HandlerResult {
     if data.get("offset").is_some() || data.get("limit").is_some() {
         let (offset, limit) = pagination(data);
+        let limit = if limit > 0 { limit } else { DEFAULT_COVER_PAGE };
         let page = match ctx.cover_store {
             Some(store) => store_cover_page(store, ctx.providers, offset, limit),
             None => ctx.providers.album_cover_page(offset, limit)?,
@@ -1004,6 +1012,39 @@ mod tests {
         assert_eq!(page.data[0].album, "Album");
         assert_eq!(page.data[0].status, 200);
         assert!(!page.data[0].cover.is_empty());
+    }
+
+    #[test]
+    fn a_cover_page_without_a_positive_limit_is_one_default_page_not_every_cover() {
+        use crate::cover::store::AlbumIdentity;
+        let (store, _dir) = temp_store("default-page");
+        let albums: Vec<AlbumIdentity> = (0..150)
+            .map(|i| AlbumIdentity {
+                key: cover_identifier("Artist", &format!("Album {i}")),
+                path: format!("/{i}.mp3"),
+                modified: 0,
+            })
+            .collect();
+        store.warm_up(&albums);
+        let m = MockProviders::default();
+        let ctx = Ctx::new(&m, ProtocolVersion::V4).with_cover_store(&store);
+
+        for request in [
+            json!({"offset": 0, "limit": 0}),
+            json!({"offset": 0, "limit": -1}),
+            json!({"offset": 0, "limit": i64::MIN}),
+            json!({"offset": 0}),
+            json!({"limit": 0}),
+        ] {
+            let reply = &album_cover(&request, &ctx).unwrap()[0].1;
+            assert_eq!(reply["data"].as_array().unwrap().len(), 100, "{request}");
+            assert_eq!(reply["limit"], 100, "{request}: the limit actually used");
+            assert_eq!(reply["total"], 150, "{request}");
+        }
+
+        let asked = &album_cover(&json!({"offset": 0, "limit": 120}), &ctx).unwrap()[0].1;
+        assert_eq!(asked["data"].as_array().unwrap().len(), 120);
+        assert_eq!(asked["limit"], 120);
     }
 
     #[test]
