@@ -30,7 +30,7 @@ namespace MusicBeePlugin.Host
 
         private readonly UserSettingsService _userSettings;
         private readonly ISystemOperations _system;
-        private readonly IPluginLogger _logger;
+        private readonly FfiLogger _logger;
         private bool _disposed;
 
         public PluginHost(Plugin.MusicBeeApiInterface api, string storagePath, string version)

@@ -122,7 +122,7 @@ namespace MusicBeePlugin.Settings
             Controls.Add(root);
         }
 
-        private Control BuildDevicesGroup()
+        private GroupBox BuildDevicesGroup()
         {
             _devices = new ListView
             {
@@ -175,7 +175,7 @@ namespace MusicBeePlugin.Settings
             return Group("Devices", layout, fill: true);
         }
 
-        private Control BuildPairingGroup()
+        private GroupBox BuildPairingGroup()
         {
             _codeRole = RoleCombo();
             _codeRole.SelectedIndex = 0;
@@ -202,7 +202,7 @@ namespace MusicBeePlugin.Settings
             return Group("Pairing", layout, fill: false);
         }
 
-        private Control BuildRefusalsGroup()
+        private GroupBox BuildRefusalsGroup()
         {
             _refusals = new ListView
             {
@@ -231,7 +231,7 @@ namespace MusicBeePlugin.Settings
             return Group("Refused requests", layout, fill: true);
         }
 
-        private Control BuildCloseRow()
+        private Button BuildCloseRow()
         {
             var close = new Button { Text = "Close", AutoSize = true, Anchor = AnchorStyles.Right };
             close.Click += (s, e) => Close();

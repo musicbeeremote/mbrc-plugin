@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace MusicBeePlugin.Utilities
 {
@@ -31,7 +30,7 @@ namespace MusicBeePlugin.Utilities
         private const string ContainerRoamingSuffix = @"LocalCache\Roaming";
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        private static extern int GetCurrentPackageFamilyName(ref uint length, StringBuilder name);
+        private static extern int GetCurrentPackageFamilyName(ref uint length, [Out] char[] name);
 
         private static readonly Lazy<string> Family = new Lazy<string>(ReadPackageFamilyName);
 
@@ -128,8 +127,8 @@ namespace MusicBeePlugin.Utilities
                 if (probe == AppModelErrorNoPackage || length == 0) return string.Empty;
                 if (probe != ErrorInsufficientBuffer && probe != 0) return string.Empty;
 
-                var buffer = new StringBuilder((int)length);
-                return GetCurrentPackageFamilyName(ref length, buffer) == 0 ? buffer.ToString() : string.Empty;
+                var buffer = new char[length];
+                return GetCurrentPackageFamilyName(ref length, buffer) == 0 ? new string(buffer).TrimEnd('\0') : string.Empty;
             }
             catch (Exception)
             {

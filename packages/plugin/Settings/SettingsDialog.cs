@@ -301,7 +301,7 @@ namespace MusicBeePlugin.Settings
             Controls.Add(scroller);
         }
 
-        private Control BuildConnectionGroup()
+        private GroupBox BuildConnectionGroup()
         {
             _port = new NumericUpDown { Minimum = 1, Maximum = 65535, Width = 100, Anchor = AnchorStyles.Left };
 
@@ -362,7 +362,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Connection", layout);
         }
 
-        private Control BuildAccessGroup()
+        private GroupBox BuildAccessGroup()
         {
             _filterMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, Anchor = AnchorStyles.Left };
             _filterMode.Items.AddRange(new object[] { "All clients", "Address range", "Specific addresses" });
@@ -413,7 +413,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Access control", layout);
         }
 
-        private Control BuildLibraryGroup()
+        private GroupBox BuildLibraryGroup()
         {
             _searchSource = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, Anchor = AnchorStyles.Left };
             _searchSource.Items.AddRange(Sources.Select(x => (object)x.Label).ToArray());
@@ -422,7 +422,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Library", layout);
         }
 
-        private Control BuildAdvancedGroup()
+        private GroupBox BuildAdvancedGroup()
         {
             _logLevel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
             _logLevel.Items.AddRange(LogLevels.Select(x => (object)x.Label).ToArray());
@@ -456,7 +456,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Advanced", layout);
         }
 
-        private Control BuildCacheGroup()
+        private GroupBox BuildCacheGroup()
         {
             _cacheStatus = new Label
             {
@@ -500,7 +500,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Cache", layout);
         }
 
-        private Control BuildUpdatesGroup()
+        private GroupBox BuildUpdatesGroup()
         {
             _updateStatus = new Label
             {
@@ -577,7 +577,7 @@ namespace MusicBeePlugin.Settings
         // capture, which leaves one zip on the Desktop to attach to an issue.
         // Structurally the Cache group with a countdown: a wrapping grey status
         // line over a row of buttons.
-        private Control BuildDiagnosticsGroup()
+        private GroupBox BuildDiagnosticsGroup()
         {
             _captureStatus = new Label
             {
@@ -631,7 +631,7 @@ namespace MusicBeePlugin.Settings
             return WrapGroup("Diagnostics", layout);
         }
 
-        private Control BuildButtonRow()
+        private TableLayoutPanel BuildButtonRow()
         {
             // Bottom-left: the version (the title bar already names the plugin), a
             // Help link to the online docs, and the save status shown when saving.
@@ -718,7 +718,7 @@ namespace MusicBeePlugin.Settings
         ///     The Web remote group: the two toggles, plus the pairing controls
         ///     that only matter while pairing is enforced.
         /// </summary>
-        private Control BuildWebGroup()
+        private GroupBox BuildWebGroup()
         {
             _webEnabled = new CheckBox
             {
@@ -1003,7 +1003,7 @@ namespace MusicBeePlugin.Settings
         ///     The Party Mode group: whether it is on, and the way to its own window,
         ///     where everything applies at once rather than on Save.
         /// </summary>
-        private Control BuildPartyGroup()
+        private GroupBox BuildPartyGroup()
         {
             // Anchored Left only, so the row centres it on the button beside it.
             _partyStatus = new Label
@@ -1057,7 +1057,7 @@ namespace MusicBeePlugin.Settings
                 : "On - " + promoted + " devices have a role";
         }
 
-        private static Control WrapGroup(string title, Control content)
+        private static GroupBox WrapGroup(string title, Control content)
         {
             var box = new GroupBox
             {
@@ -1116,7 +1116,7 @@ namespace MusicBeePlugin.Settings
             if (previous == CaptureStates.Writing && _captureState == CaptureStates.Done) RevealBundle();
         }
 
-        private string DescribeCapture(CaptureStatus status)
+        private static string DescribeCapture(CaptureStatus status)
         {
             if (status == null)
                 return "Diagnostics are unavailable - the core is not running.";
