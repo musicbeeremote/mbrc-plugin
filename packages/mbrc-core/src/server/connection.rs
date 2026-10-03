@@ -262,7 +262,8 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
                 break;
             }
             _ = ping_tick.tick() => {
-                match conn.on_ping_tick(&proto, registered, last_inbound.elapsed(), &timeouts) {
+                let age = Age { idle: last_inbound.elapsed(), open: opened_at.elapsed() };
+                match conn.on_ping_tick(&proto, registered, age, &timeouts) {
                     Tick::Waiting => continue,
                     Tick::Retire => break,
                 }
@@ -325,6 +326,13 @@ impl From<&crate::config::Config> for IdleTimeouts {
     }
 }
 
+/// How long a connection has been quiet, and how long it has been open.
+#[derive(Clone, Copy)]
+struct Age {
+    idle: Duration,
+    open: Duration,
+}
+
 /// What a keepalive tick decided about the connection.
 enum Tick {
     /// Keep it, and go back to waiting for input.
@@ -352,19 +360,23 @@ impl Conn {
     ///
     /// The rules and the reasoning behind them are on [`run`]. A silent V6
     /// connection is a dead one - its protocol asks the client to ping - while
-    /// legacy keeps the exemption its shipped clients were built against.
+    /// legacy keeps the exemption its shipped clients were built against. The
+    /// un-handshaked window counts from the open, not the last byte, so a peer
+    /// trickling bytes or non-handshake frames cannot hold a socket forever.
     fn on_ping_tick(
         &self,
         proto: &Proto,
         registered: bool,
-        idle: Duration,
+        age: Age,
         timeouts: &IdleTimeouts,
     ) -> Tick {
         let (peer, conn_id) = (self.peer, self.conn_id);
+        let idle = age.idle;
         let idle_ms = idle.as_millis() as u64;
 
-        if !proto.handshaked() && idle >= timeouts.unhandshaked {
-            tracing::debug!(%peer, conn_id, idle_ms, "closing un-handshaked idle connection");
+        if !proto.handshaked() && age.open >= timeouts.unhandshaked {
+            let open_ms = age.open.as_millis() as u64;
+            tracing::debug!(%peer, conn_id, open_ms, "closing connection that never handshaked");
             return Tick::Retire;
         }
 
