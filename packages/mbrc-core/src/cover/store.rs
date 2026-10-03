@@ -180,6 +180,11 @@ impl ItemCover {
     }
 }
 
+/// The key an albumless track's own cover is kept under among the item covers.
+pub fn track_cover_key(src: &str) -> String {
+    format!("track:{src}")
+}
+
 pub struct CoverStore {
     storage_path: PathBuf,
     /// The shared redb store, holding the durable album_key -> content_hash index
@@ -430,25 +435,15 @@ impl CoverStore {
             .write()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        let mut items = self.items.write().unwrap_or_else(|e| e.into_inner());
-        let missing: Vec<String> = items
+        let missing: Vec<String> = self
+            .items
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .filter(|(_, cover)| cover.hash.is_none())
             .map(|(key, _)| key.clone())
             .collect();
-        if missing.is_empty() {
-            return;
-        }
-        self.db.write(Durability::Immediate, |txn| {
-            let mut table = txn.open_table(COVER_ITEMS)?;
-            for key in &missing {
-                table.remove(key.as_str())?;
-            }
-            Ok(())
-        });
-        for key in &missing {
-            items.remove(key);
-        }
+        self.remove_items(&missing);
     }
 
     /// Builds missing covers: fetch each album's artwork, resize+hash+store it,
@@ -773,6 +768,55 @@ impl CoverStore {
                     tracing::debug!(%path, error = %e, "cover build: store failed");
                 }
             }
+        }
+    }
+
+    /// Forgets what is known about these tracks' artwork, after MusicBee said
+    /// they changed: their own covers are read again when next shown, and an
+    /// album one of them represents is dropped for the build to fetch again.
+    ///
+    /// A track's file can keep its modified time through an artwork change, as
+    /// when MusicBee stores the picture as a link, so the time alone misses it.
+    /// Returns how many album covers were dropped.
+    pub fn forget_tracks(&self, paths: &[String]) -> usize {
+        if paths.is_empty() {
+            return 0;
+        }
+        let keys: Vec<String> = paths.iter().map(|p| track_cover_key(p)).collect();
+        self.remove_items(&keys);
+
+        let changed: std::collections::HashSet<&str> = paths.iter().map(String::as_str).collect();
+        let albums: Vec<String> = self
+            .read_paths()
+            .iter()
+            .filter(|(_, path)| changed.contains(path.as_str()))
+            .map(|(key, _)| key.clone())
+            .collect();
+        let mut no_art = self.no_art.write().unwrap_or_else(|e| e.into_inner());
+        let mut covers = self.write_covers();
+        let mut dropped = 0;
+        for key in &albums {
+            no_art.remove(key);
+            dropped += usize::from(covers.remove(key).is_some());
+        }
+        dropped
+    }
+
+    /// Removes these item covers from memory and from redb.
+    fn remove_items(&self, keys: &[String]) {
+        let mut items = self.items.write().unwrap_or_else(|e| e.into_inner());
+        if !keys.iter().any(|key| items.contains_key(key)) {
+            return;
+        }
+        self.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(COVER_ITEMS)?;
+            for key in keys {
+                table.remove(key.as_str())?;
+            }
+            Ok(())
+        });
+        for key in keys {
+            items.remove(key);
         }
     }
 
@@ -1383,6 +1427,32 @@ mod tests {
             ..missing(now - NO_ART_RETRY_SECS - 1)
         };
         assert!(found.is_current(5), "artwork found does not expire");
+    }
+
+    #[test]
+    fn a_changed_track_loses_its_own_cover_and_the_album_it_represents() {
+        let (db, dir) = temp_storage("forget-tracks");
+        let store = CoverStore::new(db.clone(), &dir);
+        store.warm_up(&albums(2, 0));
+        store.build(|_| Some(jpeg_bytes(400, 400)), false);
+        store
+            .cache_item_cover(
+                &track_cover_key("/single.mp3"),
+                Some(&jpeg_bytes(300, 300)),
+                1,
+            )
+            .unwrap();
+
+        let dropped = store.forget_tracks(&["/single.mp3".into(), "/0.mp3".into()]);
+
+        assert_eq!(dropped, 1);
+        assert_eq!(store.hash_for("alb0"), None, "its representative changed");
+        assert!(store.hash_for("alb1").is_some());
+        assert_eq!(
+            CoverStore::new(db, &dir).item_cover(&track_cover_key("/single.mp3")),
+            None,
+            "forgotten in redb as well"
+        );
     }
 
     #[test]

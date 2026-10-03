@@ -591,7 +591,7 @@ fn notify_reconcile(core: &Core, scope: RebuildScope, building: bool) {
 ///
 /// The caller must already hold the reconcile single-flight guard (the Scanner
 /// does), so this cannot race an init, a library switch, or a manual rebuild.
-pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
+pub(crate) fn refresh_covers_delta(core: &Arc<Core>, changed: &[String]) {
     use crate::cover::{cover_identifier, store::AlbumIdentity};
 
     let identities: Vec<AlbumIdentity> = match core.providers.album_identifiers() {
@@ -612,7 +612,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>) {
     let before = core.cover_store.cached_count();
     core.cover_store.warm_up(&identities);
     let kept = core.cover_store.cached_count();
-    let dropped = before.saturating_sub(kept);
+    let dropped = before.saturating_sub(kept) + core.cover_store.forget_tracks(changed);
 
     let providers = core.providers.clone();
     let stats = core.cover_store.build_located(
@@ -830,16 +830,33 @@ mod cover_delta_tests {
         core.broadcaster.register(1, tx);
 
         // First pass builds the album's cover -> grid changed -> one status frame.
-        refresh_covers_delta(&core);
+        refresh_covers_delta(&core, &[]);
         let frame = rx.try_recv().expect("a built cover must broadcast");
         assert!(frame.contains("librarycovercachebuildstatus"), "{frame}");
         assert!(rx.try_recv().is_err(), "exactly one frame for one change");
 
         // Second pass: same unmodified album -> nothing dropped, nothing built.
-        refresh_covers_delta(&core);
+        refresh_covers_delta(&core, &[]);
         assert!(
             rx.try_recv().is_err(),
             "an unchanged cover delta must not broadcast"
         );
+    }
+
+    /// MusicBee can change a track's artwork without its file's modified time,
+    /// so a track the delta names is fetched again on its word alone.
+    #[test]
+    fn a_track_musicbee_says_changed_has_its_album_cover_fetched_again() {
+        let core = temp_core("named", vec![album("Artist", "Album", "/a.mp3", 0)]);
+        refresh_covers_delta(&core, &[]);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        core.broadcaster.register(1, tx);
+
+        refresh_covers_delta(&core, &["/a.mp3".to_owned()]);
+
+        let frame = rx.try_recv().expect("the named album is rebuilt");
+        assert!(frame.contains("librarycovercachebuildstatus"), "{frame}");
+        let key = crate::cover::cover_identifier("Artist", "Album");
+        assert!(core.cover_store.hash_for(&key).is_some());
     }
 }

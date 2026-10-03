@@ -182,10 +182,13 @@ async fn scan(core: &Arc<Core>, covers: bool) {
         // with the finish event below so the line clears again.
         core.providers
             .emit_event(HostEventType::CacheStatusChanged, &[]);
-        commands::library::refresh_library_delta(&core.metadata_cache, core.providers.as_ref());
+        let changed =
+            commands::library::refresh_library_delta(&core.metadata_cache, core.providers.as_ref());
         backfill_tags(&core);
-        if covers {
-            super::refresh_covers_delta(&core);
+        // A pass that found changed tracks is not idle, nudged or not: their
+        // artwork may have moved without their file's modified time.
+        if covers || !changed.is_empty() {
+            super::refresh_covers_delta(&core, &changed);
         }
         // Released before the finish event: the panel answers that event by
         // re-reading `is_reconciling`, so the guard must already be gone.

@@ -207,9 +207,9 @@ pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
 ///
 /// Only `updated` and `deleted` drop tags: `added` is asked for with no cached
 /// file list, which MusicBee answers with the whole library.
-pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
+pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) -> Vec<String> {
     if !cache.is_validated() {
-        return;
+        return Vec::new();
     }
     let since = cache.tracks_synced_at();
 
@@ -219,18 +219,23 @@ pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) {
         Err(e) => tracing::warn!(error = %e, "scanner: track path refetch failed"),
     }
 
-    match p.sync_delta(since) {
+    let changed = match p.sync_delta(since) {
         Ok(delta) => {
             let mut changed = delta.updated;
             changed.extend(delta.deleted);
             cache.drop_track_tags(&changed);
+            changed
         }
-        Err(e) => tracing::warn!(error = %e, "scanner: sync delta failed"),
-    }
+        Err(e) => {
+            tracing::warn!(error = %e, "scanner: sync delta failed");
+            Vec::new()
+        }
+    };
 
     // Small lists are cheap (~1-2 MB) and shift on add / tag edit; refresh whole.
     prewarm_browse_lists(cache, p);
     cache.set_tracks_synced_at(now_unix_seconds());
+    changed
 }
 
 /// Current unix time in seconds (0 if the clock is before the epoch).

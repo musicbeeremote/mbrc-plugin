@@ -16,7 +16,7 @@ use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
-use crate::cover::store::{Artwork, CoverStore};
+use crate::cover::store::{Artwork, CoverStore, track_cover_key};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
@@ -130,7 +130,7 @@ impl<'a> Covers<'a> {
     fn own(&self, src: &str) -> Option<String> {
         let store = self.store?;
         let modified = modified_secs(src)?;
-        let key = track_artwork_key(src);
+        let key = track_cover_key(src);
         if let Some(cover) = store.item_cover(&key).filter(|c| c.is_current(modified)) {
             return cover.hash;
         }
@@ -196,11 +196,6 @@ pub(crate) fn playing_cover_hash(
         return usual();
     };
     store.cache_cover(&key, &bytes).ok().or_else(usual)
-}
-
-/// The store key an albumless track's own cover is kept under.
-fn track_artwork_key(src: &str) -> String {
-    format!("track:{src}")
 }
 
 /// The key the playing track's announced artwork is kept under, apart from the
