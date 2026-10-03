@@ -93,4 +93,20 @@ mod tests {
         assert!(!is_allowed("thoth.fritz.box:3000"), ".box is a real gTLD");
         assert!(!is_allowed("thoth.lan"));
     }
+
+    proptest::proptest! {
+        /// The Host header is the first untrusted input every request meets.
+        #[test]
+        fn any_host_header_is_judged_without_panicking(host in "(?s).{0,80}") {
+            let _ = is_allowed(&host);
+            let _ = strip_port(&host);
+        }
+
+        #[test]
+        fn a_bracketed_host_with_any_tail_is_judged_without_panicking(
+            inner in "[0-9a-fA-F:.%]{0,40}", tail in "[\\]:0-9a-z]{0,12}",
+        ) {
+            let _ = is_allowed(&format!("[{inner}{tail}"));
+        }
+    }
 }

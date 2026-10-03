@@ -17,6 +17,9 @@ mod router;
 mod rpc;
 mod ws;
 
+#[cfg(test)]
+mod fuzz_tests;
+
 pub use router::serve;
 
 /// HTTP method prefixes that route a connection to this module.

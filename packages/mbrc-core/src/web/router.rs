@@ -117,7 +117,7 @@ fn guarded_routes(state: &WebState) -> Router<WebState> {
         .route_layer(middleware::from_fn_with_state(state.clone(), gate))
 }
 
-fn app(state: WebState) -> Router {
+pub(super) fn app(state: WebState) -> Router {
     Router::new()
         .merge(guarded_routes(&state))
         // Registered before the `{hash}` route it would otherwise look like.

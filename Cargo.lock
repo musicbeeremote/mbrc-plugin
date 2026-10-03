@@ -735,6 +735,7 @@ dependencies = [
  "syn 3.0.6",
  "time",
  "tokio",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",
