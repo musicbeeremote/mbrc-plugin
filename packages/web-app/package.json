@@ -15,7 +15,7 @@
     "typecheck": "vue-tsc -b"
   },
   "dependencies": {
-    "@vueuse/core": "14.4.0",
+    "@vueuse/core": "15.0.0",
     "pinia": "4.0.3",
     "vue": "3.5.43",
     "vue-i18n": "11.4.12",
