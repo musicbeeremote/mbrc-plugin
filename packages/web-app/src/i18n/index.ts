@@ -25,13 +25,16 @@ export const SUPPORTED_LOCALES: Record<string, string> = {
 const LOCALE_KEY = 'mbrc.locale'
 
 /**
- * Every locale directory, as a lazy import each.
+ * Every locale directory except the bundled fallback, as a lazy import each.
  *
  * A glob rather than a template-literal import so the bundler can see the set
  * at build time and give each locale its own chunk; a bare dynamic import on a
  * runtime string cannot be split and ends up in the entry bundle.
  */
-const LOCALE_LOADERS = import.meta.glob<{ default: unknown }>('./locales/*/index.ts') as Record<
+const LOCALE_LOADERS = import.meta.glob<{ default: unknown }>([
+  './locales/*/index.ts',
+  '!./locales/en/index.ts',
+]) as Record<
   string,
   () => Promise<{ default: MessageSchema }>
 >
