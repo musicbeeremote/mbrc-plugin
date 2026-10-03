@@ -412,10 +412,12 @@ fn run_reconcile(core: &Core, scope: RebuildScope) {
     notify_reconcile(core, scope, false);
 }
 
-/// Re-fingerprints the library and rebuilds the metadata caches if it moved.
+/// Re-fingerprints the library, rebuilds the browse lists if it moved, and
+/// lists the library into the index and the change log.
 ///
-/// A rebuild is also forced when the browse lists are missing, which is the
-/// cold-start case: the fingerprint matches but there is nothing to serve.
+/// The browse lists are also rebuilt when missing, which is the cold-start
+/// case. The listing runs on every start: nothing reported what changed while
+/// the plugin was not running.
 fn reconcile_metadata(core: &Core, identifiers: &[crate::protocol::messages::AlbumIdentifier]) {
     let albums: Vec<(String, i64)> = identifiers
         .iter()
@@ -430,16 +432,17 @@ fn reconcile_metadata(core: &Core, identifiers: &[crate::protocol::messages::Alb
         crate::metadata_cache::fingerprint(albums.iter().map(|(k, m)| (k.as_str(), *m)));
     let changed = core.metadata_cache.reconcile(&albums, fingerprint);
     let needs_rebuild = changed || !commands::library::browse_lists_cached(&core.metadata_cache);
+    let head = core.metadata_cache.changes().head();
 
-    let (counts, tracks) = if needs_rebuild {
-        let counts =
-            commands::library::prewarm_browse_lists(&core.metadata_cache, core.providers.as_ref());
-        let tracks =
-            commands::library::build_track_index(&core.metadata_cache, core.providers.as_ref());
-        (Some(counts), tracks)
-    } else {
-        (None, core.metadata_cache.track_count() as usize)
-    };
+    let counts = needs_rebuild.then(|| {
+        commands::library::prewarm_browse_lists(&core.metadata_cache, core.providers.as_ref())
+    });
+    let tracks =
+        commands::library::build_track_index(&core.metadata_cache, core.providers.as_ref());
+    core.tag_backfill.notify_one();
+    if core.metadata_cache.changes().head() != head {
+        crate::state::broadcast_library_changed(core);
+    }
 
     tracing::info!(
         albums = identifiers.len(),

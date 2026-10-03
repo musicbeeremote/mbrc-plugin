@@ -41,6 +41,9 @@ namespace MusicBeePlugin.Ffi.Generated
         FileAddedToLibrary = 7,
         LibrarySwitched = 8,
         StopAfterCurrentChanged = 9,
+        TagsChanged = 10,
+        RatingChanged = 11,
+        FileDeleted = 12,
     }
 
     public enum QueryType

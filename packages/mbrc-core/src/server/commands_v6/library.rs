@@ -11,12 +11,13 @@
 //! and `sort`/`order`. A filter is a parameter rather than an op of its own so
 //! that searching and sorting compose with browsing instead of duplicating it.
 //!
-//! Plus `library_genres`, `library_radio`, `library_play_all`, and
+//! Plus `library_genres`, `library_radio`, `library_play_all`,
+//! `library_changes` (see [`super::library_sync`]), and
 //! `library_queue { genre?, artist?, album?, query?, mode, play?, shuffle? }`,
 //! which queues what those same filters would list. It exists for a client that
 //! holds only a page of the library and so cannot name the paths itself.
 //!
-//! Every list is a V6 `Page` (`{ total, offset, items }`).
+//! Every list but `library_changes` is a V6 `Page` (`{ total, offset, items }`).
 
 use std::collections::BTreeMap;
 
@@ -44,6 +45,7 @@ pub const OPS: &[&str] = &[
     "library_radio",
     "library_play_all",
     "library_queue",
+    "library_changes",
 ];
 
 /// Dispatch a `library_*` op. `None` if `op` is not in this domain.
@@ -62,6 +64,7 @@ pub fn dispatch(
         "library_radio" => radio(data, p),
         "library_play_all" => play_all(data, p),
         "library_queue" => queue(data, p, metadata_cache),
+        "library_changes" => super::library_sync::changes(data, p, cover_store, metadata_cache),
         _ => return None,
     })
 }

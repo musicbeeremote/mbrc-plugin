@@ -330,6 +330,11 @@ namespace MusicBeePlugin.Ffi
         public string play { get; set; }
     }
 
+    public class NotificationParams
+    {
+        public string path { get; set; }
+    }
+
     public class TagChangeParams
     {
         public string tag { get; set; }

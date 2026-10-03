@@ -169,6 +169,10 @@ pub const SPECS: &[OpSpec] = &[
         fields: &[OFFSET, LIMIT],
     },
     OpSpec {
+        op: "library_changes",
+        fields: &[LIMIT],
+    },
+    OpSpec {
         op: "track_get",
         fields: &[req("src", Kind::From(Pool::Src))],
     },

@@ -22,6 +22,7 @@ use redb::{Durability, ReadableTable, ReadableTableMetadata};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::library_changes::ChangeLog;
 use crate::protocol::messages::{Track, TrackTags};
 use crate::store::{
     ALBUM_STAMPS, Db, LIBRARY_FINGERPRINT, META, METADATA_CACHE, TAGS_SCHEMA, TRACK_PATHS,
@@ -331,14 +332,45 @@ impl TrackFilter<'_> {
 pub struct MetadataCache {
     db: Db,
     validated: AtomicBool,
+    changes: ChangeLog,
 }
 
 impl MetadataCache {
     pub fn new(db: Db) -> Self {
         Self {
+            changes: ChangeLog::new(db.clone()),
             db,
             validated: AtomicBool::new(false),
         }
+    }
+
+    /// The library change log a syncing client reads.
+    pub fn changes(&self) -> &ChangeLog {
+        &self.changes
+    }
+
+    /// Files an index pass in the change log; the new generation if anything moved.
+    ///
+    /// No-op until validated, like every other write here: an unreconciled
+    /// cache may be looking at the previous library.
+    pub fn record_changes(&self, paths: Option<&[String]>, updated: &[String]) -> Option<u64> {
+        if !self.is_validated() {
+            return None;
+        }
+        self.changes.record(paths, updated)
+    }
+
+    /// Forgets everything tied to the library itself, for a switch to another one.
+    ///
+    /// The change log starts a new epoch and the sync watermark goes, since both
+    /// describe a library that is no longer the one loaded.
+    pub fn forget_library(&self) {
+        self.changes.reset();
+        self.db.write(Durability::Immediate, |txn| {
+            let mut meta = txn.open_table(META)?;
+            meta.remove(TRACKS_SYNCED_AT)?;
+            Ok(())
+        });
     }
 
     /// Whether the cache has been reconciled against the current library and is
@@ -404,11 +436,13 @@ impl MetadataCache {
         });
     }
 
-    /// Drops every cached entry (used on a library change): the generic blob cache
-    /// plus the track ordinal index and path-keyed tag cache. Resets the tracks
-    /// watermark so the next scan rebuilds from scratch, but keeps the `META`
-    /// table (it also holds the library fingerprint). Does not touch the
-    /// `validated` flag.
+    /// Drops every cached entry: the generic blob cache plus the track ordinal
+    /// index and path-keyed tag cache. Does not touch the `validated` flag.
+    ///
+    /// Keeps `META`, and with it the sync watermark, and keeps the change log:
+    /// a rebuild of the same library must not read to a syncing client as the
+    /// library having changed. A switch to another library also calls
+    /// [`forget_library`](Self::forget_library).
     pub fn clear(&self) {
         self.db.write(Durability::Immediate, |txn| {
             // `delete_table` returns false if it never existed - harmless.
@@ -417,8 +451,6 @@ impl MetadataCache {
             txn.delete_table(TRACK_TAGS)?;
             txn.delete_table(TRACK_SORT)?;
             txn.delete_table(ALBUM_STAMPS)?;
-            let mut meta = txn.open_table(META)?;
-            meta.remove(TRACKS_SYNCED_AT)?;
             Ok(())
         });
     }
@@ -1259,7 +1291,7 @@ mod tests {
     }
 
     #[test]
-    fn synced_at_round_trips_and_clear_resets_tracks() {
+    fn synced_at_round_trips_and_clear_keeps_it() {
         let cache = MetadataCache::new(temp_db("synced"));
         cache.reconcile(&[], 1);
         assert_eq!(cache.tracks_synced_at(), 0);
@@ -1279,9 +1311,48 @@ mod tests {
         assert!(cache.track_tags("/x.mp3").is_none());
         assert_eq!(
             cache.tracks_synced_at(),
-            0,
-            "watermark reset on library change"
+            12345,
+            "a rebuild keeps the watermark, so edits since it are still found"
         );
+    }
+
+    #[test]
+    fn forgetting_the_library_resets_the_watermark_and_the_change_log() {
+        let cache = MetadataCache::new(temp_db("forget"));
+        cache.reconcile(&[], 1);
+        cache.set_tracks_synced_at(12345);
+        cache.record_changes(Some(&["/x.mp3".into()]), &[]);
+        let before = cache.changes().head().unwrap();
+
+        cache.forget_library();
+        assert_eq!(cache.tracks_synced_at(), 0);
+        assert_eq!(cache.changes().head(), None);
+
+        cache.record_changes(Some(&["/y.mp3".into()]), &[]);
+        assert_ne!(cache.changes().head().unwrap().epoch, before.epoch);
+    }
+
+    /// A rebuild empties the index; the log is diffed against itself, so the
+    /// same library listed again files nothing.
+    #[test]
+    fn a_rebuild_of_the_same_library_files_no_changes() {
+        let cache = MetadataCache::new(temp_db("rebuild-quiet"));
+        cache.reconcile(&[], 1);
+        let library: Vec<String> = vec!["/a.mp3".into(), "/b.mp3".into()];
+        cache.replace_track_index(&library);
+        cache.record_changes(Some(&library), &[]);
+
+        cache.clear();
+        cache.replace_track_index(&library);
+        assert_eq!(cache.record_changes(Some(&library), &[]), None);
+        assert_eq!(cache.changes().head().unwrap().generation, 1);
+    }
+
+    #[test]
+    fn an_unvalidated_cache_files_no_changes() {
+        let cache = MetadataCache::new(temp_db("changes-gate"));
+        assert_eq!(cache.record_changes(Some(&["/a.mp3".into()]), &[]), None);
+        assert_eq!(cache.changes().head(), None);
     }
 
     #[test]

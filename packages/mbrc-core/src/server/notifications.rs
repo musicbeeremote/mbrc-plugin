@@ -41,6 +41,9 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
         // `state::handle_notification`, which owns the `Arc<Core>`.
         NotificationType::NowPlayingListChanged
         | NotificationType::FileAddedToLibrary
+        | NotificationType::TagsChanged
+        | NotificationType::RatingChanged
+        | NotificationType::FileDeleted
         | NotificationType::LibrarySwitched => {}
     }
 
@@ -111,6 +114,9 @@ fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) ->
             out.push(("nowplayinglistchanged".to_string(), json!(true)));
         }
         NotificationType::FileAddedToLibrary
+        | NotificationType::TagsChanged
+        | NotificationType::RatingChanged
+        | NotificationType::FileDeleted
         | NotificationType::LibrarySwitched
         | NotificationType::StopAfterCurrentChanged => {}
     }

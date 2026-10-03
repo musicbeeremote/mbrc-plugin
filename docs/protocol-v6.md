@@ -651,6 +651,7 @@ gone, and the `version` has moved, so re-read the list.
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
 | `library_play_all` | `{shuffle?}` | `{}` |
 | `library_queue` | `{mode?, play?, shuffle?, genre?, artist?, album?, query?}` | `{"count":N}` |
+| `library_changes` | `{since?, after?, limit?}` | `{epoch, generation, resync, total, items, next}` - see [Library sync](#library-sync) |
 
 **Scope.** `genre`, `artist` and `album` narrow a listing to what they name, and
 combine. An **empty string is an answer, not an absence**: `{"artist":""}` names the
@@ -676,6 +677,50 @@ containing it - and by the named order once one is asked for.
 the server resolves the scope and answers how many it queued. `mode` is `now`, `next`
 or `last` (default `last`); `play` names one `src` to start from; `shuffle` shuffles
 the selection rather than turning the player's shuffle mode on.
+
+### Library sync
+
+`library_changes` is for a client that keeps its own copy of the library and wants
+only what moved since it last looked. It is a cursor read, not a page:
+
+```json
+→ {"id":9,"kind":"request","op":"library_changes","data":{"since":{"epoch":"9f2c41d07a8be335","generation":41},"limit":1000}}
+← {"id":9,"kind":"response","data":{
+     "epoch":"9f2c41d07a8be335","generation":57,"resync":false,"total":212,
+     "items":[{"change":"upsert","track":{<canonical track>}},
+              {"change":"delete","src":"C:\\Music\\gone.mp3"}],
+     "next":{"epoch":"9f2c41d07a8be335","since":41,"until":57,"total":212,"generation":44,"src":"C:\\Music\\b.mp3"}}}
+```
+
+- **First sync:** omit `since`. Every track in the library comes back as an `upsert`;
+  deletes are left out because there is nothing to delete yet.
+- **Paging:** while `next` is non-null, send the same op with `after` set to `next`,
+  unchanged (it is opaque). `limit` defaults to 1000 and is clamped to 1..5000.
+- **Progress:** `total` is how many items the whole read holds, the same on every page
+  (it travels in `next`, so a resumed read keeps it). On a first sync it is the number of
+  tracks in the library. It is counted when the read starts, so treat it as an upper
+  bound: a track removed during the read can leave the last page short.
+- **The cursor:** once `next` is null, store `{epoch, generation}` from the response.
+  Every page of one read reports the same pair. Pass it as `since` next time.
+- **Applying:** `upsert` inserts or replaces the track keyed by `src`; `delete` removes it.
+  A track changed several times since the cursor appears once, as its latest state.
+- **`resync: true`** (with no items) means the cursor cannot be answered: the epoch is from
+  another library (MusicBee switched libraries), or the deletes it would need were
+  forgotten. Drop the local copy and sync again without `since`. Up to 10,000 deletes are
+  remembered.
+- **`unavailable`** means the library index is still being built (first start, or a library
+  switch). Retry when `library_changed` arrives.
+
+**Where changes come from.** While the plugin runs, only from what MusicBee reports.
+`RatingChanged` names the file, which is filed as an edit. `TagsChanged`, `FileAddedToLibrary`
+and `FileDeleted` make the server re-list the library's paths, since each can move the browse
+order, and file the edited, added or removed tracks. Notifications are collected for two
+seconds from the first one and applied as one pass, so a burst of edits is a few passes. Every start re-lists the library
+and asks MusicBee what was edited since the last pass, which covers the time the plugin was not
+running. A change MusicBee does not report, such as a file edited outside it that it never
+notices, is not synced. Play counts are not part of the track and are not tracked. Each pass bumps
+`generation` and broadcasts `library_changed` with the new `{epoch, generation}`, so a client
+already at that pair can skip the read.
 
 ### Playlist
 
@@ -841,7 +886,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
-| `library_changed` | `{}` | the library changed (add/scan/switch) -> re-browse |
+| `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 

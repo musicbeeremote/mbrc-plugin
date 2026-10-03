@@ -7,6 +7,7 @@
 //! returned value.
 
 pub mod library;
+pub mod library_sync;
 pub mod nowplaying;
 pub mod nowplaying_list;
 pub mod player;

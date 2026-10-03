@@ -65,6 +65,9 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
         // from the dispatch and reconcile paths, which own the `Arc<Core>`.
         NotificationType::NowPlayingArtworkReady
         | NotificationType::FileAddedToLibrary
+        | NotificationType::TagsChanged
+        | NotificationType::RatingChanged
+        | NotificationType::FileDeleted
         | NotificationType::LibrarySwitched
         | NotificationType::StopAfterCurrentChanged => Vec::new(),
     }

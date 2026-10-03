@@ -1,8 +1,8 @@
 //! Integration test: library-changing MusicBee notifications emit the V6
-//! `library_changed` event **imperatively** - from the dispatch path
-//! (`state::dispatch_notification`), NOT the pure `notifications_v6::build`
-//! builder (which returns nothing for them, since it has no owned `Arc<Core>`).
-//! Verifies the marker actually reaches a subscribed V6 main over a real socket.
+//! `library_changed` event from the Scanner's pass, after the debounce - NOT the
+//! pure `notifications_v6::build` builder (which returns nothing for them, since
+//! it has no owned `Arc<Core>`). Verifies the marker actually reaches a
+//! subscribed V6 main over a real socket.
 
 #![allow(clippy::unwrap_used)]
 
@@ -34,7 +34,7 @@ fn core(port: u16) -> Arc<Core> {
 fn connect(port: u16) -> (TcpStream, BufReader<TcpStream>) {
     let writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     let rs = writer.try_clone().unwrap();
-    rs.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    rs.set_read_timeout(Some(Duration::from_secs(6))).unwrap();
     (writer, BufReader::new(rs))
 }
 
@@ -57,11 +57,11 @@ fn handshake() -> String {
     .to_string()
 }
 
-/// A subscribed V6 main receives `library_changed` when a `FileAddedToLibrary`
-/// notification is dispatched - proving the imperative emission path fires (the
-/// pure builder is silent for this notification; see `notifications_v6` unit tests).
+/// A subscribed V6 main receives `library_changed` once the Scanner has applied
+/// a reported change (the pure builder is silent for these notifications; see
+/// `notifications_v6` unit tests).
 #[test]
-fn file_added_emits_library_changed_to_v6_main() {
+fn a_reported_edit_emits_library_changed_to_v6_main() {
     let port = free_port();
     let core = core(port);
     let net = server::start(core.clone()).expect("server starts");
@@ -74,9 +74,7 @@ fn file_added_emits_library_changed_to_v6_main() {
     send(&mut w, r#"{"id":1,"kind":"request","op":"ping","data":{}}"#);
     assert_eq!(read_frame(&mut r)["id"], 1);
 
-    // FileAddedToLibrary emits `library_changed` imperatively (and nudges the
-    // scanner). The pure builder returns nothing for it.
-    state::dispatch_notification(&core, NotificationType::FileAddedToLibrary);
+    state::dispatch_notification(&core, NotificationType::TagsChanged, Some("/a.mp3"));
 
     let ev = read_frame(&mut r);
     assert_eq!(ev["kind"], "event", "{ev}");

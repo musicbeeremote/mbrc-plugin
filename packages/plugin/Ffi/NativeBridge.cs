@@ -624,13 +624,20 @@ namespace MusicBeePlugin.Ffi
 
         #region Lifecycle (continued)
 
-        /// <summary>Forward a MusicBee notification (0-7) to the core.</summary>
-        public unsafe void HandleNotification(int notificationType)
+        /// <summary>Forward a MusicBee notification to the core, with the file it names if any.</summary>
+        public unsafe void HandleNotification(int notificationType, string path)
         {
             if (!_initialized) return;
             try
             {
-                _ = NativeMethods.mbrc_handle_notification(notificationType, null, 0);
+                var paramsBytes = string.IsNullOrEmpty(path)
+                    ? null
+                    : Msgpack.Serialize(new NotificationParams { path = path });
+                fixed (byte* p = paramsBytes)
+                {
+                    _ = NativeMethods.mbrc_handle_notification(
+                        notificationType, p, (uint)(paramsBytes?.Length ?? 0));
+                }
             }
             catch (Exception ex)
             {

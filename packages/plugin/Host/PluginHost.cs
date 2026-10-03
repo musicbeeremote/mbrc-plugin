@@ -87,8 +87,9 @@ namespace MusicBeePlugin.Host
             // host only provides raw MusicBee ingredients through the FFI.
         }
 
-        /// <summary>Forward a MusicBee notification (already mapped to 0-7) to the core.</summary>
-        public void HandleNotification(int notificationType) => _bridge.HandleNotification(notificationType);
+        /// <summary>Forward a MusicBee notification (already mapped to the core's type) to the core.</summary>
+        public void HandleNotification(int notificationType, string path) =>
+            _bridge.HandleNotification(notificationType, path);
 
         /// <summary>
         ///     The folder holding the log files (<c>mbrc-core.log</c> +

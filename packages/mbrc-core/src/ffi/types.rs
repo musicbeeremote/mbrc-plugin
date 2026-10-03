@@ -83,6 +83,12 @@ pub enum NotificationType {
     /// window. The only playback mode MusicBee announces rather than leaving to
     /// the poll in `server::monitor`.
     StopAfterCurrentChanged = 9,
+    /// A library file's tags were edited. Carries the file's path.
+    TagsChanged = 10,
+    /// A library file's rating changed. Carries the file's path.
+    RatingChanged = 11,
+    /// A file was removed from the library. Carries the file's path.
+    FileDeleted = 12,
 }
 
 impl NotificationType {
@@ -99,6 +105,9 @@ impl NotificationType {
             7 => Some(Self::FileAddedToLibrary),
             8 => Some(Self::LibrarySwitched),
             9 => Some(Self::StopAfterCurrentChanged),
+            10 => Some(Self::TagsChanged),
+            11 => Some(Self::RatingChanged),
+            12 => Some(Self::FileDeleted),
             _ => None,
         }
     }
@@ -507,10 +516,10 @@ mod tests {
 
     #[test]
     fn notification_type_roundtrips() {
-        for raw in 0..=9 {
+        for raw in 0..=12 {
             assert_eq!(NotificationType::from_i32(raw).map(|n| n as i32), Some(raw));
         }
-        assert_eq!(NotificationType::from_i32(10), None);
+        assert_eq!(NotificationType::from_i32(13), None);
         assert_eq!(NotificationType::from_i32(-1), None);
     }
 

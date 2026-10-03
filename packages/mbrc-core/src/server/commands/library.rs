@@ -181,17 +181,23 @@ pub fn prewarm_browse_lists(
 
 /// Builds the ordinal track index from the provider's browse-ordered path list.
 ///
-/// One `Library_QueryFilesEx(null)` call, paths only (~20 MB at 200k tracks),
-/// then the sync watermark is stamped to now so the first delta scan only picks
-/// up later changes. No eager tag prewarm: a page's tags are read lazily on
-/// first browse and cached path-keyed, which bounds the reconcile's memory to
-/// the path list rather than the full-tag library. Returns the track count; a
-/// provider error leaves the index empty and the handler does a full fetch.
+/// Runs on every start. One `Library_QueryFilesEx(null)` call, paths only, filed
+/// in the change log with what the host reports edited since the watermark,
+/// which covers a spell the plugin was not running. Tags are read lazily on
+/// first browse. Returns the track count; a provider error leaves the index
+/// empty and the handler does a full fetch.
 pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
     match p.track_paths() {
         Ok(paths) => {
             let count = paths.len();
+            let since = cache.tracks_synced_at();
+            let edited = if since > 0 {
+                edited_since(cache, p, since)
+            } else {
+                Vec::new()
+            };
             cache.replace_track_index(&paths);
+            cache.record_changes(Some(&paths), &edited);
             cache.set_tracks_synced_at(now_unix_seconds());
             count
         }
@@ -202,27 +208,53 @@ pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
     }
 }
 
-/// Refreshes the library caches incrementally (the Scanner's delta pass).
+/// Re-lists the library after MusicBee reported a change to it.
 ///
-/// Rebuilds the ordinal index, drops the tags of tracks the host reports
-/// changed, re-prewarms the small lists, advances the watermark. No-op until
-/// the cache is validated; best-effort otherwise.
-///
-/// Only `updated` and `deleted` drop tags: `added` is asked for with no cached
-/// file list, which MusicBee answers with the whole library.
-pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) -> Vec<String> {
+/// Rewrites the browse index, which an add, a delete or a tag edit can reorder,
+/// drops the cached tags of `edited`, files the pass in the change log, re-reads
+/// the small browse lists and advances the watermark. If the library cannot be
+/// listed, the edits are still filed. No-op until the cache is validated.
+pub fn relist_library(cache: &MetadataCache, p: &dyn Providers, edited: &[String]) {
     if !cache.is_validated() {
-        return Vec::new();
+        return;
     }
-    let since = cache.tracks_synced_at();
-
-    // Rebuild the ordinal index (browse order) - handles add / delete / reorder.
+    cache.drop_track_tags(edited);
     match p.track_paths() {
-        Ok(paths) => cache.replace_track_index(&paths),
-        Err(e) => tracing::warn!(error = %e, "scanner: track path refetch failed"),
+        Ok(paths) => {
+            cache.replace_track_index(&paths);
+            cache.record_changes(Some(&paths), edited);
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "scanner: track path refetch failed");
+            cache.record_changes(None, edited);
+        }
     }
+    prewarm_browse_lists(cache, p);
+    cache.set_tracks_synced_at(now_unix_seconds());
+}
 
-    let changed = match p.sync_delta(since) {
+/// Files edits that move nothing in the browse order, such as a rating.
+///
+/// Their cached tags go and the log records them; the library is not listed.
+pub fn file_reported_edits(cache: &MetadataCache, paths: &[String]) {
+    if paths.is_empty() || !cache.is_validated() {
+        return;
+    }
+    cache.drop_track_tags(paths);
+    cache.record_changes(None, paths);
+    cache.set_tracks_synced_at(now_unix_seconds());
+}
+
+/// The paths the host reports edited or removed since `since`, their cached
+/// tags dropped so the next read refetches them.
+///
+/// Only asked at startup: while the plugin runs, MusicBee's notifications say
+/// what changed.
+///
+/// Only `updated` and `deleted` count: `added` is asked for with no cached file
+/// list, which MusicBee answers with the whole library.
+fn edited_since(cache: &MetadataCache, p: &dyn Providers, since: i64) -> Vec<String> {
+    match p.sync_delta(since) {
         Ok(delta) => {
             let mut changed = delta.updated;
             changed.extend(delta.deleted);
@@ -233,12 +265,7 @@ pub fn refresh_library_delta(cache: &MetadataCache, p: &dyn Providers) -> Vec<St
             tracing::warn!(error = %e, "scanner: sync delta failed");
             Vec::new()
         }
-    };
-
-    // Small lists are cheap (~1-2 MB) and shift on add / tag edit; refresh whole.
-    prewarm_browse_lists(cache, p);
-    cache.set_tracks_synced_at(now_unix_seconds());
-    changed
+    }
 }
 
 /// Current unix time in seconds (0 if the clock is before the epoch).
@@ -728,19 +755,14 @@ mod tests {
         assert!(browse_lists_cached(&cache));
     }
 
-    #[test]
-    fn refresh_library_delta_rebuilds_index_and_drops_changed_tags() {
-        use crate::metadata_cache::MetadataCache;
-        use crate::protocol::messages::SyncDelta;
-        use crate::store::Db;
-
-        let dir = std::env::temp_dir().join("mbrc-refresh-delta");
+    fn validated_cache(name: &str) -> crate::metadata_cache::MetadataCache {
+        let dir = std::env::temp_dir().join(format!("mbrc-library-pass-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        let cache = crate::metadata_cache::MetadataCache::new(crate::store::Db::open(
+            dir.to_str().unwrap(),
+        ));
         cache.reconcile(&[], 1);
-
-        // Seed an index + cached tags for two tracks, at watermark 100.
         cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into()]);
         cache.put_track_tags(&[
             CachedTags {
@@ -754,37 +776,36 @@ mod tests {
                 ..Default::default()
             },
         ]);
-        cache.set_tracks_synced_at(100);
+        cache
+    }
 
-        // Provider: a file was added (index now 3), and /a.mp3 was edited.
+    #[test]
+    fn relisting_rebuilds_the_index_and_drops_only_the_edited_tags() {
+        let cache = validated_cache("relist");
+        cache.set_tracks_synced_at(100);
         let m = MockProviders {
-            track_paths: vec!["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()],
-            sync_delta: SyncDelta {
-                updated: vec!["/a.mp3".into()],
-                ..Default::default()
-            },
+            track_paths: vec!["/b.mp3".into(), "/a.mp3".into(), "/c.mp3".into()],
             ..Default::default()
         };
 
-        refresh_library_delta(&cache, &m);
+        relist_library(&cache, &m, &["/a.mp3".to_string()]);
 
-        // Index rebuilt to the new path list.
         assert_eq!(cache.track_count(), 3);
-        // The edited track's cached tags are dropped (re-read lazily); the
-        // untouched track's tags survive.
+        assert_eq!(
+            cache.track_page_paths(0, 1),
+            vec!["/b.mp3".to_string()],
+            "a tag edit can reorder the index"
+        );
         assert!(
             cache.track_tags("/a.mp3").is_none(),
-            "changed track's tags dropped"
+            "edited track's tags dropped"
         );
-        assert_eq!(
-            cache.track_tags("/b.mp3").unwrap().title,
-            "B",
-            "unchanged track's tags kept"
+        assert_eq!(cache.track_tags("/b.mp3").unwrap().title, "B");
+        assert!(cache.tracks_synced_at() > 100, "watermark advanced");
+        assert!(
+            !m.recorded().iter().any(|c| c.starts_with("sync_delta")),
+            "the host is not asked for a delta while it reports changes itself"
         );
-        // Watermark advanced past the old value; delta queried with the OLD one.
-        assert!(cache.tracks_synced_at() > 100);
-        assert!(m.recorded().contains(&"sync_delta(100)".to_string()));
-        assert!(m.recorded().contains(&"track_paths".to_string()));
     }
 
     /// The host is asked for the delta with no cached file list, which it
@@ -793,30 +814,10 @@ mod tests {
     /// and no sort order was ever built.
     #[test]
     fn a_delta_that_calls_everything_new_keeps_the_cached_tags() {
-        use crate::metadata_cache::MetadataCache;
         use crate::protocol::messages::SyncDelta;
-        use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-delta-all-new");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
-        cache.reconcile(&[], 1);
-
-        cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into()]);
-        cache.put_track_tags(&[
-            CachedTags {
-                src: "/a.mp3".into(),
-                title: "A".into(),
-                ..Default::default()
-            },
-            CachedTags {
-                src: "/b.mp3".into(),
-                title: "B".into(),
-                ..Default::default()
-            },
-        ]);
-
+        let cache = validated_cache("delta-all-new");
+        cache.set_tracks_synced_at(100);
         let m = MockProviders {
             track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
             sync_delta: SyncDelta {
@@ -826,11 +827,44 @@ mod tests {
             ..Default::default()
         };
 
-        refresh_library_delta(&cache, &m);
+        build_track_index(&cache, &m);
 
+        assert!(m.recorded().contains(&"sync_delta(100)".to_string()));
         assert!(cache.untagged_paths(10).is_empty(), "nothing was refetched");
         assert_eq!(cache.track_tags("/a.mp3").unwrap().title, "A");
-        assert_eq!(cache.track_tags("/b.mp3").unwrap().title, "B");
+    }
+
+    /// A spell the plugin was not running has nobody to report it, so a start
+    /// asks the host what was edited since the watermark.
+    #[test]
+    fn a_start_files_what_was_edited_while_the_plugin_was_not_running() {
+        use crate::protocol::messages::SyncDelta;
+
+        let cache = validated_cache("start-edits");
+        let library = vec!["/a.mp3".to_string(), "/b.mp3".to_string()];
+        cache.record_changes(Some(&library), &[]);
+        let cursor = cache.changes().head().unwrap();
+        cache.set_tracks_synced_at(100);
+        let m = MockProviders {
+            track_paths: library,
+            sync_delta: SyncDelta {
+                updated: vec!["/b.mp3".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        build_track_index(&cache, &m);
+
+        assert!(cache.track_tags("/b.mp3").is_none());
+        let Some(crate::library_changes::ChangePage::Changes { changes, .. }) = cache
+            .changes()
+            .read(crate::library_changes::ReadFrom::Since(&cursor), 10)
+        else {
+            panic!("expected a page");
+        };
+        let filed: Vec<&str> = changes.iter().map(|c| c.src.as_str()).collect();
+        assert_eq!(filed, vec!["/b.mp3"]);
     }
 
     #[test]

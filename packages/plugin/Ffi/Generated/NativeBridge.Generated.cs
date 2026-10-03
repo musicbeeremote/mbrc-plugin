@@ -129,12 +129,15 @@ namespace MusicBeePlugin.Ffi.Generated
         /// <summary>
         ///  Forwards a MusicBee notification.
         ///
-        ///  Carries an optional MessagePack payload (`params_buf`/`params_len`, e.g. the
-        ///  added/changed file URL) so the broadcast fan-out can build the right
-        ///  broadcast. Empty payload = null/0.
+        ///  Library notifications carry a MessagePack `NotificationParams` payload
+        ///  (`params_buf`/`params_len`) naming the file that changed. Empty payload =
+        ///  null/0.
+        ///
+        ///  # Safety
+        ///  `params_buf` must be null or point to `params_len` readable bytes.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "mbrc_handle_notification", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern int mbrc_handle_notification(int notification_type, byte* _params_buf, uint _params_len);
+        internal static extern int mbrc_handle_notification(int notification_type, byte* params_buf, uint params_len);
 
         /// <summary>
         ///  Emits a log line from C# through the core's logger. `level`: 0=trace..4=error.

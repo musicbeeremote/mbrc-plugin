@@ -10,6 +10,7 @@ pub mod diagnostics;
 pub mod discovery;
 pub mod ffi;
 pub mod legacy;
+pub mod library_changes;
 pub mod logging;
 pub mod mdns;
 pub mod metadata_cache;
@@ -307,22 +308,34 @@ pub unsafe extern "C" fn mbrc_free_bytes(ptr: *mut u8, len: u32) {
 
 /// Forwards a MusicBee notification.
 ///
-/// Carries an optional MessagePack payload (`params_buf`/`params_len`, e.g. the
-/// added/changed file URL) so the broadcast fan-out can build the right
-/// broadcast. Empty payload = null/0.
+/// Library notifications carry a MessagePack `NotificationParams` payload
+/// (`params_buf`/`params_len`) naming the file that changed. Empty payload =
+/// null/0.
+///
+/// # Safety
+/// `params_buf` must be null or point to `params_len` readable bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn mbrc_handle_notification(
+pub unsafe extern "C" fn mbrc_handle_notification(
     notification_type: c_int,
-    _params_buf: *const u8,
-    _params_len: u32,
+    params_buf: *const u8,
+    params_len: u32,
 ) -> c_int {
     ffi_guard("mbrc_handle_notification", || {
-        match NotificationType::from_i32(notification_type) {
-            // The V4 broadcast set re-queries current state, so the params payload is
-            // unused here and reserved for targeted notifications.
-            Some(notification) => state::handle_notification(notification) as c_int,
-            None => MbrcResult::InvalidArgument as c_int,
-        }
+        let Some(notification) = NotificationType::from_i32(notification_type) else {
+            return MbrcResult::InvalidArgument as c_int;
+        };
+        let path = if params_buf.is_null() || params_len == 0 {
+            None
+        } else {
+            // SAFETY: non-null, and the caller's contract says it points to
+            // `params_len` readable bytes.
+            let bytes = unsafe { std::slice::from_raw_parts(params_buf, params_len as usize) };
+            rmp_serde::from_slice::<ffi::dtos::NotificationParams>(bytes)
+                .ok()
+                .map(|p| p.path)
+                .filter(|p| !p.is_empty())
+        };
+        state::handle_notification(notification, path) as c_int
     })
 }
 

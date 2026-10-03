@@ -558,14 +558,19 @@ namespace MusicBeePlugin
                 case NotificationType.PlayingTracksChanged:
                     coreType = FfiGen.NotificationType.NowPlayingListChanged;
                     break;
+                // Library changes carry the file they name: the core files exactly
+                // what MusicBee reports, and walks the library for nothing else.
                 case NotificationType.FileAddedToLibrary:
-                // Tag edits (artwork included) and deletions change the library
-                // exactly like an add from the core's view: nudge the Scanner to
-                // run a metadata + cover delta. Mapped to the same core
-                // notification so no extra FFI variant is needed.
-                case NotificationType.TagsChanged:
-                case NotificationType.FileDeleted:
                     coreType = FfiGen.NotificationType.FileAddedToLibrary;
+                    break;
+                case NotificationType.TagsChanged:
+                    coreType = FfiGen.NotificationType.TagsChanged;
+                    break;
+                case NotificationType.RatingChanged:
+                    coreType = FfiGen.NotificationType.RatingChanged;
+                    break;
+                case NotificationType.FileDeleted:
+                    coreType = FfiGen.NotificationType.FileDeleted;
                     break;
                 case NotificationType.LibrarySwitched:
                     coreType = FfiGen.NotificationType.LibrarySwitched;
@@ -582,7 +587,7 @@ namespace MusicBeePlugin
             // event dispatch.
             try
             {
-                _host.HandleNotification((int)coreType);
+                _host.HandleNotification((int)coreType, sourceFileUrl);
             }
             catch (Exception ex)
             {

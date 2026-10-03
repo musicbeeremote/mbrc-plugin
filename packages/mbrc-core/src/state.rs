@@ -64,6 +64,10 @@ pub struct Core {
     /// change notification (`FileAddedToLibrary`) is a debounced nudge on this,
     /// not a full cache clear (see `server::scanner`).
     pub scanner_nudge: Arc<Notify>,
+    /// Library changes MusicBee reported, waiting for the Scanner's next pass.
+    pub library_events: crate::server::scanner::LibraryEvents,
+    /// Asks the Scanner to fill the tag cache until nothing is missing.
+    pub tag_backfill: Notify,
     /// Set when the core is being torn down, and read by the long blocking work
     /// so it can stop between items.
     ///
@@ -113,6 +117,8 @@ impl Core {
             session,
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
+            library_events: Default::default(),
+            tag_backfill: Notify::new(),
             stopping: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -750,7 +756,7 @@ fn rebuild(scope: RebuildScope) -> MbrcResult {
 /// because it needs the owned `Arc<Core>`: the C# notification thread has no
 /// Tokio runtime, so the reconcile is spawned on a plain thread and does
 /// blocking FFI.
-pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
+pub fn handle_notification(ntype: NotificationType, path: Option<String>) -> MbrcResult {
     // Clone the Arc and drop the lock before querying/broadcasting.
     let core = {
         let guard = lock();
@@ -760,7 +766,7 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
         }
     };
 
-    dispatch_notification(&core, ntype);
+    dispatch_notification(&core, ntype, path.as_deref());
     MbrcResult::Ok
 }
 
@@ -768,22 +774,34 @@ pub fn handle_notification(ntype: NotificationType) -> MbrcResult {
 ///
 /// Split out of [`handle_notification`] so the cache maintenance and the V4/V6
 /// fan-out are testable without the global runtime.
-pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType) {
+pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Option<&str>) {
     match ntype {
         NotificationType::LibrarySwitched => {
             // Gate reads off + clear immediately so nothing stale is served in
             // the gap; the reconcile re-fingerprints, re-prewarms, re-validates.
             core.metadata_cache.invalidate();
+            core.metadata_cache.forget_library();
             broadcast_library_changed(core);
             let reconcile_core = core.clone();
             std::thread::spawn(move || server::reconcile_library(&reconcile_core));
             return;
         }
-        NotificationType::FileAddedToLibrary => {
-            // A nudge, not a clear: the Scanner debounces these, so a big import
-            // collapses to a scan or two instead of a wipe per file.
+        // Queued, not applied: the Scanner debounces these, so a big import or
+        // a bulk edit collapses to one pass, which then broadcasts.
+        NotificationType::FileAddedToLibrary | NotificationType::FileDeleted => {
+            core.library_events.membership_changed();
             core.scanner_nudge.notify_one();
-            broadcast_library_changed(core);
+            return;
+        }
+        NotificationType::TagsChanged => {
+            core.library_events.tags_changed(path);
+            core.scanner_nudge.notify_one();
+            return;
+        }
+        NotificationType::RatingChanged => {
+            core.library_events.rating_changed(path);
+            core.scanner_nudge.notify_one();
+            return;
         }
         NotificationType::NowPlayingListChanged => core.now_playing.bump_list_version(),
         _ => {}
@@ -810,13 +828,16 @@ fn broadcast_server_shutdown(core: &Core) {
 
 /// Fans out the V6 `library_changed` marker; the client re-queries what it needs.
 ///
-/// V6-only: V4 has no equivalent broadcast, where a library change is cache
-/// maintenance and nothing more.
-fn broadcast_library_changed(core: &Core) {
-    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
-        "library_changed",
-        serde_json::json!({}),
-    )]);
+/// Carries the change log's head when it has one, so a syncing client can tell
+/// whether its copy is already current. V6-only: V4 has no equivalent
+/// broadcast, where a library change is cache maintenance and nothing more.
+pub(crate) fn broadcast_library_changed(core: &Core) {
+    let data = match core.metadata_cache.changes().head() {
+        Some(head) => serde_json::json!({ "epoch": head.epoch, "generation": head.generation }),
+        None => serde_json::json!({}),
+    };
+    core.v6_broadcaster
+        .broadcast(&[mbrc_wire::v6::event("library_changed", data)]);
 }
 
 /// Tells the background work to wind down, without stopping anything yet.
@@ -900,6 +921,60 @@ pub fn stop_networking() -> MbrcResult {
 mod tests {
     use super::*;
     use crate::providers::NullProviders;
+
+    fn core_with_storage(name: &str) -> Arc<Core> {
+        let dir = std::env::temp_dir().join(format!("mbrc-state-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = Config {
+            storage_path: dir.to_string_lossy().into_owned(),
+            ..Config::for_test(0)
+        };
+        let core = Arc::new(Core::new(Arc::new(NullProviders), config));
+        core.metadata_cache.reconcile(&[], 1);
+        core
+    }
+
+    fn next_event(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> serde_json::Value {
+        serde_json::from_str(rx.try_recv().expect("an event").trim()).unwrap()
+    }
+
+    #[test]
+    fn library_changed_carries_the_change_log_head() {
+        let core = core_with_storage("changed-head");
+        core.metadata_cache
+            .record_changes(Some(&["/a.mp3".to_string()]), &[]);
+        let head = core.metadata_cache.changes().head().unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        core.v6_broadcaster.register(1, tx);
+
+        broadcast_library_changed(&core);
+        let ev = next_event(&mut rx);
+        assert_eq!(ev["event"], "library_changed");
+        assert_eq!(ev["data"]["epoch"], head.epoch.as_str());
+        assert_eq!(ev["data"]["generation"], 1);
+    }
+
+    /// A switch to another library must not let a syncing client carry on from
+    /// a cursor into the previous one.
+    #[test]
+    fn a_library_switch_forgets_the_change_log() {
+        let core = core_with_storage("switch");
+        core.metadata_cache
+            .record_changes(Some(&["/a.mp3".to_string()]), &[]);
+        let before = core.metadata_cache.changes().head().unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        core.v6_broadcaster.register(1, tx);
+
+        dispatch_notification(&core, NotificationType::LibrarySwitched, None);
+        // The spawned reconcile may already have started the next epoch.
+        let after = core.metadata_cache.changes().head();
+        assert!(
+            after.as_ref().is_none_or(|h| h.epoch != before.epoch),
+            "{after:?}"
+        );
+        assert_eq!(next_event(&mut rx)["data"], serde_json::json!({}));
+    }
 
     #[test]
     fn settings_and_host_queries_round_trip_through_state() {

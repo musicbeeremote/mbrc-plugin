@@ -223,6 +223,7 @@ fn run_checks(
 
     protocol_surface(c, host, port, timeout, &ops, r);
     list_contract(c, &ops, allow_writes, r);
+    library_sync_contract(c, &ops, r);
 
     browse_differential(host, port, timeout, c, r);
 
@@ -298,6 +299,88 @@ fn protocol_surface(
         expect(
             resp.err_field()?.as_deref() == Some("client_token"),
             "invalid_token did not name `client_token`",
+        )
+    });
+}
+
+/// `library_changes`: a full read pages to its end, its cursor answers with
+/// nothing older than itself, and a cursor from another library is told to resync.
+fn library_sync_contract(c: &mut V6Client, ops: &[String], r: &mut Report) {
+    if !ops.iter().any(|o| o == "library_changes") {
+        r.skip("library sync", "library_changes not advertised");
+        return;
+    }
+    let first = match c.request("library_changes", json!({ "limit": 2 })) {
+        Ok(resp) => match resp.err_code() {
+            Ok(code) if code == "unavailable" => {
+                r.skip("library sync", "the library index is still being built");
+                return;
+            }
+            _ => resp,
+        },
+        Err(e) => return r.fail("library sync", &e),
+    };
+    r.check("library sync", || {
+        let data = first.ok()?;
+        expect(data["epoch"].is_string(), "epoch not a string")?;
+        expect(
+            data["generation"].is_u64(),
+            "generation not an unsigned int",
+        )?;
+        expect(
+            data["resync"] == json!(false),
+            "a first read asked to resync",
+        )?;
+        expect(data["total"].is_u64(), "total not an unsigned int")?;
+        let data_total = data["total"].clone();
+        let cursor = json!({ "epoch": data["epoch"], "generation": data["generation"] });
+
+        let mut page = data;
+        let mut pages = 1;
+        while !page["next"].is_null() && pages < 3 {
+            for item in page["items"].as_array().ok_or("items not an array")? {
+                expect(
+                    item["change"] == json!("upsert"),
+                    "a first read served a delete",
+                )?;
+                check_track(&item["track"])?;
+            }
+            let resp = c.request(
+                "library_changes",
+                json!({ "limit": 2, "after": page["next"] }),
+            )?;
+            page = resp.ok()?;
+            expect(
+                page["epoch"] == cursor["epoch"],
+                "epoch moved between pages",
+            )?;
+            expect(page["total"] == data_total, "total moved between pages")?;
+            expect(
+                page["generation"] == cursor["generation"],
+                "cursor moved between pages",
+            )?;
+            pages += 1;
+        }
+
+        let since = c
+            .request("library_changes", json!({ "since": cursor }))?
+            .ok()?;
+        expect(
+            since["resync"] == json!(false),
+            "its own cursor asked to resync",
+        )?;
+        expect(
+            since["generation"].as_u64() >= cursor["generation"].as_u64(),
+            "the log went backwards",
+        )?;
+
+        let foreign = json!({ "epoch": "not-this-library", "generation": 0 });
+        let other = c
+            .request("library_changes", json!({ "since": foreign }))?
+            .ok()?;
+        expect(
+            other["resync"] == json!(true),
+            "a foreign epoch was answered",
         )
     });
 }

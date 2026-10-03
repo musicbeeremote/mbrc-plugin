@@ -124,6 +124,12 @@ pub struct NowPlayingQueueParams {
     pub play: String,
 }
 
+/// The payload of a library notification: the file MusicBee says changed.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct NotificationParams {
+    pub path: String,
+}
+
 /// `NowPlayingTagChange`. `tag` is the lowercase wire tag name; `value` is the
 /// new tag value. C# maps `tag` to its `MetaDataType` and commits it.
 #[derive(Debug, Serialize, Deserialize)]

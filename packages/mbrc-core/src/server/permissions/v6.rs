@@ -58,6 +58,7 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "library_albums"
         | "library_tracks"
         | "library_radio"
+        | "library_changes"
         | "playlist_list"
         | "playlist_tracks"
         | "now_playing_state"
