@@ -131,7 +131,7 @@ impl<'a> Covers<'a> {
         let store = self.store?;
         let modified = modified_secs(src)?;
         let key = track_artwork_key(src);
-        if let Some(cover) = store.item_cover(&key).filter(|c| c.modified == modified) {
+        if let Some(cover) = store.item_cover(&key).filter(|c| c.is_current(modified)) {
             return cover.hash;
         }
         if Instant::now() >= self.deadline {

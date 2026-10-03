@@ -36,9 +36,10 @@ pub const COVER_NO_ART: TableDefinition<&str, i64> = TableDefinition::new("cover
 /// Covers kept for one item rather than an album, owned by `cover::store`.
 ///
 /// `"track:{src}"` or `"podcast:{id}"` -> (content hash, the source's modified
-/// time in unix seconds). An empty hash records that the item had no artwork
-/// at that time. The album build never touches it.
-pub const COVER_ITEMS: TableDefinition<&str, (&str, i64)> = TableDefinition::new("cover_items");
+/// time, when it was read), times in unix seconds. An empty hash records that
+/// the item had no artwork then. The album build never touches it.
+pub const COVER_ITEMS: TableDefinition<&str, (&str, i64, i64)> =
+    TableDefinition::new("item_covers");
 /// Cover-cache scalars keyed by name. `"last_check"` -> unix seconds (the former
 /// `state.json` `paths` field - a legacy naming quirk, dropped now that the value
 /// is its own row).

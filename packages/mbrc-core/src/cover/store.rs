@@ -165,6 +165,19 @@ pub struct ItemCover {
     /// The source's modified time when it was read, in unix seconds: a cover
     /// read before the file last changed is stale.
     pub modified: i64,
+    /// When it was read, in unix seconds.
+    pub checked: i64,
+}
+
+impl ItemCover {
+    /// Whether this still answers for a source last modified at `modified`.
+    ///
+    /// "No artwork" expires like an album's does: a folder image added beside
+    /// the file does not change it, so only asking again would find it.
+    pub fn is_current(&self, modified: i64) -> bool {
+        self.modified == modified
+            && (self.hash.is_some() || now_unix_secs() - self.checked < NO_ART_RETRY_SECS)
+    }
 }
 
 pub struct CoverStore {
@@ -301,10 +314,12 @@ impl CoverStore {
         let cover = ItemCover {
             hash: hash.clone(),
             modified,
+            checked: now_unix_secs(),
         };
         self.db.write(Durability::Immediate, |txn| {
             let mut table = txn.open_table(COVER_ITEMS)?;
-            table.insert(key, (cover.hash.as_deref().unwrap_or(""), modified))?;
+            let hash = cover.hash.as_deref().unwrap_or("");
+            table.insert(key, (hash, modified, cover.checked))?;
             Ok(())
         });
         self.items
@@ -969,9 +984,14 @@ fn load_items(db: &Db) -> HashMap<String, ItemCover> {
         let mut map = HashMap::new();
         for entry in table.iter()? {
             let (key, value) = entry?;
-            let (hash, modified) = value.value();
+            let (hash, modified, checked) = value.value();
             let hash = (!hash.is_empty()).then(|| hash.to_owned());
-            map.insert(key.value().to_owned(), ItemCover { hash, modified });
+            let cover = ItemCover {
+                hash,
+                modified,
+                checked,
+            };
+            map.insert(key.value().to_owned(), cover);
         }
         Ok(map)
     })
@@ -1335,17 +1355,34 @@ mod tests {
         store.build(|_| Some(jpeg_bytes(400, 400)), false);
 
         let restarted = CoverStore::new(db, &dir);
+        let kept = restarted.item_cover("track:/single.mp3").unwrap();
         assert_eq!(
-            restarted.item_cover("track:/single.mp3"),
-            Some(ItemCover {
-                hash: Some(hash.clone()),
-                modified: 7
-            })
+            (kept.hash.as_deref(), kept.modified),
+            (Some(hash.as_str()), 7)
         );
+        assert!(kept.is_current(7));
         assert!(
             restarted.read_cover_bytes(&hash).is_some(),
             "the build's prune keeps a file only an item references"
         );
+    }
+
+    #[test]
+    fn an_items_missing_artwork_is_asked_again_after_a_week() {
+        let missing = |checked| ItemCover {
+            hash: None,
+            modified: 5,
+            checked,
+        };
+        let now = now_unix_secs();
+        assert!(missing(now - 60).is_current(5));
+        assert!(!missing(now - NO_ART_RETRY_SECS - 1).is_current(5));
+        assert!(!missing(now).is_current(6), "the file changed");
+        let found = ItemCover {
+            hash: Some("abc".into()),
+            ..missing(now - NO_ART_RETRY_SECS - 1)
+        };
+        assert!(found.is_current(5), "artwork found does not expire");
     }
 
     #[test]
