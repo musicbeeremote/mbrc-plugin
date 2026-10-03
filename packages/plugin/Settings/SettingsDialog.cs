@@ -774,13 +774,15 @@ namespace MusicBeePlugin.Settings
                 MultiSelect = false,
                 HideSelection = false,
                 HeaderStyle = ColumnHeaderStyle.Nonclickable,
-                Height = 74,
+                Height = 112,
                 Width = 360,
                 Margin = new Padding(0, 2, 0, 2)
             };
-            _webPaired.Columns.Add("Browser", 170);
-            _webPaired.Columns.Add("Paired", 90);
-            _webPaired.Columns.Add("Last seen", 90);
+            // The columns leave room for the vertical scrollbar, or a second,
+            // horizontal one appears and covers a row.
+            _webPaired.Columns.Add("Browser", 165);
+            _webPaired.Columns.Add("Paired", 85);
+            _webPaired.Columns.Add("Last seen", 85);
             _webPaired.ShowItemToolTips = true;
             // Edited in place, which fills the box with the current name: a
             // rename is nearly always a correction to it rather than a fresh
