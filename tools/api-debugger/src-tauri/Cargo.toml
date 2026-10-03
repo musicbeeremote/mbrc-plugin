@@ -21,12 +21,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # bumps are handled by Renovate, which waits 7 days after a release
 # (minimumReleaseAge) before opening an update PR.
 [build-dependencies]
-tauri-build = { version = "=2.6.3", features = [] }
+tauri-build = { version = "=2.7.0", features = [] }
 
 [dependencies]
-tauri = { version = "=2.11.5", features = [] }
-tauri-plugin-opener = "=2.5.4"
-tauri-plugin-dialog = "=2.7.2"
+tauri = { version = "=2.12.0", features = [] }
+tauri-plugin-opener = "=2.5.5"
+tauri-plugin-dialog = "=2.7.3"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 tokio = { version = "=1.53.1", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "fs"] }
