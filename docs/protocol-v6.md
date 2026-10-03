@@ -646,7 +646,7 @@ gone, and the `version` has moved, so re-read the list.
 |----|----------------|----------|
 | `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}` |
 | `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}` |
-| `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, + `year` when the tracks agree on one) |
+| `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` when the tracks agree on one) |
 | `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
 | `library_play_all` | `{shuffle?}` | `{}` |

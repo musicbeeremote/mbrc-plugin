@@ -211,11 +211,17 @@ fn playing_artwork_key(src: &str) -> String {
 
 /// Resolve an album's `cover_hash` from its `(artist, album)` key - the shared
 /// album-keyed lookup the library domain uses for album items too.
+///
+/// An artist's tracks with no album are a group, not a record: the picture
+/// keyed for it is one single's, so the group has none.
 pub(crate) fn album_cover_hash(
     store: Option<&CoverStore>,
     artist: &str,
     album: &str,
 ) -> Option<String> {
+    if album.is_empty() {
+        return None;
+    }
     store?.hash_for(&cover_identifier(artist, album))
 }
 

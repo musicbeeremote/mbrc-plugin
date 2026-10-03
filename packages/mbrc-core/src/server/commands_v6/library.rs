@@ -1659,6 +1659,38 @@ mod tests {
     }
 
     #[test]
+    fn an_artists_albumless_group_has_no_cover() {
+        use crate::cover::{cover_identifier, test_jpeg_bytes};
+        use crate::store::Db;
+        let dir = std::env::temp_dir().join("mbrc-v6-lib-albumless-group");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let store = CoverStore::new(Db::open(&path), path.clone());
+        store
+            .cache_cover(&cover_identifier("Artist", ""), &test_jpeg_bytes(64, 64))
+            .unwrap();
+
+        let m = MockProviders {
+            browse_albums: Page {
+                total: 1,
+                offset: 0,
+                limit: 0,
+                data: vec![AlbumData {
+                    album: String::new(),
+                    artist: "Artist".into(),
+                    count: 4,
+                }],
+            },
+            ..Default::default()
+        };
+        let out = dispatch("library_albums", &json!({}), &m, Some(&store), None)
+            .unwrap()
+            .unwrap();
+        assert!(out["items"][0].get("cover_hash").is_none());
+    }
+
+    #[test]
     fn tracks_flat_emits_typed_canonical_tracks() {
         let m = MockProviders {
             track_paths: vec!["a.mp3".into(), "b.mp3".into()],
