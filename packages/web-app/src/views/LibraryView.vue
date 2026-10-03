@@ -6,7 +6,6 @@ import { useRoute, useRouter } from 'vue-router'
 
 import IconBack from '~icons/lucide/chevron-left'
 import IconLibrary from '~icons/lucide/library'
-import IconMusic from '~icons/lucide/music'
 import IconNoResults from '~icons/lucide/search-x'
 import IconPlay from '~icons/lucide/play'
 import IconSearch from '~icons/lucide/search'
@@ -18,6 +17,7 @@ import type { AlbumEntry, ArtistEntry, GenreEntry, Track } from '../api/types'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
+import CoverPlaceholder from '../components/CoverPlaceholder.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import QueueMenu from '../components/QueueMenu.vue'
@@ -413,10 +413,10 @@ function onGridScroll(event: Event) {
             class="block w-full transition-transform active:scale-[0.98]"
             @click="openAlbum(entry)"
           >
-            <!-- A blank tile reads as a cover still loading. The note says the
-                 album has none, which is a different and permanent thing. -->
+            <!-- A blank tile reads as a cover still loading. The placeholder says
+                 the album has none, which is a different and permanent thing. -->
             <div
-              class="flex aspect-square items-center justify-center overflow-hidden rounded-control bg-surface-2 text-outline"
+              class="relative flex aspect-square items-center justify-center overflow-hidden rounded-control bg-surface-2 text-outline"
             >
               <img
                 v-if="coverUrl(entry.cover_hash)"
@@ -425,7 +425,7 @@ function onGridScroll(event: Event) {
                 loading="lazy"
                 class="h-full w-full object-cover"
               />
-              <IconMusic v-else class="size-1/3 opacity-40" />
+              <CoverPlaceholder v-else :name="entry.album || entry.artist" large />
             </div>
           </button>
 
@@ -531,7 +531,7 @@ function onGridScroll(event: Event) {
                 loading="lazy"
                 class="h-full w-full object-cover"
               />
-              <IconMusic v-else class="absolute inset-0 m-auto size-1/2 text-outline opacity-40" />
+              <CoverPlaceholder v-else :name="row.data.artist" />
               <div
                 v-if="row.data.src === player.track?.src"
                 class="absolute inset-0 grid place-items-center bg-surface/70"

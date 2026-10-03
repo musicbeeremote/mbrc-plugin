@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { coverUrl, formatDuration, nowPlayingCoverUrl, trackLabel } from './display'
+import {
+  coverUrl,
+  formatDuration,
+  nowPlayingCoverUrl,
+  placeholderHue,
+  placeholderInitials,
+  trackLabel,
+} from './display'
 
 describe('formatDuration', () => {
   it('renders under an hour as m:ss', () => {
@@ -73,5 +80,42 @@ describe('trackLabel', () => {
 
   it('keeps a name that has no extension to strip', () => {
     expect(trackLabel('', 'Z:/m/rawfile')).toBe('rawfile')
+  })
+})
+
+describe('placeholderInitials', () => {
+  it('takes the first letter of up to two words', () => {
+    expect(placeholderInitials('Dibby Dougherty')).toBe('DD')
+    expect(placeholderInitials('GusGus')).toBe('G')
+    expect(placeholderInitials('Moonbeam Pres. Illuminant For Fancy')).toBe('MP')
+  })
+
+  // A leading run of punctuation is not the name: "...En Their Medh" is "ET".
+  it('counts a word from its first letter or digit', () => {
+    expect(placeholderInitials('...En Their Medh Riki Fara...')).toBe('ET')
+    expect(placeholderInitials('#3')).toBe('3')
+    expect(placeholderInitials('ñengo flow')).toBe('ÑF')
+  })
+
+  it('is empty when there is nothing to show', () => {
+    expect(placeholderInitials('')).toBe('')
+    expect(placeholderInitials('  ...  ')).toBe('')
+  })
+})
+
+describe('placeholderHue', () => {
+  // The same artist must be the same colour in the queue and in the library.
+  it('is stable for a name and within the colour wheel', () => {
+    expect(placeholderHue('Dontknower')).toBe(placeholderHue('Dontknower'))
+    for (const name of ['', 'a', 'Dibby Dougherty', 'Ñengo Flow']) {
+      const hue = placeholderHue(name)
+      expect(hue).toBeGreaterThanOrEqual(0)
+      expect(hue).toBeLessThan(360)
+    }
+  })
+
+  it('spreads different names apart', () => {
+    const names = ['Dibby Dougherty', 'Dontknower', 'GusGus', 'Moonbeam', 'Apparat']
+    expect(new Set(names.map((name) => placeholderHue(name))).size).toBe(names.length)
   })
 })

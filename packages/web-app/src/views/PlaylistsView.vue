@@ -10,7 +10,6 @@ import IconGrip from '~icons/lucide/grip-vertical'
 import IconPlaylists from '~icons/lucide/list'
 import IconListChecks from '~icons/lucide/list-checks'
 import IconListPlus from '~icons/lucide/list-plus'
-import IconMusic from '~icons/lucide/music'
 import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
 import IconSearch from '~icons/lucide/search'
@@ -19,6 +18,7 @@ import IconTrash from '~icons/lucide/trash-2'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { QueryField, QueueMode } from '../api/types'
+import CoverPlaceholder from '../components/CoverPlaceholder.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import QueueMenu from '../components/QueueMenu.vue'
@@ -507,7 +507,7 @@ const summary = computed(() => {
               loading="lazy"
               class="h-full w-full object-cover"
             />
-            <IconMusic v-else class="absolute inset-0 m-auto size-1/2 text-outline opacity-40" />
+            <CoverPlaceholder v-else :name="row.data.artist" />
             <div
               v-if="row.data.src === player.track?.src"
               class="absolute inset-0 grid place-items-center bg-surface/70"

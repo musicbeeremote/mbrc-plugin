@@ -6,7 +6,6 @@ import IconCheck from '~icons/lucide/check'
 import IconGrip from '~icons/lucide/grip-vertical'
 import IconListChecks from '~icons/lucide/list-checks'
 import IconListPlus from '~icons/lucide/list-plus'
-import IconMusic from '~icons/lucide/music'
 import IconQueue from '~icons/lucide/list-music'
 import IconSearch from '~icons/lucide/search'
 import IconTrash from '~icons/lucide/trash-2'
@@ -15,6 +14,7 @@ import IconX from '~icons/lucide/x'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { ShuffleMode } from '../api/types'
+import CoverPlaceholder from '../components/CoverPlaceholder.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
 import { heardRows } from '../composables/queueHeard'
@@ -384,7 +384,7 @@ const drag = useDragSort(
             loading="lazy"
             class="h-full w-full object-cover"
           />
-          <IconMusic v-else class="absolute inset-0 m-auto size-1/2 text-outline opacity-40" />
+          <CoverPlaceholder v-else :name="item.artist" />
           <div
             v-if="isPlaying(item.src)"
             class="absolute inset-0 grid place-items-center bg-surface/70"

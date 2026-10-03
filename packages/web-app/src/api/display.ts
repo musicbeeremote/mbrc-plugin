@@ -50,3 +50,33 @@ export function formatDuration(ms: number | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`
 }
+
+/**
+ * The letters a coverless tile shows: the first of up to two words.
+ *
+ * Words are counted from the first letter or digit, so "...And Justice" reads
+ * "AJ" and not ".J". Empty when the name has neither, and the tile falls back
+ * to the plain note.
+ */
+export function placeholderInitials(name: string): string {
+  const words = name.split(/\s+/u)
+  const firsts = words
+    .map((word) => /[\p{L}\p{N}]/u.exec(word)?.[0])
+    .filter((first): first is string => first !== undefined)
+  return firsts.slice(0, 2).join('').toLocaleUpperCase()
+}
+
+/**
+ * The hue a coverless tile is drawn in, from its name.
+ *
+ * Stable, so one artist's singles share a colour across the queue, the library
+ * and a reload; spread, so two neighbours rarely do. A rolling hash over the
+ * code points, kept below 2^31 so it never leaves exact integer arithmetic.
+ */
+export function placeholderHue(name: string): number {
+  let hash = 7
+  for (const char of name) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 2_147_483_647
+  }
+  return hash % 360
+}

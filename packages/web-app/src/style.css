@@ -71,6 +71,9 @@
   --mbrc-ink: #1a1a1a;
   --mbrc-ink-soft: #424242;
   --mbrc-outline: #757575;
+  /* A coverless tile: a pale field and a dark letter, both in the name's hue. */
+  --mbrc-placeholder-l: 88%;
+  --mbrc-placeholder-ink-l: 42%;
 
   --mbrc-accent: oklch(var(--mbrc-accent-l) var(--mbrc-accent-c) var(--mbrc-accent-h));
   --mbrc-accent-soft: oklch(
@@ -99,6 +102,8 @@
     --mbrc-ink: #e3e3e3;
     --mbrc-ink-soft: #bdbdbd;
     --mbrc-outline: #8a8a8a;
+    --mbrc-placeholder-l: 36%;
+    --mbrc-placeholder-ink-l: 84%;
   }
 }
 
@@ -115,6 +120,8 @@
   --mbrc-ink: #e3e3e3;
   --mbrc-ink-soft: #bdbdbd;
   --mbrc-outline: #8a8a8a;
+  --mbrc-placeholder-l: 36%;
+  --mbrc-placeholder-ink-l: 84%;
 }
 
 /* The phone is the target, so the app owns the viewport and never scrolls the
@@ -143,6 +150,14 @@ body {
      unsmoothed text on a dark surface reads heavier than it should. */
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* The stand-in for a missing cover, coloured by `--placeholder-h`, the hue
+   `CoverPlaceholder` derives from the name. Low chroma: it should read as a
+   label, not compete with the real covers around it. */
+.cover-placeholder {
+  background: oklch(var(--mbrc-placeholder-l) 0.045 var(--placeholder-h));
+  color: oklch(var(--mbrc-placeholder-ink-l) 0.09 var(--placeholder-h));
 }
 
 /* The scrollbars are part of the theme, not part of the browser: a pane that
