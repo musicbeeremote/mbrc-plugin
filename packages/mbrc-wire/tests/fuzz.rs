@@ -83,4 +83,27 @@ proptest! {
         let parsed = parse_context(&frame);
         prop_assert_eq!(parsed.as_deref(), Some(ctx.as_str()));
     }
+
+    /// However the socket splits a stream of valid frames, the same frames come
+    /// out, byte for byte.
+    #[test]
+    fn any_split_of_valid_frames_reassembles_them(
+        lines in prop::collection::vec("[^\r\n]{0,40}", 1..5),
+        cuts in prop::collection::vec(any::<prop::sample::Index>(), 0..12),
+    ) {
+        let stream: Vec<u8> = lines.iter().flat_map(|l| frame_line(l).into_bytes()).collect();
+        let mut points: Vec<usize> = cuts.iter().map(|c| c.index(stream.len() + 1)).collect();
+        points.sort_unstable();
+        let mut acc = FrameAccumulator::default();
+        let mut out = Vec::new();
+        let mut from = 0;
+        for to in points.into_iter().chain([stream.len()]) {
+            acc.push_bytes(&stream[from..to.max(from)]);
+            from = to.max(from);
+            while let Some(frame) = acc.next_frame() {
+                out.push(frame);
+            }
+        }
+        prop_assert_eq!(out, lines);
+    }
 }

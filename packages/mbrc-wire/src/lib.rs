@@ -191,12 +191,13 @@ pub const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 ///
 /// It breaks on `\n` and trims a single trailing `\r`, so legacy CRLF and V6
 /// bare-LF framing decode identically - one accumulator reads the socket before
-/// the first frame has routed the connection. Bytes go in with
-/// [`push_bytes`](Self::push_bytes) and come out of
-/// [`next_frame`](Self::next_frame); the [`DEFAULT_MAX_FRAME_BYTES`] cap keeps
-/// an unauthenticated peer from exhausting memory.
+/// the first frame has routed the connection. Each whole frame is decoded once,
+/// so a UTF-8 character split across reads arrives intact. The
+/// [`DEFAULT_MAX_FRAME_BYTES`] cap keeps a peer from exhausting memory.
 pub struct FrameAccumulator {
-    acc: String,
+    acc: Vec<u8>,
+    /// How much of `acc` is known to hold no terminator.
+    scanned: usize,
     max_frame: usize,
     overflow: bool,
 }
@@ -213,14 +214,15 @@ impl FrameAccumulator {
     /// latches true.
     pub fn with_max_frame_bytes(max_frame: usize) -> Self {
         Self {
-            acc: String::new(),
+            acc: Vec::new(),
+            scanned: 0,
             max_frame,
             overflow: false,
         }
     }
 
     pub fn push_bytes(&mut self, bytes: &[u8]) {
-        self.acc.push_str(&String::from_utf8_lossy(bytes));
+        self.acc.extend_from_slice(bytes);
     }
 
     /// Pops the next complete frame (terminator stripped), or `None` if no full
@@ -230,18 +232,25 @@ impl FrameAccumulator {
     /// bytes are dropped and [`overflowed`](Self::overflowed) latches true so the
     /// caller can close the connection.
     pub fn next_frame(&mut self) -> Option<String> {
-        if let Some(idx) = self.acc.find('\n') {
-            let mut line = self.acc[..idx].to_string();
-            if line.ends_with('\r') {
-                line.pop();
+        let found = self.acc[self.scanned..].iter().position(|&b| b == b'\n');
+        if let Some(idx) = found.map(|i| self.scanned + i) {
+            self.scanned = 0;
+            let mut frame: Vec<u8> = self.acc.drain(..=idx).collect();
+            frame.pop();
+            if frame.last() == Some(&b'\r') {
+                frame.pop();
             }
-            self.acc = self.acc[idx + 1..].to_string();
-            return Some(line);
+            return Some(match String::from_utf8(frame) {
+                Ok(line) => line,
+                Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+            });
         }
         // Past the cap with no terminator is an unbounded-buffer attack: drop it
         // and latch overflow so the caller closes the socket.
+        self.scanned = self.acc.len();
         if self.acc.len() > self.max_frame {
             self.acc.clear();
+            self.scanned = 0;
             self.overflow = true;
         }
         None
@@ -354,6 +363,17 @@ mod tests {
 
     /// One accumulator decodes the socket before the connection is routed, so a
     /// V6 stream - bare LF, no CR anywhere - has to split exactly as CRLF does.
+    #[test]
+    fn accumulator_keeps_a_utf8_character_split_across_reads() {
+        let frame = "{\"q\":\"Beyoncé ☃\"}\n".as_bytes();
+        let split = frame.iter().position(|&b| b == 0xC3).unwrap() + 1;
+        let mut acc = FrameAccumulator::default();
+        acc.push_bytes(&frame[..split]);
+        assert_eq!(acc.next_frame(), None);
+        acc.push_bytes(&frame[split..]);
+        assert_eq!(acc.next_frame().as_deref(), Some("{\"q\":\"Beyoncé ☃\"}"));
+    }
+
     #[test]
     fn accumulator_splits_on_bare_lf() {
         let mut acc = FrameAccumulator::default();
