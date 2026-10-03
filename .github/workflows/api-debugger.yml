@@ -55,7 +55,7 @@ jobs:
         # No version pin here - pnpm/action-setup reads the exact version from
         # the `packageManager` field in tools/api-debugger/package.json, keeping
         # a single source of truth.
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: tools/api-debugger/package.json
 
