@@ -20,5 +20,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 
+# Test-only: the core's own op list and read/write classification, so a test
+# fails when the V6 fuzzer has no spec for a new read-only op.
+[dev-dependencies]
+mbrc-core = { path = "../../packages/mbrc-core" }
+
 [lints]
 workspace = true

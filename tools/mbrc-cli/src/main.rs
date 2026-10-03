@@ -118,7 +118,9 @@ fn print_usage() {
          \x20          [--port P] [--values]              record responses, diff vs the golden\n\
          \x20 fuzz     [--host H] [--port P] [--seed N]  seeded protocol fuzzer (read-only\n\
          \x20          [--iterations K] [--corpus G]      default; --diff-host for differential;\n\
-         \x20          [--protocol 4|6]                   --protocol 6 = V6 read-only path)\n\
+         \x20          [--protocol 4|6]                   --protocol 6 = V6 read-only path:\n\
+         \x20          [--connections N] [--dribble]      harvests real ids, checks each reply\n\
+         \x20          [--slow-ms N]                      by id, reports per-op outcomes)\n\
          \x20 monitor  [--host H] [--port P]             read-only paging/keepalive validator\n\
          \x20          [--client-type Android|iOS]        (invariants + JSONL + persistence sig)\n\
          \x20          [--concurrency N] [--duration D]   D = inf|<n>[s|m|h]\n\

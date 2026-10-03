@@ -882,6 +882,7 @@ rather than being markers: there is nothing cheaper to re-query.
 
 - CLI: `mbrc send --protocol 6 --op <op> --json '<data>'` drives one op; it stays a broadcast
   subscriber during `--wait-ms` so events print. `mbrc conform` validates the surface;
-  `mbrc fuzz --protocol 6` stress-tests robustness (read-only).
+  `mbrc fuzz --protocol 6` stress-tests robustness (read-only): it harvests real ids first, so
+  most requests reach handler bodies, and checks every reply against its request id.
 - The committed wire snapshots under `packages/mbrc-core/tests/golden/v6/` are the byte-exact
   reference for every response shape here (regenerate with `MBRC_BLESS=1`).
