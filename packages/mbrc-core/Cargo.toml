@@ -41,13 +41,13 @@ base64 = "=0.23.1"
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
 # toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
 # - a good fit for the 32-bit i686 target (no mmap address-space ceiling).
-redb = "=4.2.0"
+redb = "=4.3.0"
 # SHA1 for cover cache identities (album key + content hash). Not cryptographic;
 # must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
 sha1 = "=0.11.0"
 # OS entropy for the V6 handshake token. A predictable token would be worse than
 # no token at all, so this is not a place for a hand-rolled generator.
-getrandom = "=0.3.4"
+getrandom = "=0.4.3"
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so
@@ -76,14 +76,14 @@ socket2 = "=0.6.5"
 # Rust with no async-runtime dependency of its own - it runs its own daemon
 # thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
 # crate would pull in `log`, and the core's logging goes through `tracing`.
-mdns-sd = { version = "=0.21.0", default-features = false }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "ws", "json", "query", "matched-path"] }
-tower-http = { version = "0.7.1", default-features = false, features = ["set-header"] }
+mdns-sd = { version = "=0.21.4", default-features = false }
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "ws", "json", "query", "matched-path"] }
+tower-http = { version = "=0.7.1", default-features = false, features = ["set-header"] }
 # Only for the SSE body's `Stream`; already in the tree under axum.
-futures-core = "0.3"
-rust-embed = { version = "8.12.0", default-features = false }
-hyper-util = { version = "0.1.20", default-features = false, features = ["service", "tokio"] }
-hyper = { version = "1.11.1", default-features = false, features = ["server", "http1"] }
+futures-core = "=0.3.34"
+rust-embed = { version = "=8.12.0", default-features = false }
+hyper-util = { version = "=0.1.20", default-features = false, features = ["service", "tokio"] }
+hyper = { version = "=1.11.1", default-features = false, features = ["server", "http1"] }
 
 # ShellExecuteExW (the elevation prompt for the update helper) and the loader
 # calls that answer "which directory was this DLL loaded from", which is how the
@@ -120,7 +120,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=3.0.4", features = ["full"] }
+syn = { version = "=3.0.6", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }

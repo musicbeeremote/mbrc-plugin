@@ -20,7 +20,7 @@ serde.workspace = true
 serde_json.workspace = true
 # Zero-dependency Ed25519 minisign verification. The signing half never lives
 # here: releases are signed in CI with the `minisign` CLI.
-minisign-verify = "=0.2.5"
+minisign-verify = "=0.3.0"
 sha2 = "=0.11.0"
 hex = "=0.4.3"
 
