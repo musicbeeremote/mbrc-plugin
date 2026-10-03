@@ -455,12 +455,54 @@ async fn check_nowplaying_windowing(
     let mut errors = Vec::new();
     if full_items != stitched {
         errors.push(format!(
-            "nowplaying full({}) != stitched({}) items",
+            "nowplaying full({}) != stitched({}) items; {}",
             full_items.len(),
-            stitched.len()
+            stitched.len(),
+            describe_window_mismatch(&full_items, &stitched, page_size)
         ));
     }
     Ok(errors)
+}
+
+/// Where a stitched read first parts from the full read, and what shape the
+/// difference has: the rows at that index, how far the stitched row sits from
+/// its place in the full read, how many rows differ, and whether the two reads
+/// hold the same rows at all. Enough to tell a shifted page from a duplicated
+/// or foreign one.
+fn describe_window_mismatch(
+    full: &[(i64, String)],
+    stitched: &[(i64, String)],
+    page_size: i32,
+) -> String {
+    let Some(first) = full.iter().zip(stitched).position(|(a, b)| a != b) else {
+        return "one read is a prefix of the other".to_string();
+    };
+    let differing = full.iter().zip(stitched).filter(|(a, b)| a != b).count();
+    let (want, got) = (&full[first], &stitched[first]);
+    let shift = full.iter().position(|(_, path)| *path == got.1).map_or(
+        "absent from the full read".to_string(),
+        |at| {
+            format!(
+                "found in the full read at {at} (shift {})",
+                at as i64 - first as i64
+            )
+        },
+    );
+    let mut full_paths: Vec<&str> = full.iter().map(|(_, p)| p.as_str()).collect();
+    let mut stitched_paths: Vec<&str> = stitched.iter().map(|(_, p)| p.as_str()).collect();
+    full_paths.sort_unstable();
+    stitched_paths.sort_unstable();
+    let same_rows = full_paths == stitched_paths;
+    format!(
+        "first difference at index {first} (page {} at offset {}): full=({}, {}) stitched=({}, {}); \
+         stitched row {shift}; {differing} differing rows; same set of rows: {same_rows}",
+        first as i32 / page_size.max(1),
+        first as i32 / page_size.max(1) * page_size.max(1),
+        want.0,
+        want.1,
+        got.0,
+        got.1,
+    )
 }
 
 // ── Workers ──
@@ -887,6 +929,46 @@ mod tests {
             nplist_items(&v),
             vec![(0, "x".to_string()), (1, "y".to_string())]
         );
+    }
+
+    fn rows(paths: &[&str]) -> Vec<(i64, String)> {
+        paths
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (i as i64 + 1, (*p).to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_window_mismatch_names_the_first_differing_row_and_its_shift() {
+        let full = rows(&["a", "b", "c", "d", "e", "f"]);
+        let mut stitched = full.clone();
+        stitched[4] = full[1].clone();
+        stitched[5] = full[2].clone();
+
+        let report = describe_window_mismatch(&full, &stitched, 2);
+
+        assert!(
+            report.contains("first difference at index 4 (page 2 at offset 4)"),
+            "{report}"
+        );
+        assert!(report.contains("full=(5, e) stitched=(2, b)"), "{report}");
+        assert!(
+            report.contains("found in the full read at 1 (shift -3)"),
+            "{report}"
+        );
+        assert!(
+            report.contains("2 differing rows; same set of rows: false"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn a_window_mismatch_reports_a_foreign_row() {
+        let full = rows(&["a", "b"]);
+        let stitched = rows(&["a", "zz"]);
+        let report = describe_window_mismatch(&full, &stitched, 1);
+        assert!(report.contains("absent from the full read"), "{report}");
     }
 
     #[test]
