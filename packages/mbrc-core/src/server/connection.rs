@@ -272,7 +272,9 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
         last_inbound = tokio::time::Instant::now();
         conn.core.registry.touch(conn_id);
         accumulator.push_bytes(&buf[..n]);
-        closing = conn.drain_frames(&mut proto, &mut accumulator, &mut registered);
+        closing = tokio::task::block_in_place(|| {
+            conn.drain_frames(&mut proto, &mut accumulator, &mut registered)
+        });
 
         // Such a peer never goes idle, so this is the only bound on it (#138).
         if accumulator.overflowed() {
@@ -409,6 +411,9 @@ impl Conn {
     /// Returns whether the connection is finished, which a client can ask for
     /// outright, an unroutable first frame forces, and a departed writer task
     /// forces too.
+    ///
+    /// Run under `block_in_place`: handlers call MusicBee and may wait on its
+    /// API lock, and the runtime moves this worker's other tasks off meanwhile.
     fn drain_frames(
         &self,
         proto: &mut Proto,

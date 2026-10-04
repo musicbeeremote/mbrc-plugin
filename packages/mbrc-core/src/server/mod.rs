@@ -863,3 +863,77 @@ mod cover_delta_tests {
         assert!(core.cover_store.hash_for(&key).is_some());
     }
 }
+
+#[cfg(test)]
+mod slow_host_tests {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpStream;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use crate::config::Config;
+    use crate::providers::MockProviders;
+
+    fn v6_connection(port: u16, client_id: &str) -> (TcpStream, BufReader<TcpStream>) {
+        let mut writer = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let reader = writer.try_clone().unwrap();
+        reader
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut reader = BufReader::new(reader);
+        let handshake = serde_json::json!({
+            "id": 0, "kind": "request", "op": "handshake",
+            "data": { "protocol_version": 6, "client_id": client_id,
+                      "client_type": "cli", "no_broadcast": true }
+        });
+        writeln!(writer, "{handshake}").unwrap();
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        (writer, reader)
+    }
+
+    /// A request waiting on a slow host call holds its connection, not a runtime
+    /// worker. Once there are more such requests than workers, a ping on another
+    /// connection used to wait for the host too.
+    #[test]
+    fn requests_stuck_on_the_host_do_not_stall_other_connections() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let mock = MockProviders {
+            output_devices_stall: Some(Duration::from_secs(3)),
+            ..Default::default()
+        };
+        let core = Arc::new(Core::new(Arc::new(mock), Config::for_test(port)));
+        let net = start(core).unwrap();
+
+        let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
+        let mut stuck = Vec::new();
+        for i in 0..workers + 2 {
+            let (mut w, r) = v6_connection(port, &format!("stuck-{i}"));
+            writeln!(
+                w,
+                r#"{{"id":1,"kind":"request","op":"player_output","data":{{}}}}"#
+            )
+            .unwrap();
+            stuck.push((w, r));
+        }
+        std::thread::sleep(Duration::from_millis(300));
+
+        let started = Instant::now();
+        let (mut w, mut r) = v6_connection(port, "free");
+        writeln!(w, r#"{{"id":1,"kind":"request","op":"ping","data":{{}}}}"#).unwrap();
+        let mut line = String::new();
+        r.read_line(&mut line).unwrap();
+        let waited = started.elapsed();
+
+        assert!(line.contains(r#""id":1"#), "{line}");
+        assert!(
+            waited < Duration::from_millis(1500),
+            "a ping waited {waited:?}"
+        );
+        net.stop();
+    }
+}

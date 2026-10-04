@@ -72,7 +72,10 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
                 tick += 1;
                 // First position broadcast lands at 20s (tick 20), like the C# timer.
                 let emit_position = tick.is_multiple_of(POSITION_EVERY_TICKS);
-                let Polled { v4, v6 } = poll(core.providers.as_ref(), &mut cached, &core.now_playing, emit_position);
+                // A MusicBee call, which may wait on its API lock.
+                let Polled { v4, v6 } = tokio::task::block_in_place(|| {
+                    poll(core.providers.as_ref(), &mut cached, &core.now_playing, emit_position)
+                });
                 core.broadcaster.broadcast(&v4);
                 core.v6_broadcaster.broadcast(&v6);
             }

@@ -966,6 +966,8 @@ impl Providers for NullProviders {
 #[cfg(test)]
 #[derive(Default)]
 pub struct MockProviders {
+    /// How long `output_devices` takes, standing in for a slow host call.
+    pub output_devices_stall: Option<std::time::Duration>,
     pub player_state: PlayerState,
     pub output_devices: OutputDevices,
     pub position: PlaybackPositionResponse,
@@ -1090,6 +1092,9 @@ impl Providers for MockProviders {
     }
     fn output_devices(&self) -> Result<OutputDevices, String> {
         self.record("output_devices");
+        if let Some(stall) = self.output_devices_stall {
+            std::thread::sleep(stall);
+        }
         Ok(self.output_devices.clone())
     }
     fn switch_output(&self, device: &str) -> Result<(), String> {
