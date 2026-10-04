@@ -42,55 +42,55 @@ namespace MusicBeePlugin.Ffi
         }
 
         /// <summary>
-        ///     Serve a query. Returns the MessagePack reply, or null if the query
-        ///     type is unknown (the caller reports an error status).
+        ///     Serve a query. Returns the result to pack once the API lock is
+        ///     released, or null if the query type is unknown.
         /// </summary>
-        public byte[] Handle(int queryType, byte[] p)
+        public QueryReply Handle(int queryType, byte[] p)
         {
             switch ((QueryType)queryType)
             {
-                case QueryType.PlayerState: return Pack(BuildPlayerState());
-                case QueryType.TrackInfo: return Pack(BuildTrackInfo());
-                case QueryType.CoverData: return Pack(BuildCover());
-                case QueryType.Lyrics: return Pack(BuildLyrics());
-                case QueryType.NowPlayingLyricsSynced: return Pack(BuildSyncedLyrics());
-                case QueryType.HasLastFmAccount: return Pack(_player.HasLastFmAccount());
-                case QueryType.NowPlayingDetails: return Pack(BuildTrackDetails());
-                case QueryType.PlaybackPosition: return Pack(BuildPlaybackPosition());
-                case QueryType.OutputDevices: return Pack(BuildOutputDevices());
-                case QueryType.NowPlayingRating: return Pack(_track.GetNowPlayingRating() ?? string.Empty);
-                case QueryType.NowPlayingLfmRating: return Pack(_track.GetNowPlayingLastfmStatus().ToString());
-                case QueryType.PluginVersion: return Pack(_userSettings.CurrentVersion ?? string.Empty);
-                case QueryType.PlaylistList: return Pack(BuildPlaylists(Page(p)));
-                case QueryType.PlaylistTracks: return Pack(_playlist.GetPlaylistFiles(Q(p).query));
-                case QueryType.PlaylistCatalog: return Pack(BuildPlaylistCatalog(Page(p)));
-                case QueryType.PlaylistCreate: return Pack(BuildCreatedPlaylist(Msgpack.Deserialize<PlaylistCreateParams>(p)));
-                case QueryType.NowPlayingList: return Pack(BuildNowPlayingList(Page(p), ordered: false));
-                case QueryType.NowPlayingListOrdered: return Pack(BuildNowPlayingList(Page(p), ordered: true));
-                case QueryType.NowPlayingListPaths: return Pack(_track.GetNowPlayingListPaths());
-                case QueryType.NowPlayingListOrder: return Pack(_track.GetNowPlayingListOrder());
-                case QueryType.PodcastSubscriptions: return Pack(BuildSubscriptions(Page(p)));
-                case QueryType.PodcastSubscription: return Pack(_podcast.GetSubscription(Q(p).query));
-                case QueryType.PodcastEpisodes: return Pack(BuildEpisodes(Msgpack.Deserialize<PodcastEpisodesParams>(p)));
-                case QueryType.PodcastEpisode: return Pack(BuildEpisode(Msgpack.Deserialize<PodcastEpisodeParams>(p)));
-                case QueryType.PodcastArtwork: return Pack(_podcast.GetSubscriptionArtwork(Q(p).query));
-                case QueryType.RadioStations: return Pack(BuildRadioStations(Page(p)));
-                case QueryType.LibraryBrowseGenres: return Pack(BuildBrowseGenres(Page(p)));
-                case QueryType.LibraryBrowseArtists: return Pack(BuildBrowseArtists(Msgpack.Deserialize<BrowseParams>(p)));
-                case QueryType.LibraryBrowseAlbums: return Pack(BuildBrowseAlbums(Page(p)));
-                case QueryType.LibraryBrowseTracks: return Pack(BuildBrowseTracks(Page(p)));
-                case QueryType.LibraryGenreArtists: return Pack(BuildGenreArtists(Q(p)));
-                case QueryType.LibraryArtistAlbums: return Pack(BuildArtistAlbums(Q(p)));
-                case QueryType.LibraryAlbumTracks: return Pack(BuildAlbumTracks(Q(p)));
-                case QueryType.LibraryGenreTracks: return Pack(BuildGenreTracks(Q(p)));
-                case QueryType.AlbumIdentifiers: return Pack(BuildAlbumIdentifiers());
-                case QueryType.ArtworkRawForPath: return Pack(BuildArtworkRaw(Msgpack.Deserialize<PathParams>(p)));
-                case QueryType.ArtworkLocationForPath: return Pack(BuildArtworkLocation(Msgpack.Deserialize<PathParams>(p)));
-                case QueryType.BatchMetadata: return Pack(BuildBatchMetadata(Msgpack.Deserialize<BatchMetadataParams>(p)));
-                case QueryType.LibraryTrackPaths: return Pack(_library.GetAllTrackPaths());
-                case QueryType.LibraryTracksForPaths: return Pack(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
-                case QueryType.LibraryTrackTags: return Pack(_library.GetTrackTags(Msgpack.Deserialize<PathsParams>(p).paths));
-                case QueryType.LibrarySyncDelta: return Pack(BuildSyncDelta(Msgpack.Deserialize<SyncDeltaParams>(p)));
+                case QueryType.PlayerState: return Reply(BuildPlayerState());
+                case QueryType.TrackInfo: return Reply(BuildTrackInfo());
+                case QueryType.CoverData: return Reply(BuildCover());
+                case QueryType.Lyrics: return Reply(BuildLyrics());
+                case QueryType.NowPlayingLyricsSynced: return Reply(BuildSyncedLyrics());
+                case QueryType.HasLastFmAccount: return Reply(_player.HasLastFmAccount());
+                case QueryType.NowPlayingDetails: return Reply(BuildTrackDetails());
+                case QueryType.PlaybackPosition: return Reply(BuildPlaybackPosition());
+                case QueryType.OutputDevices: return Reply(BuildOutputDevices());
+                case QueryType.NowPlayingRating: return Reply(_track.GetNowPlayingRating() ?? string.Empty);
+                case QueryType.NowPlayingLfmRating: return Reply(_track.GetNowPlayingLastfmStatus().ToString());
+                case QueryType.PluginVersion: return Reply(_userSettings.CurrentVersion ?? string.Empty);
+                case QueryType.PlaylistList: return Reply(BuildPlaylists(Page(p)));
+                case QueryType.PlaylistTracks: return Reply(_playlist.GetPlaylistFiles(Q(p).query));
+                case QueryType.PlaylistCatalog: return Reply(BuildPlaylistCatalog(Page(p)));
+                case QueryType.PlaylistCreate: return Reply(BuildCreatedPlaylist(Msgpack.Deserialize<PlaylistCreateParams>(p)));
+                case QueryType.NowPlayingList: return Reply(BuildNowPlayingList(Page(p), ordered: false));
+                case QueryType.NowPlayingListOrdered: return Reply(BuildNowPlayingList(Page(p), ordered: true));
+                case QueryType.NowPlayingListPaths: return Reply(_track.GetNowPlayingListPaths());
+                case QueryType.NowPlayingListOrder: return Reply(_track.GetNowPlayingListOrder());
+                case QueryType.PodcastSubscriptions: return Reply(BuildSubscriptions(Page(p)));
+                case QueryType.PodcastSubscription: return Reply(_podcast.GetSubscription(Q(p).query));
+                case QueryType.PodcastEpisodes: return Reply(BuildEpisodes(Msgpack.Deserialize<PodcastEpisodesParams>(p)));
+                case QueryType.PodcastEpisode: return Reply(BuildEpisode(Msgpack.Deserialize<PodcastEpisodeParams>(p)));
+                case QueryType.PodcastArtwork: return Reply(_podcast.GetSubscriptionArtwork(Q(p).query));
+                case QueryType.RadioStations: return Reply(BuildRadioStations(Page(p)));
+                case QueryType.LibraryBrowseGenres: return Reply(BuildBrowseGenres(Page(p)));
+                case QueryType.LibraryBrowseArtists: return Reply(BuildBrowseArtists(Msgpack.Deserialize<BrowseParams>(p)));
+                case QueryType.LibraryBrowseAlbums: return Reply(BuildBrowseAlbums(Page(p)));
+                case QueryType.LibraryBrowseTracks: return Reply(BuildBrowseTracks(Page(p)));
+                case QueryType.LibraryGenreArtists: return Reply(BuildGenreArtists(Q(p)));
+                case QueryType.LibraryArtistAlbums: return Reply(BuildArtistAlbums(Q(p)));
+                case QueryType.LibraryAlbumTracks: return Reply(BuildAlbumTracks(Q(p)));
+                case QueryType.LibraryGenreTracks: return Reply(BuildGenreTracks(Q(p)));
+                case QueryType.AlbumIdentifiers: return Reply(BuildAlbumIdentifiers());
+                case QueryType.ArtworkRawForPath: return Reply(BuildArtworkRaw(Msgpack.Deserialize<PathParams>(p)));
+                case QueryType.ArtworkLocationForPath: return Reply(BuildArtworkLocation(Msgpack.Deserialize<PathParams>(p)));
+                case QueryType.BatchMetadata: return Reply(BuildBatchMetadata(Msgpack.Deserialize<BatchMetadataParams>(p)));
+                case QueryType.LibraryTrackPaths: return Reply(_library.GetAllTrackPaths());
+                case QueryType.LibraryTracksForPaths: return Reply(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
+                case QueryType.LibraryTrackTags: return Reply(_library.GetTrackTags(Msgpack.Deserialize<PathsParams>(p).paths));
+                case QueryType.LibrarySyncDelta: return Reply(BuildSyncDelta(Msgpack.Deserialize<SyncDeltaParams>(p)));
                 default: return null;
             }
         }
@@ -271,7 +271,7 @@ namespace MusicBeePlugin.Ffi
             return new SyncDelta { added = added, updated = updated, deleted = deleted };
         }
 
-        private static byte[] Pack<T>(T value) => Msgpack.Serialize(value);
+        private static QueryReply Reply<T>(T value) => QueryReply.Of(value);
         private static PaginationParams Page(byte[] p) => Msgpack.Deserialize<PaginationParams>(p);
         private static QueryParams Q(byte[] p) => Msgpack.Deserialize<QueryParams>(p);
 

@@ -690,23 +690,24 @@ namespace MusicBeePlugin.Ffi
             try
             {
                 var p = CopyParams(paramsBuf, paramsLen);
-                byte[] result;
-                string slow, summary;
-                var asked = Stopwatch.GetTimestamp();
+                QueryReply reply;
+                long asked, acquired, done;
+                asked = Stopwatch.GetTimestamp();
                 lock (_apiLock)
                 {
-                    var acquired = Stopwatch.GetTimestamp();
-                    result = _queries.Handle(queryType, p);
-                    var done = Stopwatch.GetTimestamp();
-                    _lockStats.Record(((QueryType)queryType).ToString(),
-                        acquired - asked, done - acquired, done, out slow, out summary);
+                    acquired = Stopwatch.GetTimestamp();
+                    reply = _queries.Handle(queryType, p);
+                    done = Stopwatch.GetTimestamp();
                 }
-                LogLockStats(slow, summary);
-                if (result == null)
+                if (reply == null)
                 {
                     _logger.Warn("Unknown query type {0}", queryType);
                     return -1;
                 }
+                var result = reply.Pack();
+                var packed = Stopwatch.GetTimestamp();
+                RecordLockUse(((QueryType)queryType).ToString(),
+                    acquired - asked, done - acquired, packed - done, packed);
 
                 outResultBuf = Marshal.AllocHGlobal(result.Length);
                 Marshal.Copy(result, 0, outResultBuf, result.Length);
@@ -727,17 +728,16 @@ namespace MusicBeePlugin.Ffi
             {
                 var p = CopyParams(paramsBuf, paramsLen);
                 bool ok;
-                string slow, summary;
-                var asked = Stopwatch.GetTimestamp();
+                long asked, acquired, done;
+                asked = Stopwatch.GetTimestamp();
                 lock (_apiLock)
                 {
-                    var acquired = Stopwatch.GetTimestamp();
+                    acquired = Stopwatch.GetTimestamp();
                     ok = _commands.Handle(commandType, p);
-                    var done = Stopwatch.GetTimestamp();
-                    _lockStats.Record(((CommandType)commandType).ToString(),
-                        acquired - asked, done - acquired, done, out slow, out summary);
+                    done = Stopwatch.GetTimestamp();
                 }
-                LogLockStats(slow, summary);
+                RecordLockUse(((CommandType)commandType).ToString(),
+                    acquired - asked, done - acquired, 0, done);
                 return ok ? 0 : 1;
             }
             catch (Exception ex)
@@ -747,8 +747,10 @@ namespace MusicBeePlugin.Ffi
             }
         }
 
-        private void LogLockStats(string slow, string summary)
+        private void RecordLockUse(string kind, long waitTicks, long holdTicks, long packTicks, long nowTicks)
         {
+            string slow, summary;
+            _lockStats.Record(kind, waitTicks, holdTicks, packTicks, nowTicks, out slow, out summary);
             if (slow != null) _logger.Debug(slow);
             if (summary != null) _logger.Debug(summary);
         }

@@ -18,9 +18,9 @@ namespace MusicBeeRemote.Core.Tests.Ffi
             var stats = new ApiLockStats(TicksPerSecond);
 
             string slow, summary;
-            stats.Record("LibraryTrackTags", 40 * Ms, 250 * Ms, 0, out slow, out summary);
+            stats.Record("LibraryTrackTags", 40 * Ms, 250 * Ms, 7 * Ms, 0, out slow, out summary);
 
-            slow.Should().Be("api lock: LibraryTrackTags held 250ms after waiting 40ms");
+            slow.Should().Be("api lock: LibraryTrackTags held 250ms after waiting 40ms, packed in 7ms");
             summary.Should().BeNull();
         }
 
@@ -30,7 +30,7 @@ namespace MusicBeeRemote.Core.Tests.Ffi
             var stats = new ApiLockStats(TicksPerSecond);
 
             string slow, summary;
-            stats.Record("PlayerState", 0, 2 * Ms, 0, out slow, out summary);
+            stats.Record("PlayerState", 0, 2 * Ms, 0, 0, out slow, out summary);
 
             slow.Should().BeNull();
         }
@@ -40,15 +40,15 @@ namespace MusicBeeRemote.Core.Tests.Ffi
         {
             var stats = new ApiLockStats(TicksPerSecond);
             string slow, summary;
-            stats.Record("PlayerState", 0, 2 * Ms, 0, out slow, out summary);
-            stats.Record("PlayerState", 10 * Ms, 4 * Ms, 30000 * Ms, out slow, out summary);
+            stats.Record("PlayerState", 0, 2 * Ms, 1 * Ms, 0, out slow, out summary);
+            stats.Record("PlayerState", 10 * Ms, 4 * Ms, 3 * Ms, 30000 * Ms, out slow, out summary);
             summary.Should().BeNull("the window is not over yet");
 
-            stats.Record("LibraryTrackPaths", 0, 600 * Ms, 60000 * Ms, out slow, out summary);
+            stats.Record("LibraryTrackPaths", 0, 600 * Ms, 40 * Ms, 60000 * Ms, out slow, out summary);
 
             summary.Should().StartWith("api lock over 60s: held 606ms (1.0%)");
-            summary.Should().Contain("; LibraryTrackPaths n=1 hold avg 600.0 max 600 wait avg 0.0 max 0");
-            summary.Should().Contain("; PlayerState n=2 hold avg 3.0 max 4 wait avg 5.0 max 10");
+            summary.Should().Contain("; LibraryTrackPaths n=1 hold avg 600.0 max 600 wait avg 0.0 max 0 pack avg 40.0 max 40");
+            summary.Should().Contain("; PlayerState n=2 hold avg 3.0 max 4 wait avg 5.0 max 10 pack avg 2.0 max 3");
             summary.IndexOf("LibraryTrackPaths", System.StringComparison.Ordinal).Should().BeLessThan(
                 summary.IndexOf("PlayerState", System.StringComparison.Ordinal), "the kind that held the lock longest comes first");
         }
@@ -58,11 +58,11 @@ namespace MusicBeeRemote.Core.Tests.Ffi
         {
             var stats = new ApiLockStats(TicksPerSecond);
             string slow, summary;
-            stats.Record("PlayerState", 0, 1 * Ms, 0, out slow, out summary);
-            stats.Record("PlayerState", 0, 1 * Ms, 60000 * Ms, out slow, out summary);
+            stats.Record("PlayerState", 0, 1 * Ms, 0, 0, out slow, out summary);
+            stats.Record("PlayerState", 0, 1 * Ms, 0, 60000 * Ms, out slow, out summary);
             summary.Should().NotBeNull();
 
-            stats.Record("CoverData", 0, 1 * Ms, 120000 * Ms, out slow, out summary);
+            stats.Record("CoverData", 0, 1 * Ms, 0, 120000 * Ms, out slow, out summary);
 
             summary.Should().Contain("CoverData n=1");
             summary.Should().NotContain("PlayerState");

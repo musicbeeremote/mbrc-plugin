@@ -7,12 +7,12 @@ using System.Text;
 namespace MusicBeePlugin.Ffi
 {
     /// <summary>
-    ///     How long each FFI call waited for the MusicBee API lock and then held it.
+    ///     How long each FFI call waited for the MusicBee API lock, held it, and
+    ///     then spent packing its reply after releasing it.
     /// </summary>
     /// <remarks>
-    ///     Not thread-safe on its own: every call is made while holding the API lock
-    ///     it measures. Returns the lines to log instead of logging them, so the
-    ///     caller can write them after releasing the lock.
+    ///     Recorded after the API lock is released, so it has a lock of its own.
+    ///     Returns the lines to log instead of logging them.
     /// </remarks>
     public sealed class ApiLockStats
     {
@@ -24,6 +24,7 @@ namespace MusicBeePlugin.Ffi
 
         private readonly double _ticksPerMs;
         private readonly Dictionary<string, Entry> _entries = new Dictionary<string, Entry>();
+        private readonly object _sync = new object();
         private long _windowStart = -1;
 
         public ApiLockStats(long ticksPerSecond)
@@ -35,37 +36,42 @@ namespace MusicBeePlugin.Ffi
         ///     Records one call. <paramref name="slow" /> is set when this hold was
         ///     long, <paramref name="summary" /> when a summary window closed.
         /// </summary>
-        public void Record(string kind, long waitTicks, long holdTicks, long nowTicks,
+        public void Record(string kind, long waitTicks, long holdTicks, long packTicks, long nowTicks,
             out string slow, out string summary)
         {
             slow = null;
             summary = null;
             var waitMs = waitTicks / _ticksPerMs;
             var holdMs = holdTicks / _ticksPerMs;
-
-            Entry entry;
-            if (!_entries.TryGetValue(kind, out entry))
-            {
-                entry = new Entry();
-                _entries[kind] = entry;
-            }
-            entry.Add(waitMs, holdMs);
+            var packMs = packTicks / _ticksPerMs;
 
             if (holdMs >= SlowHoldMs)
                 slow = string.Format(CultureInfo.InvariantCulture,
-                    "api lock: {0} held {1:F0}ms after waiting {2:F0}ms", kind, holdMs, waitMs);
+                    "api lock: {0} held {1:F0}ms after waiting {2:F0}ms, packed in {3:F0}ms",
+                    kind, holdMs, waitMs, packMs);
 
-            if (_windowStart < 0)
+            lock (_sync)
             {
-                _windowStart = nowTicks;
-                return;
-            }
-            if ((nowTicks - _windowStart) / _ticksPerMs < SummaryEvery.TotalMilliseconds)
-                return;
+                Entry entry;
+                if (!_entries.TryGetValue(kind, out entry))
+                {
+                    entry = new Entry();
+                    _entries[kind] = entry;
+                }
+                entry.Add(waitMs, holdMs, packMs);
 
-            summary = Summarize((nowTicks - _windowStart) / _ticksPerMs);
-            _entries.Clear();
-            _windowStart = nowTicks;
+                if (_windowStart < 0)
+                {
+                    _windowStart = nowTicks;
+                    return;
+                }
+                if ((nowTicks - _windowStart) / _ticksPerMs < SummaryEvery.TotalMilliseconds)
+                    return;
+
+                summary = Summarize((nowTicks - _windowStart) / _ticksPerMs);
+                _entries.Clear();
+                _windowStart = nowTicks;
+            }
         }
 
         private string Summarize(double windowMs)
@@ -78,8 +84,9 @@ namespace MusicBeePlugin.Ffi
             {
                 var e = pair.Value;
                 text.AppendFormat(CultureInfo.InvariantCulture,
-                    "; {0} n={1} hold avg {2:F1} max {3:F0} wait avg {4:F1} max {5:F0}",
-                    pair.Key, e.Count, e.HoldTotal / e.Count, e.HoldMax, e.WaitTotal / e.Count, e.WaitMax);
+                    "; {0} n={1} hold avg {2:F1} max {3:F0} wait avg {4:F1} max {5:F0} pack avg {6:F1} max {7:F0}",
+                    pair.Key, e.Count, e.HoldTotal / e.Count, e.HoldMax, e.WaitTotal / e.Count, e.WaitMax,
+                    e.PackTotal / e.Count, e.PackMax);
             }
             return text.ToString();
         }
@@ -89,16 +96,20 @@ namespace MusicBeePlugin.Ffi
             public int Count;
             public double HoldMax;
             public double HoldTotal;
+            public double PackMax;
+            public double PackTotal;
             public double WaitMax;
             public double WaitTotal;
 
-            public void Add(double waitMs, double holdMs)
+            public void Add(double waitMs, double holdMs, double packMs)
             {
                 Count++;
                 WaitTotal += waitMs;
                 HoldTotal += holdMs;
+                PackTotal += packMs;
                 if (waitMs > WaitMax) WaitMax = waitMs;
                 if (holdMs > HoldMax) HoldMax = holdMs;
+                if (packMs > PackMax) PackMax = packMs;
             }
         }
     }
