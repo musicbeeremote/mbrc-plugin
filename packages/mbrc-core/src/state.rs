@@ -68,6 +68,8 @@ pub struct Core {
     pub library_events: crate::server::scanner::LibraryEvents,
     /// Asks the Scanner to fill the tag cache until nothing is missing.
     pub tag_backfill: Notify,
+    /// Wakes the player poll at once, for a mode change MusicBee announced.
+    pub poll_now: Notify,
     /// Set when the core is being torn down, and read by the long blocking work
     /// so it can stop between items.
     ///
@@ -119,6 +121,7 @@ impl Core {
             scanner_nudge: Arc::new(Notify::new()),
             library_events: Default::default(),
             tag_backfill: Notify::new(),
+            poll_now: Notify::new(),
             stopping: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -804,6 +807,10 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             return;
         }
         NotificationType::NowPlayingListChanged => core.now_playing.bump_list_version(),
+        // The poll stays the one source of these events; this only brings it forward.
+        NotificationType::ShuffleChanged
+        | NotificationType::RepeatChanged
+        | NotificationType::StopAfterCurrentChanged => core.poll_now.notify_one(),
         _ => {}
     }
 
@@ -937,6 +944,31 @@ mod tests {
 
     fn next_event(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> serde_json::Value {
         serde_json::from_str(rx.try_recv().expect("an event").trim()).unwrap()
+    }
+
+    /// MusicBee announces these; the poll that broadcasts them runs at once
+    /// instead of up to a second later.
+    #[test]
+    fn a_mode_notification_wakes_the_player_poll() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        for ntype in [
+            NotificationType::ShuffleChanged,
+            NotificationType::RepeatChanged,
+            NotificationType::StopAfterCurrentChanged,
+        ] {
+            let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(0)));
+            dispatch_notification(&core, ntype, None);
+            let woken = rt.block_on(async {
+                let wait = std::time::Duration::from_millis(20);
+                tokio::time::timeout(wait, core.poll_now.notified())
+                    .await
+                    .is_ok()
+            });
+            assert!(woken, "{ntype:?} did not wake the poll");
+        }
     }
 
     #[test]

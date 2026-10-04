@@ -34,7 +34,9 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
         NotificationType::PlayStateChanged
         | NotificationType::VolumeLevelChanged
         | NotificationType::VolumeMuteChanged
-        | NotificationType::StopAfterCurrentChanged => core.now_playing.refresh_player(),
+        | NotificationType::StopAfterCurrentChanged
+        | NotificationType::ShuffleChanged
+        | NotificationType::RepeatChanged => core.now_playing.refresh_player(),
         NotificationType::NowPlayingLyricsReady => core.now_playing.refresh_lyrics(),
         NotificationType::NowPlayingArtworkReady => core.now_playing.refresh_cover(),
         // These touch no now-playing slice. The metadata cache is maintained in
@@ -118,7 +120,9 @@ fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) ->
         | NotificationType::RatingChanged
         | NotificationType::FileDeleted
         | NotificationType::LibrarySwitched
-        | NotificationType::StopAfterCurrentChanged => {}
+        | NotificationType::StopAfterCurrentChanged
+        | NotificationType::ShuffleChanged
+        | NotificationType::RepeatChanged => {}
     }
     out.into_iter()
         .map(|(ctx, data)| frame(&ctx, data))

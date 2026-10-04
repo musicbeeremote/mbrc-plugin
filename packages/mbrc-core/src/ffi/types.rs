@@ -89,6 +89,10 @@ pub enum NotificationType {
     RatingChanged = 11,
     /// A file was removed from the library. Carries the file's path.
     FileDeleted = 12,
+    /// The shuffle mode changed, from a client or MusicBee's own window.
+    ShuffleChanged = 13,
+    /// The repeat mode changed, from a client or MusicBee's own window.
+    RepeatChanged = 14,
 }
 
 impl NotificationType {
@@ -108,6 +112,8 @@ impl NotificationType {
             10 => Some(Self::TagsChanged),
             11 => Some(Self::RatingChanged),
             12 => Some(Self::FileDeleted),
+            13 => Some(Self::ShuffleChanged),
+            14 => Some(Self::RepeatChanged),
             _ => None,
         }
     }
@@ -516,10 +522,10 @@ mod tests {
 
     #[test]
     fn notification_type_roundtrips() {
-        for raw in 0..=12 {
+        for raw in 0..=14 {
             assert_eq!(NotificationType::from_i32(raw).map(|n| n as i32), Some(raw));
         }
-        assert_eq!(NotificationType::from_i32(13), None);
+        assert_eq!(NotificationType::from_i32(15), None);
         assert_eq!(NotificationType::from_i32(-1), None);
     }
 

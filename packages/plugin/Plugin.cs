@@ -580,6 +580,12 @@ namespace MusicBeePlugin
                 case NotificationType.StopAfterCurrentChanged:
                     coreType = FfiGen.NotificationType.StopAfterCurrentChanged;
                     break;
+                case NotificationType.PlayerShuffleChanged:
+                    coreType = FfiGen.NotificationType.ShuffleChanged;
+                    break;
+                case NotificationType.PlayerRepeatChanged:
+                    coreType = FfiGen.NotificationType.RepeatChanged;
+                    break;
                 default:
                     return;
             }

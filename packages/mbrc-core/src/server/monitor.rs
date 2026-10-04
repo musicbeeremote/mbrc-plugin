@@ -1,15 +1,16 @@
 //! Poll-driven broadcasts (the C# `StateMonitor` port).
 //!
 //! Some state changes fire no MusicBee event: playback position advances
-//! continuously, a user can change shuffle/repeat/scrobble in MusicBee's own UI,
-//! and stop-after-current clears itself when it fires without announcing it. A
-//! timer task polls the provider RPC, broadcasts `nowplayingposition` while
-//! playing, and broadcasts the four modes only when they change.
+//! continuously, scrobbling has none, and stop-after-current clears itself when
+//! it fires without announcing it. A timer task polls the provider RPC,
+//! broadcasts `nowplayingposition` while playing, and broadcasts the four modes
+//! only when they change.
 //!
-//! Stop-after-current is the one MusicBee does notify about, on the way in. The
-//! event is emitted here anyway, and only here, so there is one source rather
-//! than a notification and a poll racing to say the same thing a second apart -
-//! and so the silent clear is announced like any other change.
+//! Shuffle, repeat and stop-after-current do raise a notification when set. It
+//! wakes this poll at once (`core.poll_now`) rather than emitting anything
+//! itself, so there is one source rather than a notification and a poll racing
+//! to say the same thing a second apart, and the silent clear is announced like
+//! any other change.
 //!
 //! Both protocols hear it. This poll is the only place those three changes are
 //! ever noticed, so a version it does not speak has no other way to learn them:
@@ -65,29 +66,40 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
     loop {
         tokio::select! {
             _ = shutdown.notified() => return,
+            _ = core.poll_now.notified() => poll_and_broadcast(&core, &mut cached, false),
             _ = interval.tick() => {
-                if core.broadcaster.client_count() == 0 && core.v6_broadcaster.client_count() == 0 {
-                    continue;
-                }
                 tick += 1;
                 // First position broadcast lands at 20s (tick 20), like the C# timer.
                 let emit_position = tick.is_multiple_of(POSITION_EVERY_TICKS);
-                // A MusicBee call, which may wait on its API lock.
-                let Polled { v4, v6 } = tokio::task::block_in_place(|| {
-                    poll(core.providers.as_ref(), &mut cached, &core.now_playing, emit_position)
-                });
-                core.broadcaster.broadcast(&v4);
-                core.v6_broadcaster.broadcast(&v6);
+                poll_and_broadcast(&core, &mut cached, emit_position);
             }
         }
     }
 }
 
+/// One poll, broadcast to both protocols; nothing while no client listens.
+///
+/// Run under `block_in_place`: it calls MusicBee, which may wait on its API lock.
+fn poll_and_broadcast(core: &Core, cached: &mut Cached, emit_position: bool) {
+    if core.broadcaster.client_count() == 0 && core.v6_broadcaster.client_count() == 0 {
+        return;
+    }
+    let Polled { v4, v6 } = tokio::task::block_in_place(|| {
+        poll(
+            core.providers.as_ref(),
+            cached,
+            &core.now_playing,
+            emit_position,
+        )
+    });
+    core.broadcaster.broadcast(&v4);
+    core.v6_broadcaster.broadcast(&v6);
+}
+
 /// Queries state and produce the frames that changed since the last tick. The
 /// first observation of each diffed value seeds the change-detection cache
 /// without broadcasting. The full player state is also written to the shared
-/// now-playing cache: the poll is the sole update path for shuffle/repeat/
-/// scrobble (MusicBee fires no event for those), so reads stay fresh.
+/// now-playing cache, so reads stay fresh between notifications.
 fn poll(
     providers: &dyn Providers,
     cached: &mut Cached,

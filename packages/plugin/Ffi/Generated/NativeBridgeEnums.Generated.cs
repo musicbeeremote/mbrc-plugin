@@ -44,6 +44,8 @@ namespace MusicBeePlugin.Ffi.Generated
         TagsChanged = 10,
         RatingChanged = 11,
         FileDeleted = 12,
+        ShuffleChanged = 13,
+        RepeatChanged = 14,
     }
 
     public enum QueryType
