@@ -175,10 +175,8 @@ fn output(p: &dyn Providers) -> OpResult {
 
 fn set_output(data: &Value, p: &dyn Providers) -> OpResult {
     let device = req_str(data, "device")?;
-    if !device.is_empty() {
-        p.switch_output(device).map_err(internal)?;
-    }
-    Ok(output_json(&p.output_devices().map_err(internal)?))
+    let devices = crate::server::commands::player::switch_output_to(p, device).map_err(internal)?;
+    Ok(output_json(&devices))
 }
 
 // ── canonical player state -> V6 JSON (real types, snake_case enums) ─────────
@@ -436,6 +434,25 @@ mod tests {
         assert!(
             m.recorded()
                 .contains(&"switch_output(Headphones)".to_string())
+        );
+    }
+
+    /// MusicBee re-opens the audio device even for the one already in use.
+    #[test]
+    fn setting_the_active_output_does_not_switch() {
+        let m = MockProviders {
+            output_devices: OutputDevices {
+                active: "Speakers".into(),
+                devices: vec!["Speakers".into(), "Headphones".into()],
+            },
+            ..mock()
+        };
+        let out = run("player_set_output", json!({ "device": "Speakers" }), &m).unwrap();
+        assert_eq!(out["active"], "Speakers");
+        assert!(
+            !m.recorded().iter().any(|c| c.starts_with("switch_output")),
+            "{:?}",
+            m.recorded()
         );
     }
 }

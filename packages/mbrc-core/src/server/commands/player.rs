@@ -8,7 +8,7 @@
 use serde_json::{Value, json};
 
 use super::{Ctx, HandlerResult, as_bool_lenient, as_int_lenient};
-use crate::protocol::messages::{RepeatMode, ShuffleMode};
+use crate::protocol::messages::{OutputDevices, RepeatMode, ShuffleMode};
 
 /// One reply on the same context, echoing `true` for a fire-and-forget action.
 fn ack(context: &str) -> HandlerResult {
@@ -197,16 +197,31 @@ pub fn output(_data: &Value, ctx: &Ctx) -> HandlerResult {
 /// # Errors
 /// The provider call failed.
 pub fn output_switch(data: &Value, ctx: &Ctx) -> HandlerResult {
-    if let Some(device) = data.as_str()
-        && !device.is_empty()
-    {
-        ctx.providers.switch_output(device)?;
-    }
-    let devices = ctx.providers.output_devices()?;
+    let devices = switch_output_to(ctx.providers, data.as_str().unwrap_or(""))?;
     Ok(vec![(
         "playeroutput".to_string(),
         ctx.wire().output_devices(&devices),
     )])
+}
+
+/// Switches the output to `device` and reads the devices back.
+///
+/// MusicBee re-opens the audio device on every switch, which held its API lock
+/// for over 800ms in a measured run, so a switch to the device already active
+/// is answered without asking. An empty name only reads.
+///
+/// # Errors
+/// A provider call failed.
+pub(crate) fn switch_output_to(
+    p: &dyn crate::providers::Providers,
+    device: &str,
+) -> Result<OutputDevices, String> {
+    let devices = p.output_devices()?;
+    if device.is_empty() || device == devices.active {
+        return Ok(devices);
+    }
+    p.switch_output(device)?;
+    p.output_devices()
 }
 
 #[cfg(test)]
