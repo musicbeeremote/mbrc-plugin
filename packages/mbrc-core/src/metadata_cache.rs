@@ -520,10 +520,15 @@ impl MetadataCache {
     /// Replaces the ordinal index with `paths` in browse order (positions `0..n`).
     /// Drops the previous index first, so add / delete / reorder all converge.
     /// No-op when disabled or not validated.
+    ///
+    /// Also drops the cached tags of every path no longer listed: the sort
+    /// orders are built from the tag rows, and a row left behind pages a reader
+    /// through a track the library no longer holds.
     pub fn replace_track_index(&self, paths: &[String]) {
         if !self.is_validated() {
             return;
         }
+        let listed: HashSet<&str> = paths.iter().map(String::as_str).collect();
         self.db.write(Durability::Immediate, |txn| {
             // Drop the whole table (cheaper than per-row deletes), then rebuild
             // positions from scratch.
@@ -531,6 +536,17 @@ impl MetadataCache {
             let mut table = txn.open_table(TRACK_PATHS)?;
             for (i, path) in paths.iter().enumerate() {
                 table.insert(i as u32, path.as_str())?;
+            }
+            let mut tags = txn.open_table(TRACK_TAGS)?;
+            let mut gone = Vec::new();
+            for row in tags.iter()? {
+                let (path, _) = row?;
+                if !listed.contains(path.value()) {
+                    gone.push(path.value().to_string());
+                }
+            }
+            for path in &gone {
+                tags.remove(path.as_str())?;
             }
             Ok(())
         });
@@ -773,6 +789,11 @@ impl MetadataCache {
         if all.is_empty() {
             return 0;
         }
+        // An order of fewer rows than the last would otherwise keep its tail.
+        self.db.write(Durability::Immediate, |txn| {
+            txn.delete_table(TRACK_SORT)?;
+            Ok(())
+        });
         let mut indexed = 0;
         for field in SortField::ALL {
             let mut sorted: Vec<&CachedTags> = all.iter().collect();
@@ -1288,6 +1309,39 @@ mod tests {
         cache.replace_track_index(&["/m/2.mp3".into(), "/m/1.mp3".into()]);
         assert_eq!(cache.track_page_paths(0, 1), vec!["/m/2.mp3".to_string()]);
         assert!(cache.track_tags("/m/2.mp3").is_some());
+    }
+
+    /// A tag row outlived its track: the sort orders, built from the tag rows,
+    /// paged readers through it and never matched the index's count again.
+    #[test]
+    fn a_shorter_index_drops_the_tags_and_order_rows_of_what_left() {
+        let cache = MetadataCache::new(temp_db("orphans"));
+        cache.reconcile(&[], 1);
+        let tagged = |src: &str| CachedTags {
+            src: src.into(),
+            title: src.into(),
+            ..Default::default()
+        };
+        cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()]);
+        cache.put_track_tags(&[tagged("/a.mp3"), tagged("/b.mp3"), tagged("/c.mp3")]);
+        cache.rebuild_sort_orders();
+
+        cache.replace_track_index(&["/a.mp3".into(), "/c.mp3".into()]);
+        assert!(
+            cache.track_tags("/b.mp3").is_none(),
+            "the gone track's tags stayed"
+        );
+        assert_eq!(cache.all_cached_tags().len(), 2);
+
+        cache.rebuild_sort_orders();
+        assert_eq!(
+            cache.sorted_track_count(SortField::Title),
+            cache.track_count()
+        );
+        assert_eq!(
+            cache.sorted_track_page(SortField::Title, 0, 10, false),
+            vec!["/a.mp3".to_string(), "/c.mp3".to_string()]
+        );
     }
 
     #[test]

@@ -756,6 +756,7 @@ mod cover_delta_tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mock = MockProviders {
+            track_paths: albums.iter().map(|a| a.path.clone()).collect(),
             album_identifiers: albums,
             artwork_raw: crate::cover::test_jpeg_bytes(300, 300),
             ..MockProviders::default()
@@ -806,6 +807,7 @@ mod cover_delta_tests {
         let mut moved = identifiers.clone();
         moved[0].modified = 999;
         let mock = MockProviders {
+            track_paths: moved.iter().map(|a| a.path.clone()).collect(),
             album_identifiers: moved.clone(),
             ..MockProviders::default()
         };
