@@ -555,7 +555,7 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | `now_playing_seek` | `{"position_ms":N}` | `{"position_ms":..,"duration_ms":..}` (read back after the seek) |
 | `now_playing_set_rating` | `{"rating":0-5\|null}` | `{"rating":<new>}` |
 | `now_playing_set_lfm` | `{"status":"normal"\|"love"\|"ban"}` | `{"lfm_status":<new>}` |
-| `now_playing_set_tag` | `{"tag":"<name>","value":"<v>"}` | `{}` |
+| `now_playing_set_tag` | `{"tag":"title"\|"artist"\|"album"\|"album_artist"\|"genre"\|"year"\|"composer"\|"comment"\|"lyrics","value":"<v>"}` | `{}` - any other `tag` is `invalid_field` |
 
 `now_playing_details` carries what the canonical track does not, for a details pane:
 

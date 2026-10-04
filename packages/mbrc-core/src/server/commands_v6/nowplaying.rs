@@ -221,16 +221,38 @@ fn set_lfm(data: &Value, p: &dyn Providers) -> OpResult {
     Ok(json!({ "lfm_status": lfm_str(p.lfm_rating().map_err(internal)?) }))
 }
 
+/// The tags `now_playing_set_tag` writes: the V6 name, then the host's.
+///
+/// A closed set, so an unknown name is `invalid_field` rather than a host
+/// failure surfacing as `internal_error`.
+pub(crate) const EDITABLE_TAGS: &[(&str, &str)] = &[
+    ("title", "TrackTitle"),
+    ("artist", "Artist"),
+    ("album", "Album"),
+    ("album_artist", "AlbumArtist"),
+    ("genre", "Genre"),
+    ("year", "Year"),
+    ("composer", "Composer"),
+    ("comment", "Comment"),
+    ("lyrics", "Lyrics"),
+];
+
 fn set_tag(data: &Value, p: &dyn Providers) -> OpResult {
     let tag = req_str(data, "tag")?;
-    if tag.is_empty() {
-        return Err(V6Error::new(
-            ErrorCode::InvalidField,
-            "tag must not be empty",
-        ));
-    }
+    let host_tag = EDITABLE_TAGS
+        .iter()
+        .find(|(name, _)| *name == tag)
+        .map(|(_, host)| *host)
+        .ok_or_else(|| {
+            let names: Vec<&str> = EDITABLE_TAGS.iter().map(|(name, _)| *name).collect();
+            V6Error::field(
+                ErrorCode::InvalidField,
+                "tag",
+                format!("unknown tag {tag:?}; one of {}", names.join(", ")),
+            )
+        })?;
     let value = req_str(data, "value")?;
-    p.set_tag(tag, value).map_err(internal)?;
+    p.set_tag(host_tag, value).map_err(internal)?;
     Ok(json!({}))
 }
 
@@ -576,24 +598,44 @@ mod tests {
         assert_eq!(bad.code, ErrorCode::InvalidField);
     }
 
+    /// The host knows its tags by their PascalCase names, which V6 never
+    /// spells; a raw pass-through failed every snake_case name as an
+    /// internal error.
     #[test]
-    fn set_tag_edits_and_rejects_empty_tag() {
+    fn set_tag_maps_v6_names_to_the_host_names() {
         let m = MockProviders::default();
-        run(
-            "now_playing_set_tag",
-            json!({ "tag": "artist", "value": "New" }),
-            &m,
-        )
-        .unwrap();
-        assert!(m.recorded().contains(&"set_tag(artist,New)".to_string()));
+        for (v6, host) in [
+            ("artist", "Artist"),
+            ("album_artist", "AlbumArtist"),
+            ("title", "TrackTitle"),
+        ] {
+            run(
+                "now_playing_set_tag",
+                json!({ "tag": v6, "value": "New" }),
+                &m,
+            )
+            .unwrap();
+            assert!(
+                m.recorded().contains(&format!("set_tag({host},New)")),
+                "{v6}"
+            );
+        }
+    }
 
-        let err = run(
-            "now_playing_set_tag",
-            json!({ "tag": "", "value": "x" }),
-            &m,
-        )
-        .unwrap_err();
-        assert_eq!(err.code, ErrorCode::InvalidField);
+    #[test]
+    fn set_tag_rejects_an_unknown_or_empty_name_by_field() {
+        let m = MockProviders::default();
+        for tag in ["", "Artist", "bitrate"] {
+            let err = run(
+                "now_playing_set_tag",
+                json!({ "tag": tag, "value": "x" }),
+                &m,
+            )
+            .unwrap_err();
+            assert_eq!(err.code, ErrorCode::InvalidField, "{tag}");
+            assert_eq!(err.field.as_deref(), Some("tag"));
+        }
+        assert!(!m.recorded().iter().any(|c| c.starts_with("set_tag")));
     }
 
     #[test]
