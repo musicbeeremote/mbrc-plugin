@@ -766,4 +766,4 @@ async fn restore_player(
     Ok(())
 }
 
-mod v6;
+pub(crate) mod v6;

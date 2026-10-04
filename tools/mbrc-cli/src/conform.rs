@@ -29,34 +29,15 @@ use mbrc_wire::{ClientHandshake, frame_line, parse_context, pong_frame};
 
 use crate::args::{flag_value, has_flag, run_client_id};
 
-/// Write ops (they mutate playback / tags / the queue) - skipped in the
-/// capability-honesty sweep unless `--allow-writes`, since sending them with no
-/// data can still fire (e.g. `player_next`).
-const WRITE_OPS: &[&str] = &[
-    "player_play",
-    "player_pause",
-    "player_play_pause",
-    "player_stop",
-    "player_next",
-    "player_previous",
-    "player_set_volume",
-    "player_set_mute",
-    "player_set_shuffle",
-    "player_set_repeat",
-    "player_set_scrobbling",
-    "player_set_output",
-    "now_playing_seek",
-    "now_playing_set_rating",
-    "now_playing_set_lfm",
-    "now_playing_set_tag",
-    "now_playing_list_play",
-    "now_playing_list_remove",
-    "now_playing_list_move",
-    "now_playing_list_search",
-    "now_playing_queue",
-    "library_play_all",
-    "playlist_play",
-];
+/// Whether the capability sweep may send `op` with no data.
+///
+/// Only a read: sending a write with empty data can still fire, and
+/// `library_queue {}` queues the whole library. The read ops are the V6
+/// fuzzer's table, which a test holds equal to the core's own permission map,
+/// so an op missing from it is never sent rather than sent by mistake.
+fn safe_to_sweep(op: &str) -> bool {
+    matches!(op, "ping" | "pair") || crate::fuzz::v6::ops::SPECS.iter().any(|s| s.op == op)
+}
 
 /// Known list ops whose response must be a valid `Page`.
 /// The server's page size when a request names no `limit`; a page that came
@@ -160,11 +141,7 @@ fn run_checks(
     });
 
     // Every advertised read op must dispatch: only `unknown_op` is a lie.
-    let read_ops: Vec<String> = ops
-        .iter()
-        .filter(|o| *o != "handshake" && !WRITE_OPS.contains(&o.as_str()))
-        .cloned()
-        .collect();
+    let read_ops: Vec<String> = ops.iter().filter(|o| safe_to_sweep(o)).cloned().collect();
     r.check("capability honesty", || {
         for op in &read_ops {
             let resp = c.request(op, json!({}))?;
@@ -1214,5 +1191,33 @@ impl Report {
         } else {
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The ops that emptied a test MusicBee's queue: a default run must never
+    /// send them.
+    #[test]
+    fn the_sweep_skips_every_op_that_changes_state() {
+        for op in [
+            "library_queue",
+            "now_playing_list_clear",
+            "playlist_delete",
+            "player_next",
+            "now_playing_set_tag",
+        ] {
+            assert!(!safe_to_sweep(op), "{op} would be sent");
+        }
+        assert!(safe_to_sweep("library_tracks"));
+        assert!(safe_to_sweep("library_changes"));
+    }
+
+    #[test]
+    fn an_op_this_build_does_not_know_is_not_swept() {
+        assert!(!safe_to_sweep("library_reformat_disk"));
+        assert!(!safe_to_sweep("handshake"));
     }
 }

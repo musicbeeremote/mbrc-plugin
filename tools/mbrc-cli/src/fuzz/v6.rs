@@ -11,7 +11,7 @@
 //! answered with an error. A typed error to a broken request is the expected
 //! answer and never an anomaly.
 
-mod ops;
+pub(crate) mod ops;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::process::ExitCode;
