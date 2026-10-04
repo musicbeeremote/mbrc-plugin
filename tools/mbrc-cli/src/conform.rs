@@ -2,12 +2,13 @@
 //!
 //! Connects, completes the V6 handshake, reads the advertised `capabilities`, and
 //! drives a set of protocol-invariant checks against a live server (the real
-//! plugin, the test server, or a mock). Read-only by default; `--allow-writes`
-//! adds a benign, restored write check. Prints a pass/fail report and exits
-//! non-zero if any check fails.
+//! plugin, the test server, or a mock). Read-only by default. `--allow-writes`
+//! also changes player settings, the queue and a playlist of its own, and puts
+//! each back; it never writes tags or ratings or starts playback. Prints a
+//! pass/fail report and exits non-zero if any check fails.
 //!
 //! Because it is driven by `capabilities`, it stays correct as the op catalog
-//! grows: every advertised op is exercised, and any op that answers `unknown_op`
+//! grows: every advertised read op is exercised, and any op that answers `unknown_op`
 //! (a lying capability) fails the run.
 //!
 //! It also runs a **browse value-parity differential** against the legacy V4
@@ -521,12 +522,14 @@ fn browse_rows(items: &Value, key: &str) -> Vec<(String, i64)> {
         .collect()
 }
 
-/// Exercise the write ops and the actively-triggerable events, **restoring state**
-/// so the run is repeatable. Transient player states (volume/mute/shuffle/repeat/
-/// scrobbling) are changed then restored; device/tag/last.fm writes are set to
-/// their current value (shape-only, no change); genuinely destructive ops (retag,
-/// track-changing transport, queue mutation, play-all) are reported as skipped
-/// rather than run.
+/// Exercise the write ops and the events they trigger, **restoring state** so
+/// the run is repeatable and leaves the server as it found it.
+///
+/// Player settings are changed and put back. The queue and playlists are only
+/// touched through tracks this run appends and a playlist it creates, which it
+/// removes again. Nothing writes tags or ratings, calls last.fm, changes the
+/// output device or starts playback. A final check compares the state with the
+/// snapshot taken first.
 fn writes_and_events(c: &mut V6Client, ops: &[String], r: &mut Report) {
     let has = |op: &str| ops.iter().any(|o| o == op);
 
@@ -537,11 +540,121 @@ fn writes_and_events(c: &mut V6Client, ops: &[String], r: &mut Report) {
             return;
         }
     };
+    let before = match Snapshot::take(c) {
+        Ok(s) => s,
+        Err(e) => {
+            r.fail("state snapshot (writes setup)", &e);
+            return;
+        }
+    };
+    let fixtures = fixture_tracks(c);
 
     player_writes(c, r, &has, &status);
     now_playing_writes(c, r, &has);
+    match &fixtures {
+        Ok(paths) => {
+            queue_writes(c, r, &has, paths);
+            playlist_writes(c, r, &has, paths);
+        }
+        Err(e) => r.skip("queue + playlist writes", e),
+    }
     report_unrun_writes(r, &has);
+
+    r.check("state restored", || {
+        let after = Snapshot::take(c)?;
+        before.compare(&after)
+    });
 }
+
+/// What a write run must leave as it found it.
+struct Snapshot {
+    player: Value,
+    queue: Vec<String>,
+    playlists: Vec<String>,
+}
+
+impl Snapshot {
+    fn take(c: &mut V6Client) -> Result<Self, String> {
+        let mut player = c.request("player_status", json!({}))?.ok()?;
+        // Playback moves on its own; only the settings a run changes are compared.
+        player["play_state"] = Value::Null;
+        Ok(Self {
+            player,
+            queue: queue_paths(c)?,
+            playlists: playlist_names(c)?,
+        })
+    }
+
+    fn compare(&self, after: &Snapshot) -> Result<(), String> {
+        expect(
+            self.player == after.player,
+            &format!(
+                "player settings changed: {} -> {}",
+                self.player, after.player
+            ),
+        )?;
+        expect(
+            self.queue == after.queue,
+            &format!(
+                "queue changed: {} -> {} entries",
+                self.queue.len(),
+                after.queue.len()
+            ),
+        )?;
+        expect(
+            self.playlists == after.playlists,
+            &format!(
+                "playlists changed: {:?} -> {:?}",
+                self.playlists, after.playlists
+            ),
+        )
+    }
+}
+
+/// Every `src` in the queue, in queue order.
+fn queue_paths(c: &mut V6Client) -> Result<Vec<String>, String> {
+    let data = c
+        .request("now_playing_list", json!({ "offset": 0, "limit": 0 }))?
+        .ok()?;
+    Ok(srcs(&data["items"]))
+}
+
+fn playlist_names(c: &mut V6Client) -> Result<Vec<String>, String> {
+    let data = c
+        .request("playlist_list", json!({ "offset": 0, "limit": 0 }))?
+        .ok()?;
+    let mut names: Vec<String> = data["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|p| p["name"].as_str().map(String::from))
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+fn srcs(items: &Value) -> Vec<String> {
+    items
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|t| t["src"].as_str().map(String::from))
+        .collect()
+}
+
+/// The library tracks a write run queues and lists: the first three, so two
+/// runs use the same ones.
+fn fixture_tracks(c: &mut V6Client) -> Result<Vec<String>, String> {
+    let data = c
+        .request("library_tracks", json!({ "offset": 0, "limit": 3 }))?
+        .ok()?;
+    let paths = srcs(&data["items"]);
+    expect(paths.len() == 3, "the library holds fewer than 3 tracks")?;
+    Ok(paths)
+}
+
+/// The name of the playlist a write run creates, and deletes again.
+const FIXTURE_PLAYLIST: &str = "mbrc-conform";
 
 /// The player-control writes, each restored to the value `status` reported.
 fn player_writes(c: &mut V6Client, r: &mut Report, has: &impl Fn(&str) -> bool, status: &Value) {
@@ -607,21 +720,19 @@ fn player_writes(c: &mut V6Client, r: &mut Report, has: &impl Fn(&str) -> bool, 
     player_mode_writes(c, r, has, status);
 }
 
-/// The player states with no MusicBee notification behind them, so there is no
-/// event to await: set a different value, confirm the echo, put it back.
+/// The player modes: set a different value, confirm the echo and the event,
+/// put it back.
 fn player_mode_writes(
     c: &mut V6Client,
     r: &mut Report,
     has: &impl Fn(&str) -> bool,
     status: &Value,
 ) {
-    // shuffle / repeat / scrobbling: set a different value, confirm the response,
-    // restore. (MusicBee emits no notification for these - no event to await.)
     restore_enum(
         c,
         r,
         &has,
-        "player_set_shuffle",
+        ("player_set_shuffle", "shuffle_changed"),
         status["shuffle"].as_str(),
         "off",
         "shuffle",
@@ -630,11 +741,25 @@ fn player_mode_writes(
         c,
         r,
         &has,
-        "player_set_repeat",
+        ("player_set_repeat", "repeat_changed"),
         status["repeat"].as_str(),
         "none",
         "all",
     );
+    if has("player_set_stop_after_current") {
+        r.check("player_set_stop_after_current + event (restore)", || {
+            let cur = status["stop_after_current"]
+                .as_bool()
+                .ok_or("no current stop_after_current")?;
+            c.clear_events();
+            let resp = c.request("player_set_stop_after_current", json!({ "enabled": !cur }))?;
+            expect(resp.ok()?["enabled"] == json!(!cur), "not echoed")?;
+            c.wait_event("stop_after_current_changed")?;
+            c.request("player_set_stop_after_current", json!({ "enabled": cur }))?;
+            c.clear_events();
+            Ok(())
+        });
+    }
     // Scrobbling depends on last.fm being configured, so a command failure is a
     // warning (the op is still wired), not a run failure.
     if has("player_set_scrobbling") {
@@ -679,10 +804,9 @@ fn player_mode_writes(
     }
 }
 
-/// The now-playing writes, each set to the value it already holds, so a run
-/// changes nothing that has to be put back.
+/// The now-playing writes a run can make without touching the library: a seek
+/// to where playback already is.
 fn now_playing_writes(c: &mut V6Client, r: &mut Report, has: &impl Fn(&str) -> bool) {
-    // Now-playing writes, only when a track is playing (set to current - no change).
     let np = c
         .request("now_playing_state", json!({}))
         .and_then(|x| x.ok())
@@ -705,44 +829,291 @@ fn now_playing_writes(c: &mut V6Client, r: &mut Report, has: &impl Fn(&str) -> b
             },
         );
     }
-    if has("now_playing_set_rating") {
-        maybe(
-            r,
-            playing,
-            "now_playing_set_rating (current)",
-            "nothing playing",
-            || {
-                let cur = np["track"]["rating"].clone();
-                c.request("now_playing_set_rating", json!({ "rating": cur }))?
-                    .ok()?;
-                Ok(())
-            },
-        );
+}
+
+/// Queue writes on tracks this run appends: queue, move, a stale move, a scoped
+/// `library_queue`, then remove exactly what was added. The user's own entries
+/// keep their slots throughout, so nothing has to be rebuilt.
+fn queue_writes(
+    c: &mut V6Client,
+    r: &mut Report,
+    has: &impl Fn(&str) -> bool,
+    fixtures: &[String],
+) {
+    let needed = [
+        "now_playing_queue",
+        "now_playing_list_move",
+        "now_playing_list_remove",
+    ];
+    if !needed.iter().all(|op| has(op)) {
+        r.skip("queue writes", "queue ops not advertised");
+        return;
     }
-    if has("now_playing_set_lfm") {
-        maybe(
-            r,
-            playing,
-            "now_playing_set_lfm (current)",
-            "nothing playing",
-            || {
-                let cur = np["lfm_status"].as_str().unwrap_or("normal").to_string();
-                expect(
-                    c.request("now_playing_set_lfm", json!({ "status": cur }))?
-                        .ok()?["lfm_status"]
-                        .is_string(),
-                    "lfm shape",
-                )
-            },
-        );
+    let start = match queue_total(c) {
+        Ok(n) => n,
+        Err(e) => return r.fail("queue writes", &e),
+    };
+
+    r.check("now_playing_queue appends in order", || {
+        c.request(
+            "now_playing_queue",
+            json!({ "paths": fixtures, "mode": "last" }),
+        )?
+        .ok()?;
+        wait_for_queue(c, start + fixtures.len())?;
+        let (_, tail) = queue_tail(c, start)?;
+        expect(
+            tail == fixtures,
+            &format!("appended {tail:?}, not {fixtures:?}"),
+        )
+    });
+
+    r.check("now_playing_list_move + stale version", || {
+        let (version, _) = queue_tail(c, start)?;
+        c.request(
+            "now_playing_list_move",
+            json!({ "from": start, "to": start + 2, "version": version }),
+        )?
+        .ok()?;
+        let (_, tail) = queue_tail(c, start)?;
+        let moved = vec![
+            fixtures[1].clone(),
+            fixtures[2].clone(),
+            fixtures[0].clone(),
+        ];
+        expect(
+            tail == moved,
+            &format!("after the move {tail:?}, not {moved:?}"),
+        )?;
+        let stale = c.request(
+            "now_playing_list_move",
+            json!({ "from": start, "to": start + 1, "version": version }),
+        )?;
+        expect(
+            stale.err_code()? == "stale_list",
+            "a move on the version before the last one was not stale_list",
+        )
+    });
+
+    if has("library_queue") {
+        r.check("library_queue (one album, last)", || {
+            let (album, artist, count) = small_album(c)?;
+            let before = queue_total(c)?;
+            let resp = c
+                .request(
+                    "library_queue",
+                    json!({ "album": album, "artist": artist, "mode": "last" }),
+                )?
+                .ok()?;
+            let queued = resp["count"].as_u64().ok_or("count not an int")? as usize;
+            expect(
+                queued == count,
+                &format!("queued {queued}, the album holds {count}"),
+            )?;
+            wait_for_queue(c, before + queued)
+        });
+    }
+
+    r.check("now_playing_list_remove (what this run added)", || {
+        remove_appended(c, start)?;
+        wait_for_queue(c, start)
+    });
+    // A check above may have stopped half way; never leave its tracks behind.
+    if queue_total(c).is_ok_and(|n| n > start) {
+        let _ = remove_appended(c, start);
+        let _ = wait_for_queue(c, start);
     }
 }
 
-/// Reports the ops a repeatable run cannot exercise, rather than running them.
+fn queue_total(c: &mut V6Client) -> Result<usize, String> {
+    let data = c
+        .request("now_playing_list", json!({ "offset": 0, "limit": 1 }))?
+        .ok()?;
+    data["total"]
+        .as_u64()
+        .map(|n| n as usize)
+        .ok_or_else(|| "total not an int".to_string())
+}
+
+/// The queue's version and the `src`s from slot `start` to the end.
+fn queue_tail(c: &mut V6Client, start: usize) -> Result<(i64, Vec<String>), String> {
+    let data = c
+        .request("now_playing_list", json!({ "offset": start, "limit": 0 }))?
+        .ok()?;
+    let version = data["version"].as_i64().ok_or("no version")?;
+    Ok((version, srcs(&data["items"])))
+}
+
+/// Waits for the queue to reach `total`: MusicBee applies a queue request after
+/// answering it.
+fn wait_for_queue(c: &mut V6Client, total: usize) -> Result<(), String> {
+    for _ in 0..60 {
+        if queue_total(c)? == total {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(format!("the queue never reached {total} entries"))
+}
+
+/// Removes every slot from `start` to the end, guarded by the current version.
+fn remove_appended(c: &mut V6Client, start: usize) -> Result<(), String> {
+    let total = queue_total(c)?;
+    if total <= start {
+        return Ok(());
+    }
+    let (version, _) = queue_tail(c, start)?;
+    let orders: Vec<usize> = (start..total).collect();
+    c.request(
+        "now_playing_list_remove",
+        json!({ "orders": orders, "version": version }),
+    )?
+    .ok()
+    .map(|_| ())
+}
+
+/// An album of 1 to 5 tracks, the first such in the album list.
+fn small_album(c: &mut V6Client) -> Result<(String, String, usize), String> {
+    let data = c
+        .request("library_albums", json!({ "offset": 0, "limit": 200 }))?
+        .ok()?;
+    data["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find_map(|a| {
+            let count = a["count"].as_u64()? as usize;
+            let album = a["album"].as_str().filter(|n| !n.is_empty())?;
+            (1..=5).contains(&count).then(|| {
+                (
+                    album.to_string(),
+                    a["artist"].as_str().unwrap_or("").to_string(),
+                    count,
+                )
+            })
+        })
+        .ok_or_else(|| "no album of 1 to 5 tracks in the first 200".to_string())
+}
+
+/// Playlist writes on a playlist this run creates and deletes: create, add,
+/// move, a stale edit, remove, set, delete.
+fn playlist_writes(
+    c: &mut V6Client,
+    r: &mut Report,
+    has: &impl Fn(&str) -> bool,
+    fixtures: &[String],
+) {
+    let needed = [
+        "playlist_create",
+        "playlist_add_tracks",
+        "playlist_move_tracks",
+        "playlist_remove_tracks",
+        "playlist_set_tracks",
+        "playlist_delete",
+        "playlist_tracks",
+    ];
+    if !needed.iter().all(|op| has(op)) {
+        r.skip("playlist writes", "playlist edit ops not advertised");
+        return;
+    }
+    // A run that died before its delete left its playlist; take it first.
+    for url in fixture_playlist_urls(c).unwrap_or_default() {
+        let _ = c.request("playlist_delete", json!({ "url": url }));
+    }
+
+    let mut url = String::new();
+    r.check("playlist edits on its own playlist", || {
+        let made = c
+            .request(
+                "playlist_create",
+                json!({ "name": FIXTURE_PLAYLIST, "paths": &fixtures[..2] }),
+            )?
+            .ok()?;
+        url = made["url"].as_str().ok_or("no url")?.to_string();
+        let tracks = |c: &mut V6Client, url: &str| -> Result<Vec<String>, String> {
+            let data = c.request("playlist_tracks", json!({ "url": url }))?.ok()?;
+            Ok(srcs(&data["items"]))
+        };
+        let pick = |order: &[usize]| -> Vec<String> {
+            order.iter().map(|&i| fixtures[i].clone()).collect()
+        };
+        expect(tracks(c, &url)? == pick(&[0, 1]), "after create")?;
+
+        let added = c
+            .request(
+                "playlist_add_tracks",
+                json!({ "url": url, "paths": [&fixtures[2]], "version": made["version"] }),
+            )?
+            .ok()?;
+        expect(added["added"] == json!(1), "added is not 1")?;
+        expect(tracks(c, &url)? == pick(&[0, 1, 2]), "after add")?;
+
+        let stale_version = added["version"].clone();
+        let moved = c
+            .request(
+                "playlist_move_tracks",
+                json!({ "url": url, "from_orders": [0], "to_order": 2, "version": added["version"] }),
+            )?
+            .ok()?;
+        expect(tracks(c, &url)? == pick(&[1, 2, 0]), "after move")?;
+
+        let stale = c.request(
+            "playlist_remove_tracks",
+            json!({ "url": url, "orders": [0], "version": stale_version }),
+        )?;
+        expect(
+            stale.err_code()? == "stale_list",
+            "an edit on an old version was not stale_list",
+        )?;
+
+        let removed = c
+            .request(
+                "playlist_remove_tracks",
+                json!({ "url": url, "orders": [0], "version": moved["version"] }),
+            )?
+            .ok()?;
+        expect(tracks(c, &url)? == pick(&[2, 0]), "after remove")?;
+
+        c.request(
+            "playlist_set_tracks",
+            json!({ "url": url, "paths": fixtures, "version": removed["version"] }),
+        )?
+        .ok()?;
+        expect(tracks(c, &url)? == pick(&[0, 1, 2]), "after set")
+    });
+
+    r.check("playlist_delete (its own playlist)", || {
+        if url.is_empty() {
+            return Err("nothing was created to delete".into());
+        }
+        c.request("playlist_delete", json!({ "url": url }))?.ok()?;
+        expect(
+            fixture_playlist_urls(c)?.is_empty(),
+            "the playlist is still listed",
+        )
+    });
+    for leftover in fixture_playlist_urls(c).unwrap_or_default() {
+        let _ = c.request("playlist_delete", json!({ "url": leftover }));
+    }
+}
+
+fn fixture_playlist_urls(c: &mut V6Client) -> Result<Vec<String>, String> {
+    let data = c
+        .request("playlist_list", json!({ "offset": 0, "limit": 0 }))?
+        .ok()?;
+    Ok(data["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|p| p["name"] == json!(FIXTURE_PLAYLIST))
+        .filter_map(|p| p["url"].as_str().map(String::from))
+        .collect())
+}
+
+/// Reports the ops a write run leaves alone, rather than running them.
 ///
-/// Some have no safe non-mutating input - an empty search or queue is invalid to
-/// MusicBee, and a real query or path list would mutate - and the rest are
-/// destructive outright.
+/// They write tags or ratings, call last.fm, start or replace playback, or
+/// empty the queue, none of which a run can promise to put back.
 fn report_unrun_writes(r: &mut Report, has: &impl Fn(&str) -> bool) {
     let destructive: Vec<&str> = [
         "player_next",
@@ -751,20 +1122,21 @@ fn report_unrun_writes(r: &mut Report, has: &impl Fn(&str) -> bool) {
         "player_play",
         "player_pause",
         "now_playing_set_tag",
+        "now_playing_set_rating",
+        "now_playing_set_lfm",
         "now_playing_list_search",
-        "now_playing_queue",
         "now_playing_list_play",
-        "now_playing_list_remove",
-        "now_playing_list_move",
+        "now_playing_list_clear",
         "library_play_all",
         "playlist_play",
+        "podcast_episode_play",
     ]
     .into_iter()
     .filter(|op| has(op))
     .collect();
     if !destructive.is_empty() {
         r.skip(
-            "destructive writes",
+            "writes left alone",
             &format!("not auto-run: {}", destructive.join(", ")),
         );
     }
@@ -779,7 +1151,7 @@ fn restore_enum(
     c: &mut V6Client,
     r: &mut Report,
     has: &impl Fn(&str) -> bool,
-    op: &str,
+    (op, event): (&str, &str),
     cur: Option<&str>,
     a: &'static str,
     b: &'static str,
@@ -789,12 +1161,15 @@ fn restore_enum(
     }
     let cur = cur.unwrap_or(a).to_string();
     let other = if cur == a { b } else { a };
-    r.check(&format!("{op} (restore)"), || {
+    r.check(&format!("{op} + {event} (restore)"), || {
+        c.clear_events();
         expect(
             c.request(op, json!({ "mode": other }))?.ok()?["mode"] == json!(other),
             "mode not echoed",
         )?;
+        c.wait_event(event)?;
         c.request(op, json!({ "mode": cur }))?;
+        c.clear_events();
         Ok(())
     });
 }
