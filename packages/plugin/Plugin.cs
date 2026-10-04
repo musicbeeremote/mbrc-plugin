@@ -565,13 +565,20 @@ namespace MusicBeePlugin
                 case NotificationType.FileAddedToLibrary:
                     coreType = FfiGen.NotificationType.FileAddedToLibrary;
                     break;
+                // An edit to the playing track is written, and `-Changed` raised,
+                // only once it stops; `-Changing` comes at once.
+                case NotificationType.TagsChanging:
                 case NotificationType.TagsChanged:
                     coreType = FfiGen.NotificationType.TagsChanged;
                     break;
+                case NotificationType.RatingChanging:
                 case NotificationType.RatingChanged:
                     coreType = FfiGen.NotificationType.RatingChanged;
                     break;
+                // A rename moves the track to a new path: a removal and an add.
                 case NotificationType.FileDeleted:
+                case NotificationType.FileRemovedFromLibrary:
+                case NotificationType.FileRenamed:
                     coreType = FfiGen.NotificationType.FileDeleted;
                     break;
                 case NotificationType.LibrarySwitched:
