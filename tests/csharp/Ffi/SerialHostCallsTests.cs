@@ -20,10 +20,11 @@ namespace MusicBeeRemote.Core.Tests.Ffi
 {
     /// <summary>
     ///     Runs every query and command against a fake MusicBee that records its
-    ///     query calls. A kind <see cref="HostCursor" /> misses would read another
-    ///     call's results; a kind it names needlessly would wait for nothing.
+    ///     cursor walks and the changes those walks read. A kind
+    ///     <see cref="SerialHostCalls" /> misses could read another call's results or
+    ///     see a change land mid-walk; a kind it names needlessly waits for nothing.
     /// </summary>
-    public class HostCursorTests
+    public class SerialHostCallsTests
     {
         public static IEnumerable<object[]> Queries() =>
             Enum.GetValues(typeof(QueryType)).Cast<object>().Select(kind => new[] { kind });
@@ -33,7 +34,7 @@ namespace MusicBeeRemote.Core.Tests.Ffi
 
         [Theory]
         [MemberData(nameof(Queries))]
-        public void Query_IsSerializedExactlyWhenItRunsACursor(QueryType kind)
+        public void Query_IsSerializedExactlyWhenItWalksOrChangesWhatAWalkReads(QueryType kind)
         {
             var host = new FakeMusicBee();
             var queries = new QueryHandlers(new PlayerDataProvider(host.Api), new TrackDataProvider(host.Api),
@@ -43,13 +44,13 @@ namespace MusicBeeRemote.Core.Tests.Ffi
             foreach (var payload in Payloads())
                 RunUnlessPayloadMismatch(() => queries.Handle((int)kind, payload));
 
-            HostCursor.Runs(kind).Should().Be(host.CursorCalls.Count > 0,
-                "it called [{0}]", string.Join(", ", host.CursorCalls.Distinct()));
+            SerialHostCalls.Includes(kind).Should().Be(host.SerialCalls.Count > 0,
+                "it called [{0}]", string.Join(", ", host.SerialCalls.Distinct()));
         }
 
         [Theory]
         [MemberData(nameof(Commands))]
-        public void Command_IsSerializedExactlyWhenItRunsACursor(CommandType kind)
+        public void Command_IsSerializedExactlyWhenItWalksOrChangesWhatAWalkReads(CommandType kind)
         {
             var host = new FakeMusicBee();
             var commands = new CommandHandlers(new PlayerDataProvider(host.Api), new TrackDataProvider(host.Api),
@@ -59,8 +60,8 @@ namespace MusicBeeRemote.Core.Tests.Ffi
             foreach (var payload in Payloads())
                 RunUnlessPayloadMismatch(() => commands.Handle((int)kind, payload));
 
-            HostCursor.Runs(kind).Should().Be(host.CursorCalls.Count > 0,
-                "it called [{0}]", string.Join(", ", host.CursorCalls.Distinct()));
+            SerialHostCalls.Includes(kind).Should().Be(host.SerialCalls.Count > 0,
+                "it called [{0}]", string.Join(", ", host.SerialCalls.Distinct()));
         }
 
         /// <summary>
@@ -70,7 +71,7 @@ namespace MusicBeeRemote.Core.Tests.Ffi
         private static IEnumerable<byte[]> Payloads()
         {
             var options = MessagePackSerializerOptions.Standard.WithResolver(ContractlessStandardResolver.Instance);
-            foreach (var value in new object[] { "x", true, false, 1 })
+            foreach (var value in new object[] { "x", "3", true, false, 1 })
             {
                 var fields = new Dictionary<string, object>
                 {
@@ -113,7 +114,8 @@ namespace MusicBeeRemote.Core.Tests.Ffi
 
         /// <summary>
         ///     A MusicBee whose query calls find nothing and whose other calls succeed,
-        ///     so a handler runs as far as it can.
+        ///     so a handler runs as far as it can. Changes to the now playing list, a
+        ///     playlist or a file's tags count as serial calls alongside the walks.
         /// </summary>
         private sealed class FakeMusicBee
         {
@@ -121,6 +123,9 @@ namespace MusicBeeRemote.Core.Tests.Ffi
 
             private static readonly Regex QueryCall =
                 new Regex(@"^(Library|NowPlayingList|Playlist|Podcasts)_Query(?!SimilarArtists)");
+
+            private static readonly Regex ChangeCall = new Regex(
+                @"^((NowPlayingList|Playlist)_(?!Query|Get|Is)|Library_(SetFileTag|CommitTagsToFile|SetArtworkEx|AddFileToLibrary)$)");
 
             private int _calls;
 
@@ -135,7 +140,7 @@ namespace MusicBeeRemote.Core.Tests.Ffi
 
             public Plugin.MusicBeeApiInterface Api { get; }
 
-            public List<string> CursorCalls { get; } = new List<string>();
+            public List<string> SerialCalls { get; } = new List<string>();
 
             private Delegate Answering(string name, Type delegateType)
             {
@@ -158,9 +163,11 @@ namespace MusicBeeRemote.Core.Tests.Ffi
                     throw new InvalidOperationException("runaway loop calling " + name);
                 if (QueryCall.IsMatch(name))
                 {
-                    CursorCalls.Add(name);
+                    SerialCalls.Add(name);
                     return Default(returns);
                 }
+                if (ChangeCall.IsMatch(name))
+                    SerialCalls.Add(name);
                 if (returns == typeof(bool))
                     return true;
                 if (returns == typeof(string))

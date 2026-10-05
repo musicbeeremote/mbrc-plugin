@@ -5,7 +5,7 @@ namespace MusicBeePlugin.Ffi
 {
     /// <summary>
     ///     A query's result, built while the call is in MusicBee and packed after
-    ///     it, so the cursor lock is not held while MessagePack encodes it.
+    ///     it, so the serial lock is not held while MessagePack encodes it.
     /// </summary>
     public sealed class QueryReply
     {
@@ -21,13 +21,13 @@ namespace MusicBeePlugin.Ffi
         /// </summary>
         /// <remarks>
         ///     A lazy sequence is refused: enumerating it during the pack would walk
-        ///     a query cursor after the cursor lock was released.
+        ///     a query cursor after the serial lock was released.
         /// </remarks>
         public static QueryReply Of<T>(T value)
         {
             if (value is IEnumerable && !(value is ICollection) && !(value is string))
                 throw new InvalidOperationException(
-                    "A query result must be complete before the cursor lock is released, not a lazy " + value.GetType());
+                    "A query result must be complete before the serial lock is released, not a lazy " + value.GetType());
             return new QueryReply(() => Msgpack.Serialize(value));
         }
 

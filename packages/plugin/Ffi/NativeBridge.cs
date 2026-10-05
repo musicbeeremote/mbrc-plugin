@@ -84,8 +84,8 @@ namespace MusicBeePlugin.Ffi
         private readonly CommandHandlers _commands;
         private readonly IPluginLogger _logger;
 
-        // Taken only by the calls HostCursor names; MusicBee's query cursors are process-global.
-        private readonly object _cursorLock = new object();
+        // Taken only by the calls SerialHostCalls names, which says why.
+        private readonly object _serialLock = new object();
         private readonly HostCallStats _callStats = new HostCallStats(Stopwatch.Frequency);
 
         // Pinned so the GC cannot collect them while Rust holds their pointers.
@@ -690,7 +690,7 @@ namespace MusicBeePlugin.Ffi
             {
                 var p = CopyParams(paramsBuf, paramsLen);
                 long asked = Stopwatch.GetTimestamp(), acquired, done;
-                var reply = CallHost(HostCursor.Runs((QueryType)queryType),
+                var reply = CallHost(SerialHostCalls.Includes((QueryType)queryType),
                     () => _queries.Handle(queryType, p), out acquired, out done);
                 if (reply == null)
                 {
@@ -721,7 +721,7 @@ namespace MusicBeePlugin.Ffi
             {
                 var p = CopyParams(paramsBuf, paramsLen);
                 long asked = Stopwatch.GetTimestamp(), acquired, done;
-                var ok = CallHost(HostCursor.Runs((CommandType)commandType),
+                var ok = CallHost(SerialHostCalls.Includes((CommandType)commandType),
                     () => _commands.Handle(commandType, p), out acquired, out done);
                 RecordCall(((CommandType)commandType).ToString(),
                     acquired - asked, done - acquired, 0, done);
@@ -734,17 +734,17 @@ namespace MusicBeePlugin.Ffi
             }
         }
 
-        /// <summary>Runs one host call, behind the cursor lock when it runs a query cursor.</summary>
-        private T CallHost<T>(bool runsCursor, Func<T> call, out long started, out long done)
+        /// <summary>Runs one host call, behind the serial lock when it is one of SerialHostCalls.</summary>
+        private T CallHost<T>(bool serial, Func<T> call, out long started, out long done)
         {
-            if (!runsCursor)
+            if (!serial)
             {
                 started = Stopwatch.GetTimestamp();
                 var result = call();
                 done = Stopwatch.GetTimestamp();
                 return result;
             }
-            lock (_cursorLock)
+            lock (_serialLock)
             {
                 started = Stopwatch.GetTimestamp();
                 var result = call();

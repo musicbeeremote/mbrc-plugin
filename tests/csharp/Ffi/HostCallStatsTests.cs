@@ -20,7 +20,7 @@ namespace MusicBeeRemote.Core.Tests.Ffi
             string slow, summary;
             stats.Record("LibraryTrackTags", 40 * Ms, 250 * Ms, 7 * Ms, 0, out slow, out summary);
 
-            slow.Should().Be("host call: LibraryTrackTags took 250ms after waiting 40ms for the cursor, packed in 7ms");
+            slow.Should().Be("host call: LibraryTrackTags took 250ms after waiting 40ms for the serial lock, packed in 7ms");
             summary.Should().BeNull();
         }
 

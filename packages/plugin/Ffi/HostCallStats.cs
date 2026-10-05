@@ -7,7 +7,7 @@ using System.Text;
 namespace MusicBeePlugin.Ffi
 {
     /// <summary>
-    ///     How long each FFI call waited for the query cursor, spent in MusicBee,
+    ///     How long each FFI call waited for the serial lock, spent in MusicBee,
     ///     and then spent packing its reply.
     /// </summary>
     /// <remarks>
@@ -48,7 +48,7 @@ namespace MusicBeePlugin.Ffi
 
             if (callMs >= SlowCallMs)
                 slow = string.Format(CultureInfo.InvariantCulture,
-                    "host call: {0} took {1:F0}ms after waiting {2:F0}ms for the cursor, packed in {3:F0}ms",
+                    "host call: {0} took {1:F0}ms after waiting {2:F0}ms for the serial lock, packed in {3:F0}ms",
                     kind, callMs, waitMs, packMs);
 
             lock (_sync)

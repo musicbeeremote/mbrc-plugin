@@ -14,7 +14,7 @@ namespace MusicBeePlugin.Ffi
     ///     (a <see cref="QueryType"/> id + MessagePack params) to a provider call
     ///     and builds the canonical DTO reply. FFI-free (works with byte[]), so it
     ///     unit-tests against mock providers with no P/Invoke. The caller
-    ///     (<see cref="NativeBridge"/>) serializes the kinds <see cref="HostCursor"/> names.
+    ///     (<see cref="NativeBridge"/>) serializes the kinds <see cref="SerialHostCalls"/> names.
     /// </summary>
     internal sealed class QueryHandlers
     {
