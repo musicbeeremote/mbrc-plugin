@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Resources;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
@@ -29,3 +30,5 @@ using System.Runtime.InteropServices;
 
 // Specify the neutral language for resources
 [assembly: NeutralResourcesLanguage("en")]
+
+[assembly: InternalsVisibleTo("MusicBeeRemote.Core.Tests")]

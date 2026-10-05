@@ -14,7 +14,7 @@ namespace MusicBeePlugin.Ffi
     ///     (a <see cref="QueryType"/> id + MessagePack params) to a provider call
     ///     and builds the canonical DTO reply. FFI-free (works with byte[]), so it
     ///     unit-tests against mock providers with no P/Invoke. The caller
-    ///     (<see cref="NativeBridge"/>) serializes access under the API lock.
+    ///     (<see cref="NativeBridge"/>) serializes the kinds <see cref="HostCursor"/> names.
     /// </summary>
     internal sealed class QueryHandlers
     {
@@ -42,8 +42,8 @@ namespace MusicBeePlugin.Ffi
         }
 
         /// <summary>
-        ///     Serve a query. Returns the result to pack once the API lock is
-        ///     released, or null if the query type is unknown.
+        ///     Serve a query. Returns the result to pack once the call is out of
+        ///     MusicBee, or null if the query type is unknown.
         /// </summary>
         public QueryReply Handle(int queryType, byte[] p)
         {

@@ -8,7 +8,7 @@ using Xunit;
 namespace MusicBeeRemote.Core.Tests.Ffi
 {
     /// <summary>
-    ///     A reply is packed after the API lock is released, so it must already
+    ///     A reply is packed after the cursor lock is released, so it must already
     ///     hold its data rather than a query still to run.
     /// </summary>
     public class QueryReplyTests

@@ -15,7 +15,7 @@ namespace MusicBeePlugin.Ffi
     ///     request (a <see cref="CommandType"/> id + MessagePack params) to a
     ///     provider mutation. One-way (returns success only). FFI-free, so it
     ///     unit-tests against mock providers. The caller (<see cref="NativeBridge"/>)
-    ///     serializes access under the API lock.
+    ///     serializes the kinds <see cref="HostCursor"/> names.
     /// </summary>
     internal sealed class CommandHandlers
     {

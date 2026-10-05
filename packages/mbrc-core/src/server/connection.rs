@@ -412,8 +412,8 @@ impl Conn {
     /// outright, an unroutable first frame forces, and a departed writer task
     /// forces too.
     ///
-    /// Run under `block_in_place`: handlers call MusicBee and may wait on its
-    /// API lock, and the runtime moves this worker's other tasks off meanwhile.
+    /// Run under `block_in_place`: handlers call MusicBee and block for as long
+    /// as it takes, and the runtime moves this worker's other tasks off meanwhile.
     fn drain_frames(
         &self,
         proto: &mut Proto,

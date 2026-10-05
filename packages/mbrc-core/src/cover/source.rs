@@ -1,11 +1,11 @@
 //! Reading album artwork in the core, from where MusicBee says it is (#232).
 //!
 //! MusicBee answers where an album's picture is almost for free, while handing
-//! over its bytes takes tens of milliseconds an album, one at a time under its
-//! API lock. So the cover build asks where, and its workers read the picture
-//! themselves: a linked image straight from its file, an embedded one from the
-//! track's tags. Anything they cannot read goes back to MusicBee for the bytes,
-//! so no cover ends up worse than before.
+//! over its bytes takes tens of milliseconds an album. So the cover build asks
+//! where, and its workers read the picture themselves: a linked image straight
+//! from its file, an embedded one from the track's tags. Anything they cannot
+//! read goes back to MusicBee for the bytes, so no cover ends up worse than
+//! before.
 
 use std::path::{Path, PathBuf};
 

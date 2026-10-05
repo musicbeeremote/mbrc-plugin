@@ -79,7 +79,7 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
 
 /// One poll, broadcast to both protocols; nothing while no client listens.
 ///
-/// Run under `block_in_place`: it calls MusicBee, which may wait on its API lock.
+/// Run under `block_in_place`: it calls MusicBee and blocks for as long as it takes.
 fn poll_and_broadcast(core: &Core, cached: &mut Cached, emit_position: bool) {
     if core.broadcaster.client_count() == 0 && core.v6_broadcaster.client_count() == 0 {
         return;

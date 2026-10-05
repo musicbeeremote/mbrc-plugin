@@ -84,10 +84,9 @@ namespace MusicBeePlugin.Ffi
         private readonly CommandHandlers _commands;
         private readonly IPluginLogger _logger;
 
-        // MusicBee's API is not thread-safe and its Library_Query* cursors are
-        // process-global; serialize every provider access under one lock.
-        private readonly object _apiLock = new object();
-        private readonly ApiLockStats _lockStats = new ApiLockStats(Stopwatch.Frequency);
+        // Taken only by the calls HostCursor names; MusicBee's query cursors are process-global.
+        private readonly object _cursorLock = new object();
+        private readonly HostCallStats _callStats = new HostCallStats(Stopwatch.Frequency);
 
         // Pinned so the GC cannot collect them while Rust holds their pointers.
         private QueryCallbackDelegate _queryDataCallback;
@@ -690,15 +689,9 @@ namespace MusicBeePlugin.Ffi
             try
             {
                 var p = CopyParams(paramsBuf, paramsLen);
-                QueryReply reply;
-                long asked, acquired, done;
-                asked = Stopwatch.GetTimestamp();
-                lock (_apiLock)
-                {
-                    acquired = Stopwatch.GetTimestamp();
-                    reply = _queries.Handle(queryType, p);
-                    done = Stopwatch.GetTimestamp();
-                }
+                long asked = Stopwatch.GetTimestamp(), acquired, done;
+                var reply = CallHost(HostCursor.Runs((QueryType)queryType),
+                    () => _queries.Handle(queryType, p), out acquired, out done);
                 if (reply == null)
                 {
                     _logger.Warn("Unknown query type {0}", queryType);
@@ -706,7 +699,7 @@ namespace MusicBeePlugin.Ffi
                 }
                 var result = reply.Pack();
                 var packed = Stopwatch.GetTimestamp();
-                RecordLockUse(((QueryType)queryType).ToString(),
+                RecordCall(((QueryType)queryType).ToString(),
                     acquired - asked, done - acquired, packed - done, packed);
 
                 outResultBuf = Marshal.AllocHGlobal(result.Length);
@@ -727,16 +720,10 @@ namespace MusicBeePlugin.Ffi
             try
             {
                 var p = CopyParams(paramsBuf, paramsLen);
-                bool ok;
-                long asked, acquired, done;
-                asked = Stopwatch.GetTimestamp();
-                lock (_apiLock)
-                {
-                    acquired = Stopwatch.GetTimestamp();
-                    ok = _commands.Handle(commandType, p);
-                    done = Stopwatch.GetTimestamp();
-                }
-                RecordLockUse(((CommandType)commandType).ToString(),
+                long asked = Stopwatch.GetTimestamp(), acquired, done;
+                var ok = CallHost(HostCursor.Runs((CommandType)commandType),
+                    () => _commands.Handle(commandType, p), out acquired, out done);
+                RecordCall(((CommandType)commandType).ToString(),
                     acquired - asked, done - acquired, 0, done);
                 return ok ? 0 : 1;
             }
@@ -747,10 +734,29 @@ namespace MusicBeePlugin.Ffi
             }
         }
 
-        private void RecordLockUse(string kind, long waitTicks, long holdTicks, long packTicks, long nowTicks)
+        /// <summary>Runs one host call, behind the cursor lock when it runs a query cursor.</summary>
+        private T CallHost<T>(bool runsCursor, Func<T> call, out long started, out long done)
+        {
+            if (!runsCursor)
+            {
+                started = Stopwatch.GetTimestamp();
+                var result = call();
+                done = Stopwatch.GetTimestamp();
+                return result;
+            }
+            lock (_cursorLock)
+            {
+                started = Stopwatch.GetTimestamp();
+                var result = call();
+                done = Stopwatch.GetTimestamp();
+                return result;
+            }
+        }
+
+        private void RecordCall(string kind, long waitTicks, long callTicks, long packTicks, long nowTicks)
         {
             string slow, summary;
-            _lockStats.Record(kind, waitTicks, holdTicks, packTicks, nowTicks, out slow, out summary);
+            _callStats.Record(kind, waitTicks, callTicks, packTicks, nowTicks, out slow, out summary);
             if (slow != null) _logger.Debug(slow);
             if (summary != null) _logger.Debug(summary);
         }

@@ -34,7 +34,7 @@ const BACKFILL_BATCH: usize = 500;
 ///
 /// A batch of 500 measures around 200ms, so a burst fills about 5,000 tracks.
 const BACKFILL_BUDGET: Duration = Duration::from_secs(2);
-/// The rest between backfill bursts, so other MusicBee calls get the API lock.
+/// The rest between backfill bursts, so reading tags does not keep MusicBee busy.
 const BACKFILL_PAUSE: Duration = Duration::from_secs(5);
 /// After a nudge, wait this long (draining further nudges) before scanning, so a
 /// burst of per-file notifications coalesces into one pass.

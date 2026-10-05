@@ -206,8 +206,8 @@ pub fn output_switch(data: &Value, ctx: &Ctx) -> HandlerResult {
 
 /// Switches the output to `device` and reads the devices back.
 ///
-/// MusicBee re-opens the audio device on every switch, which held its API lock
-/// for over 800ms in a measured run, so a switch to the device already active
+/// MusicBee re-opens the audio device on every switch, which took over 800ms
+/// in a measured run, so a switch to the device already active
 /// is answered without asking. An empty name only reads.
 ///
 /// # Errors

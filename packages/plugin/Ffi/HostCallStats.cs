@@ -7,17 +7,18 @@ using System.Text;
 namespace MusicBeePlugin.Ffi
 {
     /// <summary>
-    ///     How long each FFI call waited for the MusicBee API lock, held it, and
-    ///     then spent packing its reply after releasing it.
+    ///     How long each FFI call waited for the query cursor, spent in MusicBee,
+    ///     and then spent packing its reply.
     /// </summary>
     /// <remarks>
-    ///     Recorded after the API lock is released, so it has a lock of its own.
-    ///     Returns the lines to log instead of logging them.
+    ///     Calls run concurrently, so it has a lock of its own and the time in
+    ///     MusicBee summed over a window can pass 100%. Returns the lines to log
+    ///     instead of logging them.
     /// </remarks>
-    public sealed class ApiLockStats
+    public sealed class HostCallStats
     {
-        /// <summary>A single hold at least this long is logged on its own.</summary>
-        public const double SlowHoldMs = 100;
+        /// <summary>A single call at least this long is logged on its own.</summary>
+        public const double SlowCallMs = 100;
 
         /// <summary>How often the per-kind summary is logged while calls keep coming.</summary>
         public static readonly TimeSpan SummaryEvery = TimeSpan.FromSeconds(60);
@@ -27,28 +28,28 @@ namespace MusicBeePlugin.Ffi
         private readonly object _sync = new object();
         private long _windowStart = -1;
 
-        public ApiLockStats(long ticksPerSecond)
+        public HostCallStats(long ticksPerSecond)
         {
             _ticksPerMs = ticksPerSecond / 1000.0;
         }
 
         /// <summary>
-        ///     Records one call. <paramref name="slow" /> is set when this hold was
+        ///     Records one call. <paramref name="slow" /> is set when this call was
         ///     long, <paramref name="summary" /> when a summary window closed.
         /// </summary>
-        public void Record(string kind, long waitTicks, long holdTicks, long packTicks, long nowTicks,
+        public void Record(string kind, long waitTicks, long callTicks, long packTicks, long nowTicks,
             out string slow, out string summary)
         {
             slow = null;
             summary = null;
             var waitMs = waitTicks / _ticksPerMs;
-            var holdMs = holdTicks / _ticksPerMs;
+            var callMs = callTicks / _ticksPerMs;
             var packMs = packTicks / _ticksPerMs;
 
-            if (holdMs >= SlowHoldMs)
+            if (callMs >= SlowCallMs)
                 slow = string.Format(CultureInfo.InvariantCulture,
-                    "api lock: {0} held {1:F0}ms after waiting {2:F0}ms, packed in {3:F0}ms",
-                    kind, holdMs, waitMs, packMs);
+                    "host call: {0} took {1:F0}ms after waiting {2:F0}ms for the cursor, packed in {3:F0}ms",
+                    kind, callMs, waitMs, packMs);
 
             lock (_sync)
             {
@@ -58,7 +59,7 @@ namespace MusicBeePlugin.Ffi
                     entry = new Entry();
                     _entries[kind] = entry;
                 }
-                entry.Add(waitMs, holdMs, packMs);
+                entry.Add(waitMs, callMs, packMs);
 
                 if (_windowStart < 0)
                 {
@@ -76,16 +77,17 @@ namespace MusicBeePlugin.Ffi
 
         private string Summarize(double windowMs)
         {
-            var heldMs = _entries.Values.Sum(e => e.HoldTotal);
+            var inHostMs = _entries.Values.Sum(e => e.CallTotal);
             var text = new StringBuilder();
             text.AppendFormat(CultureInfo.InvariantCulture,
-                "api lock over {0:F0}s: held {1:F0}ms ({2:F1}%)", windowMs / 1000, heldMs, heldMs * 100 / windowMs);
-            foreach (var pair in _entries.OrderByDescending(p => p.Value.HoldTotal))
+                "host calls over {0:F0}s: {1:F0}ms in MusicBee ({2:F1}%)", windowMs / 1000, inHostMs,
+                inHostMs * 100 / windowMs);
+            foreach (var pair in _entries.OrderByDescending(p => p.Value.CallTotal))
             {
                 var e = pair.Value;
                 text.AppendFormat(CultureInfo.InvariantCulture,
-                    "; {0} n={1} hold avg {2:F1} max {3:F0} wait avg {4:F1} max {5:F0} pack avg {6:F1} max {7:F0}",
-                    pair.Key, e.Count, e.HoldTotal / e.Count, e.HoldMax, e.WaitTotal / e.Count, e.WaitMax,
+                    "; {0} n={1} call avg {2:F1} max {3:F0} wait avg {4:F1} max {5:F0} pack avg {6:F1} max {7:F0}",
+                    pair.Key, e.Count, e.CallTotal / e.Count, e.CallMax, e.WaitTotal / e.Count, e.WaitMax,
                     e.PackTotal / e.Count, e.PackMax);
             }
             return text.ToString();
@@ -94,21 +96,21 @@ namespace MusicBeePlugin.Ffi
         private sealed class Entry
         {
             public int Count;
-            public double HoldMax;
-            public double HoldTotal;
+            public double CallMax;
+            public double CallTotal;
             public double PackMax;
             public double PackTotal;
             public double WaitMax;
             public double WaitTotal;
 
-            public void Add(double waitMs, double holdMs, double packMs)
+            public void Add(double waitMs, double callMs, double packMs)
             {
                 Count++;
                 WaitTotal += waitMs;
-                HoldTotal += holdMs;
+                CallTotal += callMs;
                 PackTotal += packMs;
                 if (waitMs > WaitMax) WaitMax = waitMs;
-                if (holdMs > HoldMax) HoldMax = holdMs;
+                if (callMs > CallMax) CallMax = callMs;
                 if (packMs > PackMax) PackMax = packMs;
             }
         }
