@@ -1,7 +1,7 @@
 //! `mbrc` - headless CLI over the shared MusicBee Remote crates.
 //!
 //! Subcommands: `discover`, `inspect`, `send`, `monitor`, `capture`, `trim`,
-//! `replay`, `fuzz`.
+//! `replay`, `fuzz`, `conform`, `stress`.
 
 #![forbid(unsafe_code)]
 
@@ -19,6 +19,7 @@ mod replay;
 mod rng;
 mod send;
 mod serve;
+mod stress;
 mod trim;
 
 use args::flag_value;
@@ -32,6 +33,7 @@ fn main() -> ExitCode {
         Some("send") => send::run(rest),
         Some("monitor") => monitor::run(rest),
         Some("conform") => conform::run(rest),
+        Some("stress") => stress::run(rest),
         Some("capture") => capture::run(rest),
         Some("serve") => serve::run(rest),
         Some("trim") => trim::run(rest),
@@ -126,6 +128,9 @@ fn print_usage() {
          \x20          [--concurrency N] [--duration D]   D = inf|<n>[s|m|h]\n\
          \x20          [--page-size N] [--out FILE]\n\
          \x20 conform  [--host H] [--port P]             V6 protocol conformance harness:\n\
-         \x20          [--allow-writes] [--wait-ms N]     capability-driven invariant checks\n"
+         \x20          [--allow-writes] [--wait-ms N]     capability-driven invariant checks\n\
+         \x20 stress   [--host H] [--port P]             concurrent V6 reads, cursor replies\n\
+         \x20          [--connections N] [--duration D]   held to a baseline; latency per op\n\
+         \x20                                           (read-only, D default 30s)\n"
     );
 }

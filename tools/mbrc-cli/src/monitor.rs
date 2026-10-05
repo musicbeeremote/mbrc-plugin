@@ -685,7 +685,7 @@ async fn summary_loop(cfg: Arc<Cfg>, stats: Arc<Stats>, sink: Arc<Sink>, until: 
 
 // ── Entry ──
 
-fn parse_duration(s: &str) -> Option<Option<Duration>> {
+pub(crate) fn parse_duration(s: &str) -> Option<Option<Duration>> {
     let s = s.trim();
     if s.eq_ignore_ascii_case("inf") || s.eq_ignore_ascii_case("infinite") {
         return Some(None);

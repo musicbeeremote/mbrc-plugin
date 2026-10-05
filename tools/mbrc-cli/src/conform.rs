@@ -1237,7 +1237,7 @@ fn expect(cond: bool, msg: &str) -> Result<(), String> {
 
 // ── the V6 client ────────────────────────────────────────────────────────────
 
-struct V6Client {
+pub(crate) struct V6Client {
     writer: TcpStream,
     reader: BufReader<TcpStream>,
     next_id: u64,
@@ -1274,7 +1274,7 @@ impl V6Client {
     ///
     /// Unlike [`V6Client::connect`] a refusal is not an error here, because the
     /// token checks are about which handshakes the server turns away.
-    fn open(
+    pub(crate) fn open(
         host: &str,
         port: u16,
         timeout: Duration,
@@ -1352,7 +1352,11 @@ impl V6Client {
     }
 
     /// Send + await one op.
-    fn request(&mut self, op: &str, data: Value) -> Result<v6::IncomingResponse, String> {
+    pub(crate) fn request(
+        &mut self,
+        op: &str,
+        data: Value,
+    ) -> Result<v6::IncomingResponse, String> {
         let id = self.send(op, data);
         self.recv(id)
     }
@@ -1368,7 +1372,7 @@ impl V6Client {
 
     /// Drop buffered events (call before triggering a change, so a stale event
     /// can't be mistaken for the one under test).
-    fn clear_events(&mut self) {
+    pub(crate) fn clear_events(&mut self) {
         self.events.clear();
     }
 
@@ -1486,7 +1490,7 @@ impl V4Client {
 
 /// Convenience accessors over a parsed response. (`parse_response` already
 /// enforced the envelope: `kind == "response"`, an `id`, and `data` XOR `error`.)
-trait RespExt {
+pub(crate) trait RespExt {
     fn ok(&self) -> Result<Value, String>;
     fn err_code(&self) -> Result<String, String>;
     fn err_field(&self) -> Result<Option<String>, String>;
