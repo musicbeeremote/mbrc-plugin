@@ -56,7 +56,7 @@ pub fn run(args: &[String]) -> ExitCode {
     };
     let timeout = Duration::from_secs(30);
 
-    let mut setup = match connect(&host, port as u16, timeout, "mbrc-stress") {
+    let mut setup = match connect(&host, port, timeout, "mbrc-stress") {
         Ok(c) => c,
         Err(e) => {
             eprintln!("connect {host}:{port} failed: {e}");
@@ -91,12 +91,12 @@ pub fn run(args: &[String]) -> ExitCode {
     let failed_connections = Mutex::new(Vec::new());
     let deadline = Instant::now() + duration;
     std::thread::scope(|s| {
-        for worker in 0..connections as usize {
+        for worker in 0..usize::from(connections) {
             let (host, mix, before, stats, failed) =
                 (&host, &mix, &before, &stats, &failed_connections);
             s.spawn(move || {
                 let tag = format!("mbrc-stress-{worker}");
-                let mut client = match connect(host, port as u16, timeout, &tag) {
+                let mut client = match connect(host, port, timeout, &tag) {
                     Ok(c) => c,
                     Err(e) => {
                         failed
@@ -113,8 +113,8 @@ pub fn run(args: &[String]) -> ExitCode {
 
     // The setup connection sat idle through the run, long enough to be dropped.
     drop(setup);
-    let closing = connect(&host, port as u16, timeout, "mbrc-stress")
-        .and_then(|mut c| baseline(&mut c, &mix));
+    let closing =
+        connect(&host, port, timeout, "mbrc-stress").and_then(|mut c| baseline(&mut c, &mix));
     let moved = match closing {
         Ok(after) => after != before,
         Err(e) => {
@@ -166,12 +166,14 @@ fn drive(
     }
 }
 
-fn number(args: &[String], flag: &str, default: u64) -> Option<u64> {
-    match flag_value(args, flag).map(|v| v.parse::<u64>()) {
+/// A positive `u16` flag, so a port or connection count out of range is refused
+/// rather than wrapped.
+fn number(args: &[String], flag: &str, default: u16) -> Option<u16> {
+    match flag_value(args, flag).map(|v| v.parse::<u16>()) {
         None => Some(default),
         Some(Ok(n)) if n > 0 => Some(n),
         Some(_) => {
-            eprintln!("{flag} must be a positive number");
+            eprintln!("{flag} must be a number from 1 to {}", u16::MAX);
             None
         }
     }
