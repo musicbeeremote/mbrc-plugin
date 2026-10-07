@@ -14,7 +14,7 @@ use mbrc_wire::v6::ErrorCode;
 use super::{OpResult, V6Error, i32_saturating, internal, opt_bool, req_i64, req_str, track};
 use crate::cover::store::CoverStore;
 use crate::nowplaying::NowPlayingCache;
-use crate::protocol::messages::{LastfmStatus, TrackDetails};
+use crate::protocol::messages::{LastfmStatus, TrackDetails, TrackInfo, TrackTags};
 use crate::providers::Providers;
 
 /// The op names this domain serves (advertised in the handshake capabilities).
@@ -63,23 +63,24 @@ fn state(
     now_playing: Option<&NowPlayingCache>,
     store: Option<&CoverStore>,
 ) -> OpResult {
-    let (path, lfm) = match now_playing {
-        Some(c) => (c.track_info().path, c.lfm()),
+    let (playing, lfm) = match now_playing {
+        Some(c) => (c.track_info(), c.lfm()),
         None => (
-            p.track_info().map_err(internal)?.path,
+            p.track_info().map_err(internal)?,
             p.lfm_rating().map_err(internal)?,
         ),
     };
-    let mut track = if path.is_empty() {
+    let mut track = if playing.path.is_empty() {
         Value::Null
     } else {
         match p
-            .tracks_detailed_for_paths(vec![path])
+            .tracks_detailed_for_paths(vec![playing.path.clone()])
             .map_err(internal)?
             .into_iter()
             .next()
         {
-            Some(tags) => {
+            Some(mut tags) => {
+                take_playing_tags(&mut tags, &playing);
                 let artwork = now_playing.map(|c| c.cover().cover).unwrap_or_default();
                 let hash =
                     track::playing_cover_hash(&track::Covers::new(store, p), &tags, &artwork);
@@ -106,6 +107,22 @@ fn state(
         "duration_ms": pos.total,
         "lfm_status": lfm_str(lfm),
     }))
+}
+
+/// Lays what the player reports for the playing track over its library entry.
+///
+/// A stream's library entry is the station; the song playing on it is known
+/// only to the player. An empty player field keeps the library's value.
+fn take_playing_tags(tags: &mut TrackTags, playing: &TrackInfo) {
+    for (field, value) in [
+        (&mut tags.artist, &playing.artist),
+        (&mut tags.title, &playing.title),
+        (&mut tags.album, &playing.album),
+    ] {
+        if !value.is_empty() {
+            field.clone_from(value);
+        }
+    }
 }
 
 /// Extended metadata not carried on the canonical track. Numeric fields parse to
@@ -390,7 +407,7 @@ fn is_metadata_tag(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::messages::{Lyrics, PlaybackPositionResponse, TrackInfo, TrackTags};
+    use crate::protocol::messages::{Lyrics, PlaybackPositionResponse};
     use crate::providers::MockProviders;
 
     fn run(op: &str, data: Value, m: &MockProviders) -> OpResult {
@@ -517,6 +534,33 @@ mod tests {
         )
         .unwrap();
         assert!(out["list_order"].is_null());
+    }
+
+    /// A station's library entry names the station; the song comes from the player.
+    #[test]
+    fn a_stream_shows_the_song_playing_not_the_station() {
+        let station = "http://radio.example/stream.pls";
+        let m = MockProviders {
+            track_info: TrackInfo {
+                path: station.into(),
+                artist: "AC/DC".into(),
+                title: "You Shook Me All Night Long".into(),
+                album: "ROCK ANTENNE".into(),
+                ..Default::default()
+            },
+            tracks_detailed: vec![TrackTags {
+                src: station.into(),
+                title: "ROCK ANTENNE".into(),
+                genre: "Rock".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let out = run("now_playing_state", json!({}), &m).unwrap();
+        assert_eq!(out["track"]["artist"], "AC/DC");
+        assert_eq!(out["track"]["title"], "You Shook Me All Night Long");
+        assert_eq!(out["track"]["album"], "ROCK ANTENNE");
+        assert_eq!(out["track"]["genre"], "Rock");
     }
 
     #[test]
