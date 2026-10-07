@@ -54,6 +54,17 @@ fn episode() -> PodcastEpisode {
     }
 }
 
+/// The fixture's value for a MusicBee field id: two genres, a custom score and
+/// two instruments, every other field empty.
+fn fixture_field(field: i32) -> String {
+    match field {
+        59 => "Rock; Jazz".into(),
+        46 => "8".into(),
+        47 => "Bass; Cello".into(),
+        _ => String::new(),
+    }
+}
+
 impl Providers for FixtureProviders {
     fn play(&self) -> Result<(), String> {
         Ok(())
@@ -418,6 +429,48 @@ impl Providers for FixtureProviders {
     /// One populated track per requested path, carrying the raw tag values the
     /// core parses: a year inside a full date, an `m:ss` duration, a rating, and
     /// an ISO `date_added`.
+    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String> {
+        Ok(fields
+            .iter()
+            .map(|f| match f {
+                46 => "Energy".into(),
+                47 => "Instruments".into(),
+                _ => String::new(),
+            })
+            .collect())
+    }
+    fn tags_for_paths(
+        &self,
+        fields: Vec<i32>,
+        paths: Vec<String>,
+    ) -> Result<Vec<mbrc_core::ffi::dtos::PathTags>, String> {
+        Ok(paths
+            .into_iter()
+            .map(|path| mbrc_core::ffi::dtos::PathTags {
+                path,
+                values: fields.iter().map(|f| fixture_field(*f)).collect(),
+            })
+            .collect())
+    }
+    fn now_playing_tags(&self, fields: Vec<i32>) -> Result<mbrc_core::ffi::dtos::PathTags, String> {
+        Ok(mbrc_core::ffi::dtos::PathTags {
+            path: r"C:\Music\s.mp3".into(),
+            values: fields.iter().map(|f| fixture_field(*f)).collect(),
+        })
+    }
+    fn write_now_playing_tag(
+        &self,
+        path: String,
+        _field: i32,
+        value: String,
+    ) -> Result<mbrc_core::ffi::dtos::TagWriteResult, String> {
+        let playing = path == r"C:\Music\s.mp3";
+        Ok(mbrc_core::ffi::dtos::TagWriteResult {
+            outcome: if playing { "written" } else { "stale_track" }.into(),
+            value: if playing { value } else { String::new() },
+            reason: String::new(),
+        })
+    }
     fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
         Ok(paths
             .into_iter()

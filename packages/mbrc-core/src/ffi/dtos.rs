@@ -155,6 +155,49 @@ pub struct PathParams {
     pub path: String,
 }
 
+/// `TagFieldNames` and `NowPlayingTags`: MusicBee field ids to read.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FieldsParams {
+    pub fields: Vec<i32>,
+}
+
+/// `TagsForPaths`: the same fields of every path, one host call per path.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TagsForPathsParams {
+    pub fields: Vec<i32>,
+    pub paths: Vec<String>,
+}
+
+/// One file's values for the fields asked for, in the order they were asked.
+///
+/// For `NowPlayingTags` the path is the playing file's, empty when nothing
+/// plays.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PathTags {
+    pub path: String,
+    pub values: Vec<String>,
+}
+
+/// `NowPlayingTagWrite`: set one field of the playing file, if it is `path`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TagWriteParams {
+    pub path: String,
+    pub field: i32,
+    pub value: String,
+}
+
+/// What a `NowPlayingTagWrite` did.
+///
+/// `outcome` is `written`, `stale_track` (another file is playing, nothing
+/// written) or `failed` with the host's `reason`. `value` is the field read
+/// back after the commit.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagWriteResult {
+    pub outcome: String,
+    pub value: String,
+    pub reason: String,
+}
+
 /// Where a track's artwork is (`ArtworkLocationForPath`), as MusicBee reports it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArtworkLocation {

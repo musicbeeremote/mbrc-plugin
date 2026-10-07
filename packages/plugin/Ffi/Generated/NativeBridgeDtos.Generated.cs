@@ -353,6 +353,37 @@ namespace MusicBeePlugin.Ffi
         public string path { get; set; }
     }
 
+    public class FieldsParams
+    {
+        public List<int> fields { get; set; }
+    }
+
+    public class TagsForPathsParams
+    {
+        public List<int> fields { get; set; }
+        public List<string> paths { get; set; }
+    }
+
+    public class PathTags
+    {
+        public string path { get; set; }
+        public List<string> values { get; set; }
+    }
+
+    public class TagWriteParams
+    {
+        public string path { get; set; }
+        public int field { get; set; }
+        public string value { get; set; }
+    }
+
+    public class TagWriteResult
+    {
+        public string outcome { get; set; }
+        public string value { get; set; }
+        public string reason { get; set; }
+    }
+
     public class ArtworkLocation
     {
         public int location { get; set; }

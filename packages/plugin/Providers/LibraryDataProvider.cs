@@ -480,6 +480,35 @@ namespace MusicBeePlugin.Providers
 
         #region Library Cache
 
+        /// <summary>The names the user gave the given fields, in order.</summary>
+        public List<string> GetFieldNames(List<int> fields)
+        {
+            var names = new List<string>(fields?.Count ?? 0);
+            if (fields == null)
+                return names;
+            foreach (var field in fields)
+                names.Add(_api.Setting_GetFieldName((Plugin.MetaDataType)field) ?? string.Empty);
+            return names;
+        }
+
+        /// <summary>The same fields of each path, read with one call per path.</summary>
+        public List<PathTags> GetTagsForPaths(List<int> fields, IEnumerable<string> paths)
+        {
+            var types = (fields ?? new List<int>()).Select(f => (Plugin.MetaDataType)f).ToArray();
+            var result = new List<PathTags>();
+            if (paths == null)
+                return result;
+            foreach (var path in paths)
+            {
+                var success = _api.Library_GetFileTags(path, types, out var tags);
+                var values = new List<string>(types.Length);
+                for (var i = 0; i < types.Length; i++)
+                    values.Add(success && tags != null && tags.Length > i ? tags[i] ?? string.Empty : string.Empty);
+                result.Add(new PathTags { path = path, values = values });
+            }
+            return result;
+        }
+
         /// <summary>
         ///     Every track path in the library, in the same browse order as
         ///     BrowseTracks. The order is the contract, not a side effect: the

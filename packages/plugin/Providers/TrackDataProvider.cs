@@ -455,6 +455,61 @@ namespace MusicBeePlugin.Providers
             return _api.Library_CommitTagsToFile(fileUrl);
         }
 
+        public PathTags GetNowPlayingTags(List<int> fields)
+        {
+            var path = GetNowPlayingFileUrl() ?? string.Empty;
+            if (path.Length == 0)
+                return new PathTags { path = string.Empty, values = new List<string>() };
+
+            // MusicBee's now-playing tags stay as they were when the track started,
+            // so a file is read through the library, which sees an edit at once.
+            var types = ToMetaDataTypes(fields);
+            var success = _api.Library_GetFileTags(path, types, out var results);
+            if (!success)
+                success = _api.NowPlaying_GetFileTags(types, out results);
+            var values = new List<string>(types.Length);
+            for (var i = 0; i < types.Length; i++)
+                values.Add(SafeGetResult(success, results, i) ?? string.Empty);
+            return new PathTags { path = path, values = values };
+        }
+
+        /// <summary>Sets one field of the playing file, if it is still <paramref name="path" />.</summary>
+        /// <remarks>
+        ///     MusicBee's panels keep showing the old value until they are refreshed, so a
+        ///     write refreshes them once it is committed.
+        /// </remarks>
+        public TagWriteResult WriteNowPlayingTag(string path, int field, string value)
+        {
+            var playing = GetNowPlayingFileUrl() ?? string.Empty;
+            if (string.IsNullOrEmpty(path) || !string.Equals(playing, path, StringComparison.Ordinal))
+                return new TagWriteResult { outcome = "stale_track", value = string.Empty, reason = string.Empty };
+
+            var type = (Plugin.MetaDataType)field;
+            if (!_api.Library_SetFileTag(path, type, value ?? string.Empty))
+                return TagWriteFailed("MusicBee did not accept the value");
+            if (!_api.Library_CommitTagsToFile(path))
+                return TagWriteFailed("MusicBee could not write the file");
+
+            _api.MB_RefreshPanels();
+            return new TagWriteResult
+            {
+                outcome = "written",
+                value = _api.Library_GetFileTag(path, type) ?? string.Empty,
+                reason = string.Empty,
+            };
+        }
+
+        private static TagWriteResult TagWriteFailed(string reason) =>
+            new TagWriteResult { outcome = "failed", value = string.Empty, reason = reason };
+
+        private static Plugin.MetaDataType[] ToMetaDataTypes(List<int> fields)
+        {
+            var types = new Plugin.MetaDataType[fields?.Count ?? 0];
+            for (var i = 0; i < types.Length; i++)
+                types[i] = (Plugin.MetaDataType)fields[i];
+            return types;
+        }
+
         #endregion
 
         #region Helper Methods

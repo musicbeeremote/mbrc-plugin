@@ -16,7 +16,7 @@
 //! a no-op and the cache transparently falls back to the provider.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use redb::{Durability, ReadableTable, ReadableTableMetadata};
@@ -335,6 +335,10 @@ impl TrackFilter<'_> {
 /// Every track's `(genre, artist)`, the part of the tags genre browse reads.
 type GenreRows = Vec<(String, String)>;
 
+/// Every track's values of the tag-editing fields, keyed by MusicBee field id,
+/// in track index order.
+pub type TagColumns = HashMap<i32, Vec<String>>;
+
 /// Drops what was derived from the tags when a write to them returns, so a
 /// reader cannot rebuild it from rows the write has not committed yet.
 struct TagsMoved<'a>(&'a MetadataCache);
@@ -342,6 +346,9 @@ struct TagsMoved<'a>(&'a MetadataCache);
 impl Drop for TagsMoved<'_> {
     fn drop(&mut self) {
         *self.0.genre_rows.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let mut columns = self.0.tag_columns.lock().unwrap_or_else(|e| e.into_inner());
+        self.0.tags_generation.fetch_add(1, Ordering::AcqRel);
+        *columns = None;
     }
 }
 
@@ -352,6 +359,11 @@ pub struct MetadataCache {
     /// Every track's `(genre, artist)`, kept once the tags are complete and
     /// dropped by any write to them, so genre browse decodes no tag rows.
     genre_rows: Mutex<Option<Arc<GenreRows>>>,
+    /// The tag-editing fields of every track, kept once read.
+    tag_columns: Mutex<Option<Arc<TagColumns>>>,
+    /// Moved by every write to the tags, so columns read across a write are
+    /// not kept.
+    tags_generation: AtomicU64,
 }
 
 impl MetadataCache {
@@ -361,6 +373,8 @@ impl MetadataCache {
             db,
             validated: AtomicBool::new(false),
             genre_rows: Mutex::new(None),
+            tag_columns: Mutex::new(None),
+            tags_generation: AtomicU64::new(0),
         }
     }
 
@@ -764,6 +778,37 @@ impl MetadataCache {
                 .then_with(|| a.cmp(b))
         });
         Some(out)
+    }
+
+    /// The tags' generation, moved by every write to them.
+    pub fn tags_generation(&self) -> u64 {
+        self.tags_generation.load(Ordering::Acquire)
+    }
+
+    /// The tag columns kept from an earlier read, if no write has moved the
+    /// tags since.
+    pub fn tag_columns(&self) -> Option<Arc<TagColumns>> {
+        self.tag_columns
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Keeps `columns`, read starting at `generation`, unless the tags have
+    /// moved since: a read that a write overtook would answer with old values.
+    pub fn keep_tag_columns(&self, generation: u64, columns: TagColumns) -> Arc<TagColumns> {
+        let columns = Arc::new(columns);
+        let mut kept = self.tag_columns.lock().unwrap_or_else(|e| e.into_inner());
+        if self.tags_generation() == generation {
+            *kept = Some(columns.clone());
+        }
+        columns
+    }
+
+    /// Drops what was derived from the tags after a write this cache did not
+    /// make itself, such as a tag edit through the host.
+    pub fn forget_derived_tags(&self) {
+        drop(TagsMoved(self));
     }
 
     fn genre_rows(&self) -> Option<Arc<GenreRows>> {

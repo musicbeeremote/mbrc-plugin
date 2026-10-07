@@ -90,6 +90,14 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.LibraryTrackPaths: return Reply(_library.GetAllTrackPaths());
                 case QueryType.LibraryTracksForPaths: return Reply(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
                 case QueryType.LibraryTrackTags: return Reply(_library.GetTrackTags(Msgpack.Deserialize<PathsParams>(p).paths));
+                case QueryType.TagFieldNames: return Reply(_library.GetFieldNames(Msgpack.Deserialize<FieldsParams>(p).fields));
+                case QueryType.TagsForPaths:
+                    var tagsFor = Msgpack.Deserialize<TagsForPathsParams>(p);
+                    return Reply(_library.GetTagsForPaths(tagsFor.fields, tagsFor.paths));
+                case QueryType.NowPlayingTags: return Reply(_track.GetNowPlayingTags(Msgpack.Deserialize<FieldsParams>(p).fields));
+                case QueryType.NowPlayingTagWrite:
+                    var write = Msgpack.Deserialize<TagWriteParams>(p);
+                    return Reply(_track.WriteNowPlayingTag(write.path, write.field, write.value));
                 case QueryType.LibrarySyncDelta: return Reply(BuildSyncDelta(Msgpack.Deserialize<SyncDeltaParams>(p)));
                 default: return null;
             }
