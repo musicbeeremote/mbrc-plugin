@@ -51,7 +51,7 @@ namespace MusicBeePlugin.Providers
             };
 
             var results = new string[fields.Length];
-            var success = _api.NowPlaying_GetFileTags(fields, out results);
+            var success = ReadPlayingTags(GetNowPlayingFileUrl(), fields, out results);
 
             // Raw values only: the V4 empty-field fallbacks (Unknown Artist/Album,
             // title -> file name) live in the Rust V4 wire codec now.
@@ -85,7 +85,7 @@ namespace MusicBeePlugin.Providers
             };
 
             var metadataResults = new string[metadataFields.Length];
-            var metadataSuccess = _api.NowPlaying_GetFileTags(metadataFields, out metadataResults);
+            var metadataSuccess = ReadPlayingTags(GetNowPlayingFileUrl(), metadataFields, out metadataResults);
 
             // Raw values only; the empty-albumArtist -> "Unknown Artist" fallback
             // lives in the Rust V4 wire codec now.
@@ -461,12 +461,8 @@ namespace MusicBeePlugin.Providers
             if (path.Length == 0)
                 return new PathTags { path = string.Empty, values = new List<string>() };
 
-            // MusicBee's now-playing tags stay as they were when the track started,
-            // so a file is read through the library, which sees an edit at once.
             var types = ToMetaDataTypes(fields);
-            var success = _api.Library_GetFileTags(path, types, out var results);
-            if (!success)
-                success = _api.NowPlaying_GetFileTags(types, out results);
+            var success = ReadPlayingTags(path, types, out var results);
             var values = new List<string>(types.Length);
             for (var i = 0; i < types.Length; i++)
                 values.Add(SafeGetResult(success, results, i) ?? string.Empty);
@@ -497,6 +493,20 @@ namespace MusicBeePlugin.Providers
                 value = _api.Library_GetFileTag(path, type) ?? string.Empty,
                 reason = string.Empty,
             };
+        }
+
+        /// <summary>The playing track's fields as they are now.</summary>
+        /// <remarks>
+        ///     MusicBee's now-playing tags keep the values a track started with, so a file
+        ///     is read through the library, which sees an edit at once. A stream has no file,
+        ///     and its now-playing tags are the song on air rather than the station's entry.
+        /// </remarks>
+        private bool ReadPlayingTags(string path, Plugin.MetaDataType[] fields, out string[] results)
+        {
+            var isFile = !string.IsNullOrEmpty(path) && path.IndexOf("://", StringComparison.Ordinal) < 0;
+            if (isFile && _api.Library_GetFileTags(path, fields, out results))
+                return true;
+            return _api.NowPlaying_GetFileTags(fields, out results);
         }
 
         private static TagWriteResult TagWriteFailed(string reason) =>

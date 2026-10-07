@@ -807,6 +807,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             core.library_events.tags_changed(path);
             core.scanner_nudge.notify_one();
             if let Some(path) = path.filter(|p| *p == core.now_playing.track_info().path) {
+                core.now_playing.refresh_track_bundle();
                 core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
                     "now_playing_tags_changed",
                     serde_json::json!({ "path": path }),
