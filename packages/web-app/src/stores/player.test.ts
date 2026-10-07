@@ -9,12 +9,13 @@ import { usePlayerStore } from './player'
 
 // Hoisted with the mock factory, which vitest lifts above every other statement
 // in the file: a plain `const` here is not yet initialised when it runs.
-const { call } = vi.hoisted(() => ({
+const { call, on } = vi.hoisted(() => ({
   call: vi.fn<(op: string, data?: Record<string, unknown>) => Promise<unknown>>(),
+  on: vi.fn<(event: string, listener: () => void) => () => void>(),
 }))
 
 vi.mock(import('../api/client'), () => ({
-  client: { call, on: vi.fn<() => () => void>() } as unknown as typeof V6Client,
+  client: { call, on } as unknown as typeof V6Client,
 }))
 
 function ops(): string[] {
@@ -84,6 +85,20 @@ describe('the rating', () => {
     await player.setRating(null)
 
     expect(call).toHaveBeenCalledWith('now_playing_set_rating', { rating: null })
+  })
+})
+
+describe('the cover', () => {
+  // A stream's artwork loads after the song changes, so the read taken on the
+  // track change has none to show.
+  it('is read again once the artwork has loaded', () => {
+    const player = usePlayerStore()
+    player.bind()
+    const listener = on.mock.calls.find(([event]) => event === 'now_playing_cover_changed')?.[1]
+
+    listener?.()
+
+    expect(ops()).toContain('now_playing_state')
   })
 })
 

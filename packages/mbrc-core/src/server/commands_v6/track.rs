@@ -8,6 +8,7 @@
 //! parsed, #112), `rating` (comma-or-dot float, #114). `date_added` is already
 //! ISO-8601 (formatted C#-side) and passes through.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use serde_json::{Value, json};
@@ -16,7 +17,7 @@ use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
-use crate::cover::store::{Artwork, CoverStore, track_cover_key};
+use crate::cover::store::{Artwork, CoverStore, PLAYING_KEY_PREFIX, track_cover_key};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
@@ -188,20 +189,24 @@ pub(crate) fn playing_cover_hash(
     if artwork_b64.is_empty() {
         return usual();
     }
-    let key = playing_artwork_key(&tags.src);
+    let key = playing_artwork_key(&tags.src, artwork_b64);
     if let Some(hash) = store.hash_for(&key) {
         return Some(hash);
     }
     let Some(bytes) = crate::cover::from_base64(artwork_b64) else {
         return usual();
     };
-    store.cache_cover(&key, &bytes).ok().or_else(usual)
+    store.cache_playing_cover(&key, &bytes).ok().or_else(usual)
 }
 
-/// The key the playing track's announced artwork is kept under, apart from the
-/// album keys so that neither can answer for the other.
-fn playing_artwork_key(src: &str) -> String {
-    format!("playing:{src}")
+/// The key the playing track's announced artwork is kept under.
+///
+/// It names the bytes as well as the path: a radio station keeps one path while
+/// each song brings its own artwork.
+fn playing_artwork_key(src: &str, artwork_b64: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    artwork_b64.hash(&mut hasher);
+    format!("{PLAYING_KEY_PREFIX}{src}#{:016x}", hasher.finish())
 }
 
 /// Resolve an album's `cover_hash` from its `(artist, album)` key - the shared
@@ -508,6 +513,30 @@ mod tests {
         // Answered from the store the second time, so a client polling the
         // playing track does not re-hash the same image on every read.
         assert_eq!(playing_cover_hash(&covers, &tags, &artwork), Some(hash));
+    }
+
+    /// A station plays every song under its own path, so the path alone would
+    /// pin the first song's picture to all that follow.
+    #[test]
+    fn a_stream_gets_each_songs_artwork_and_keeps_only_the_latest() {
+        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover-stream");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let store = CoverStore::new(Db::open(&path), path.clone());
+        let mut tags = tags();
+        tags.src = "http://radio.example/stream.pls".into();
+        tags.album = String::new();
+        let m = MockProviders::default();
+        let covers = Covers::new(Some(&store), &m);
+
+        let first_song = crate::cover::to_base64(&test_jpeg_bytes(120, 120));
+        let second_song = crate::cover::to_base64(&test_jpeg_bytes(90, 90));
+        let first = playing_cover_hash(&covers, &tags, &first_song).unwrap();
+        let second = playing_cover_hash(&covers, &tags, &second_song).unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(store.cached_count(), 1);
     }
 
     /// Before MusicBee has announced the artwork there is nothing to hash, and

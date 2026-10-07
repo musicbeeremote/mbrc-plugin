@@ -245,6 +245,9 @@ export const usePlayerStore = defineStore('player', () => {
     client.on(WireEvent.NowPlayingLyricsChanged, () => {
       void refreshLyrics()
     })
+    client.on(WireEvent.NowPlayingCoverChanged, () => {
+      void refreshNowPlaying()
+    })
   }
 
   return {

@@ -226,6 +226,7 @@ export const WireEvent = {
   StopAfterCurrentChanged: 'stop_after_current_changed',
   NowPlayingChanged: 'now_playing_changed',
   NowPlayingLyricsChanged: 'now_playing_lyrics_changed',
+  NowPlayingCoverChanged: 'now_playing_cover_changed',
   NowPlayingListChanged: 'now_playing_list_changed',
   CoverCacheChanged: 'cover_cache_changed',
   LibraryChanged: 'library_changed',

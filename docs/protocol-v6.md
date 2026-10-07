@@ -446,7 +446,9 @@ A list may add index fields beside these - `order` and `position` on a playlist,
 album carries its own, read the first time a page includes it and kept until its file changes,
 so two singles by one artist no longer share a picture. A server spends at most about half a
 second of a request reading those: a track past that comes back without `cover_hash` and gets
-one the next time a page includes it. A stream with no album has none.
+one the next time a page includes it. A stream with no album has none, except while it plays:
+then `now_playing_state` carries the artwork MusicBee loaded for the song on air, which arrives
+after the track change and is announced with `now_playing_cover_changed`.
 
 Fetch the image with `cover_get` over any
 transport, or - because it is content-addressed and so can be cached forever - straight from
@@ -455,6 +457,8 @@ transport, or - because it is content-addressed and so can be cached forever - s
 \* `duration_ms` is parsed from MusicBee's formatted tag, the only per-path source there is,
 so it is second-granular. The **playing** track is the exception: `now_playing_state` serves
 the player's own exact millisecond duration, matching the `duration_ms` beside it.
+Its `artist`, `title` and `album` are also the player's: for a stream, the library entry names
+the station and the player names the song on air.
 
 ## Keepalive (normative)
 
@@ -884,6 +888,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `stop_after_current_changed` | `{"stop_after_current":bool}` | stop-after-current is turned on or off, including from MusicBee's own window and when it clears itself after firing |
 | `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
+| `now_playing_cover_changed` | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |

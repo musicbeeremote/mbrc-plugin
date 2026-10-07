@@ -43,6 +43,10 @@ const MAX_WORKERS: usize = 4;
 /// The memory all workers' decodes may hold at once, by [`decode_cost`].
 const DECODE_BUDGET: usize = 64 * 1024 * 1024;
 
+/// The prefix of the key the playing track's announced artwork is kept under,
+/// apart from the album keys so that neither can answer for the other.
+pub const PLAYING_KEY_PREFIX: &str = "playing:";
+
 /// How long "this album has no artwork" is believed before it is asked again.
 ///
 /// A folder image can be added without touching the track, so the track's
@@ -286,6 +290,22 @@ impl CoverStore {
     pub fn cache_cover(&self, key: &str, raw: &[u8]) -> Result<String, String> {
         let (hash, _) = self.store_cover(raw)?;
         self.write_covers().insert(key.to_string(), hash.clone());
+        Ok(hash)
+    }
+
+    /// Caches the playing track's artwork under `key`, dropping the entry kept
+    /// for whatever played before it.
+    ///
+    /// A radio station plays a new song under one path, so one entry per track
+    /// would grow for as long as the station plays.
+    ///
+    /// # Errors
+    /// The artwork does not resize, or the cover file cannot be written.
+    pub fn cache_playing_cover(&self, key: &str, raw: &[u8]) -> Result<String, String> {
+        let (hash, _) = self.store_cover(raw)?;
+        let mut covers = self.write_covers();
+        covers.retain(|k, _| !k.starts_with(PLAYING_KEY_PREFIX));
+        covers.insert(key.to_string(), hash.clone());
         Ok(hash)
     }
 

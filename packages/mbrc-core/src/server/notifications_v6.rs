@@ -61,6 +61,11 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
         NotificationType::NowPlayingListChanged => {
             vec![v6::event("now_playing_list_changed", json!({}))]
         }
+        // A stream's artwork arrives after the track changes, so this is the
+        // only signal that `cover_hash` now has something to say.
+        NotificationType::NowPlayingArtworkReady if snap.cover.status == 200 => {
+            vec![v6::event("now_playing_cover_changed", json!({}))]
+        }
         // `library_changed` and `cover_cache_changed` are emitted imperatively,
         // from the dispatch and reconcile paths, which own the `Arc<Core>`.
         NotificationType::NowPlayingArtworkReady
@@ -78,7 +83,7 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::messages::{PlayState, PlayerState};
+    use crate::protocol::messages::{Cover, PlayState, PlayerState};
     use serde_json::Value;
 
     fn snap(player: PlayerState) -> NowPlaying {
@@ -179,6 +184,24 @@ mod tests {
         let s = NowPlaying::default();
         assert!(build(NotificationType::FileAddedToLibrary, &s).is_empty());
         assert!(build(NotificationType::LibrarySwitched, &s).is_empty());
+    }
+
+    #[test]
+    fn artwork_ready_with_artwork_emits_marker() {
+        let s = NowPlaying {
+            cover: Cover {
+                status: 200,
+                cover: "aGk=".into(),
+            },
+            ..Default::default()
+        };
+        let v = one(&build(NotificationType::NowPlayingArtworkReady, &s));
+        assert_eq!(v["event"], "now_playing_cover_changed");
+    }
+
+    #[test]
+    fn artwork_ready_without_artwork_emits_nothing() {
+        let s = NowPlaying::default();
         assert!(build(NotificationType::NowPlayingArtworkReady, &s).is_empty());
     }
 }

@@ -41,6 +41,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "stop_after_current_changed",
     "now_playing_changed",
     "now_playing_lyrics_changed",
+    "now_playing_cover_changed",
     "now_playing_list_changed",
     "cover_cache_changed",
     "library_changed",

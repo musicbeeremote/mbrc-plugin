@@ -243,6 +243,7 @@ function v6Adapter(): PlayerAdapter {
             return { patch: foldTrack(d), followUps: [state()], lyricsStale: true };
           case "now_playing_lyrics_changed":
             return { patch: {}, followUps: [], lyricsStale: true };
+          case "now_playing_cover_changed":
           case "cover_cache_changed":
             return { patch: {}, followUps: [state()] };
           default:

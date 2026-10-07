@@ -205,6 +205,7 @@ export const EventPayloadSchemas = {
     path: z.string(),
   }),
   now_playing_lyrics_changed: EmptySchema,
+  now_playing_cover_changed: EmptySchema,
   now_playing_list_changed: EmptySchema,
   cover_cache_changed: z.object({ building: z.boolean() }),
   library_changed: EmptySchema,
