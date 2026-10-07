@@ -39,6 +39,16 @@ pub(crate) fn key_browse_artists(album_artists: bool) -> String {
 
 pub fn browse_genres(data: &Value, ctx: &Ctx) -> HandlerResult {
     let (offset, limit) = page_request(data, LIST_PAGE);
+    if let Some(counts) = ctx.metadata_cache.and_then(MetadataCache::genre_counts) {
+        let data = crate::server::commands_v6::library::genre_data(counts);
+        let full = Page {
+            total: i32::try_from(data.len()).unwrap_or(i32::MAX),
+            offset: 0,
+            limit: 0,
+            data,
+        };
+        return reply_dto("browsegenres", &slice_page(full, offset, limit));
+    }
     let page = flat_browse(ctx, KEY_BROWSE_GENRES, offset, limit, || {
         ctx.providers.browse_genres(0, 0)
     })?;
@@ -305,6 +315,10 @@ pub fn browse_lists_cached(cache: &MetadataCache) -> bool {
 /// The provider call failed.
 pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
     let genre = as_set_string(data).unwrap_or_default();
+    if let Some(counts) = ctx.metadata_cache.and_then(|c| c.genre_artists(&genre)) {
+        let list = crate::server::commands_v6::library::artist_data(counts);
+        return reply_dto("librarygenreartists", &list);
+    }
     let list = nav_cached(ctx, &format!("genre_artists:{genre}"), || {
         ctx.providers.genre_artists(&genre)
     })?;
@@ -611,6 +625,39 @@ mod tests {
         assert!(out[0].1.is_array());
         assert_eq!(out[0].1[0]["artist"], json!("A"));
         assert!(m.recorded().contains(&"genre_artists(Rock)".to_string()));
+    }
+
+    /// The V4 genre screens read the same counts as V6 (#228).
+    #[test]
+    fn v4_genre_browse_counts_a_file_under_each_genre() {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join("mbrc-v4-multi-genre");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        cache.replace_track_index(&["/saga.mp3".into()]);
+        cache.put_track_tags(&[CachedTags {
+            src: "/saga.mp3".into(),
+            artist: "Leaves' Eyes".into(),
+            genre: "Gothic Metal; Metal".into(),
+            ..CachedTags::default()
+        }]);
+        let m = MockProviders::default();
+        let ctx = Ctx::new(&m, ProtocolVersion::V4).with_metadata_cache(&cache);
+
+        let genres = browse_genres(&json!({}), &ctx).unwrap();
+        let names: Vec<&str> = genres[0].1["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|g| g["genre"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["Gothic Metal", "Metal"]);
+        let artists = genre_artists(&json!("Metal"), &ctx).unwrap();
+        assert_eq!(artists[0].1[0]["artist"], "Leaves' Eyes");
     }
 
     #[test]

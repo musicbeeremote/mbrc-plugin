@@ -17,6 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use redb::{Durability, ReadableTable, ReadableTableMetadata};
 use serde::de::DeserializeOwned;
@@ -322,10 +323,25 @@ impl TrackFilter<'_> {
         };
         self.artist.is_none_or(|a| filed_under(track, a))
             && self.album.is_none_or(|al| equals(&track.album, al))
-            && self.genre.is_none_or(|g| equals(&track.genre, g))
+            && self
+                .genre
+                .is_none_or(|g| crate::multi_value::holds(&track.genre, g))
             && self
                 .query
                 .is_none_or(|q| contains(&track.title, q) || contains(&track.artist, q))
+    }
+}
+
+/// Every track's `(genre, artist)`, the part of the tags genre browse reads.
+type GenreRows = Vec<(String, String)>;
+
+/// Drops what was derived from the tags when a write to them returns, so a
+/// reader cannot rebuild it from rows the write has not committed yet.
+struct TagsMoved<'a>(&'a MetadataCache);
+
+impl Drop for TagsMoved<'_> {
+    fn drop(&mut self) {
+        *self.0.genre_rows.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -333,6 +349,9 @@ pub struct MetadataCache {
     db: Db,
     validated: AtomicBool,
     changes: ChangeLog,
+    /// Every track's `(genre, artist)`, kept once the tags are complete and
+    /// dropped by any write to them, so genre browse decodes no tag rows.
+    genre_rows: Mutex<Option<Arc<GenreRows>>>,
 }
 
 impl MetadataCache {
@@ -341,6 +360,7 @@ impl MetadataCache {
             changes: ChangeLog::new(db.clone()),
             db,
             validated: AtomicBool::new(false),
+            genre_rows: Mutex::new(None),
         }
     }
 
@@ -365,6 +385,7 @@ impl MetadataCache {
     /// The change log starts a new epoch and the sync watermark goes, since both
     /// describe a library that is no longer the one loaded.
     pub fn forget_library(&self) {
+        let _moved = TagsMoved(self);
         self.changes.reset();
         self.db.write(Durability::Immediate, |txn| {
             let mut meta = txn.open_table(META)?;
@@ -380,6 +401,7 @@ impl MetadataCache {
     }
 
     fn set_validated(&self, value: bool) {
+        let _moved = TagsMoved(self);
         self.validated.store(value, Ordering::Release);
     }
 
@@ -444,6 +466,7 @@ impl MetadataCache {
     /// library having changed. A switch to another library also calls
     /// [`forget_library`](Self::forget_library).
     pub fn clear(&self) {
+        let _moved = TagsMoved(self);
         self.db.write(Durability::Immediate, |txn| {
             // `delete_table` returns false if it never existed - harmless.
             txn.delete_table(METADATA_CACHE)?;
@@ -525,6 +548,7 @@ impl MetadataCache {
     /// orders are built from the tag rows, and a row left behind pages a reader
     /// through a track the library no longer holds.
     pub fn replace_track_index(&self, paths: &[String]) {
+        let _moved = TagsMoved(self);
         if !self.is_validated() {
             return;
         }
@@ -573,6 +597,7 @@ impl MetadataCache {
     /// Caches the given tracks, keyed by each track's `src` path, in one write
     /// transaction. No-op when disabled, not validated, or empty.
     pub fn put_track_tags(&self, tracks: &[CachedTags]) {
+        let _moved = TagsMoved(self);
         if !self.is_validated() || tracks.is_empty() {
             return;
         }
@@ -591,6 +616,7 @@ impl MetadataCache {
     /// re-read lazily on the next serve). No-op when disabled, not validated, or
     /// empty.
     pub fn drop_track_tags(&self, paths: &[String]) {
+        let _moved = TagsMoved(self);
         if !self.is_validated() || paths.is_empty() {
             return;
         }
@@ -698,6 +724,64 @@ impl MetadataCache {
                 Ok(missing)
             })
             .unwrap_or_default()
+    }
+
+    /// Whether every indexed track has cached tags, so a question about tag
+    /// content is answered from the cache alone.
+    pub fn tags_complete(&self) -> bool {
+        self.is_validated() && self.track_count() > 0 && self.untagged_paths(1).is_empty()
+    }
+
+    /// Each genre with its track count, a file counted under every genre it
+    /// has, or `None` while some track's tags are not cached yet.
+    ///
+    /// MusicBee's genre lookup files a track under its first genre only.
+    pub fn genre_counts(&self) -> Option<Vec<(String, u32)>> {
+        let rows = self.genre_rows()?;
+        Some(crate::multi_value::counts(
+            rows.iter().map(|(genre, _)| genre.as_str()),
+        ))
+    }
+
+    /// The artists with tracks in `genre` and how many each has there, or
+    /// `None` while some track's tags are not cached yet.
+    pub fn genre_artists(&self, genre: &str) -> Option<Vec<(String, u32)>> {
+        let rows = self.genre_rows()?;
+        let mut counts: HashMap<&str, u32> = HashMap::new();
+        for (_, artist) in rows
+            .iter()
+            .filter(|(g, _)| crate::multi_value::holds(g, genre))
+        {
+            *counts.entry(artist.as_str()).or_default() += 1;
+        }
+        let mut out: Vec<(String, u32)> = counts
+            .into_iter()
+            .map(|(artist, n)| (artist.to_string(), n))
+            .collect();
+        out.sort_by(|(a, _), (b, _)| {
+            a.to_lowercase()
+                .cmp(&b.to_lowercase())
+                .then_with(|| a.cmp(b))
+        });
+        Some(out)
+    }
+
+    fn genre_rows(&self) -> Option<Arc<GenreRows>> {
+        let mut memo = self.genre_rows.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(rows) = memo.as_ref() {
+            return Some(rows.clone());
+        }
+        if !self.tags_complete() {
+            return None;
+        }
+        let rows: GenreRows = self
+            .all_cached_tags()
+            .into_iter()
+            .map(|t| (t.genre, t.artist))
+            .collect();
+        let rows = Arc::new(rows);
+        *memo = Some(rows.clone());
+        Some(rows)
     }
 
     /// Every cached tag row, for building an order or a derived map.
@@ -1133,6 +1217,30 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Db::open(dir.to_str().unwrap())
+    }
+
+    /// The genre list is kept between reads, and a tag edit must still show.
+    #[test]
+    fn a_genre_edit_reaches_the_kept_genre_list() {
+        let dir = std::env::temp_dir().join("mbrc-meta-genre-memo");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        cache.replace_track_index(&["/a.mp3".into()]);
+        let tagged = |genre: &str| CachedTags {
+            src: "/a.mp3".into(),
+            genre: genre.into(),
+            ..CachedTags::default()
+        };
+        cache.put_track_tags(&[tagged("Rock")]);
+        assert_eq!(cache.genre_counts(), Some(vec![("Rock".into(), 1)]));
+
+        cache.put_track_tags(&[tagged("Rock; Jazz")]);
+        assert_eq!(
+            cache.genre_counts(),
+            Some(vec![("Jazz".into(), 1), ("Rock".into(), 1)])
+        );
     }
 
     #[test]

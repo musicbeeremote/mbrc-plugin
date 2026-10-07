@@ -14,6 +14,7 @@ pub mod library_changes;
 pub mod logging;
 pub mod mdns;
 pub mod metadata_cache;
+pub mod multi_value;
 pub mod nowplaying;
 pub mod protocol;
 pub mod providers;

@@ -648,7 +648,7 @@ gone, and the `version` has moved, so re-read the list.
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
-| `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}` |
+| `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}`; a file tagged with several genres (`Rock; Jazz`) counts under each, and a `genre` filter on the other ops finds it through any of them |
 | `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}` |
 | `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` when the tracks agree on one) |
 | `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |

@@ -32,7 +32,7 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
     CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
 };
-use crate::protocol::messages::{AlbumData, ArtistData, Page, Track, TrackTags};
+use crate::protocol::messages::{AlbumData, ArtistData, GenreData, Page, Track, TrackTags};
 use crate::providers::Providers;
 use crate::server::commands::library::{KEY_BROWSE_ALBUMS, KEY_BROWSE_GENRES, key_browse_artists};
 
@@ -71,7 +71,10 @@ pub fn dispatch(
 
 fn genres(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
     let (offset, limit) = page_args(data)?;
-    let mut all = flat_list(cache, KEY_BROWSE_GENRES, || p.browse_genres(0, 0))?;
+    let mut all = match cache.and_then(MetadataCache::genre_counts) {
+        Some(counts) => genre_data(counts),
+        None => flat_list(cache, KEY_BROWSE_GENRES, || p.browse_genres(0, 0))?,
+    };
     let needle = needle(data)?;
     if let Some(n) = &needle {
         all.retain(|g| contains(&g.genre, n));
@@ -92,7 +95,10 @@ fn artists(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> Op
     let (offset, limit) = page_args(data)?;
     // With a `genre` filter, navigate that genre's artists; otherwise the flat list.
     let mut all: Vec<ArtistData> = match opt_str(data, "genre")? {
-        Some(genre) => p.genre_artists(genre).map_err(internal)?,
+        Some(genre) => match cache.and_then(|c| c.genre_artists(genre)) {
+            Some(counts) => artist_data(counts),
+            None => p.genre_artists(genre).map_err(internal)?,
+        },
         None => {
             let album_artists = opt_bool(data, "album_artists")?.unwrap_or(false);
             flat_list(cache, &key_browse_artists(album_artists), || {
@@ -429,6 +435,13 @@ pub(super) fn scope_paths(
         genre: opt_str(data, "genre")?,
     };
 
+    let genre_only = filter.genre.is_some() && filter.artist.is_none() && filter.album.is_none();
+    if let Some(c) = cache
+        && genre_only
+        && c.tags_complete()
+    {
+        return Ok(c.track_paths_where(&filter, None, false));
+    }
     if filter.artist.is_some() || filter.album.is_some() || filter.genre.is_some() {
         return cold_scope_paths(&filter, p);
     }
@@ -666,6 +679,28 @@ fn slice<T>(all: Vec<T>, offset: i64, limit: i64) -> Vec<T> {
 /// Read a flat browse list: reuse the cached full `Page<T>` (the V4 reconcile
 /// prewarms these under the same keys), else fetch it from the provider and cache
 /// it. Returns the full `Vec<T>`; the caller slices to the page.
+/// Genres counted from the cached tags, in the shape the host's lookup returns.
+pub(crate) fn genre_data(counts: Vec<(String, u32)>) -> Vec<GenreData> {
+    counts
+        .into_iter()
+        .map(|(genre, count)| GenreData {
+            genre,
+            count: i32::try_from(count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
+/// A genre's artists counted from the cached tags, in the host's shape.
+pub(crate) fn artist_data(counts: Vec<(String, u32)>) -> Vec<ArtistData> {
+    counts
+        .into_iter()
+        .map(|(artist, count)| ArtistData {
+            artist,
+            count: i32::try_from(count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
 fn flat_list<T, F>(cache: Option<&MetadataCache>, key: &str, fetch: F) -> Result<Vec<T>, V6Error>
 where
     T: Serialize + DeserializeOwned + Default,
@@ -999,6 +1034,102 @@ mod tests {
             json!({ "count": 1 }),
             "the list and the queue agree"
         );
+    }
+
+    fn multi_genre_cache(name: &str) -> crate::metadata_cache::MetadataCache {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        let tagged = |src: &str, artist: &str, genre: &str| CachedTags {
+            src: src.into(),
+            title: src.into(),
+            artist: artist.into(),
+            genre: genre.into(),
+            ..CachedTags::default()
+        };
+        cache.replace_track_index(&["/saga.mp3".into(), "/power.mp3".into(), "/rock.mp3".into()]);
+        cache.put_track_tags(&[
+            tagged(
+                "/saga.mp3",
+                "Leaves' Eyes",
+                "Gothic Metal; Power Metal; Metal",
+            ),
+            tagged("/power.mp3", "Blind Guardian", "Power Metal"),
+            tagged("/rock.mp3", "AC/DC", "Rock"),
+        ]);
+        cache
+    }
+
+    /// MusicBee's genre lookup files a track under its first genre only, and
+    /// the genre filters compared the whole field (#228).
+    #[test]
+    fn a_file_is_found_through_each_of_its_genres() {
+        let cache = multi_genre_cache("mbrc-v6-multi-genre");
+        let m = MockProviders::default();
+        let run = |op: &str, data: Value| {
+            dispatch(op, &data, &m, None, Some(&cache))
+                .unwrap()
+                .unwrap()
+        };
+
+        let genres = run("library_genres", json!({}));
+        let count = |name: &str| {
+            genres["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|g| g["genre"] == name)
+                .map(|g| g["count"].clone())
+        };
+        assert_eq!(count("Metal"), Some(json!(1)));
+        assert_eq!(count("Power Metal"), Some(json!(2)));
+        assert_eq!(count("Gothic Metal"), Some(json!(1)));
+
+        let tracks = run("library_tracks", json!({ "genre": "Metal" }));
+        assert_eq!(tracks["total"], 1, "only the saga is filed under Metal");
+
+        let artists = run("library_artists", json!({ "genre": "Power Metal" }));
+        let names: Vec<&str> = artists["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["artist"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["Blind Guardian", "Leaves' Eyes"]);
+
+        let queued = run("library_queue", json!({ "genre": "Metal", "mode": "last" }));
+        assert_eq!(queued, json!({ "count": 1 }));
+        assert!(
+            m.recorded().iter().all(|c| !c.starts_with("genre_")),
+            "{:?}",
+            m.recorded()
+        );
+    }
+
+    /// Until every track's tags are cached, the cache cannot know every genre.
+    #[test]
+    fn genres_come_from_the_host_while_tags_are_missing() {
+        let cache = multi_genre_cache("mbrc-v6-multi-genre-cold");
+        cache.replace_track_index(&["/saga.mp3".into(), "/untagged.mp3".into()]);
+        let m = MockProviders {
+            browse_genres: Page {
+                total: 1,
+                offset: 0,
+                limit: 0,
+                data: vec![genre("FromHost")],
+            },
+            ..Default::default()
+        };
+
+        let out = dispatch("library_genres", &json!({}), &m, None, Some(&cache))
+            .unwrap()
+            .unwrap();
+        assert_eq!(out["items"][0]["genre"], "FromHost");
     }
 
     /// An artist in the list that cannot be opened is a hole. MusicBee reports
