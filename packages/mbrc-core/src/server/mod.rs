@@ -10,6 +10,7 @@ pub mod clients;
 pub mod commands;
 pub mod commands_v6;
 pub mod connection;
+pub mod list_changes;
 pub mod monitor;
 pub mod notifications;
 pub mod notifications_v6;
@@ -153,6 +154,7 @@ fn run_thread(
         let mdns = spawn_mdns(&core, bind_ip, &shutdown);
         let monitor = tokio::spawn(monitor::run(core.clone(), shutdown.clone()));
         let scanner = tokio::spawn(scanner::run(core.clone(), shutdown.clone()));
+        let list_changes = tokio::spawn(list_changes::run(core.clone(), shutdown.clone()));
         seed_now_playing(&core);
         spawn_library_reconcile(&core);
         spawn_staging_sweep(&core);
@@ -168,6 +170,7 @@ fn run_thread(
         withdraw_mdns(mdns).await;
         monitor.abort();
         scanner.abort();
+        list_changes.abort();
     });
 }
 

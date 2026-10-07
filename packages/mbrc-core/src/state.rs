@@ -70,6 +70,11 @@ pub struct Core {
     pub tag_backfill: Notify,
     /// Wakes the player poll at once, for a mode change MusicBee announced.
     pub poll_now: Notify,
+    /// A now-playing list change waiting for its burst to settle.
+    pub list_change: crate::server::list_changes::PendingListChange,
+    /// The play state last broadcast. Kept apart from the cache, which the
+    /// player poll also writes, so a change the poll saw first is still sent.
+    pub play_state_sent: std::sync::Mutex<Option<crate::protocol::messages::PlayState>>,
     /// Set when the core is being torn down, and read by the long blocking work
     /// so it can stop between items.
     ///
@@ -122,6 +127,8 @@ impl Core {
             library_events: Default::default(),
             tag_backfill: Notify::new(),
             poll_now: Notify::new(),
+            list_change: Default::default(),
+            play_state_sent: std::sync::Mutex::new(None),
             stopping: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -806,7 +813,11 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             core.scanner_nudge.notify_one();
             return;
         }
-        NotificationType::NowPlayingListChanged => core.now_playing.bump_list_version(),
+        NotificationType::NowPlayingListChanged => {
+            core.now_playing.bump_list_version();
+            core.list_change.mark();
+            return;
+        }
         // The poll stays the one source of these events; this only brings it forward.
         NotificationType::ShuffleChanged
         | NotificationType::RepeatChanged
@@ -969,6 +980,47 @@ mod tests {
             });
             assert!(woken, "{ntype:?} did not wake the poll");
         }
+    }
+
+    fn frames(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> Vec<String> {
+        std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    /// MusicBee reports a stream stopping twice, both times as stopped.
+    #[test]
+    fn a_repeated_play_state_is_broadcast_once() {
+        let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(0)));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        core.broadcaster.register(1, tx);
+
+        dispatch_notification(&core, NotificationType::PlayStateChanged, None);
+        dispatch_notification(&core, NotificationType::PlayStateChanged, None);
+
+        assert_eq!(frames(&mut rx).len(), 1);
+    }
+
+    /// The player poll writes the cache too, so a change it saw before the
+    /// notification arrived must still reach clients.
+    #[test]
+    fn a_play_state_the_poll_saw_first_is_still_broadcast() {
+        use crate::protocol::messages::{PlayState, PlayerState};
+        let playing = PlayerState {
+            play_state: PlayState::Playing,
+            ..Default::default()
+        };
+        let providers = crate::providers::MockProviders {
+            player_state: playing.clone(),
+            ..Default::default()
+        };
+        let core = Arc::new(Core::new(Arc::new(providers), Config::for_test(0)));
+        *core.play_state_sent.lock().unwrap() = Some(PlayState::Stopped);
+        core.now_playing.set_player(playing);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        core.broadcaster.register(1, tx);
+
+        dispatch_notification(&core, NotificationType::PlayStateChanged, None);
+
+        assert_eq!(frames(&mut rx).len(), 1);
     }
 
     #[test]

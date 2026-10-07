@@ -889,7 +889,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_cover_changed` | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
-| `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list` |
+| `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list`. Sent once per burst, about 150ms after the first change, so a multi-step edit such as play-now is one event; the list `version` still moves with every step |
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |

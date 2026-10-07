@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 
 use crate::ffi::types::NotificationType;
 use crate::nowplaying::NowPlaying;
-use crate::protocol::messages::Cover;
+use crate::protocol::messages::{Cover, PlayState};
 use crate::protocol::version::ProtocolVersion;
 use crate::state::Core;
 use crate::wire::WireCodec;
@@ -61,9 +61,25 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
     };
 
     let snapshot = core.now_playing.snapshot();
+    if ntype == NotificationType::PlayStateChanged
+        && !play_state_moved(core, snapshot.player.play_state)
+    {
+        return (Vec::new(), Vec::new());
+    }
     let v4 = build(ntype, &snapshot, position);
     let v6 = super::notifications_v6::build(ntype, &snapshot);
     (v4, v6)
+}
+
+/// Whether `state` differs from the play state last broadcast, recording it.
+///
+/// MusicBee reports a stream stopping twice, both times as stopped.
+fn play_state_moved(core: &Core, state: PlayState) -> bool {
+    let mut sent = core
+        .play_state_sent
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    sent.replace(state) != Some(state)
 }
 
 /// Builds the raw broadcast frames from a cache snapshot (empty = nothing to
