@@ -7,6 +7,9 @@
 
 use std::collections::HashMap;
 
+/// What joins the values of a multi-value field when one is written.
+pub const SEPARATOR: &str = "; ";
+
 /// The values of a multi-value field, trimmed, without empties.
 pub fn values(raw: &str) -> impl Iterator<Item = &str> {
     raw.split([';', '\0'])
@@ -69,6 +72,36 @@ pub fn counts<'a>(fields: impl IntoIterator<Item = &'a str>) -> Vec<(String, u32
     out
 }
 
+/// Each distinct value across `fields` with how many fields hold it, by value.
+///
+/// Unlike [`counts`], values differing in case stay apart, so an editor shows
+/// the stray spelling it can fix. `split` splits each field into its values;
+/// otherwise a field is one value. Fields with no value are left out.
+pub fn distinct<'a>(fields: impl IntoIterator<Item = &'a str>, split: bool) -> Vec<(String, u32)> {
+    let mut counts: HashMap<&'a str, u32> = HashMap::new();
+    for raw in fields {
+        let mut held: Vec<&str> = if split {
+            values(raw).collect()
+        } else {
+            Some(raw.trim())
+                .filter(|v| !v.is_empty())
+                .into_iter()
+                .collect()
+        };
+        held.sort_unstable();
+        held.dedup();
+        for value in held {
+            *counts.entry(value).or_default() += 1;
+        }
+    }
+    let mut out: Vec<(String, u32)> = counts
+        .into_iter()
+        .map(|(value, count)| (value.to_string(), count))
+        .collect();
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,6 +137,23 @@ mod tests {
     fn values_differing_in_case_are_one_spelled_as_most_spell_it() {
         let out = counts(["Trance", "trance", "Trance", "Trance; trance"]);
         assert_eq!(out, [("Trance".into(), 4)]);
+    }
+
+    #[test]
+    fn distinct_values_split_count_and_keep_case_apart() {
+        let out = distinct(["Bass; Cello", "Cello", " Bass ;Bass", "bass", ""], true);
+        assert_eq!(
+            out,
+            [("Bass".into(), 2), ("Cello".into(), 2), ("bass".into(), 1)]
+        );
+    }
+
+    #[test]
+    fn a_single_value_field_is_not_split() {
+        assert_eq!(
+            distinct(["Rock; Live", " Rock; Live "], false),
+            [("Rock; Live".into(), 2)]
+        );
     }
 
     #[test]

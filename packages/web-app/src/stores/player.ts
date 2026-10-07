@@ -248,6 +248,10 @@ export const usePlayerStore = defineStore('player', () => {
     client.on(WireEvent.NowPlayingCoverChanged, () => {
       void refreshNowPlaying()
     })
+    // A title or artist edited, here or in MusicBee, is what the bar shows.
+    client.on(WireEvent.NowPlayingTagsChanged, () => {
+      void refreshNowPlaying()
+    })
   }
 
   return {

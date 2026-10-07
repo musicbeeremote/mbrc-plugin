@@ -149,6 +149,12 @@ namespace MusicBeePlugin.Providers
         /// <returns>True if successful</returns>
         bool SetTrackTag(string fileUrl, string tagName, string value);
 
+        /// <summary>The playing file's path and the given fields' values, in order.</summary>
+        PathTags GetNowPlayingTags(List<int> fields);
+
+        /// <summary>Sets one field of the playing file when it is still <paramref name="path" />.</summary>
+        TagWriteResult WriteNowPlayingTag(string path, int field, string value);
+
         /// <summary>
         ///     Commits tag changes to a track file.
         /// </summary>

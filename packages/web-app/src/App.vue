@@ -21,6 +21,7 @@ import { useShortcuts } from './composables/useShortcuts'
 import { useUpdateWatch } from './composables/useUpdateWatch'
 import { useLibraryStore } from './stores/library'
 import { usePermissionsStore } from './stores/permissions'
+import { useTagsStore } from './stores/tags'
 import { usePlayerStore } from './stores/player'
 import { useQueueStore } from './stores/queue'
 import { RouteName, wideRedirect } from './router/locations'
@@ -60,6 +61,7 @@ const update = useUpdateWatch()
 const queue = useQueueStore()
 const library = useLibraryStore()
 const permissions = usePermissionsStore()
+const tags = useTagsStore()
 
 /** Keys do only what the buttons for them would, so a refused key is a quiet one. */
 function when(capability: Capability, action: () => void): () => void {
@@ -143,6 +145,7 @@ function start() {
   library.bind()
   update.bind()
   permissions.bind()
+  tags.bind()
   client.on(WireEvent.AuthRequired, async () => {
     // A refusal is only the user's to fix while pairing is enforced. With it off
     // there is no code to enter, so reconnect rather than show a screen that

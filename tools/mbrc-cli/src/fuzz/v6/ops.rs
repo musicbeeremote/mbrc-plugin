@@ -110,6 +110,21 @@ pub const SPECS: &[OpSpec] = &[
         fields: &[],
     },
     OpSpec {
+        op: "now_playing_tags",
+        fields: &[],
+    },
+    OpSpec {
+        op: "tag_fields",
+        fields: &[],
+    },
+    OpSpec {
+        op: "tag_values",
+        fields: &[req(
+            "key",
+            Kind::Choice(&["genre", "artist", "mood", "custom1", "custom2", "title"]),
+        )],
+    },
+    OpSpec {
         op: "now_playing_list",
         fields: &[
             OFFSET,

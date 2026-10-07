@@ -11,11 +11,12 @@
 
 use crate::ffi::callbacks::SafeCallbacks;
 use crate::ffi::dtos::{
-    AlbumCoverParams, ArtworkLocation, BatchMetadataParams, BrowseParams, IndexParams, MoveParams,
-    NowPlayingQueueParams, PaginationParams, PathParams, PathsParams, PlaylistCreateParams,
-    PlaylistFilesParams, PodcastEpisodeParams, PodcastEpisodesParams, QueryParams, SetBoolParams,
-    SetIntParams, SetLfmRatingParams, SetRepeatParams, StringValueParams, SyncDeltaParams,
-    TagChangeParams,
+    AlbumCoverParams, ArtworkLocation, BatchMetadataParams, BrowseParams, FieldsParams,
+    IndexParams, MoveParams, NowPlayingQueueParams, PaginationParams, PathParams, PathTags,
+    PathsParams, PlaylistCreateParams, PlaylistFilesParams, PodcastEpisodeParams,
+    PodcastEpisodesParams, QueryParams, SetBoolParams, SetIntParams, SetLfmRatingParams,
+    SetRepeatParams, StringValueParams, SyncDeltaParams, TagChangeParams, TagWriteParams,
+    TagWriteResult, TagsForPathsParams,
 };
 use crate::ffi::types::{CommandType, QueryType};
 use crate::protocol::messages::{
@@ -165,6 +166,21 @@ pub trait Providers: Send + Sync {
     /// fields from. Separate from `tracks_for_paths` (the thin V4 browse track).
     fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String>;
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String>;
+
+    /// The names the user gave MusicBee's fields, in the order asked.
+    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String>;
+    /// The same fields of each path, raw as MusicBee holds them.
+    fn tags_for_paths(&self, fields: Vec<i32>, paths: Vec<String>)
+    -> Result<Vec<PathTags>, String>;
+    /// The fields of the playing file, with its path.
+    fn now_playing_tags(&self, fields: Vec<i32>) -> Result<PathTags, String>;
+    /// Sets one field of the playing file, if `path` is still what plays.
+    fn write_now_playing_tag(
+        &self,
+        path: String,
+        field: i32,
+        value: String,
+    ) -> Result<TagWriteResult, String>;
 
     fn radio_stations(&self, offset: i32, limit: i32) -> Result<Page<RadioStation>, String>;
     fn play_all(&self, shuffle: bool) -> Result<(), String>;
@@ -591,6 +607,35 @@ impl Providers for FfiProviders {
         self.callbacks
             .query(QueryType::LibraryTrackTags, &PathsParams { paths })
     }
+    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String> {
+        self.callbacks
+            .query(QueryType::TagFieldNames, &FieldsParams { fields })
+    }
+    fn tags_for_paths(
+        &self,
+        fields: Vec<i32>,
+        paths: Vec<String>,
+    ) -> Result<Vec<PathTags>, String> {
+        self.callbacks.query(
+            QueryType::TagsForPaths,
+            &TagsForPathsParams { fields, paths },
+        )
+    }
+    fn now_playing_tags(&self, fields: Vec<i32>) -> Result<PathTags, String> {
+        self.callbacks
+            .query(QueryType::NowPlayingTags, &FieldsParams { fields })
+    }
+    fn write_now_playing_tag(
+        &self,
+        path: String,
+        field: i32,
+        value: String,
+    ) -> Result<TagWriteResult, String> {
+        self.callbacks.query(
+            QueryType::NowPlayingTagWrite,
+            &TagWriteParams { path, field, value },
+        )
+    }
     fn sync_delta(&self, updated_since: i64) -> Result<SyncDelta, String> {
         self.callbacks.query(
             QueryType::LibrarySyncDelta,
@@ -916,6 +961,31 @@ impl Providers for NullProviders {
     fn tracks_detailed_for_paths(&self, _paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
         Ok(Vec::new())
     }
+    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String> {
+        Ok(vec![String::new(); fields.len()])
+    }
+    fn tags_for_paths(
+        &self,
+        _fields: Vec<i32>,
+        _paths: Vec<String>,
+    ) -> Result<Vec<PathTags>, String> {
+        Ok(Vec::new())
+    }
+    fn now_playing_tags(&self, _fields: Vec<i32>) -> Result<PathTags, String> {
+        Ok(PathTags::default())
+    }
+    fn write_now_playing_tag(
+        &self,
+        _path: String,
+        _field: i32,
+        _value: String,
+    ) -> Result<TagWriteResult, String> {
+        Ok(TagWriteResult {
+            outcome: "failed".into(),
+            reason: "no host".into(),
+            ..TagWriteResult::default()
+        })
+    }
     fn sync_delta(&self, _updated_since: i64) -> Result<SyncDelta, String> {
         Ok(SyncDelta::default())
     }
@@ -1016,6 +1086,14 @@ pub struct MockProviders {
     pub refuse_playlist_writes: bool,
     pub plugin_version: String,
     pub calls: std::sync::Mutex<Vec<String>>,
+    /// The user's field names, by MusicBee field id.
+    pub field_names: std::collections::HashMap<i32, String>,
+    /// Fields whose writes MusicBee accepts and does not keep, the way a custom
+    /// field with no tag set up behaves.
+    pub dropped_fields: Vec<i32>,
+    /// Every file's field values by MusicBee field id; tag writes land here.
+    pub file_tags:
+        std::sync::Mutex<std::collections::HashMap<String, std::collections::HashMap<i32, String>>>,
 }
 
 #[cfg(test)]
@@ -1319,6 +1397,72 @@ impl Providers for MockProviders {
     }
     /// Only the paths asked for, as the host answers: a caller that sums what
     /// comes back must get the window it asked about, not the whole fixture.
+    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String> {
+        self.record("field_names");
+        Ok(fields
+            .iter()
+            .map(|f| self.field_names.get(f).cloned().unwrap_or_default())
+            .collect())
+    }
+    fn tags_for_paths(
+        &self,
+        fields: Vec<i32>,
+        paths: Vec<String>,
+    ) -> Result<Vec<PathTags>, String> {
+        self.record(format!("tags_for_paths({})", paths.len()));
+        let files = self.file_tags.lock().unwrap();
+        Ok(paths
+            .into_iter()
+            .map(|path| {
+                let tags = files.get(&path);
+                let values = fields
+                    .iter()
+                    .map(|f| tags.and_then(|t| t.get(f)).cloned().unwrap_or_default())
+                    .collect();
+                PathTags { path, values }
+            })
+            .collect())
+    }
+    fn now_playing_tags(&self, fields: Vec<i32>) -> Result<PathTags, String> {
+        self.record("now_playing_tags");
+        let path = self.track_info.path.clone();
+        if path.is_empty() {
+            return Ok(PathTags::default());
+        }
+        let mut read = self.tags_for_paths(fields, vec![path])?;
+        Ok(read.pop().unwrap_or_default())
+    }
+    /// Writes into `file_tags`, so a read after the write sees it.
+    fn write_now_playing_tag(
+        &self,
+        path: String,
+        field: i32,
+        value: String,
+    ) -> Result<TagWriteResult, String> {
+        self.record(format!("write_now_playing_tag({field},{value})"));
+        if path != self.track_info.path {
+            return Ok(TagWriteResult {
+                outcome: "stale_track".into(),
+                ..TagWriteResult::default()
+            });
+        }
+        let kept = if self.dropped_fields.contains(&field) {
+            String::new()
+        } else {
+            value
+        };
+        self.file_tags
+            .lock()
+            .unwrap()
+            .entry(path)
+            .or_default()
+            .insert(field, kept.clone());
+        Ok(TagWriteResult {
+            outcome: "written".into(),
+            value: kept,
+            reason: String::new(),
+        })
+    }
     fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
         self.record(format!("tracks_detailed_for_paths({})", paths.len()));
         Ok(self

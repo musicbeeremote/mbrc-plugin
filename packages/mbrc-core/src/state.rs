@@ -806,6 +806,13 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
         NotificationType::TagsChanged => {
             core.library_events.tags_changed(path);
             core.scanner_nudge.notify_one();
+            if let Some(path) = path.filter(|p| *p == core.now_playing.track_info().path) {
+                core.now_playing.refresh_track_bundle();
+                core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+                    "now_playing_tags_changed",
+                    serde_json::json!({ "path": path }),
+                )]);
+            }
             return;
         }
         NotificationType::RatingChanged => {
@@ -984,6 +991,32 @@ mod tests {
 
     fn frames(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> Vec<String> {
         std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    /// An edit to the playing file, from a client or in MusicBee's own window,
+    /// reaches every client showing its tags; other files' edits do not.
+    #[test]
+    fn a_tag_edit_to_the_playing_file_is_announced() {
+        let providers = crate::providers::MockProviders {
+            track_info: crate::protocol::messages::TrackInfo {
+                path: "/playing.mp3".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let core = Arc::new(Core::new(Arc::new(providers), Config::for_test(0)));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        core.v6_broadcaster.register(1, tx);
+
+        dispatch_notification(&core, NotificationType::TagsChanged, Some("/other.mp3"));
+        assert!(frames(&mut rx).is_empty());
+
+        dispatch_notification(&core, NotificationType::TagsChanged, Some("/playing.mp3"));
+        let sent = frames(&mut rx);
+        assert_eq!(sent.len(), 1);
+        let event: serde_json::Value = serde_json::from_str(sent[0].trim()).unwrap();
+        assert_eq!(event["event"], "now_playing_tags_changed");
+        assert_eq!(event["data"]["path"], "/playing.mp3");
     }
 
     /// MusicBee reports a stream stopping twice, both times as stopped.

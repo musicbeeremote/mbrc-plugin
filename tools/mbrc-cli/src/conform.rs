@@ -202,6 +202,7 @@ fn run_checks(
     protocol_surface(c, host, port, timeout, &ops, r);
     list_contract(c, &ops, allow_writes, r);
     library_sync_contract(c, &ops, r);
+    tag_contract(c, &ops, r);
 
     browse_differential(host, port, timeout, c, r);
 
@@ -283,6 +284,65 @@ fn protocol_surface(
 
 /// `library_changes`: a full read pages to its end, its cursor answers with
 /// nothing older than itself, and a cursor from another library is told to resync.
+/// Tag fields (#225, #229): the playing track's values take the shape
+/// `tag_fields` says, distinct values come sorted with positive counts, and an
+/// unknown key is refused by name.
+fn tag_contract(c: &mut V6Client, ops: &[String], r: &mut Report) {
+    if !ops.iter().any(|o| o == "tag_fields") {
+        r.skip("tag fields", "tag_fields not advertised");
+        return;
+    }
+    r.check("tag values shape", || {
+        let fields = c.request("tag_fields", json!({}))?.ok()?;
+        let fields = fields["fields"].as_array().cloned().unwrap_or_default();
+        expect(!fields.is_empty(), "tag_fields listed no field")?;
+        let read = c.request("now_playing_tags", json!({}))?.ok()?;
+        if read["path"].is_null() {
+            return Ok(());
+        }
+        for field in &fields {
+            let key = field["key"].as_str().unwrap_or_default();
+            let value = &read["tags"][key];
+            let multi = field["multi_value"].as_bool().unwrap_or(false);
+            expect(
+                if multi {
+                    value.is_array()
+                } else {
+                    value.is_string()
+                },
+                &format!("{key} is {value}, but multi_value is {multi}"),
+            )?;
+        }
+        Ok(())
+    });
+    r.check("tag_values sorted and counted", || {
+        let out = c.request("tag_values", json!({ "key": "genre" }))?.ok()?;
+        let values = out["values"].as_array().cloned().unwrap_or_default();
+        let names: Vec<&str> = values.iter().filter_map(|v| v["value"].as_str()).collect();
+        expect(
+            names.windows(2).all(|w| w[0] < w[1]),
+            "values are not sorted and distinct",
+        )?;
+        expect(
+            values
+                .iter()
+                .all(|v| v["count"].as_u64().is_some_and(|n| n > 0)),
+            "a value has no tracks",
+        )
+    });
+    r.check("unknown tag key rejected", || {
+        let resp = c.request("tag_values", json!({ "key": "NotAKey" }))?;
+        expect(
+            resp.err_code()? == "invalid_field",
+            "an unknown key was accepted",
+        )?;
+        expect(
+            resp.err_field()?.as_deref() == Some("key"),
+            "the error did not name key",
+        )
+    });
+}
+
 fn library_sync_contract(c: &mut V6Client, ops: &[String], r: &mut Report) {
     if !ops.iter().any(|o| o == "library_changes") {
         r.skip("library sync", "library_changes not advertised");

@@ -20,6 +20,7 @@
   "panel": {
     "lyrics": "Lyrics",
     "details": "Details",
+    "tags": "Tags",
     "output": "Output",
     "playback": "Playback"
   },
@@ -49,5 +50,17 @@
   "art": {
     "expand": "Show the artwork full size",
     "expanded": "Album artwork"
+  },
+  "tags": {
+    "saving": "Saving...",
+    "add": "Add to {field}",
+    "remove": "Remove {value} from {field}",
+    "uses": "{count} track | {count} tracks",
+    "stale": "The track changed before this was saved. These are the new track's tags.",
+    "hostOnly": "Party Mode is on: only the host can edit tags.",
+    "readOnly": "Tag editing is not allowed for this browser.",
+    "showAll": "Show {count} more fields",
+    "showFewer": "Show fewer fields",
+    "loading": "Reading tags..."
   }
 }

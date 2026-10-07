@@ -35,7 +35,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Unauthorized | ErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
         ErrorCode::NotAllowed | ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::UnknownOp | ErrorCode::NotFound => StatusCode::NOT_FOUND,
-        ErrorCode::StaleList => StatusCode::CONFLICT,
+        ErrorCode::StaleList | ErrorCode::StaleTrack => StatusCode::CONFLICT,
         ErrorCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }

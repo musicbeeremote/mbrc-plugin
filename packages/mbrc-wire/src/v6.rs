@@ -96,6 +96,9 @@ pub enum ErrorCode {
     /// The queue or playlist moved since the version the request carried, so the
     /// `order` it names may no longer hold what the client read.
     StaleList,
+    /// The track a write named is no longer the one playing, so nothing was
+    /// written: the single-track sibling of `StaleList`.
+    StaleTrack,
     /// A server-side failure carrying out the op (e.g. a MusicBee FFI error).
     Internal,
     /// The requested resource (track, cover, ...) does not exist.
@@ -119,6 +122,7 @@ impl ErrorCode {
             Self::Forbidden => "forbidden",
             Self::InvalidToken => "invalid_token",
             Self::StaleList => "stale_list",
+            Self::StaleTrack => "stale_track",
             Self::Internal => "internal_error",
             Self::NotFound => "not_found",
             Self::Unavailable => "unavailable",

@@ -51,7 +51,7 @@ namespace MusicBeePlugin.Providers
             };
 
             var results = new string[fields.Length];
-            var success = _api.NowPlaying_GetFileTags(fields, out results);
+            var success = ReadPlayingTags(GetNowPlayingFileUrl(), fields, out results);
 
             // Raw values only: the V4 empty-field fallbacks (Unknown Artist/Album,
             // title -> file name) live in the Rust V4 wire codec now.
@@ -85,7 +85,7 @@ namespace MusicBeePlugin.Providers
             };
 
             var metadataResults = new string[metadataFields.Length];
-            var metadataSuccess = _api.NowPlaying_GetFileTags(metadataFields, out metadataResults);
+            var metadataSuccess = ReadPlayingTags(GetNowPlayingFileUrl(), metadataFields, out metadataResults);
 
             // Raw values only; the empty-albumArtist -> "Unknown Artist" fallback
             // lives in the Rust V4 wire codec now.
@@ -453,6 +453,71 @@ namespace MusicBeePlugin.Providers
         public bool CommitTrackTags(string fileUrl)
         {
             return _api.Library_CommitTagsToFile(fileUrl);
+        }
+
+        public PathTags GetNowPlayingTags(List<int> fields)
+        {
+            var path = GetNowPlayingFileUrl() ?? string.Empty;
+            if (path.Length == 0)
+                return new PathTags { path = string.Empty, values = new List<string>() };
+
+            var types = ToMetaDataTypes(fields);
+            var success = ReadPlayingTags(path, types, out var results);
+            var values = new List<string>(types.Length);
+            for (var i = 0; i < types.Length; i++)
+                values.Add(SafeGetResult(success, results, i) ?? string.Empty);
+            return new PathTags { path = path, values = values };
+        }
+
+        /// <summary>Sets one field of the playing file, if it is still <paramref name="path" />.</summary>
+        /// <remarks>
+        ///     MusicBee's panels keep showing the old value until they are refreshed, so a
+        ///     write refreshes them once it is committed.
+        /// </remarks>
+        public TagWriteResult WriteNowPlayingTag(string path, int field, string value)
+        {
+            var playing = GetNowPlayingFileUrl() ?? string.Empty;
+            if (string.IsNullOrEmpty(path) || !string.Equals(playing, path, StringComparison.Ordinal))
+                return new TagWriteResult { outcome = "stale_track", value = string.Empty, reason = string.Empty };
+
+            var type = (Plugin.MetaDataType)field;
+            if (!_api.Library_SetFileTag(path, type, value ?? string.Empty))
+                return TagWriteFailed("MusicBee did not accept the value");
+            if (!_api.Library_CommitTagsToFile(path))
+                return TagWriteFailed("MusicBee could not write the file");
+
+            _api.MB_RefreshPanels();
+            return new TagWriteResult
+            {
+                outcome = "written",
+                value = _api.Library_GetFileTag(path, type) ?? string.Empty,
+                reason = string.Empty,
+            };
+        }
+
+        /// <summary>The playing track's fields as they are now.</summary>
+        /// <remarks>
+        ///     MusicBee's now-playing tags keep the values a track started with, so a file
+        ///     is read through the library, which sees an edit at once. A stream has no file,
+        ///     and its now-playing tags are the song on air rather than the station's entry.
+        /// </remarks>
+        private bool ReadPlayingTags(string path, Plugin.MetaDataType[] fields, out string[] results)
+        {
+            var isFile = !string.IsNullOrEmpty(path) && path.IndexOf("://", StringComparison.Ordinal) < 0;
+            if (isFile && _api.Library_GetFileTags(path, fields, out results))
+                return true;
+            return _api.NowPlaying_GetFileTags(fields, out results);
+        }
+
+        private static TagWriteResult TagWriteFailed(string reason) =>
+            new TagWriteResult { outcome = "failed", value = string.Empty, reason = reason };
+
+        private static Plugin.MetaDataType[] ToMetaDataTypes(List<int> fields)
+        {
+            var types = new Plugin.MetaDataType[fields?.Count ?? 0];
+            for (var i = 0; i < types.Length; i++)
+                types[i] = (Plugin.MetaDataType)fields[i];
+            return types;
         }
 
         #endregion

@@ -85,7 +85,7 @@ a browser, a proxy and `curl` all read it correctly:
 | `unauthorized`, `invalid_token` | 401 |
 | `not_allowed`, `forbidden` | 403 |
 | `unknown_op`, `not_found` | 404 |
-| `stale_list` | 409 |
+| `stale_list`, `stale_track` | 409 |
 | `unavailable` | 503 |
 | `internal` | 500 |
 
@@ -407,6 +407,7 @@ offending input directly. Its absence means the error is not about a single fiel
 | `forbidden` | Party Mode is on and this client's role does not allow the op; the message names the capability it needs |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
 | `stale_list` | the queue or playlist moved since the `version` the request carried |
+| `stale_track` | a write named a track that is no longer the one playing; nothing was written |
 | `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account) |
 | `internal_error` | an unexpected host/plugin failure |
 
@@ -559,7 +560,8 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | `now_playing_seek` | `{"position_ms":N}` | `{"position_ms":..,"duration_ms":..}` (read back after the seek) |
 | `now_playing_set_rating` | `{"rating":0-5\|null}` | `{"rating":<new>}` |
 | `now_playing_set_lfm` | `{"status":"normal"\|"love"\|"ban"}` | `{"lfm_status":<new>}` |
-| `now_playing_set_tag` | `{"tag":"title"\|"artist"\|"album"\|"album_artist"\|"genre"\|"year"\|"composer"\|"comment"\|"lyrics","value":"<v>"}` | `{}` - any other `tag` is `invalid_field` |
+| `now_playing_tags` | `{keys?}` | `{"path":..,"tags":{"<key>":<value>}}`, or `{"path":null,"tags":{}}` when nothing plays - see [Tags](#tags) |
+| `now_playing_set_tag` | `{"path":..,"key":..,"value":<value>}` | `{"path":..,"key":..,"value":<read back>}` - see [Tags](#tags) |
 
 `now_playing_details` carries what the canonical track does not, for a details pane:
 
@@ -580,6 +582,45 @@ as it formats them.
 
 `now_playing_lyrics` returns structured lyrics; synced lines carry `at_ms`, plain lines do not,
 and `type:"none"` yields an empty `lines`.
+
+### Tags
+
+Tags are read and written by a fixed lowercase **key**, never by the name the user gave a
+field in MusicBee: names change, collide with built-in names and are localized.
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `tag_fields` | `{}` | `{"fields":[{"key":..,"name":..,"multi_value":bool}]}`, every key below, in this order |
+| `tag_values` | `{"key":..}` | `{"key":..,"values":[{"value":..,"count":N}]}`, sorted by `value` |
+| `now_playing_tags` | `{keys?}` | the playing track's values, every key when `keys` is absent |
+| `now_playing_set_tag` | `{"path":..,"key":..,"value":<value>}` | the value read back after the commit |
+
+Keys: `title`, `artist`, `album`, `album_artist`, `year`, `genre`, `composer`, `grouping`,
+`publisher`, `comment`, `mood`, `occasion`, `bpm`, `custom1` .. `custom16`. Lyrics and rating
+have ops of their own. An unknown key is `invalid_field`.
+
+- **`name`** is the label the user sees in MusicBee, such as `Energy` for `custom1`.
+- **Values.** A multi-value field is always a JSON array (`[]` when unset) and a single-value
+  field always a string (`""` when unset), so a client never splits on `;`. `artist`, `genre`,
+  `composer`, `mood` and `occasion` are multi-value. MusicBee does not report whether a custom
+  field is, so a custom field is `multi_value` once any file in the library holds a `;`
+  separated value in it.
+- **`tag_values`** splits a multi-value field, so a file tagged `Bass; Cello` counts once for
+  each. Values are trimmed, empty ones dropped, and values differing only in case are kept
+  apart (`Rock` and `rock`), so an editor can show the stray spelling. `library_genres` merges
+  case the way MusicBee's genre browse does. The first tag op after a library change reads every
+  track's fields once, which can take a few seconds on a large library; later ones are served
+  from memory until the tags change.
+- **`now_playing_set_tag`** writes the playing track. `value` is an array for a multi-value
+  field and a string for a single-value one; a custom field takes either, since a file may be
+  the first to give it a second value. The wrong shape is `invalid_field`. `""` or `[]` clears
+  the field. `path` is required: when it is no longer the playing track, the reply is
+  `stale_track` and nothing is written, so a slow tap never tags the next song. A commit
+  MusicBee refuses (a read-only file, a stream) is `unavailable` with its reason, and so is a
+  value MusicBee accepted but did not keep: a custom field holds a value only once it is set up
+  in MusicBee's tag preferences. MusicBee stores a multi-value field's values separately in the
+  file, and writes a playing file once playback moves on; reads show the new value at once. A successful
+  write refreshes MusicBee's own panels and sends `now_playing_tags_changed`.
 
 ### Now Playing List (the queue)
 
@@ -889,6 +930,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_cover_changed` | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
+| `now_playing_tags_changed` | `{"path":..}` | the playing track's tags were edited, from a client or in MusicBee -> re-query `now_playing_tags` |
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list`. Sent once per burst, about 150ms after the first change, so a multi-step edit such as play-now is one event; the list `version` still moves with every step |
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
