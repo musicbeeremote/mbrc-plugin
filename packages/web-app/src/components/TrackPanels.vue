@@ -8,18 +8,21 @@ import IconLyrics from '~icons/lucide/mic-vocal'
 import IconOutput from '~icons/lucide/speaker'
 import IconPlayback from '~icons/lucide/sliders-horizontal'
 import IconStopAfter from '~icons/lucide/circle-stop'
+import IconTags from '~icons/lucide/tags'
 
 import { activeLyricLine } from '../composables/lyrics'
 import { useOutputStore } from '../stores/output'
 import { usePlayerStore } from '../stores/player'
 import { usePermissionsStore } from '../stores/permissions'
+import { useTagsStore } from '../stores/tags'
 
 import EmptyState from './EmptyState.vue'
 import PanelSheet from './PanelSheet.vue'
+import TagEditor from './TagEditor.vue'
 import { Capability } from '../api/permissions'
 
 /**
- * The four things about playback worth more than a row of their own.
+ * The things about playback worth more than a row of their own.
  *
  * Lyrics and the tag list are content and open a sheet, which is the only way
  * either gets the room it needs: a rail is narrow, and words in a letterbox are
@@ -40,6 +43,7 @@ const { t } = useI18n()
 const player = usePlayerStore()
 const output = useOutputStore()
 const permissions = usePermissionsStore()
+const tags = useTagsStore()
 
 const showLyrics = ref(false)
 const showDetails = ref(false)
@@ -141,6 +145,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       {{ $t('player.panel.details') }}
     </button>
 
+    <button
+      class="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-2xs text-outline transition-colors hover:text-ink"
+      @click="tags.show()"
+    >
+      <IconTags class="size-4" />
+      {{ $t('player.panel.tags') }}
+    </button>
+
     <div v-if="permissions.can(Capability.Modes)" ref="playbackRoot" class="relative">
       <button
         class="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-2xs transition-colors"
@@ -237,6 +249,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
         {{ line.text || ' ' }}
       </p>
     </div>
+  </PanelSheet>
+
+  <PanelSheet :open="tags.open" :title="trackTitle" @close="tags.hide()">
+    <TagEditor />
   </PanelSheet>
 
   <PanelSheet :open="showDetails" :title="trackTitle" @close="showDetails = false">

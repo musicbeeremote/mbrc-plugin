@@ -85,6 +85,7 @@ export const ErrorCode = {
   Forbidden: 'forbidden',
   InvalidToken: 'invalid_token',
   StaleList: 'stale_list',
+  StaleTrack: 'stale_track',
   Internal: 'internal',
   NotFound: 'not_found',
   Unavailable: 'unavailable',
@@ -294,3 +295,4 @@ export const LyricsSchema = z.object({
   lines: z.array(LyricLineSchema).default([]),
 })
 export type Lyrics = z.infer<typeof LyricsSchema>
+
