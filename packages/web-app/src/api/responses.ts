@@ -30,6 +30,7 @@ import {
   TrackSchema,
 } from './types'
 import { PermissionsSchema } from './permissions'
+import { NowPlayingTagsSchema, TagFieldSchema, TagValueCountSchema, TagValueSchema } from './tags'
 
 export const PlayerStatusSchema = z.object({
   play_state: PlayStateSchema,
@@ -132,6 +133,11 @@ export const OpResponseSchemas = {
   now_playing_seek: PositionSchema,
   now_playing_set_rating: z.object({ rating: z.number().nullable() }),
   now_playing_set_lfm: z.object({ lfm_status: LastfmStatusSchema }),
+  now_playing_tags: NowPlayingTagsSchema,
+  /** The value read back after the commit, which is what MusicBee kept. */
+  now_playing_set_tag: z.object({ path: z.string(), key: z.string(), value: TagValueSchema }),
+  tag_fields: z.object({ fields: z.array(TagFieldSchema) }),
+  tag_values: z.object({ key: z.string(), values: z.array(TagValueCountSchema) }),
 
   now_playing_list: QueuePageSchema,
   now_playing_list_play: EmptySchema,
@@ -206,6 +212,7 @@ export const EventPayloadSchemas = {
   }),
   now_playing_lyrics_changed: EmptySchema,
   now_playing_cover_changed: EmptySchema,
+  now_playing_tags_changed: z.object({ path: z.string() }),
   now_playing_list_changed: EmptySchema,
   cover_cache_changed: z.object({ building: z.boolean() }),
   library_changed: EmptySchema,

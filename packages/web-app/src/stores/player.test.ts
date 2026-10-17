@@ -102,6 +102,19 @@ describe('the cover', () => {
   })
 })
 
+describe('a tag edit', () => {
+  // A title fixed in the tag editor, or in MusicBee, is what the bar shows.
+  it('reads the track again', () => {
+    const player = usePlayerStore()
+    player.bind()
+    const listener = on.mock.calls.find(([event]) => event === 'now_playing_tags_changed')?.[1]
+
+    listener?.()
+
+    expect(ops()).toContain('now_playing_state')
+  })
+})
+
 describe('the track panels', () => {
   it('asks for details only when something wants them', async () => {
     const player = usePlayerStore()

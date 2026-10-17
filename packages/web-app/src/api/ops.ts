@@ -10,6 +10,7 @@
  * instead, and live in `responses`.
  */
 
+import type { TagValue } from './tags'
 import type {
   Empty,
   LastfmStatus,
@@ -91,6 +92,12 @@ export interface OpRequests {
   now_playing_seek: { position_ms: number }
   now_playing_set_rating: { rating: number | null }
   now_playing_set_lfm: { status: LastfmStatus }
+  now_playing_tags: { keys?: string[] }
+  // `path` is what the editor was opened on; a write landing after the track
+  // moved on is refused with `stale_track` rather than tagging the next song.
+  now_playing_set_tag: { path: string; key: string; value: TagValue }
+  tag_fields: Empty
+  tag_values: { key: string }
 
   now_playing_list: PageArgs & { up_next?: boolean; totals?: boolean }
   now_playing_list_play: { order: number; version?: number }
@@ -173,6 +180,10 @@ export const Op = {
   NowPlayingSeek: 'now_playing_seek',
   NowPlayingSetRating: 'now_playing_set_rating',
   NowPlayingSetLfm: 'now_playing_set_lfm',
+  NowPlayingTags: 'now_playing_tags',
+  NowPlayingSetTag: 'now_playing_set_tag',
+  TagFields: 'tag_fields',
+  TagValues: 'tag_values',
 
   NowPlayingList: 'now_playing_list',
   NowPlayingListPlay: 'now_playing_list_play',
@@ -227,6 +238,7 @@ export const WireEvent = {
   NowPlayingChanged: 'now_playing_changed',
   NowPlayingLyricsChanged: 'now_playing_lyrics_changed',
   NowPlayingCoverChanged: 'now_playing_cover_changed',
+  NowPlayingTagsChanged: 'now_playing_tags_changed',
   NowPlayingListChanged: 'now_playing_list_changed',
   CoverCacheChanged: 'cover_cache_changed',
   LibraryChanged: 'library_changed',
