@@ -6,13 +6,18 @@
 //! target is just an address, so the same command validates any V4 server.
 //!
 //! Per connection it replays the handshake (via the shared `ClientHandshake`),
-//! blasts the remaining commands, drains the responses, then compares. Volatile
+//! blasts the remaining commands, drains the responses, then compares. Draining
+//! waits up to ten idle periods while a reply the golden recorded on that
+//! connection is still missing, since some host calls outlast one. Volatile
 //! state differences (volume, position) are expected against a live plugin - use
-//! `--values --ignore playervolume,...` to focus the value diff.
+//! `--values --ignore playervolume,...` to focus the value diff. Library
+//! references in the golden are first bound to live items (see `library_bind`);
+//! `--no-bind` sends them as captured.
 //!
 //! Usage:
-//!   mbrc replay --golden <file|dir> [--host H] [--port P]
-//!               [--wait-ms N] [--values] [--ignore f1,f2] [--out capture.jsonl]
+//!   mbrc replay --golden <file|dir> [--host H] [--port P] [--wait-ms N]
+//!               [--values] [--ignore f1,f2] [--out capture.jsonl]
+//!               [--no-bind] [--show-bindings]
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -25,6 +30,7 @@ use tokio::net::TcpStream;
 
 use crate::args::{flag_value, has_flag};
 use crate::compare::{diff_report, parse_ignore};
+use crate::library_bind::{Binder, LiveLibrary, PROBE_COMMANDS};
 use crate::trim::read_all;
 
 /// A connection's replay plan: how to present, and what commands to send.
@@ -32,12 +38,14 @@ struct ReplayConn {
     client_type: String,
     protocol: u8,
     commands: Vec<String>,
+    /// Contexts of the golden's replies on this connection, one per reply.
+    expected_replies: Vec<String>,
 }
 
 pub fn run(args: &[String]) -> ExitCode {
     let Some(golden) = flag_value(args, "--golden") else {
         eprintln!(
-            "usage: mbrc replay --golden <file|dir> [--host H] [--port P] [--wait-ms N] [--values] [--ignore f1,f2] [--out F]"
+            "usage: mbrc replay --golden <file|dir> [--host H] [--port P] [--wait-ms N] [--values] [--ignore f1,f2] [--out F] [--no-bind] [--show-bindings]"
         );
         return ExitCode::from(2);
     };
@@ -69,7 +77,7 @@ pub fn run(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let plan = plan_connections(&golden_contents);
+    let mut plan = plan_connections(&golden_contents);
     if plan.is_empty() {
         eprintln!("no connections found in {golden}");
         return ExitCode::from(2);
@@ -82,6 +90,16 @@ pub fn run(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if !has_flag(args, "--no-bind") {
+        let live = match rt.block_on(probe(&host, port, wait)) {
+            Ok(live) => live,
+            Err(e) => {
+                eprintln!("probe of {host}:{port} failed: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        bind_plan(&mut plan, &live, has_flag(args, "--show-bindings"));
+    }
     let replay_contents = match rt.block_on(drive_all(&host, port, &plan, wait)) {
         Ok(c) => c,
         Err(e) => {
@@ -111,10 +129,18 @@ pub fn run(args: &[String]) -> ExitCode {
 fn plan_connections(golden: &str) -> Vec<ReplayConn> {
     let mut order: Vec<u32> = Vec::new();
     let mut by_conn: BTreeMap<u32, Vec<Frame>> = BTreeMap::new();
+    let mut replies: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     for line in golden.lines() {
-        if let Some(Record::Frame(f)) = parse_line(line)
-            && f.dir == "c2s"
+        let Some(Record::Frame(f)) = parse_line(line) else {
+            continue;
+        };
+        if f.dir == "s2c"
+            && f.reply_to.is_some()
+            && let Some(ctx) = f.context()
         {
+            replies.entry(f.conn_id).or_default().push(ctx.to_string());
+        }
+        if f.dir == "c2s" {
             by_conn
                 .entry(f.conn_id)
                 .or_insert_with(|| {
@@ -163,9 +189,51 @@ fn plan_connections(golden: &str) -> Vec<ReplayConn> {
                 client_type,
                 protocol,
                 commands,
+                expected_replies: replies.remove(&cid).unwrap_or_default(),
             }
         })
         .collect()
+}
+
+/// Reads the live library over one Android V4 connection, for binding.
+async fn probe(host: &str, port: u16, wait: Duration) -> std::io::Result<LiveLibrary> {
+    let conn = ReplayConn {
+        client_type: "Android".to_string(),
+        protocol: 4,
+        commands: PROBE_COMMANDS.iter().map(|c| c.to_string()).collect(),
+        expected_replies: PROBE_COMMANDS
+            .iter()
+            .filter_map(|c| parse_context(c))
+            .collect(),
+    };
+    let mut lines = Vec::new();
+    drive_one(host, port, 0, &conn, wait, &mut 0, &mut lines).await?;
+    Ok(LiveLibrary::from_probe(&lines))
+}
+
+/// Rewrites every planned command's library references, in replay order.
+fn bind_plan(plan: &mut [ReplayConn], live: &LiveLibrary, show: bool) {
+    let mut binder = Binder::new(live);
+    binder.prescan(plan.iter().flat_map(|c| c.commands.iter()));
+    let mut rewritten = 0;
+    for cmd in plan.iter_mut().flat_map(|c| c.commands.iter_mut()) {
+        if let Some(bound) = binder.rewrite(cmd) {
+            *cmd = bound;
+            rewritten += 1;
+        }
+    }
+    println!(
+        "bound {} library reference(s) in {rewritten} command(s) to the live library",
+        binder.bindings.len()
+    );
+    for (kind, golden) in &binder.unbound {
+        println!("  unbound {kind:?} {golden:?}: the live library has none");
+    }
+    if show {
+        for (kind, golden, live) in &binder.bindings {
+            println!("  {kind:?} {golden:?} -> {live:?}");
+        }
+    }
 }
 
 /// Replays every connection in sequence, accumulating one capture (JSONL string).
@@ -231,9 +299,10 @@ async fn drive_one(
         send_line(&mut wr, lines, conn_id, seq, &mut last_c2s, cmd).await?;
     }
 
-    // Drain responses until the server goes idle.
+    let mut pending = plan.expected_replies.clone();
     loop {
-        let n = match tokio::time::timeout(wait, rd.read(&mut buf)).await {
+        let idle = if pending.is_empty() { wait } else { wait * 10 };
+        let n = match tokio::time::timeout(idle, rd.read(&mut buf)).await {
             Ok(Ok(0)) | Err(_) => break,
             Ok(Ok(n)) => n,
             Ok(Err(e)) => return Err(e),
@@ -244,8 +313,11 @@ async fn drive_one(
                 continue;
             }
             record_s2c(lines, conn_id, seq, last_c2s, &line);
-            // Keep the connection alive across ping keepalives.
-            if let Some(reply) = hs.on_incoming(&parse_context(&line).unwrap_or_default()) {
+            let ctx = parse_context(&line).unwrap_or_default();
+            if let Some(i) = pending.iter().position(|p| *p == ctx) {
+                pending.swap_remove(i);
+            }
+            if let Some(reply) = hs.on_incoming(&ctx) {
                 send_line(&mut wr, lines, conn_id, seq, &mut last_c2s, &reply).await?;
             }
         }
@@ -290,4 +362,47 @@ fn record(conn_id: u32, seq: u64, dir: &str, reply_to: Option<u64>, raw: &str) -
     let mut f = Frame::new(conn_id, seq, dir, 0, raw.as_bytes());
     f.reply_to = reply_to;
     serde_json::to_string(&f).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_connection_expects_the_replies_the_golden_recorded_but_not_broadcasts() {
+        let golden = [
+            record(
+                0,
+                0,
+                "c2s",
+                None,
+                r#"{"context":"player","data":"Android"}"#,
+            ),
+            record(
+                0,
+                1,
+                "c2s",
+                None,
+                r#"{"context":"playlistplay","data":"x.mbp"}"#,
+            ),
+            record(
+                0,
+                2,
+                "s2c",
+                Some(1),
+                r#"{"context":"playlistplay","data":true}"#,
+            ),
+            record(
+                0,
+                3,
+                "s2c",
+                None,
+                r#"{"context":"playerstate","data":"playing"}"#,
+            ),
+        ]
+        .join("\n");
+        let plan = plan_connections(&golden);
+        assert_eq!(plan[0].commands.len(), 1);
+        assert_eq!(plan[0].expected_replies, vec!["playlistplay"]);
+    }
 }

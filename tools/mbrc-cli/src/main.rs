@@ -14,6 +14,7 @@ mod compare;
 mod conform;
 mod fuzz;
 mod inspect;
+mod library_bind;
 mod monitor;
 mod replay;
 mod rng;
@@ -118,6 +119,7 @@ fn print_usage() {
          \x20 compare  <a> <b> [--values]               diff two captures by endpoint\n\
          \x20 replay   --golden <file|dir> [--host H]   drive a golden against a live server,\n\
          \x20          [--port P] [--values]              record responses, diff vs the golden\n\
+         \x20          [--no-bind] [--show-bindings]      (library references bound to live items)\n\
          \x20 fuzz     [--host H] [--port P] [--seed N]  seeded protocol fuzzer (read-only\n\
          \x20          [--iterations K] [--corpus G]      default; --diff-host for differential;\n\
          \x20          [--protocol 4|6]                   --protocol 6 = V6 read-only path:\n\
