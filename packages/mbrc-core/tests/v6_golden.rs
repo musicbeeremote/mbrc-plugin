@@ -74,6 +74,7 @@ fn suites() -> Vec<(&'static str, Vec<Case>)> {
         ("nowplaying_list", nowplaying_list_cases(&page)),
         ("library", library_cases(&page)),
         ("playlist", playlist_cases(&page)),
+        ("tags", tag_cases()),
         ("errors", error_cases()),
     ]
 }
@@ -159,6 +160,41 @@ fn nowplaying_cases() -> Vec<Case> {
             "now_playing_set_lfm",
             "now_playing_set_lfm",
             json!({ "status": "love" }),
+        ),
+    ]
+}
+
+/// Tag editing by field (#225, #229): the field list, values, and the write
+/// with its refusals.
+fn tag_cases() -> Vec<Case> {
+    let playing = r"C:\Music\s.mp3";
+    vec![
+        case("tag_fields", "tag_fields", json!({})),
+        case("tag_values", "tag_values", json!({ "key": "genre" })),
+        case(
+            "now_playing_tags",
+            "now_playing_tags",
+            json!({ "keys": ["genre", "custom1", "custom2", "title"] }),
+        ),
+        case(
+            "set_tag_multi_value",
+            "now_playing_set_tag",
+            json!({ "path": playing, "key": "custom2", "value": ["Bass", "Cello"] }),
+        ),
+        case(
+            "set_tag_clear",
+            "now_playing_set_tag",
+            json!({ "path": playing, "key": "custom1", "value": "" }),
+        ),
+        case(
+            "set_tag_stale_track",
+            "now_playing_set_tag",
+            json!({ "path": r"C:\Music\other.mp3", "key": "title", "value": "x" }),
+        ),
+        case(
+            "set_tag_unknown_key",
+            "now_playing_set_tag",
+            json!({ "path": playing, "key": "Instruments", "value": "x" }),
         ),
     ]
 }

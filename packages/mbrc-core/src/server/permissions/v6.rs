@@ -69,7 +69,10 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "podcast_subscriptions"
         | "podcast_subscription"
         | "podcast_episodes"
-        | "podcast_episode" => Action::Read,
+        | "podcast_episode"
+        | "tag_fields"
+        | "tag_values"
+        | "now_playing_tags" => Action::Read,
         _ => return None,
     })
 }

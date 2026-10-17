@@ -234,6 +234,8 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
         commands::library::file_reported_edits(cache, &edited);
     }
     crate::state::broadcast_library_changed(core);
+    super::commands_v6::tags::refresh_rows(core.providers.as_ref(), Some(cache), &tagged);
+    announce_playing_edit(core, &tagged);
 
     if backfill_tags(core) {
         core.tag_backfill.notify_one();
@@ -247,6 +249,23 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
     drop(reconcile);
     core.providers
         .emit_event(HostEventType::CacheStatusChanged, &[]);
+}
+
+/// Re-reads the playing track and tells V6 clients, when it is among `tagged`.
+///
+/// Done here, after the debounce, rather than when MusicBee reports the edit:
+/// it reports an edit to the playing file as `TagsChanging` before applying
+/// it, so a read then sends clients the values being replaced.
+fn announce_playing_edit(core: &Core, tagged: &[String]) {
+    let playing = core.now_playing.track_info().path;
+    if playing.is_empty() || !tagged.contains(&playing) {
+        return;
+    }
+    core.now_playing.refresh_track_bundle();
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "now_playing_tags_changed",
+        serde_json::json!({ "path": playing }),
+    )]);
 }
 
 /// One backfill burst on a blocking worker, under the reconcile guard.
@@ -301,6 +320,50 @@ mod tests {
         core.metadata_cache.replace_track_index(&library);
         core.metadata_cache.record_changes(Some(&library), &[]);
         core
+    }
+
+    /// An edit to the playing file, from a client or in MusicBee's own window,
+    /// reaches every client showing its tags once the pass has read it, and
+    /// not before: MusicBee reports the edit before applying it.
+    #[test]
+    fn a_tag_edit_to_the_playing_file_is_announced_after_the_pass() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_info: crate::protocol::messages::TrackInfo {
+                path: "/a.mp3".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "playing-edit");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+        let announced = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>| {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .filter(|frame| frame.contains("now_playing_tags_changed"))
+                .count()
+        };
+
+        crate::state::dispatch_notification(
+            &core,
+            crate::ffi::types::NotificationType::TagsChanged,
+            Some("/a.mp3"),
+        );
+        assert_eq!(
+            announced(&mut rx),
+            0,
+            "announced before MusicBee applied it"
+        );
+
+        apply_reported_now(&core);
+        assert_eq!(announced(&mut rx), 1);
+
+        core.library_events.tags_changed(Some("/b.mp3"));
+        apply_reported_now(&core);
+        assert_eq!(
+            announced(&mut rx),
+            0,
+            "another file's edit is not the playing track's"
+        );
     }
 
     #[test]

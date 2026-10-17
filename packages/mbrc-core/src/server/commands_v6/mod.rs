@@ -14,6 +14,7 @@ pub mod player;
 pub mod playlist;
 pub mod podcast;
 pub mod system;
+pub mod tags;
 pub mod track;
 
 use serde_json::{Value, json};
@@ -42,6 +43,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "now_playing_changed",
     "now_playing_lyrics_changed",
     "now_playing_cover_changed",
+    "now_playing_tags_changed",
     "now_playing_list_changed",
     "cover_cache_changed",
     "library_changed",
@@ -64,6 +66,7 @@ pub fn capabilities() -> Value {
         .chain(nowplaying::OPS)
         .chain(nowplaying_list::OPS)
         .chain(podcast::OPS)
+        .chain(tags::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })
@@ -119,6 +122,7 @@ pub fn dispatch(
         .or_else(|| playlist::dispatch(op, data, providers, metadata_cache, cover_store))
         .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
         .or_else(|| podcast::dispatch(op, data, providers, cover_store))
+        .or_else(|| tags::dispatch(op, data, providers, metadata_cache))
         .or_else(|| {
             nowplaying_list::dispatch(
                 op,
