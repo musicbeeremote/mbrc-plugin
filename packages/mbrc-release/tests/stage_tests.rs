@@ -45,8 +45,8 @@ fn temp_dir(name: &str) -> String {
 /// test, not the compressor.
 fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let options: zip::write::FileOptions<'_, ()> =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     for (name, bytes) in entries {
         writer.start_file(*name, options).unwrap();
         writer.write_all(bytes).unwrap();

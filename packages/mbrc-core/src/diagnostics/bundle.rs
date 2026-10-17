@@ -202,7 +202,10 @@ mod tests {
         let file = File::open(zip_path).expect("open bundle");
         let mut archive = zip::ZipArchive::new(file).expect("read bundle");
         (0..archive.len())
-            .map(|i| archive.by_index(i).expect("entry").name().to_owned())
+            .map(|i| {
+                let entry = archive.by_index(i).expect("entry");
+                entry.name().expect("entry name").into_owned()
+            })
             .collect()
     }
 

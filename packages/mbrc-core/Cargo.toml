@@ -58,7 +58,7 @@ flate2 = { version = "=1.1.10", default-features = false, features = ["rust_back
 # takes mbrc-release with `client`, which already compiles zip in. `deflate-flate2`
 # rides on the pure-Rust miniz_oxide above, so i686-msvc stays free of a C
 # toolchain.
-zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.0.1", default-features = false, features = ["deflate-flate2"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),
@@ -76,14 +76,14 @@ socket2 = "=0.6.5"
 # Rust with no async-runtime dependency of its own - it runs its own daemon
 # thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
 # crate would pull in `log`, and the core's logging goes through `tracing`.
-mdns-sd = { version = "=0.21.4", default-features = false }
+mdns-sd = { version = "=0.21.5", default-features = false }
 axum = { version = "=0.8.9", default-features = false, features = ["http1", "ws", "json", "query", "matched-path"] }
 tower-http = { version = "=0.7.1", default-features = false, features = ["set-header"] }
 # Only for the SSE body's `Stream`; already in the tree under axum.
 futures-core = "=0.3.34"
-rust-embed = { version = "=8.12.0", default-features = false }
-hyper-util = { version = "=0.1.20", default-features = false, features = ["service", "tokio"] }
-hyper = { version = "=1.11.1", default-features = false, features = ["server", "http1"] }
+rust-embed = { version = "=8.13.0", default-features = false }
+hyper-util = { version = "=0.1.21", default-features = false, features = ["service", "tokio"] }
+hyper = { version = "=1.12.0", default-features = false, features = ["server", "http1"] }
 
 # ShellExecuteExW (the elevation prompt for the update helper) and the loader
 # calls that answer "which directory was this DLL loaded from", which is how the
@@ -120,7 +120,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=3.0.6", features = ["full"] }
+syn = { version = "=3.0.7", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }
@@ -128,7 +128,7 @@ serde_json = { workspace = true }
 # Property-based fuzzing of the untrusted decode paths (cover artwork + settings
 # msgpack) on stable. rmp-serde is re-declared here so the integration test can
 # call the decoder directly (crate deps aren't visible to integration tests).
-proptest = "=1.11.0"
+proptest = "=1.12.0"
 # `ServiceExt::oneshot`, to drive the web router in process. Already in the
 # graph under axum.
 tower = { version = "=0.5.3", default-features = false, features = ["util"] }

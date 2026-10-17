@@ -21,15 +21,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # bumps are handled by Renovate, which waits 7 days after a release
 # (minimumReleaseAge) before opening an update PR.
 [build-dependencies]
-tauri-build = { version = "=2.7.0", features = [] }
+tauri-build = { version = "=2.7.2", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.0", features = [] }
-tauri-plugin-opener = "=2.5.5"
-tauri-plugin-dialog = "=2.7.3"
+tauri = { version = "=2.12.3", features = [] }
+tauri-plugin-opener = "=2.7.1"
+tauri-plugin-dialog = "=2.8.2"
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
-tokio = { version = "=1.53.1", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "fs"] }
+serde_json = "=1.0.152"
+tokio = { version = "=1.53.2", features = ["net", "io-util", "sync", "rt", "rt-multi-thread", "macros", "fs"] }
 
 # Shared crates from the root workspace. This app stays its own workspace (the
 # [workspace] table below) and reaches them by path, so the root workspace's

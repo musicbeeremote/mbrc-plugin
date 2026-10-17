@@ -208,7 +208,10 @@ fn extract_verified(zip_bytes: &[u8], manifest: &Manifest) -> Result<Vec<(String
         let entry = archive
             .by_index_raw(index)
             .map_err(|e| UpdateError::Archive(e.to_string()))?;
-        let name = entry.name().to_owned();
+        let name = entry
+            .name()
+            .map_err(|e| UpdateError::Archive(e.to_string()))?
+            .into_owned();
         if !is_bare_filename(&name) {
             return Err(UpdateError::UnsafeEntry(name));
         }
