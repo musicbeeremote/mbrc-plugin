@@ -16,7 +16,7 @@
 //! a no-op and the cache transparently falls back to the provider.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use redb::{Durability, ReadableTable, ReadableTableMetadata};
@@ -335,13 +335,33 @@ impl TrackFilter<'_> {
 /// Every track's `(genre, artist)`, the part of the tags genre browse reads.
 type GenreRows = Vec<(String, String)>;
 
-/// Drops what was derived from the tags when a write to them returns, so a
-/// reader cannot rebuild it from rows the write has not committed yet.
+/// Every track's values of the tag-editing fields, by path, each row in the
+/// order the reader asked for them.
+pub type TagRows = HashMap<String, Vec<String>>;
+
+/// Drops what was derived from the cached tags when a write to them returns,
+/// so a reader cannot rebuild it from rows the write has not committed yet.
+///
+/// The tag rows are not among them: they are read from the host, and an edit
+/// patches its own row rather than costing every track's again.
 struct TagsMoved<'a>(&'a MetadataCache);
 
 impl Drop for TagsMoved<'_> {
     fn drop(&mut self) {
         *self.0.genre_rows.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+/// As [`TagsMoved`], for a change to which tracks there are: the tag rows go
+/// too, and a read already under way is not kept.
+struct IndexMoved<'a>(&'a MetadataCache);
+
+impl Drop for IndexMoved<'_> {
+    fn drop(&mut self) {
+        drop(TagsMoved(self.0));
+        let mut rows = self.0.tag_rows.lock().unwrap_or_else(|e| e.into_inner());
+        self.0.tags_generation.fetch_add(1, Ordering::AcqRel);
+        *rows = None;
     }
 }
 
@@ -352,6 +372,14 @@ pub struct MetadataCache {
     /// Every track's `(genre, artist)`, kept once the tags are complete and
     /// dropped by any write to them, so genre browse decodes no tag rows.
     genre_rows: Mutex<Option<Arc<GenreRows>>>,
+    /// The tag-editing fields of every track, kept once read.
+    tag_rows: Mutex<Option<Arc<TagRows>>>,
+    /// Held while the tag rows are read, so a second reader waits for the
+    /// first rather than reading every track again.
+    tag_rows_read: Mutex<()>,
+    /// Moved by every change to the tag rows, so rows read across one are
+    /// not kept.
+    tags_generation: AtomicU64,
 }
 
 impl MetadataCache {
@@ -361,6 +389,9 @@ impl MetadataCache {
             db,
             validated: AtomicBool::new(false),
             genre_rows: Mutex::new(None),
+            tag_rows: Mutex::new(None),
+            tag_rows_read: Mutex::new(()),
+            tags_generation: AtomicU64::new(0),
         }
     }
 
@@ -385,7 +416,7 @@ impl MetadataCache {
     /// The change log starts a new epoch and the sync watermark goes, since both
     /// describe a library that is no longer the one loaded.
     pub fn forget_library(&self) {
-        let _moved = TagsMoved(self);
+        let _moved = IndexMoved(self);
         self.changes.reset();
         self.db.write(Durability::Immediate, |txn| {
             let mut meta = txn.open_table(META)?;
@@ -401,7 +432,7 @@ impl MetadataCache {
     }
 
     fn set_validated(&self, value: bool) {
-        let _moved = TagsMoved(self);
+        let _moved = IndexMoved(self);
         self.validated.store(value, Ordering::Release);
     }
 
@@ -466,7 +497,7 @@ impl MetadataCache {
     /// library having changed. A switch to another library also calls
     /// [`forget_library`](Self::forget_library).
     pub fn clear(&self) {
-        let _moved = TagsMoved(self);
+        let _moved = IndexMoved(self);
         self.db.write(Durability::Immediate, |txn| {
             // `delete_table` returns false if it never existed - harmless.
             txn.delete_table(METADATA_CACHE)?;
@@ -548,7 +579,7 @@ impl MetadataCache {
     /// orders are built from the tag rows, and a row left behind pages a reader
     /// through a track the library no longer holds.
     pub fn replace_track_index(&self, paths: &[String]) {
-        let _moved = TagsMoved(self);
+        let _moved = IndexMoved(self);
         if !self.is_validated() {
             return;
         }
@@ -764,6 +795,63 @@ impl MetadataCache {
                 .then_with(|| a.cmp(b))
         });
         Some(out)
+    }
+
+    fn kept_tag_rows(&self) -> Option<Arc<TagRows>> {
+        self.tag_rows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// The tag rows, kept from an earlier read or read now by `read`.
+    ///
+    /// One reader at a time: a second caller waits and is answered from the
+    /// first one's rows. Rows a patch or an index change overtook are
+    /// returned but not kept, since they may hold the values being replaced.
+    ///
+    /// # Errors
+    /// Whatever `read` failed with.
+    pub fn tag_rows_or_read<E>(
+        &self,
+        read: impl FnOnce() -> Result<TagRows, E>,
+    ) -> Result<Arc<TagRows>, E> {
+        if let Some(rows) = self.kept_tag_rows() {
+            return Ok(rows);
+        }
+        let _reading = self.tag_rows_read.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(rows) = self.kept_tag_rows() {
+            return Ok(rows);
+        }
+        let generation = self.tags_generation.load(Ordering::Acquire);
+        let rows = Arc::new(read()?);
+        let mut kept = self.tag_rows.lock().unwrap_or_else(|e| e.into_inner());
+        if self.tags_generation.load(Ordering::Acquire) == generation {
+            *kept = Some(rows.clone());
+        }
+        Ok(rows)
+    }
+
+    /// Replaces the kept rows of tracks that were edited.
+    ///
+    /// A path with no kept row is skipped: it is not a library track, and its
+    /// values would count in every tally of the library's.
+    pub fn patch_tag_rows(&self, rows: Vec<(String, Vec<String>)>) {
+        let mut kept = self.tag_rows.lock().unwrap_or_else(|e| e.into_inner());
+        self.tags_generation.fetch_add(1, Ordering::AcqRel);
+        if let Some(all) = kept.as_mut() {
+            let all = Arc::make_mut(all);
+            for (path, values) in rows {
+                if let Some(slot) = all.get_mut(&path) {
+                    *slot = values;
+                }
+            }
+        }
+    }
+
+    /// Whether any tag rows are kept.
+    pub fn has_tag_rows(&self) -> bool {
+        self.kept_tag_rows().is_some()
     }
 
     fn genre_rows(&self) -> Option<Arc<GenreRows>> {
