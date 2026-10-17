@@ -22,6 +22,7 @@ pub mod server;
 pub mod session;
 pub mod state;
 pub mod store;
+pub mod tag_fields;
 pub mod updates;
 pub mod web;
 pub mod wire;
