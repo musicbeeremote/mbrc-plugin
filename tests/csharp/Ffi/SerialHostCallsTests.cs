@@ -96,6 +96,8 @@ namespace MusicBeeRemote.Core.Tests.Ffi
                     ["queue_type"] = "Next",
                     ["play"] = "x",
                     ["tag"] = "Artist",
+                    ["field"] = 46,
+                    ["fields"] = new[] { 46 },
                 };
                 yield return MessagePackSerializer.Serialize(fields, options);
             }

@@ -99,6 +99,10 @@ namespace MusicBeePlugin.Ffi.Generated
         PlaylistCatalog = 47,
         PlaylistCreate = 48,
         ArtworkLocationForPath = 49,
+        TagFieldNames = 50,
+        TagsForPaths = 51,
+        NowPlayingTags = 52,
+        NowPlayingTagWrite = 53,
     }
 
     public enum CommandType

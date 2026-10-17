@@ -455,6 +455,49 @@ namespace MusicBeePlugin.Providers
             return _api.Library_CommitTagsToFile(fileUrl);
         }
 
+        public PathTags GetNowPlayingTags(List<int> fields)
+        {
+            var path = GetNowPlayingFileUrl() ?? string.Empty;
+            if (path.Length == 0)
+                return new PathTags { path = string.Empty, values = new List<string>() };
+
+            var types = ToMetaDataTypes(fields);
+            var success = ReadPlayingTags(path, types, out var results);
+            var values = new List<string>(types.Length);
+            for (var i = 0; i < types.Length; i++)
+                values.Add(SafeGetResult(success, results, i) ?? string.Empty);
+            return new PathTags { path = path, values = values };
+        }
+
+        /// <summary>Sets one field of the playing file, if it is still <paramref name="path" />.</summary>
+        /// <remarks>
+        ///     <paramref name="readField" /> is read before and after: MusicBee answers a
+        ///     write it will not keep with success, and only the two reads tell. Its panels
+        ///     keep showing the old value until refreshed, so a committed write refreshes them.
+        /// </remarks>
+        public TagWriteResult WriteNowPlayingTag(string path, int field, int readField, string value)
+        {
+            var playing = GetNowPlayingFileUrl() ?? string.Empty;
+            if (string.IsNullOrEmpty(path) || !string.Equals(playing, path, StringComparison.Ordinal))
+                return TagWriteOutcome("stale_track", string.Empty);
+
+            var readType = (Plugin.MetaDataType)readField;
+            var previous = _api.Library_GetFileTag(path, readType) ?? string.Empty;
+            if (!_api.Library_SetFileTag(path, (Plugin.MetaDataType)field, value ?? string.Empty))
+                return TagWriteOutcome("failed", "MusicBee did not accept the value");
+            if (!_api.Library_CommitTagsToFile(path))
+                return TagWriteOutcome("failed", "MusicBee could not write the file");
+
+            _api.MB_RefreshPanels();
+            return new TagWriteResult
+            {
+                outcome = "written",
+                value = _api.Library_GetFileTag(path, readType) ?? string.Empty,
+                previous = previous,
+                reason = string.Empty,
+            };
+        }
+
         /// <summary>The playing track's fields as they are now.</summary>
         /// <remarks>
         ///     MusicBee's now-playing tags keep the values a track started with, so a file
@@ -467,6 +510,17 @@ namespace MusicBeePlugin.Providers
             if (isFile && _api.Library_GetFileTags(path, fields, out results))
                 return true;
             return _api.NowPlaying_GetFileTags(fields, out results);
+        }
+
+        private static TagWriteResult TagWriteOutcome(string outcome, string reason) =>
+            new TagWriteResult { outcome = outcome, value = string.Empty, previous = string.Empty, reason = reason };
+
+        private static Plugin.MetaDataType[] ToMetaDataTypes(List<int> fields)
+        {
+            var types = new Plugin.MetaDataType[fields?.Count ?? 0];
+            for (var i = 0; i < types.Length; i++)
+                types[i] = (Plugin.MetaDataType)fields[i];
+            return types;
         }
 
         #endregion

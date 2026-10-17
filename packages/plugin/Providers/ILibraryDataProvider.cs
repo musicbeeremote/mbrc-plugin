@@ -156,6 +156,12 @@ namespace MusicBeePlugin.Providers
         /// <returns>One TrackTags per path, in the input order.</returns>
         List<TrackTags> GetTrackTags(IEnumerable<string> paths);
 
+        /// <summary>The names the user gave the given fields, in order.</summary>
+        List<string> GetFieldNames(List<int> fields);
+
+        /// <summary>The same fields of each path, raw as MusicBee holds them.</summary>
+        List<PathTags> GetTagsForPaths(List<int> fields, IEnumerable<string> paths);
+
         /// <summary>
         ///     Library changes (Music category) since <paramref name="updatedSince" />
         ///     unix seconds, for the core's incremental scan. Deleted detection needs

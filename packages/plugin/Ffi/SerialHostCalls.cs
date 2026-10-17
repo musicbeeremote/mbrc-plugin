@@ -39,6 +39,7 @@ namespace MusicBeePlugin.Ffi
             QueryType.LibraryTrackPaths,
             QueryType.AlbumIdentifiers,
             QueryType.PodcastSubscriptions,
+            QueryType.NowPlayingTagWrite,
         };
 
         private static readonly HashSet<CommandType> Commands = new HashSet<CommandType>

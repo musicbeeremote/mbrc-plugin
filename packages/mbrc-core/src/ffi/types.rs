@@ -221,6 +221,13 @@ pub enum QueryType {
     // path), without its bytes: MusicBee answers this almost for free, and the
     // core reads the picture itself (#232).
     ArtworkLocationForPath = 49,
+    // Tag editing by field (#225). Fields travel as MusicBee `MetaDataType`
+    // ids from the core's key table, so the host matches no names. Only the
+    // write changes a file, and only it runs one host call at a time.
+    TagFieldNames = 50,
+    TagsForPaths = 51,
+    NowPlayingTags = 52,
+    NowPlayingTagWrite = 53,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).
