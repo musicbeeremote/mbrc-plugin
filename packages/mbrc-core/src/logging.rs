@@ -558,7 +558,12 @@ pub mod test_support {
         let subscriber = Registry::default().with(layer.with_filter(
             tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG),
         ));
-        tracing::subscriber::with_default(subscriber, f);
+        // A callsite first hit on another thread, with no subscriber, is cached
+        // as uninteresting process-wide; asking again lets this capture see it.
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::callsite::rebuild_interest_cache();
+            f();
+        });
         let captured = lines.lock().unwrap();
         captured.clone()
     }
