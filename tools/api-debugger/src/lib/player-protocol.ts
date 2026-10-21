@@ -172,7 +172,7 @@ function foldTrack(track: unknown): Partial<NowPlaying> {
   const t = track as Record<string, unknown>;
   return {
     title: str(t.title),
-    artist: str(t.artist),
+    artist: str(t.artist_display),
     album: str(t.album),
     year: t.year == null ? "" : str(t.year),
   };

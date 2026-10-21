@@ -63,8 +63,9 @@ describe("v6 adapter", () => {
     expect(a.fold(rx({ event: "volume_changed", raw: JSON.stringify({ data: { volume: 55 } }) })).patch.volume).toBe(55);
     expect(a.fold(rx({ event: "mute_changed", raw: JSON.stringify({ data: { muted: true } }) })).patch.muted).toBe(true);
     // Track change patches title immediately, re-queries state, and stales lyrics.
-    const ch = a.fold(rx({ event: "now_playing_changed", raw: JSON.stringify({ data: { title: "T", artist: "A", album: "Al" } }) }));
+    const ch = a.fold(rx({ event: "now_playing_changed", raw: JSON.stringify({ data: { title: "T", artist: ["A"], artist_display: "A", album: "Al" } }) }));
     expect(ch.patch.title).toBe("T");
+    expect(ch.patch.artist).toBe("A");
     expect(ch.lyricsStale).toBe(true);
     expect(env(ch.followUps[0]).op).toBe("now_playing_state");
   });
@@ -81,7 +82,7 @@ describe("v6 adapter", () => {
           id: reqId,
           kind: "response",
           data: {
-            track: { title: "Song", artist: "Band", album: "Rec", year: 2003, cover_hash: "abc" },
+            track: { title: "Song", artist: ["Band"], artist_display: "Band", album: "Rec", year: 2003, cover_hash: "abc" },
             position_ms: 1000,
             duration_ms: 240000,
             lfm_status: "love",

@@ -1278,6 +1278,30 @@ fn track_schema_check(c: &mut V6Client, ops: &[String]) -> Result<usize, String>
 fn check_track(t: &Value) -> Result<(), String> {
     expect(t["src"].is_string(), "track.src not a string")?;
     expect(t["track_no"].is_i64(), "track.track_no not an int")?;
+    expect(
+        t["artist_display"].is_string(),
+        "track.artist_display not a string",
+    )?;
+    for f in ["artist", "composer", "genre"] {
+        let names = t[f].as_array();
+        expect(
+            names.is_some_and(|a| a.iter().all(Value::is_string)),
+            &format!("track.{f} not an array of strings"),
+        )?;
+    }
+    let credits = t["artist_credits"].as_array();
+    expect(
+        credits.is_some_and(|a| {
+            a.iter().all(|c| {
+                c["name"].is_string()
+                    && matches!(
+                        c["role"].as_str(),
+                        Some("artist" | "guest" | "performer" | "remixer")
+                    )
+            })
+        }),
+        "track.artist_credits not an array of {name, role}",
+    )?;
     for f in ["year", "duration_ms"] {
         expect(
             t[f].is_i64() || t[f].is_null(),
