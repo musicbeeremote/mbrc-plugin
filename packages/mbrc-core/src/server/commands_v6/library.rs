@@ -262,7 +262,7 @@ fn tracks(
     let covers = track::Covers::new(store, p);
     let items = tags
         .iter()
-        .map(|t| track::track_json(t, covers.track(t).as_deref()))
+        .map(|t| track::track_json(t, covers.track(t).as_deref(), track::Credits::Lead))
         .collect();
     Ok(page_json(total, offset, items))
 }

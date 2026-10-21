@@ -17,6 +17,12 @@ pub fn values(raw: &str) -> impl Iterator<Item = &str> {
         .filter(|v| !v.is_empty())
 }
 
+/// The values of a multi-value field as the V6 wire carries them, one array
+/// entry each.
+pub fn list(raw: &str) -> Vec<&str> {
+    values(raw).collect()
+}
+
 /// Whether one of the field's values is `value`.
 ///
 /// The empty name matches a field with no value, which is how the untagged

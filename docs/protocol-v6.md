@@ -427,14 +427,38 @@ Track objects are uniform across every domain (`track_get`, `now_playing_state`,
 four typed fields are `null` when unknown; `cover_hash` is omitted when there is no cover
 to give (see below).
 
+`artist`, `composer` and `genre` are arrays of the individual values, `[]` when unset, the
+same shape the [tag ops](#tags) give them, so a client never splits on `;`, `,` or `&`.
+`artist_display` is the artist as MusicBee shows it. It keeps the user's own text, such as
+`feat.` or `&` between names, which cannot be rebuilt from the array: show it where a track
+is shown, and use `artist` to browse or link. `album_artist` stays a single string.
+
+**Credits.** The names come from the credits MusicBee's Multiple Artist Splitter stores, each
+with a role: `artist`, `guest` (a featured artist), `performer` (with the instrument or part as
+`detail`) or `remixer`. `artist` lists the artists and guests, the people the display string
+names. `artist_credits` lists each credit with its role, in MusicBee's order:
+`{"name":..,"role":..}`, plus `"detail":..` on a performer that has one. A list page
+(`library_tracks`, `now_playing_list`, `playlist_tracks`, `library_changes`) leaves the
+performers out, since an album can credit dozens per track; `track_get` and
+`now_playing_state` carry every credit. A track nobody split, a stream, or a queued file outside
+the library has its display artist as its one credit, role `artist`.
+
 A list may add index fields beside these - `order` and `position` on a playlist, plus
 `play_position` on the queue - but never changes the track's own shape.
 
 ```json
 {
   "src": "C:\\Music\\s.mp3",
-  "artist": "Artist", "title": "Title", "album": "Album", "album_artist": "AlbumArtist",
-  "track_no": 1, "disc_no": 1, "genre": "Rock",
+  "artist": ["Gadiel", "Yandel"],          // the artists and guests
+  "artist_display": "Gadiel feat. Yandel", // MusicBee's display string
+  "artist_credits": [
+    {"name": "Gadiel", "role": "artist"},
+    {"name": "Yandel", "role": "guest"}
+  ],
+  "title": "Title", "album": "Album", "album_artist": "AlbumArtist",
+  "track_no": 1, "disc_no": 1,
+  "genre": ["Reggaeton", "Latin"],
+  "composer": [],
   "year": 2007,            // int | null (4-digit year parsed from the raw tag)
   "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")*
   "rating": 4.5,           // float | null (0-5)
@@ -458,8 +482,8 @@ transport, or - because it is content-addressed and so can be cached forever - s
 \* `duration_ms` is parsed from MusicBee's formatted tag, the only per-path source there is,
 so it is second-granular. The **playing** track is the exception: `now_playing_state` serves
 the player's own exact millisecond duration, matching the `duration_ms` beside it.
-Its `artist`, `title` and `album` are also the player's: for a stream, the library entry names
-the station and the player names the song on air.
+Its `artist_display`, `title` and `album` are also the player's: for a stream, the library entry
+names the station and the player names the song on air, which is then its one `artist`.
 
 ## Keepalive (normative)
 
@@ -595,22 +619,36 @@ field in MusicBee: names change, collide with built-in names and are localized.
 | `now_playing_tags` | `{keys?}` | the playing track's values, every key when `keys` is absent |
 | `now_playing_set_tag` | `{"path":..,"key":..,"value":<value>}` | the value read back after the commit |
 
-Keys: `title`, `artist`, `album`, `album_artist`, `year`, `genre`, `composer`, `grouping`,
-`publisher`, `comment`, `mood`, `occasion`, `bpm`, `custom1` .. `custom16`, and `lyrics`, which
-`now_playing_set_tag` writes but `tag_fields` does not list and `now_playing_tags` returns only
-when asked for by key. Rating has ops of its own. An unknown key is `invalid_field`.
+Keys: `title`, `artist`, `artist_display`, `album`, `album_artist`, `year`, `genre`, `composer`,
+`grouping`, `publisher`, `comment`, `mood`, `occasion`, `bpm`, `custom1` .. `custom16`, and two
+that `tag_fields` does not list and `now_playing_tags` returns only when asked for by key:
+`artist_credits` and `lyrics`. Rating has ops of its own. An unknown key is `invalid_field`.
 
-`artist` and `composer` read MusicBee's list of the individual names, not the string it displays
-("A feat. B"), so each name is its own array entry.
+The artist is three keys over two MusicBee fields, read as on the [track](#canonical-track):
+
+- **`artist`**: the artists and guests, an array of names. A write replaces them and keeps every
+  other credit, and a name that was a guest stays a guest, so an editor that shows only names
+  never promotes a featured artist or drops a performer. A new name is an artist.
+- **`artist_credits`**: every credit, an array of `{"name":..,"role":..,"detail"?:..}`, `role`
+  one of `artist`, `guest`, `performer`, `remixer`. A write replaces the whole list; an unknown
+  role is `invalid_field`.
+- **`artist_display`**: the string MusicBee shows, a single string. It is not rebuilt from the
+  credits, so an edit to them leaves it as it was.
+
+Both credit keys write MusicBee's credit list, the field its splitter writes, which sets each
+role the way the splitter does. `composer` reads MusicBee's list of the individual composers,
+not the string it displays.
 
 - **`name`** is the label the user sees in MusicBee, such as `Energy` for `custom1`.
 - **Values.** A multi-value field is always a JSON array (`[]` when unset) and a single-value
-  field always a string (`""` when unset), so a client never splits on `;`. `artist`, `genre`,
-  `composer`, `mood` and `occasion` are multi-value. MusicBee does not report whether a custom
+  field always a string (`""` when unset), so a client never splits on `;`. `artist`,
+  `artist_credits`, `genre`, `composer`, `mood` and `occasion` are multi-value. MusicBee does
+  not report whether a custom
   field is, so a custom field is `multi_value` once any file in the library holds a `;`
   separated value in it.
 - **`tag_values`** splits a multi-value field, so a file tagged `Bass; Cello` counts once for
-  each. Values are trimmed, empty ones dropped, and values differing only in case are kept
+  each, and `artist` or `artist_credits` counts the artists and guests by name. Values are
+  trimmed, empty ones dropped, and values differing only in case are kept
   apart (`Rock` and `rock`), so an editor can show the stray spelling. `library_genres` merges
   case the way MusicBee's genre browse does. The first tag op after a library change reads every
   track's fields once, which can take a few seconds on a large library; later ones are served
@@ -933,7 +971,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `repeat_changed` | `{"repeat":".."}` | the repeat mode changes |
 | `scrobbling_changed` | `{"scrobbling":bool}` | scrobbling is turned on or off |
 | `stop_after_current_changed` | `{"stop_after_current":bool}` | stop-after-current is turned on or off, including from MusicBee's own window and when it clears itself after firing |
-| `now_playing_changed` | `{"artist":..,"title":..,"album":..,"path":..}` | the track changes |
+| `now_playing_changed` | `{"artist":[..],"artist_display":..,"title":..,"album":..,"path":..}`, `artist` shaped as on the track | the track changes |
 | `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
 | `now_playing_cover_changed` | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
 | `now_playing_tags_changed` | `{"path":..}` | the playing track's tags were edited, from a client or in MusicBee -> re-query `now_playing_tags`. Sent about two seconds after the edit, once MusicBee has applied it: it reports an edit to the playing file before applying it |

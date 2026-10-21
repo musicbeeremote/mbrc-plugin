@@ -39,6 +39,7 @@ namespace MusicBeePlugin.Ffi
         public string album { get; set; }
         public string year { get; set; }
         public string path { get; set; }
+        public string multi_artist { get; set; }
     }
 
     public class TrackDetails
@@ -140,6 +141,8 @@ namespace MusicBeePlugin.Ffi
         public int track_no { get; set; }
         public int disc_no { get; set; }
         public string genre { get; set; }
+        public string multi_artist { get; set; }
+        public string multi_composer { get; set; }
         public string year { get; set; }
         public string duration { get; set; }
         public string rating { get; set; }

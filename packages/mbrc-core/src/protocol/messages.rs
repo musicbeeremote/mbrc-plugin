@@ -119,6 +119,12 @@ pub struct TrackInfo {
     pub year: String,
     #[serde(default)]
     pub path: String,
+    /// The individual artists (`MultiArtist`), NUL separated.
+    ///
+    /// Read from the host but never serialized: the V4 `nowplayingtrack` frame
+    /// is this struct as is, and that shape is frozen.
+    #[serde(default, skip_serializing)]
+    pub multi_artist: String,
 }
 
 /// Extended track metadata (FFI query `NowPlayingDetails`). All values are
@@ -294,6 +300,13 @@ pub struct TrackTags {
     pub disc_no: i32,
     #[serde(default)]
     pub genre: String,
+    /// The individual artists (`MultiArtist`), NUL separated. `artist` is the
+    /// display string, which may be prose such as `"A feat. B"`.
+    #[serde(default)]
+    pub multi_artist: String,
+    /// The individual composers (`MultiComposer`), NUL separated.
+    #[serde(default)]
+    pub multi_composer: String,
     /// Raw MusicBee Year tag - may be a full date (e.g. `"12/03/2007"`); the core
     /// extracts the 4-digit year.
     #[serde(default)]

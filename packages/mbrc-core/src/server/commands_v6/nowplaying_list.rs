@@ -115,7 +115,7 @@ fn list(
         .enumerate()
         .map(|(i, npt)| {
             let mut obj = match by_path.get(npt.path.as_str()) {
-                Some(t) => track::track_json(t, covers.track(t).as_deref()),
+                Some(t) => track::track_json(t, covers.track(t).as_deref(), track::Credits::Lead),
                 None => basic_track_json(npt),
             };
             let rank = offset + i as i64;
@@ -226,15 +226,19 @@ fn play_ranks(order: &NowPlayingOrder) -> HashMap<i32, i64> {
 /// A minimal canonical-shaped track from the now-playing item's basic fields, for
 /// a queued path the library can't resolve to full tags.
 fn basic_track_json(npt: &NowPlayingListTrack) -> Value {
+    let (artist, artist_credits) = track::artist_json("", &npt.artist, track::Credits::Lead);
     json!({
         "src": npt.path.as_str(),
-        "artist": npt.artist.as_str(),
+        "artist": artist,
+        "artist_display": npt.artist.as_str(),
+        "artist_credits": artist_credits,
         "title": npt.title.as_str(),
         "album": npt.album.as_str(),
         "album_artist": npt.album_artist.as_str(),
         "track_no": 0,
         "disc_no": 0,
-        "genre": "",
+        "genre": [],
+        "composer": [],
         "year": Value::Null,
         "duration_ms": Value::Null,
         "rating": Value::Null,

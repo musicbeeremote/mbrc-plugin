@@ -45,6 +45,10 @@ pub struct CachedTags {
     pub track_no: i32,
     pub disc_no: i32,
     pub genre: String,
+    /// The individual artists, NUL separated, as [`TrackTags::multi_artist`].
+    pub multi_artist: String,
+    /// The individual composers, NUL separated.
+    pub multi_composer: String,
     /// Zero when the tag carried no year, which sorts before every real one.
     pub year: i32,
     pub rating: f32,
@@ -62,7 +66,7 @@ pub struct CachedTags {
 /// A record that has grown makes every stored row stale in a way no library
 /// fingerprint would notice: the library did not change, the shape it is read
 /// into did.
-const TAGS_SCHEMA_VERSION: u32 = 3;
+const TAGS_SCHEMA_VERSION: u32 = 4;
 
 impl From<&TrackTags> for CachedTags {
     fn from(tags: &TrackTags) -> Self {
@@ -75,6 +79,8 @@ impl From<&TrackTags> for CachedTags {
             track_no: tags.track_no,
             disc_no: tags.disc_no,
             genre: tags.genre.clone(),
+            multi_artist: tags.multi_artist.clone(),
+            multi_composer: tags.multi_composer.clone(),
             year: parse_year(&tags.year),
             rating: parse_rating(&tags.rating),
             date_added: tags.date_added.clone(),

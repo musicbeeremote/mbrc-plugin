@@ -7,6 +7,10 @@
 //! `year` (4-digit extracted from a possibly-full-date), `duration_ms` (`m:ss`
 //! parsed, #112), `rating` (comma-or-dot float, #114). `date_added` is already
 //! ISO-8601 (formatted C#-side) and passes through.
+//!
+//! `artist`, `composer` and `genre` are arrays of the individual values (#139),
+//! as the tag ops carry them. `artist_display` is MusicBee's display string,
+//! which is the user's own text ("A feat. B") and cannot be rebuilt from them.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{Duration, Instant, UNIX_EPOCH};
@@ -18,7 +22,9 @@ use mbrc_wire::v6::ErrorCode;
 use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
 use crate::cover::store::{Artwork, CoverStore, PLAYING_KEY_PREFIX, track_cover_key};
+use crate::credits::{self, Credit, Role};
 use crate::metadata_cache::{CachedTags, MetadataCache};
+use crate::multi_value;
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
 
@@ -48,7 +54,7 @@ fn track_get(data: &Value, p: &dyn Providers, cover_store: Option<&CoverStore>) 
         .next()
         .ok_or_else(|| V6Error::new(ErrorCode::NotFound, format!("no track for src: {src}")))?;
     let cover_hash = Covers::new(cover_store, p).track(&tags);
-    Ok(track_json(&tags, cover_hash.as_deref()))
+    Ok(track_json(&tags, cover_hash.as_deref(), Credits::All))
 }
 
 /// Content-addressed cover fetch (#136). Returns the image bytes (base64), a
@@ -225,18 +231,53 @@ pub(crate) fn album_cover_hash(
     store?.hash_for(&cover_identifier(artist, album))
 }
 
+/// Which credits a track object lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Credits {
+    /// Everyone but performers. A list page carries it for every row, and an
+    /// album's performer credits can run to dozens per track.
+    Lead,
+    /// Every credit, for a view of one track.
+    All,
+}
+
+/// `artist` and `artist_credits` from a `MultiArtist` value and the display
+/// artist: the names a track is browsed under, and each credit with its role.
+pub(crate) fn artist_json(raw: &str, display: &str, shown: Credits) -> (Value, Value) {
+    let all = credits::or_display(raw, display);
+    let listed: Vec<Value> = all
+        .iter()
+        .filter(|c| shown == Credits::All || c.role != Role::Performer)
+        .map(Credit::to_json)
+        .collect();
+    (json!(credits::lead_names(&all)), json!(listed))
+}
+
+/// The composers in a `MultiComposer` value, split the way the `composer` tag
+/// op splits it, without any role marker.
+fn composer_names(raw: &str) -> Vec<&str> {
+    multi_value::values(raw)
+        .map(|v| v.trim_start_matches(char::is_control).trim())
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
 /// Build the canonical V6 `track` from raw tags: base fields always present, the
 /// four typed fields `null` when unknown, `cover_hash` omitted when absent.
-pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>) -> Value {
+pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>, shown: Credits) -> Value {
+    let (artist, artist_credits) = artist_json(&tags.multi_artist, &tags.artist, shown);
     let mut obj = json!({
         "src": tags.src,
-        "artist": tags.artist,
+        "artist": artist,
+        "artist_display": tags.artist,
+        "artist_credits": artist_credits,
         "title": tags.title,
         "album": tags.album,
         "album_artist": tags.album_artist,
         "track_no": tags.track_no,
         "disc_no": tags.disc_no,
-        "genre": tags.genre,
+        "genre": multi_value::list(&tags.genre),
+        "composer": composer_names(&tags.multi_composer),
         "year": parse_year(&tags.year),
         "duration_ms": parse_duration_ms(&tags.duration),
         "rating": parse_rating(&tags.rating),
@@ -255,15 +296,19 @@ pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>) -> Value {
 /// exactly what [`track_json`] does for the same track: a client cannot tell
 /// which one answered it, and `cached_and_live_tracks_agree` fails if they part.
 pub(crate) fn cached_track_json(tags: &CachedTags, cover_hash: Option<&str>) -> Value {
+    let (artist, artist_credits) = artist_json(&tags.multi_artist, &tags.artist, Credits::Lead);
     let mut obj = json!({
         "src": tags.src,
-        "artist": tags.artist,
+        "artist": artist,
+        "artist_display": tags.artist,
+        "artist_credits": artist_credits,
         "title": tags.title,
         "album": tags.album,
         "album_artist": tags.album_artist,
         "track_no": tags.track_no,
         "disc_no": tags.disc_no,
-        "genre": tags.genre,
+        "genre": multi_value::list(&tags.genre),
+        "composer": composer_names(&tags.multi_composer),
         "year": (tags.year > 0).then_some(tags.year as i64),
         "duration_ms": (tags.duration_ms > 0).then_some(tags.duration_ms),
         "rating": (tags.rating > 0.0).then_some(tags.rating as f64),
@@ -368,6 +413,8 @@ mod tests {
             track_no: 4,
             disc_no: 1,
             genre: "Rock".into(),
+            multi_artist: "Artist".into(),
+            multi_composer: String::new(),
             year: "12/03/2007".into(),
             duration: "4:17".into(),
             rating: "3,5".into(),
@@ -407,16 +454,21 @@ mod tests {
             album_artist: "AlbumArtist".into(),
             track_no: 3,
             disc_no: 1,
-            genre: "Rock".into(),
+            genre: "Rock; Metal".into(),
+            multi_artist: "A\0B".into(),
+            multi_composer: "C\0D".into(),
             year: "12/03/2007".into(),
             duration: "3:45".into(),
             rating: "3.5".into(),
             date_added: "2024-01-02T03:04:05Z".into(),
         };
         let cached = CachedTags::from(&live);
-        assert_eq!(track_json(&live, None), cached_track_json(&cached, None));
         assert_eq!(
-            track_json(&live, Some("abc")),
+            track_json(&live, None, Credits::Lead),
+            cached_track_json(&cached, None)
+        );
+        assert_eq!(
+            track_json(&live, Some("abc"), Credits::Lead),
             cached_track_json(&cached, Some("abc"))
         );
     }
@@ -431,7 +483,7 @@ mod tests {
         };
         let cached = CachedTags::from(&live);
         let out = cached_track_json(&cached, None);
-        assert_eq!(track_json(&live, None), out);
+        assert_eq!(track_json(&live, None, Credits::Lead), out);
         assert!(out["year"].is_null());
         assert!(out["duration_ms"].is_null());
         assert!(out["rating"].is_null());
@@ -440,7 +492,7 @@ mod tests {
 
     #[test]
     fn track_json_is_typed_and_omits_cover_hash_when_absent() {
-        let v = track_json(&tags(), None);
+        let v = track_json(&tags(), None, Credits::Lead);
         assert_eq!(v["src"], "C:\\Music\\song.mp3");
         assert_eq!(v["track_no"], 4);
         assert_eq!(v["year"], 2007);
@@ -450,6 +502,82 @@ mod tests {
         assert!(v.get("cover_hash").is_none());
     }
 
+    /// The display string is prose ("A feat. B") a client cannot split, so the
+    /// names come from MusicBee's own list of them, guests included.
+    #[test]
+    fn multi_value_fields_are_arrays_beside_the_display_artist() {
+        let mut t = tags();
+        t.artist = "Gadiel feat. Yandel & Franco".into();
+        t.multi_artist = "Gadiel\0\u{1}Yandel\0\u{1}Franco\0".into();
+        t.multi_composer = "Tainy\0Luny".into();
+        t.genre = "Reggaeton; Latin".into();
+        let v = track_json(&t, None, Credits::Lead);
+        assert_eq!(v["artist"], json!(["Gadiel", "Yandel", "Franco"]));
+        assert_eq!(v["artist_display"], "Gadiel feat. Yandel & Franco");
+        assert_eq!(
+            v["artist_credits"],
+            json!([
+                { "name": "Gadiel", "role": "artist" },
+                { "name": "Yandel", "role": "guest" },
+                { "name": "Franco", "role": "guest" },
+            ])
+        );
+        assert_eq!(v["composer"], json!(["Tainy", "Luny"]));
+        assert_eq!(v["genre"], json!(["Reggaeton", "Latin"]));
+    }
+
+    /// A list page sends every row, and some albums credit dozens of performers
+    /// per track; one track's own view shows them all.
+    #[test]
+    fn performers_are_credited_only_where_one_track_is_shown() {
+        let mut t = tags();
+        t.multi_artist = "Eluveitie\0\u{2}Tommy Vetterli (engineer)\0".into();
+        let lead = track_json(&t, None, Credits::Lead);
+        assert_eq!(lead["artist"], json!(["Eluveitie"]));
+        assert_eq!(
+            lead["artist_credits"],
+            json!([{ "name": "Eluveitie", "role": "artist" }])
+        );
+        let all = track_json(&t, None, Credits::All);
+        assert_eq!(
+            all["artist_credits"][1],
+            json!({ "name": "Tommy Vetterli", "role": "performer", "detail": "engineer" })
+        );
+    }
+
+    /// The `composer` tag op splits on `;` as well as NUL; a track must name
+    /// the same composers the editor shows.
+    #[test]
+    fn composers_split_the_way_the_tag_editor_splits_them() {
+        let mut t = tags();
+        t.multi_composer = "Tainy; Luny".into();
+        assert_eq!(
+            track_json(&t, None, Credits::Lead)["composer"],
+            json!(["Tainy", "Luny"])
+        );
+    }
+
+    #[test]
+    fn an_unset_multi_value_field_is_an_empty_array() {
+        let v = track_json(&TrackTags::default(), None, Credits::Lead);
+        assert_eq!(v["artist"], json!([]));
+        assert_eq!(v["artist_display"], "");
+        assert_eq!(v["artist_credits"], json!([]));
+        assert_eq!(v["composer"], json!([]));
+        assert_eq!(v["genre"], json!([]));
+    }
+
+    #[test]
+    fn a_track_without_a_list_of_names_is_named_by_its_display_artist() {
+        let mut t = tags();
+        t.artist = "Wisin & Yandel".into();
+        t.multi_artist = String::new();
+        assert_eq!(
+            track_json(&t, None, Credits::Lead)["artist"],
+            json!(["Wisin & Yandel"])
+        );
+    }
+
     #[test]
     fn track_json_nulls_unknown_typed_fields() {
         let mut t = tags();
@@ -457,7 +585,7 @@ mod tests {
         t.duration = String::new();
         t.rating = "0".into();
         t.date_added = String::new();
-        let v = track_json(&t, Some("abc123"));
+        let v = track_json(&t, Some("abc123"), Credits::Lead);
         assert!(v["year"].is_null());
         assert!(v["duration_ms"].is_null());
         assert!(v["rating"].is_null());

@@ -19,6 +19,7 @@ use serde_json::json;
 use mbrc_wire::v6;
 
 use super::commands_v6::player::play_state_str;
+use super::commands_v6::track;
 use crate::ffi::types::NotificationType;
 use crate::nowplaying::NowPlaying;
 
@@ -48,7 +49,8 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
         NotificationType::TrackChanged => vec![v6::event(
             "now_playing_changed",
             json!({
-                "artist": snap.track_info.artist,
+                "artist": track::artist_json(&snap.track_info.multi_artist, &snap.track_info.artist, track::Credits::Lead).0,
+                "artist_display": snap.track_info.artist,
                 "title": snap.track_info.title,
                 "album": snap.track_info.album,
                 "path": snap.track_info.path,
@@ -149,7 +151,8 @@ mod tests {
         use crate::protocol::messages::TrackInfo;
         let s = NowPlaying {
             track_info: TrackInfo {
-                artist: "A".into(),
+                artist: "A feat. B".into(),
+                multi_artist: "A\0B".into(),
                 title: "T".into(),
                 album: "Al".into(),
                 path: "p.mp3".into(),
@@ -159,6 +162,8 @@ mod tests {
         };
         let v = one(&build(NotificationType::TrackChanged, &s));
         assert_eq!(v["event"], "now_playing_changed");
+        assert_eq!(v["data"]["artist"], json!(["A", "B"]));
+        assert_eq!(v["data"]["artist_display"], "A feat. B");
         assert_eq!(v["data"]["title"], "T");
         assert_eq!(v["data"]["path"], "p.mp3");
     }

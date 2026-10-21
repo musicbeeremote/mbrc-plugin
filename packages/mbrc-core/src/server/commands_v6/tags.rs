@@ -10,7 +10,8 @@
 //! A multi-value field is always a JSON array and a single-value one a string,
 //! so a client never splits. Custom fields are judged multi-value from one read
 //! of every track's fields after a start or a library change; an edit patches
-//! its own track's row.
+//! its own track's row. `artist` and `artist_credits` are decoded from
+//! MusicBee's role-tagged credits ([`crate::credits`]).
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -20,10 +21,11 @@ use serde_json::{Map, Value, json};
 use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, req_str};
+use crate::credits::{self, Credit, Role};
 use crate::metadata_cache::{MetadataCache, TagRows};
 use crate::multi_value;
 use crate::providers::Providers;
-use crate::tag_fields::{self, FIELDS, Multi, TagField};
+use crate::tag_fields::{self, DISPLAY_ARTIST, FIELDS, Form, Multi, TagField};
 
 /// The op names this domain serves (advertised in the handshake capabilities).
 pub const OPS: &[&str] = &[
@@ -58,12 +60,15 @@ fn listed() -> impl Iterator<Item = &'static TagField> {
 
 fn fields(p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
     let names = p
-        .field_names(listed().map(|f| f.field).collect())
+        .field_names(listed().map(|f| f.label).collect())
         .map_err(internal)?;
     let rows = rows(p, cache)?;
     let fields: Vec<Value> = listed()
         .zip(names)
-        .map(|(f, name)| json!({ "key": f.key, "name": name.trim(), "multi_value": is_multi(f, &rows) }))
+        .map(|(f, name)| {
+            let name = f.name.unwrap_or(name.trim());
+            json!({ "key": f.key, "name": name, "multi_value": is_multi(f, &rows) })
+        })
         .collect();
     Ok(json!({ "fields": fields }))
 }
@@ -72,7 +77,11 @@ fn values(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpR
     let field = field_for(data, "key")?;
     let rows = rows(p, cache)?;
     let split = is_multi(field, &rows);
-    let values: Vec<Value> = multi_value::distinct(column(&rows, field), split)
+    let column: Vec<String> = match field.form {
+        Form::Plain => column(&rows, field).map(str::to_owned).collect(),
+        Form::Names | Form::Credits => names_column(&rows, field),
+    };
+    let values: Vec<Value> = multi_value::distinct(column.iter().map(String::as_str), split)
         .into_iter()
         .map(|(value, count)| json!({ "value": value, "count": count }))
         .collect();
@@ -98,20 +107,24 @@ fn now_playing_tags(data: &Value, p: &dyn Providers, cache: Option<&MetadataCach
             ));
         }
     };
-    let read = p
-        .now_playing_tags(wanted.iter().map(|f| f.read).collect())
-        .map_err(internal)?;
+    let mut ids: Vec<i32> = wanted.iter().map(|f| f.read).collect();
+    ids.push(DISPLAY_ARTIST);
+    let read = p.now_playing_tags(ids).map_err(internal)?;
     if read.path.is_empty() {
         return Ok(json!({ "path": null, "tags": {} }));
     }
+    let display = read.values.get(wanted.len()).map_or("", String::as_str);
     let rows = if wanted.iter().any(|f| f.multi == Multi::Inferred) {
         rows(p, cache)?
     } else {
         Arc::default()
     };
     let mut tags = Map::new();
-    for (field, raw) in wanted.iter().zip(read.values) {
-        tags.insert(field.key.into(), shaped(&raw, is_multi(field, &rows)));
+    for (field, raw) in wanted.iter().zip(&read.values) {
+        tags.insert(
+            field.key.into(),
+            shaped_field(field, raw, display, is_multi(field, &rows)),
+        );
     }
     Ok(json!({ "path": read.path, "tags": tags }))
 }
@@ -119,7 +132,11 @@ fn now_playing_tags(data: &Value, p: &dyn Providers, cache: Option<&MetadataCach
 fn set_tag(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
     let path = req_str(data, "path")?;
     let field = field_for(data, "key")?;
-    let (stored, as_list) = stored_value(field, data.get("value"))?;
+    let (stored, as_list) = match field.form {
+        Form::Plain => stored_value(field, data.get("value"))?,
+        Form::Names => (stored_names(p, field, data.get("value"))?, true),
+        Form::Credits => (stored_credits(data.get("value"))?, true),
+    };
 
     let result = p
         .write_now_playing_tag(path.to_owned(), field.field, field.read, stored.clone())
@@ -146,7 +163,96 @@ fn set_tag(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> Op
             ),
         ));
     }
-    Ok(json!({ "path": path, "key": field.key, "value": shaped(&result.value, as_list) }))
+    let value = shaped_field(field, &result.value, "", as_list);
+    Ok(json!({ "path": path, "key": field.key, "value": value }))
+}
+
+/// The credits stored for a new list of names: the names replace the artists
+/// and guests, and every other credit is kept.
+///
+/// The file is read first, since the write replaces the whole credit list. A
+/// track nobody split counts its display artist as its one artist.
+fn stored_names(
+    p: &dyn Providers,
+    field: &TagField,
+    value: Option<&Value>,
+) -> Result<String, V6Error> {
+    let names = string_list(field, value)?;
+    let read = p
+        .now_playing_tags(vec![field.read, DISPLAY_ARTIST])
+        .map_err(internal)?;
+    let raw = read.values.first().map_or("", String::as_str);
+    let display = read.values.get(1).map_or("", String::as_str);
+    let current = credits::or_display(raw, display);
+    Ok(credits::encode(&credits::with_lead_names(&current, &names)))
+}
+
+/// The credits stored for a full list of `{name, role, detail?}`.
+fn stored_credits(value: Option<&Value>) -> Result<String, V6Error> {
+    let wrong = || {
+        V6Error::field(
+            ErrorCode::InvalidField,
+            "value",
+            "artist_credits takes an array of {name, role, detail?}, role one of artist, guest, performer, remixer",
+        )
+    };
+    let Some(Value::Array(items)) = value else {
+        return Err(match value {
+            None => missing_value(),
+            Some(_) => wrong(),
+        });
+    };
+    let parsed = items
+        .iter()
+        .map(|item| {
+            let name = item.get("name").and_then(Value::as_str).ok_or_else(wrong)?;
+            let role = item
+                .get("role")
+                .and_then(Value::as_str)
+                .and_then(Role::parse)
+                .ok_or_else(wrong)?;
+            let detail = match item.get("detail") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(d)) => Some(d.trim().to_owned()),
+                Some(_) => return Err(wrong()),
+            };
+            Ok(Credit {
+                name: name.trim().to_owned(),
+                role,
+                detail,
+            })
+        })
+        .collect::<Result<Vec<Credit>, V6Error>>()?;
+    let kept: Vec<Credit> = parsed.into_iter().filter(|c| !c.name.is_empty()).collect();
+    Ok(credits::encode(&kept))
+}
+
+/// An array of strings, trimmed, without empties.
+fn string_list<'a>(field: &TagField, value: Option<&'a Value>) -> Result<Vec<&'a str>, V6Error> {
+    let wrong = || {
+        V6Error::field(
+            ErrorCode::InvalidField,
+            "value",
+            format!("{} takes an array of strings", field.key),
+        )
+    };
+    match value {
+        None => Err(missing_value()),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| item.as_str().map(str::trim).ok_or_else(wrong))
+            .filter(|item| !matches!(item, Ok("")))
+            .collect(),
+        Some(_) => Err(wrong()),
+    }
+}
+
+fn missing_value() -> V6Error {
+    V6Error::field(
+        ErrorCode::MissingField,
+        "value",
+        "value is required; send \"\" or [] to clear the field",
+    )
 }
 
 /// Whether MusicBee kept the field as it was although another value was sent.
@@ -173,11 +279,7 @@ fn stored_value(field: &TagField, value: Option<&Value>) -> Result<(String, bool
         )
     };
     match (value, field.multi) {
-        (None, _) => Err(V6Error::field(
-            ErrorCode::MissingField,
-            "value",
-            "value is required; send \"\" or [] to clear the field",
-        )),
+        (None, _) => Err(missing_value()),
         (Some(Value::String(s)), Multi::Never | Multi::Inferred) => Ok((s.clone(), false)),
         (Some(Value::Array(items)), Multi::Always | Multi::Inferred) => {
             let parts = items
@@ -196,11 +298,24 @@ fn stored_value(field: &TagField, value: Option<&Value>) -> Result<(String, bool
     }
 }
 
+/// A field's raw value as the wire carries it. `display` is the display artist,
+/// which names a track nobody split.
+fn shaped_field(field: &TagField, raw: &str, display: &str, multi: bool) -> Value {
+    match field.form {
+        Form::Plain => shaped(raw, multi),
+        Form::Names => json!(credits::lead_names(&credits::or_display(raw, display))),
+        Form::Credits => {
+            let all = credits::or_display(raw, display);
+            json!(all.iter().map(Credit::to_json).collect::<Vec<Value>>())
+        }
+    }
+}
+
 /// A raw value as the wire carries it: split into an array for a multi-value
 /// field, as stored otherwise.
 fn shaped(raw: &str, multi: bool) -> Value {
     if multi {
-        json!(multi_value::values(raw).collect::<Vec<&str>>())
+        json!(multi_value::list(raw))
     } else {
         json!(raw)
     }
@@ -220,6 +335,21 @@ fn column<'a>(rows: &'a TagRows, field: &TagField) -> impl Iterator<Item = &'a s
     rows.values()
         .filter_map(move |row| at.and_then(|i| row.get(i)))
         .map(String::as_str)
+}
+
+/// The names each row's credits are browsed under, one NUL-joined value per row.
+fn names_column(rows: &TagRows, field: &TagField) -> Vec<String> {
+    let at = FIELDS.iter().position(|f| f.key == field.key);
+    let display_at = FIELDS.iter().position(|f| f.read == DISPLAY_ARTIST);
+    let cell = |row: &Vec<String>, i: Option<usize>| -> String {
+        i.and_then(|i| row.get(i)).cloned().unwrap_or_default()
+    };
+    rows.values()
+        .map(|row| {
+            let credits = credits::or_display(&cell(row, at), &cell(row, display_at));
+            credits::lead_names(&credits).join("\0")
+        })
+        .collect()
 }
 
 fn field_for(data: &Value, name: &str) -> Result<&'static TagField, V6Error> {
@@ -360,6 +490,17 @@ mod tests {
         assert_eq!(field(&out, "custom2")["multi_value"], true);
         assert_eq!(field(&out, "genre")["multi_value"], true);
         assert_eq!(field(&out, "title")["multi_value"], false);
+    }
+
+    /// MusicBee calls both artist fields "Artist"; an editor showing two of
+    /// them could not tell which is which.
+    #[test]
+    fn the_display_artist_has_a_name_of_its_own() {
+        let mut m = library();
+        m.field_names.extend([(32, "Artist".to_string())]);
+        let out = run("tag_fields", json!({}), &m).unwrap();
+        assert_eq!(field(&out, "artist")["name"], "Artist");
+        assert_eq!(field(&out, "artist_display")["name"], "Display artist");
     }
 
     #[test]
@@ -619,18 +760,121 @@ mod tests {
         assert!(tags["tags"].get("lyrics").is_none());
     }
 
-    /// MusicBee formats several artists into one display string; the names
-    /// themselves come from its list of individual artists.
-    #[test]
-    fn artist_is_read_as_its_individual_names() {
+    /// The playing file split as MusicBee's splitter stores it: an artist, a
+    /// guest and a performer credit.
+    fn split_library() -> MockProviders {
         let m = library();
         m.file_tags
             .lock()
             .unwrap()
             .get_mut("/a.flac")
             .unwrap()
-            .extend([(32, "A feat. B".to_string()), (33, "A\0B".to_string())]);
-        let out = run("now_playing_tags", json!({ "keys": ["artist"] }), &m).unwrap();
+            .extend([
+                (32, "A feat. B".to_string()),
+                (33, "A\0\u{1}B\0\u{2}C (drums)\0".to_string()),
+            ]);
+        m
+    }
+
+    /// MusicBee formats several artists into one display string; the names
+    /// come from its credits, without their role markers or the performers.
+    #[test]
+    fn artist_is_read_as_the_names_on_the_track() {
+        let out = run(
+            "now_playing_tags",
+            json!({ "keys": ["artist", "artist_display", "artist_credits"] }),
+            &split_library(),
+        )
+        .unwrap();
         assert_eq!(out["tags"]["artist"], json!(["A", "B"]));
+        assert_eq!(out["tags"]["artist_display"], "A feat. B");
+        assert_eq!(
+            out["tags"]["artist_credits"],
+            json!([
+                { "name": "A", "role": "artist" },
+                { "name": "B", "role": "guest" },
+                { "name": "C", "role": "performer", "detail": "drums" },
+            ])
+        );
+    }
+
+    #[test]
+    fn a_track_nobody_split_is_named_by_its_display_artist() {
+        let m = library();
+        m.file_tags
+            .lock()
+            .unwrap()
+            .get_mut("/a.flac")
+            .unwrap()
+            .insert(32, "A feat. B".to_string());
+        let out = run("now_playing_tags", json!({ "keys": ["artist"] }), &m).unwrap();
+        assert_eq!(out["tags"]["artist"], json!(["A feat. B"]));
+    }
+
+    /// An editor that only knows the flat list of names must not turn a guest
+    /// into a lead artist or drop the performers.
+    #[test]
+    fn writing_the_names_keeps_every_role() {
+        let m = split_library();
+        let out = run(
+            "now_playing_set_tag",
+            json!({ "path": "/a.flac", "key": "artist", "value": ["A", "B", "E"] }),
+            &m,
+        )
+        .unwrap();
+        assert!(
+            m.recorded()
+                .contains(&"write_now_playing_tag(33,A\0\u{1}B\0E\0\u{2}C (drums)\0)".to_string()),
+            "{:?}",
+            m.recorded()
+        );
+        assert_eq!(out["value"], json!(["A", "B", "E"]));
+    }
+
+    #[test]
+    fn writing_the_credits_stores_each_role() {
+        let m = split_library();
+        let out = run(
+            "now_playing_set_tag",
+            json!({ "path": "/a.flac", "key": "artist_credits", "value": [
+                { "name": "A", "role": "artist" },
+                { "name": "D", "role": "remixer" },
+            ] }),
+            &m,
+        )
+        .unwrap();
+        assert!(
+            m.recorded()
+                .contains(&"write_now_playing_tag(33,A\0\u{4}D\0)".to_string())
+        );
+        assert_eq!(out["value"][1], json!({ "name": "D", "role": "remixer" }));
+    }
+
+    #[test]
+    fn a_credit_with_an_unknown_role_writes_nothing() {
+        let m = split_library();
+        let err = run(
+            "now_playing_set_tag",
+            json!({ "path": "/a.flac", "key": "artist_credits", "value": [
+                { "name": "A", "role": "producer" },
+            ] }),
+            &m,
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidField);
+        assert!(
+            !m.recorded()
+                .iter()
+                .any(|c| c.starts_with("write_now_playing_tag"))
+        );
+    }
+
+    #[test]
+    fn tag_values_counts_artists_and_guests_by_name() {
+        let out = run("tag_values", json!({ "key": "artist" }), &split_library()).unwrap();
+        assert_eq!(
+            out["values"],
+            json!([{ "value": "A", "count": 1 }, { "value": "B", "count": 1 }])
+        );
     }
 }

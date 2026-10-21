@@ -274,6 +274,7 @@ mod tests {
             album: String::new(),
             year: "2020".into(),
             path: "C:\\Music\\song.mp3".into(),
+            ..Default::default()
         };
         let v = V4_CODEC.track_info(&empty);
         assert_eq!(v["artist"], json!("Unknown Artist"));
@@ -287,6 +288,7 @@ mod tests {
             album: "Al".into(),
             year: String::new(),
             path: "/x/y.flac".into(),
+            ..Default::default()
         };
         let v = V4_CODEC.track_info(&full);
         assert_eq!(v["artist"], json!("A"));
@@ -367,6 +369,7 @@ mod tests {
             album: "Album 1".into(),
             year: "2008".into(),
             path: "00 - Track 1.mp3".into(),
+            multi_artist: "A\0B".into(),
         };
         assert_shipped_order(
             &V4_CODEC.track_info(&info),

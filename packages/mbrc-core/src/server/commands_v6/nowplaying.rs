@@ -82,7 +82,7 @@ fn state(
                 let artwork = now_playing.map(|c| c.cover().cover).unwrap_or_default();
                 let hash =
                     track::playing_cover_hash(&track::Covers::new(store, p), &tags, &artwork);
-                track::track_json(&tags, hash.as_deref())
+                track::track_json(&tags, hash.as_deref(), track::Credits::All)
             }
             None => Value::Null,
         }
@@ -110,8 +110,12 @@ fn state(
 /// Lays what the player reports for the playing track over its library entry.
 ///
 /// A stream's library entry is the station; the song playing on it is known
-/// only to the player. An empty player field keeps the library's value.
+/// only to the player. An empty player field keeps the library's value. The
+/// player's artist comes with the player's list of names, never the entry's.
 fn take_playing_tags(tags: &mut TrackTags, playing: &TrackInfo) {
+    if !playing.artist.is_empty() {
+        tags.multi_artist.clone_from(&playing.multi_artist);
+    }
     for (field, value) in [
         (&mut tags.artist, &playing.artist),
         (&mut tags.title, &playing.title),
@@ -432,6 +436,29 @@ mod tests {
         assert!(out["list_order"].is_null());
     }
 
+    /// The player trims nothing while the library read does, so the two display
+    /// strings can differ for one file; the names must survive that.
+    #[test]
+    fn a_playing_file_keeps_its_individual_artists() {
+        let m = MockProviders {
+            track_info: TrackInfo {
+                path: "a.mp3".into(),
+                artist: "Gadiel feat. Yandel ".into(),
+                multi_artist: "Gadiel\0Yandel".into(),
+                ..Default::default()
+            },
+            tracks_detailed: vec![TrackTags {
+                src: "a.mp3".into(),
+                artist: "Gadiel feat. Yandel".into(),
+                multi_artist: "Gadiel\0Yandel".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let out = run("now_playing_state", json!({}), &m).unwrap();
+        assert_eq!(out["track"]["artist"], json!(["Gadiel", "Yandel"]));
+    }
+
     /// The tag string is second-granular, the player's own duration is not, and
     /// a response carrying both must not disagree with itself (#112).
     #[test]
@@ -520,10 +547,11 @@ mod tests {
             ..Default::default()
         };
         let out = run("now_playing_state", json!({}), &m).unwrap();
-        assert_eq!(out["track"]["artist"], "AC/DC");
+        assert_eq!(out["track"]["artist"], json!(["AC/DC"]));
+        assert_eq!(out["track"]["artist_display"], "AC/DC");
         assert_eq!(out["track"]["title"], "You Shook Me All Night Long");
         assert_eq!(out["track"]["album"], "ROCK ANTENNE");
-        assert_eq!(out["track"]["genre"], "Rock");
+        assert_eq!(out["track"]["genre"], json!(["Rock"]));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 
 pub mod config;
 pub mod cover;
+pub mod credits;
 pub mod diagnostics;
 pub mod discovery;
 pub mod ffi;

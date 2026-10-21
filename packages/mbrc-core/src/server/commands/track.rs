@@ -172,6 +172,7 @@ mod tests {
                 album: "Album".into(),
                 year: "2024".into(),
                 path: "C:\\m.mp3".into(),
+                ..Default::default()
             },
             ..Default::default()
         };

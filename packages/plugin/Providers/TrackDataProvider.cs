@@ -47,7 +47,8 @@ namespace MusicBeePlugin.Providers
                 Plugin.MetaDataType.Artist,
                 Plugin.MetaDataType.TrackTitle,
                 Plugin.MetaDataType.Album,
-                Plugin.MetaDataType.Year
+                Plugin.MetaDataType.Year,
+                Plugin.MetaDataType.MultiArtist,
             };
 
             var results = new string[fields.Length];
@@ -61,6 +62,7 @@ namespace MusicBeePlugin.Providers
                 title = SafeGetResult(success, results, 1),
                 album = SafeGetResult(success, results, 2),
                 year = SafeGetResult(success, results, 3),
+                multi_artist = SafeGetResult(success, results, 4),
                 path = GetNowPlayingFileUrl(),
             };
         }

@@ -42,6 +42,7 @@ namespace MusicBeePlugin.Providers
             Plugin.MetaDataType.AlbumArtist, Plugin.MetaDataType.Genre,
             Plugin.MetaDataType.TrackNo, Plugin.MetaDataType.DiscNo,
             Plugin.MetaDataType.Year, Plugin.MetaDataType.Rating,
+            Plugin.MetaDataType.MultiArtist, Plugin.MetaDataType.MultiComposer,
         };
 
         private static readonly Plugin.MetaDataType[] AlbumTrackFields =
@@ -577,6 +578,8 @@ namespace MusicBeePlugin.Providers
                     // Raw values, parsed core-side (year 4-digit extract, rating float).
                     year = Tag(tags, 7),
                     rating = Tag(tags, 8),
+                    multi_artist = Tag(tags, 9),
+                    multi_composer = Tag(tags, 10),
                     // Duration parsed to ms core-side; DateAdded is locale-ambiguous as
                     // a display string, so convert to ISO-8601 UTC here (#114).
                     duration = duration ?? string.Empty,

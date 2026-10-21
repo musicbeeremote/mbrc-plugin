@@ -142,6 +142,7 @@ impl Providers for FixtureProviders {
             album: "Album".into(),
             year: "2024".into(),
             path: "C:\\Music\\s.mp3".into(),
+            multi_artist: "Artist".into(),
         })
     }
     fn track_details(&self) -> Result<TrackDetails, String> {
@@ -485,6 +486,8 @@ impl Providers for FixtureProviders {
                 track_no: 1,
                 disc_no: 1,
                 genre: "Rock".into(),
+                multi_artist: "Artist".into(),
+                multi_composer: "Composer".into(),
                 year: "12/03/2007".into(),
                 duration: "4:00".into(),
                 rating: "4.5".into(),
