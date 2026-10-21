@@ -171,7 +171,7 @@ function cycleRepeat() {
         <p class="truncate text-xl leading-tight font-semibold tracking-tight">
           {{ player.track?.title || $t('player.nothingPlaying') }}
         </p>
-        <p class="truncate text-sm text-ink-soft">{{ player.track?.artist }}</p>
+        <p class="truncate text-sm text-ink-soft">{{ player.track?.artist_display }}</p>
         <p class="truncate text-xs text-outline">{{ player.track?.album }}</p>
       </div>
 

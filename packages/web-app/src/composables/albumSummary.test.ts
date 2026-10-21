@@ -7,13 +7,16 @@ import { albumSummary } from './albumSummary'
 function track(over: Partial<Track>): Track {
   return {
     src: '/a.mp3',
-    artist: 'Artist',
+    artist: ['Artist'],
+    artist_display: 'Artist',
+    artist_credits: [{ name: 'Artist', role: 'artist' }],
     title: 'T',
     album: 'Album',
     album_artist: 'Album Artist',
     track_no: 1,
     disc_no: 1,
-    genre: '',
+    genre: [],
+    composer: [],
     year: null,
     duration_ms: null,
     rating: null,

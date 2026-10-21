@@ -205,7 +205,8 @@ export const EventPayloadSchemas = {
   scrobbling_changed: z.object({ scrobbling: z.boolean() }),
   stop_after_current_changed: z.object({ stop_after_current: z.boolean() }),
   now_playing_changed: z.object({
-    artist: z.string(),
+    artist: z.array(z.string()),
+    artist_display: z.string(),
     title: z.string(),
     album: z.string(),
     path: z.string(),

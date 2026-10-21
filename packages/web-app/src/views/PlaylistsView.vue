@@ -507,7 +507,7 @@ const summary = computed(() => {
               loading="lazy"
               class="h-full w-full object-cover"
             />
-            <CoverPlaceholder v-else :name="row.data.artist" />
+            <CoverPlaceholder v-else :name="row.data.artist_display" />
             <div
               v-if="row.data.src === player.track?.src"
               class="absolute inset-0 grid place-items-center bg-surface/70"
@@ -526,7 +526,7 @@ const summary = computed(() => {
               {{ trackLabel(row.data.title, row.data.src) }}
             </span>
             <span class="mt-0.5 block truncate text-2xs/tight text-outline">
-              {{ row.data.artist || $t('common.unknown.artist') }} &middot;
+              {{ row.data.artist_display || $t('common.unknown.artist') }} &middot;
               {{ row.data.album || $t('common.unknown.album') }}
             </span>
           </button>

@@ -60,7 +60,7 @@ const progress = computed(() =>
         </div>
         <div class="min-w-0">
           <p class="truncate text-sm font-medium">{{ player.track?.title || $t('player.nothingPlaying') }}</p>
-          <p class="truncate text-xs text-outline">{{ player.track?.artist }}</p>
+          <p class="truncate text-xs text-outline">{{ player.track?.artist_display }}</p>
         </div>
       </button>
       <button

@@ -17,6 +17,8 @@
 
 import { z } from 'zod'
 
+import { peopleFields } from './credits'
+
 export const PlayState = {
   Playing: 'playing',
   Paused: 'paused',
@@ -119,13 +121,13 @@ export type Empty = z.infer<typeof EmptySchema>
 /** The canonical track, uniform across every domain that returns one. */
 export const TrackSchema = z.object({
   src: z.string(),
-  artist: z.string(),
+  ...peopleFields,
   title: z.string(),
   album: z.string(),
   album_artist: z.string(),
   track_no: z.number(),
   disc_no: z.number(),
-  genre: z.string(),
+  genre: z.array(z.string()),
   year: z.number().nullable(),
   duration_ms: z.number().nullable(),
   rating: z.number().nullable(),

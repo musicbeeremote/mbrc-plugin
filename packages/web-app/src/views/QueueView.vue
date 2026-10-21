@@ -53,7 +53,7 @@ const rows = computed(() => {
   const needle = term.value.trim().toLowerCase()
   if (needle === '') return queue.items
   return queue.items.filter((item) =>
-    [item.title, item.artist, item.album].some((field) =>
+    [item.title, item.artist_display, item.album].some((field) =>
       field.toLowerCase().includes(needle),
     ),
   )
@@ -384,7 +384,7 @@ const drag = useDragSort(
             loading="lazy"
             class="h-full w-full object-cover"
           />
-          <CoverPlaceholder v-else :name="item.artist" />
+          <CoverPlaceholder v-else :name="item.artist_display" />
           <div
             v-if="isPlaying(item.src)"
             class="absolute inset-0 grid place-items-center bg-surface/70"
@@ -400,7 +400,7 @@ const drag = useDragSort(
             {{ trackLabel(item.title, item.src) }}
           </p>
           <p class="truncate text-xs text-outline">
-            {{ item.artist || $t('common.unknown.artist') }}
+            {{ item.artist_display || $t('common.unknown.artist') }}
           </p>
         </button>
         <span class="text-xs tabular-nums text-outline">

@@ -11,7 +11,7 @@ import type { Track } from '../api/types'
 export function albumSummary(tracks: Track[]): string {
   const [first] = tracks
   if (!first) return ''
-  const artist = first.album_artist || first.artist || ''
+  const artist = first.album_artist || first.artist_display || ''
   const years = tracks
     .map((track) => track.year)
     .filter((year): year is number => typeof year === 'number' && year > 0)
