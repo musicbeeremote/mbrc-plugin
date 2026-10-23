@@ -93,18 +93,20 @@ fn genres(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpR
 
 fn artists(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
     let (offset, limit) = page_args(data)?;
-    // With a `genre` filter, navigate that genre's artists; otherwise the flat list.
-    let mut all: Vec<ArtistData> = match opt_str(data, "genre")? {
-        Some(genre) => match cache.and_then(|c| c.genre_artists(genre)) {
-            Some(counts) => artist_data(counts),
-            None => p.genre_artists(genre).map_err(internal)?,
-        },
-        None => {
-            let album_artists = opt_bool(data, "album_artists")?.unwrap_or(false);
-            flat_list(cache, &key_browse_artists(album_artists), || {
-                p.browse_artists(0, 0, album_artists)
-            })?
-        }
+    let genre = opt_str(data, "genre")?;
+    let album_artists = opt_bool(data, "album_artists")?.unwrap_or(false);
+    // Each artist and guest a track credits is a row of its own (#139); the
+    // host's lookup answers until every track's tags are cached.
+    let credited = match album_artists {
+        true => None,
+        false => cache.and_then(|c| c.credited_artists(genre)),
+    };
+    let mut all: Vec<ArtistData> = match (credited, genre) {
+        (Some(counts), _) => artist_data(counts),
+        (None, Some(genre)) => p.genre_artists(genre).map_err(internal)?,
+        (None, None) => flat_list(cache, &key_browse_artists(album_artists), || {
+            p.browse_artists(0, 0, album_artists)
+        })?,
     };
     let needle = needle(data)?;
     if let Some(n) = &needle {
@@ -130,10 +132,14 @@ fn albums(
 ) -> OpResult {
     let (offset, limit) = page_args(data)?;
     let all: Vec<AlbumData> = match opt_str(data, "artist")? {
-        Some(artist) => match p.artist_albums(artist).map_err(internal)? {
-            found if found.is_empty() => albums_the_tags_name(cache, artist),
-            found => found,
-        },
+        Some(artist) => {
+            let mut own = match p.artist_albums(artist).map_err(internal)? {
+                found if found.is_empty() => albums_the_tags_name(cache, artist),
+                found => found,
+            };
+            own.extend(appearances(cache, artist, &own));
+            own
+        }
         None => flat_list(cache, KEY_BROWSE_ALBUMS, || p.browse_albums(0, 0))?,
     };
 
@@ -345,7 +351,16 @@ fn albums_the_tags_name(cache: Option<&MetadataCache>, artist: &str) -> Vec<Albu
 
     let mut counts: BTreeMap<String, i32> = BTreeMap::new();
     for path in cache.track_paths_where(&filter, None, false) {
-        if let Some(tags) = cache.track_tags(&path) {
+        let Some(tags) = cache.track_tags(&path) else {
+            continue;
+        };
+        let owner = if tags.album_artist.is_empty() {
+            &tags.artist
+        } else {
+            &tags.album_artist
+        };
+        // Another artist's record is an appearance, filed under its owner.
+        if owner.eq_ignore_ascii_case(artist) {
             *counts.entry(tags.album).or_default() += 1;
         }
     }
@@ -418,10 +433,11 @@ fn shuffle(paths: &mut [String]) {
 
 /// The paths a scope selects, in browse order.
 ///
-/// A named artist, album or genre goes through the provider even when the tag
-/// index is warm: the index is filled by browsing, so an artist resolved from
-/// it would queue only the albums already visited and call that the artist.
-/// Only an unscoped search reads the index, which answers it in one pass.
+/// A named artist, album or genre goes through the provider until every
+/// track's tags are cached: an index filled by browsing would queue only the
+/// albums already visited and call that the artist. Once it is complete, an
+/// artist or genre is answered from the tags, which file a track under each
+/// name it credits (#139) and each genre it has (#228).
 pub(super) fn scope_paths(
     data: &Value,
     p: &dyn Providers,
@@ -435,9 +451,9 @@ pub(super) fn scope_paths(
         genre: opt_str(data, "genre")?,
     };
 
-    let genre_only = filter.genre.is_some() && filter.artist.is_none() && filter.album.is_none();
+    let by_tags = filter.album.is_none() && (filter.genre.is_some() || filter.artist.is_some());
     if let Some(c) = cache
-        && genre_only
+        && by_tags
         && c.tags_complete()
     {
         return Ok(c.track_paths_where(&filter, None, false));
@@ -685,6 +701,31 @@ pub(crate) fn genre_data(counts: Vec<(String, u32)>) -> Vec<GenreData> {
         .into_iter()
         .map(|(genre, count)| GenreData {
             genre,
+            count: i32::try_from(count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
+/// Other artists' records `artist` is credited on, which MusicBee's album
+/// lookup cannot report: it files a track under its display string only.
+///
+/// Each is filed under its own artist, so its cover and track list are the
+/// record's. The artist's own albums stay the host's answer; the tags only add
+/// what it has no way to know.
+fn appearances(cache: Option<&MetadataCache>, artist: &str, own: &[AlbumData]) -> Vec<AlbumData> {
+    let Some(found) = cache.and_then(|c| c.credited_albums(artist)) else {
+        return Vec::new();
+    };
+    let listed = |owner: &str, album: &str| {
+        own.iter()
+            .any(|al| al.album.eq_ignore_ascii_case(album) && al.artist.eq_ignore_ascii_case(owner))
+    };
+    found
+        .into_iter()
+        .filter(|(owner, album, _)| !owner.eq_ignore_ascii_case(artist) && !listed(owner, album))
+        .map(|(owner, album, count)| AlbumData {
+            album,
+            artist: owner,
             count: i32::try_from(count).unwrap_or(i32::MAX),
         })
         .collect()
@@ -1034,6 +1075,99 @@ mod tests {
             json!({ "count": 1 }),
             "the list and the queue agree"
         );
+    }
+
+    /// A split collaboration, a track by its featured artist alone, and a
+    /// track nobody split.
+    fn credited_cache(name: &str) -> crate::metadata_cache::MetadataCache {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        let tagged = |src: &str, artist: &str, multi: &str, album: &str| CachedTags {
+            src: src.into(),
+            title: src.into(),
+            artist: artist.into(),
+            multi_artist: multi.into(),
+            album: album.into(),
+            album_artist: if album.is_empty() {
+                String::new()
+            } else {
+                "Tico".into()
+            },
+            ..CachedTags::default()
+        };
+        cache.replace_track_index(&["/split.mp3".into(), "/solo.mp3".into(), "/prose.mp3".into()]);
+        cache.put_track_tags(&[
+            tagged(
+                "/split.mp3",
+                "Tico feat. Wisin & Yandel, Gadiel",
+                "Tico\0\u{1}Wisin & Yandel\0\u{1}Gadiel\0",
+                "El Inmigrante",
+            ),
+            tagged("/solo.mp3", "Gadiel", "Gadiel\0", ""),
+            tagged("/prose.mp3", "Gadiel feat. Jayko", "", ""),
+        ]);
+        cache
+    }
+
+    /// MusicBee's artist lookup files a collaboration under its display string,
+    /// which is nobody's name; V6 lists each credited artist (#139).
+    #[test]
+    fn each_credited_artist_is_listed_and_counted() {
+        let cache = credited_cache("mbrc-v6-credited-artists");
+        let m = MockProviders::default();
+        let out = dispatch("library_artists", &json!({}), &m, None, Some(&cache))
+            .unwrap()
+            .unwrap();
+        let rows: Vec<(String, i64)> = out["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| {
+                (
+                    a["artist"].as_str().unwrap().to_owned(),
+                    a["count"].as_i64().unwrap(),
+                )
+            })
+            .collect();
+        let row = |name: &str, n: i64| (name.to_owned(), n);
+        assert_eq!(
+            rows,
+            vec![
+                row("Gadiel", 2),
+                row("Gadiel feat. Jayko", 1),
+                row("Tico", 1),
+                row("Wisin & Yandel", 1),
+            ],
+            "the unsplit track keeps its display string"
+        );
+    }
+
+    /// A guest's page lists the record they appear on, filed under its own
+    /// artist so its cover and track list are that record's.
+    #[test]
+    fn a_guest_is_found_on_the_records_they_appear_on() {
+        let cache = credited_cache("mbrc-v6-credited-albums");
+        let m = MockProviders::default();
+        let run = |op: &str, data: Value| {
+            dispatch(op, &data, &m, None, Some(&cache))
+                .unwrap()
+                .unwrap()
+        };
+        let albums = run("library_albums", json!({ "artist": "Wisin & Yandel" }));
+        assert_eq!(albums["items"][0]["album"], "El Inmigrante");
+        assert_eq!(albums["items"][0]["artist"], "Tico");
+
+        let tracks = run("library_tracks", json!({ "artist": "Gadiel" }));
+        assert_eq!(tracks["total"], 2, "the solo track and the guest spot");
+
+        let queued = run("library_queue", json!({ "artist": "Wisin & Yandel" }));
+        assert_eq!(queued["count"], 1);
     }
 
     fn multi_genre_cache(name: &str) -> crate::metadata_cache::MetadataCache {

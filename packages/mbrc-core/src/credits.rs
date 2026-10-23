@@ -142,14 +142,23 @@ pub fn encode(credits: &[Credit]) -> String {
     out
 }
 
-/// The credits of a track, or its display artist as its one artist when
-/// MusicBee lists none: a file nobody split, a stream, a queued file outside
-/// the library.
+/// The credits of a track, its artist named by the display string unless the
+/// track is split.
+///
+/// Split means more than one artist, or a guest. Otherwise MusicBee files and
+/// shows the track under its display string, which may differ from the one
+/// stored artist ("A & B" shown, "A feat. B" stored), so that string is the one
+/// artist, as it is for a file with no credits, a stream or a queued file
+/// outside the library. Performers and remixers are kept either way.
 pub fn or_display(raw: &str, display: &str) -> Vec<Credit> {
-    let credits = parse(raw);
-    if credits.is_empty() && !display.trim().is_empty() {
-        return vec![Credit::new(display.trim(), Role::Artist)];
+    let mut credits = parse(raw);
+    let display = display.trim();
+    let split = credits.iter().filter(|c| c.role.is_lead()).count() > 1;
+    if display.is_empty() || split {
+        return credits;
     }
+    credits.retain(|c| c.role != Role::Artist);
+    credits.insert(0, Credit::new(display, Role::Artist));
     credits
 }
 
@@ -246,6 +255,32 @@ mod tests {
             vec![Credit::new("Gadiel feat. Tico", Role::Artist)]
         );
         assert!(or_display("", " ").is_empty());
+    }
+
+    /// Found on a real library: the one stored artist read "A feat. B" while
+    /// MusicBee showed and filed the track as "A & B".
+    #[test]
+    fn one_stored_artist_is_named_as_musicbee_shows_it() {
+        let credits = or_display(
+            "ProleteR feat. Mister Colfer & DJ Crabees\0\u{2}C (drums)\0",
+            "ProleteR & Mister Colfer & DJ Crabees",
+        );
+        assert_eq!(
+            lead_names(&credits),
+            vec!["ProleteR & Mister Colfer & DJ Crabees"]
+        );
+        assert_eq!(credits[1].role, Role::Performer, "other credits are kept");
+    }
+
+    #[test]
+    fn a_split_track_keeps_its_names_whatever_it_shows() {
+        let credits = or_display(SPLIT, "Tico feat. Wisin & Yandel, Gadiel");
+        assert_eq!(lead_names(&credits).len(), 3);
+        assert_eq!(
+            lead_names(&or_display("A\0B\0", "A & B")),
+            vec!["A", "B"],
+            "two artists and no guest is split too"
+        );
     }
 
     #[test]

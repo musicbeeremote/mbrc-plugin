@@ -531,6 +531,7 @@ mod tests {
     #[test]
     fn performers_are_credited_only_where_one_track_is_shown() {
         let mut t = tags();
+        t.artist = "Eluveitie".into();
         t.multi_artist = "Eluveitie\0\u{2}Tommy Vetterli (engineer)\0".into();
         let lead = track_json(&t, None, Credits::Lead);
         assert_eq!(lead["artist"], json!(["Eluveitie"]));

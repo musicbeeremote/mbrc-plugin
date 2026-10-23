@@ -734,7 +734,7 @@ gone, and the `version` has moved, so re-read the list.
 | Op | Request `data` | Response |
 |----|----------------|----------|
 | `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}`; a file tagged with several genres (`Rock; Jazz`) counts under each, and a `genre` filter on the other ops finds it through any of them |
-| `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}` |
+| `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}`; each artist and guest a track credits is a row, the track counted under each |
 | `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` when the tracks agree on one) |
 | `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
@@ -746,6 +746,17 @@ gone, and the `version` has moved, so re-read the list.
 combine. An **empty string is an answer, not an absence**: `{"artist":""}` names the
 tracks filed under no artist at all, which is the only way to reach the untagged
 corner of a library. Omit the key entirely to mean "no filter".
+
+**Credited artists.** Artists are named the way a track's [`artist`](#canonical-track) names
+them (#139): `library_artists` lists every artist and guest a track credits, so
+`Tico feat. Wisin & Yandel, Gadiel` counts under `Tico`, `Wisin & Yandel` and `Gadiel` rather
+than as a row of its own, and a track nobody split counts under its display string. An `artist`
+scope matches any of those names, the album artist or the display string. `library_albums`
+for an artist lists their own records, then the other artists' records they are credited on,
+each with that record's own `artist`, so opening it shows the record's cover and tracks. With
+`album_artists: true` the list is MusicBee's album artists, which are never split. Until the
+server has read every track's tags after a start, it answers from MusicBee's lookup, which
+files a track under its display string.
 
 On `library_tracks` the artist is not a second filter: it says **which record is
 meant** when several share a title, and is ignored without an album. The rule is

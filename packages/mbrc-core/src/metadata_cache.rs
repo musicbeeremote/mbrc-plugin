@@ -15,7 +15,7 @@
 //! is best-effort (see [`crate::store::Db`]); a disabled `Db` makes every method
 //! a no-op and the cache transparently falls back to the provider.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -86,6 +86,18 @@ impl From<&TrackTags> for CachedTags {
             date_added: tags.date_added.clone(),
             duration_ms: parse_duration_ms(&tags.duration),
         }
+    }
+}
+
+impl CachedTags {
+    /// The artists and guests the track credits, or its display artist when
+    /// nobody split it.
+    pub fn credited_names(&self) -> Vec<String> {
+        let credits = crate::credits::or_display(&self.multi_artist, &self.artist);
+        crate::credits::lead_names(&credits)
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
     }
 }
 
@@ -273,7 +285,9 @@ fn filed_under(track: &CachedTags, artist: &str) -> bool {
     if artist.is_empty() {
         return track.artist.is_empty() && track.album_artist.is_empty();
     }
-    equals(&track.artist, artist) || equals(&track.album_artist, artist)
+    equals(&track.artist, artist)
+        || equals(&track.album_artist, artist)
+        || track.credited_names().iter().any(|n| equals(n, artist))
 }
 
 fn contains(haystack: &str, needle: &str) -> bool {
@@ -338,8 +352,37 @@ impl TrackFilter<'_> {
     }
 }
 
-/// Every track's `(genre, artist)`, the part of the tags genre browse reads.
-type GenreRows = Vec<(String, String)>;
+/// The part of one track's tags the browse lists are counted from.
+struct BrowseRow {
+    genre: String,
+    /// The display artist, which V4's lists name.
+    artist: String,
+    /// The artists and guests V6 lists name.
+    credited: Vec<String>,
+    album: String,
+    /// The artist an album is filed under: its album artist, else the artist.
+    album_owner: String,
+}
+
+impl From<CachedTags> for BrowseRow {
+    fn from(t: CachedTags) -> Self {
+        let credited = t.credited_names();
+        let album_owner = if t.album_artist.is_empty() {
+            t.artist.clone()
+        } else {
+            t.album_artist
+        };
+        Self {
+            genre: t.genre,
+            artist: t.artist,
+            credited,
+            album: t.album,
+            album_owner,
+        }
+    }
+}
+
+type GenreRows = Vec<BrowseRow>;
 
 /// Every track's values of the tag-editing fields, by path, each row in the
 /// order the reader asked for them.
@@ -776,8 +819,47 @@ impl MetadataCache {
     pub fn genre_counts(&self) -> Option<Vec<(String, u32)>> {
         let rows = self.genre_rows()?;
         Some(crate::multi_value::counts(
-            rows.iter().map(|(genre, _)| genre.as_str()),
+            rows.iter().map(|r| r.genre.as_str()),
         ))
+    }
+
+    /// Each credited artist with its track count, a track counted under every
+    /// artist and guest it credits, or `None` while some track's tags are not
+    /// cached yet. `genre` narrows it to the tracks filed under that genre.
+    ///
+    /// MusicBee's artist lookup files a track under its display string, so a
+    /// collaboration is a row of its own and no participant's.
+    pub fn credited_artists(&self, genre: Option<&str>) -> Option<Vec<(String, u32)>> {
+        let rows = self.genre_rows()?;
+        let joined: Vec<String> = rows
+            .iter()
+            .filter(|r| genre.is_none_or(|g| crate::multi_value::holds(&r.genre, g)))
+            .map(|r| r.credited.join("\0"))
+            .collect();
+        Some(crate::multi_value::counts(
+            joined.iter().map(String::as_str),
+        ))
+    }
+
+    /// The albums `artist` is credited on, each filed under its own artist,
+    /// with how many of its tracks credit them; `None` while some track's tags
+    /// are not cached yet.
+    pub fn credited_albums(&self, artist: &str) -> Option<Vec<(String, String, u32)>> {
+        let rows = self.genre_rows()?;
+        let mut counts: BTreeMap<(String, String), u32> = BTreeMap::new();
+        for r in rows.iter().filter(|r| {
+            r.credited.iter().any(|n| equals(n, artist)) || equals(&r.album_owner, artist)
+        }) {
+            *counts
+                .entry((r.album_owner.clone(), r.album.clone()))
+                .or_default() += 1;
+        }
+        Some(
+            counts
+                .into_iter()
+                .map(|((owner, album), n)| (owner, album, n))
+                .collect(),
+        )
     }
 
     /// The artists with tracks in `genre` and how many each has there, or
@@ -785,11 +867,11 @@ impl MetadataCache {
     pub fn genre_artists(&self, genre: &str) -> Option<Vec<(String, u32)>> {
         let rows = self.genre_rows()?;
         let mut counts: HashMap<&str, u32> = HashMap::new();
-        for (_, artist) in rows
+        for r in rows
             .iter()
-            .filter(|(g, _)| crate::multi_value::holds(g, genre))
+            .filter(|r| crate::multi_value::holds(&r.genre, genre))
         {
-            *counts.entry(artist.as_str()).or_default() += 1;
+            *counts.entry(r.artist.as_str()).or_default() += 1;
         }
         let mut out: Vec<(String, u32)> = counts
             .into_iter()
@@ -871,7 +953,7 @@ impl MetadataCache {
         let rows: GenreRows = self
             .all_cached_tags()
             .into_iter()
-            .map(|t| (t.genre, t.artist))
+            .map(BrowseRow::from)
             .collect();
         let rows = Arc::new(rows);
         *memo = Some(rows.clone());
