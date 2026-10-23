@@ -21,6 +21,7 @@ import IconVolumeOff from '~icons/lucide/volume-x'
 import { formatDuration, nowPlayingCoverUrl } from '../api/display'
 import { Capability } from '../api/permissions'
 import { LastfmStatus, PlayState, RepeatMode, ShuffleMode } from '../api/types'
+import ArtistLinks from '../components/ArtistLinks.vue'
 import StarRating from '../components/StarRating.vue'
 import TrackPanels from '../components/TrackPanels.vue'
 import { useCoverAccent } from '../composables/useCoverAccent'
@@ -171,7 +172,7 @@ function cycleRepeat() {
         <p class="truncate text-xl leading-tight font-semibold tracking-tight">
           {{ player.track?.title || $t('player.nothingPlaying') }}
         </p>
-        <p class="truncate text-sm text-ink-soft">{{ player.track?.artist_display }}</p>
+        <p class="truncate text-sm text-ink-soft"><ArtistLinks :track="player.track" /></p>
         <p class="truncate text-xs text-outline">{{ player.track?.album }}</p>
       </div>
 

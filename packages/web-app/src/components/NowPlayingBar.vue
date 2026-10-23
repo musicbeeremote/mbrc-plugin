@@ -8,6 +8,7 @@ import IconSkipBack from '~icons/lucide/skip-back'
 import IconSkipForward from '~icons/lucide/skip-forward'
 
 import { coverUrl } from '../api/display'
+import ArtistLinks from './ArtistLinks.vue'
 import { Capability } from '../api/permissions'
 import { PlayState } from '../api/types'
 import { useSwipe } from '../composables/useSwipe'
@@ -51,18 +52,24 @@ const progress = computed(() =>
       <div class="h-full bg-accent transition-[width] duration-200" :style="{ width: `${progress}%` }" />
     </div>
     <div class="flex items-center gap-3 p-2">
-      <button class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="$emit('open')">
-        <div
+      <!-- The artist line is links of its own, which cannot sit inside the
+           button that opens the player, so the cover and title open it. -->
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <button
           class="size-10 shrink-0 overflow-hidden rounded-control bg-surface-2 text-outline"
+          :aria-label="$t('player.open')"
+          @click="$emit('open')"
         >
           <img v-if="cover" :src="cover" alt="" class="h-full w-full object-cover" />
           <IconMusic v-else class="h-full w-full p-2.5" />
-        </div>
+        </button>
         <div class="min-w-0">
-          <p class="truncate text-sm font-medium">{{ player.track?.title || $t('player.nothingPlaying') }}</p>
-          <p class="truncate text-xs text-outline">{{ player.track?.artist_display }}</p>
+          <button class="block w-full truncate text-left text-sm font-medium" @click="$emit('open')">
+            {{ player.track?.title || $t('player.nothingPlaying') }}
+          </button>
+          <p class="truncate text-xs text-outline"><ArtistLinks :track="player.track" /></p>
         </div>
-      </button>
+      </div>
       <button
         v-if="permissions.can(Capability.Playback)"
         class="p-2 transition-transform active:scale-90"

@@ -1,5 +1,7 @@
 {
   "nothingPlaying": "Nothing playing",
+  "featuring": "feat.",
+  "open": "Open the player",
   "action": {
     "playPause": "Play or pause",
     "previous": "Previous",
