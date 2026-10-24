@@ -12,7 +12,7 @@
 //!
 //! It also stamps `MBRC_VERSION` from `Directory.Build.props`, so the core
 //! reports the product's version rather than the crate's workspace-internal
-//! 0.1.0.
+//! 0.1.0, and embeds the same version in the DLL's Windows version resource.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -53,10 +53,13 @@ fn main() {
     }
 
     mbrc_buildinfo::emit_version();
+    mbrc_buildinfo::embed_resources(&mbrc_buildinfo::Binary {
+        description: "MusicBee Remote Core",
+        file_name: "mbrc_core.dll",
+        kind: mbrc_buildinfo::Kind::Dll,
+        manifest: None,
+    });
     ensure_web_bundle_dir();
-    // A release build bakes the bundle in, so a rebuilt bundle is a reason to
-    // rebuild even when no Rust source moved.
-    println!("cargo:rerun-if-changed=../web-app/dist");
     // A release build bakes the bundle in, so a rebuilt bundle is a reason to
     // rebuild even when no Rust source moved.
     println!("cargo:rerun-if-changed=../web-app/dist");

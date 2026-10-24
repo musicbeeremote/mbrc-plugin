@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <description>MusicBee Remote Helper: adds the firewall rule and applies staged updates.</description>
+  <!--
+    asInvoker, not requireAdministrator: the core starts the helper with the
+    shell's runas verb when it needs elevation, and with CreateProcess from an
+    already elevated or packaged parent, which requireAdministrator would fail
+    with ERROR_ELEVATION_REQUIRED. Run without rights, the helper reports exit
+    code 3 rather than failing to start. Declaring a level also turns off installer
+    detection, which would otherwise guess from the file name.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>
