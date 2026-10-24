@@ -111,6 +111,7 @@ pub const FIELDS: &[TagField] = &[
     field("album", 30, Multi::Never),
     field("album_artist", 34, Multi::Never),
     field("year", 88, Multi::Never),
+    field("original_year", 175, Multi::Never),
     field("genre", 59, Multi::Always),
     names("composer", 43, 89),
     field("grouping", 61, Multi::Never),

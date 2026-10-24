@@ -472,8 +472,8 @@ impl Providers for FixtureProviders {
         })
     }
     /// One populated track per requested path, carrying the raw tag values the
-    /// core parses: a year inside a full date, an `m:ss` duration, a rating, and
-    /// an ISO `date_added`.
+    /// core parses: years inside full dates, an `m:ss` duration, a rating, and an
+    /// ISO `date_added`.
     fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
         Ok(paths
             .into_iter()
@@ -489,6 +489,7 @@ impl Providers for FixtureProviders {
                 multi_artist: "Artist".into(),
                 multi_composer: "Composer".into(),
                 year: "12/03/2007".into(),
+                original_year: "1998-05-01".into(),
                 duration: "4:00".into(),
                 rating: "4.5".into(),
                 date_added: "2024-01-02T03:04:05Z".into(),

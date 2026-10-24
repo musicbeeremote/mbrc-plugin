@@ -76,6 +76,7 @@ const TRACK_SORTS: &[&str] = &[
     "album_artist",
     "track",
     "year",
+    "original_year",
     "rating",
     "date_added",
 ];
@@ -162,7 +163,10 @@ pub const SPECS: &[OpSpec] = &[
             LIMIT,
             opt("artist", Kind::From(Pool::Artist)),
             QUERY,
-            opt("sort", Kind::Choice(&["name", "artist", "year"])),
+            opt(
+                "sort",
+                Kind::Choice(&["name", "artist", "year", "original_year"]),
+            ),
             ORDER,
         ],
     },

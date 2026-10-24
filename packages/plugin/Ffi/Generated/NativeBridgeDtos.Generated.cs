@@ -144,6 +144,7 @@ namespace MusicBeePlugin.Ffi
         public string multi_artist { get; set; }
         public string multi_composer { get; set; }
         public string year { get; set; }
+        public string original_year { get; set; }
         public string duration { get; set; }
         public string rating { get; set; }
         public string date_added { get; set; }

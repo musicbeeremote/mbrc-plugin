@@ -240,6 +240,7 @@ fn basic_track_json(npt: &NowPlayingListTrack) -> Value {
         "genre": [],
         "composer": [],
         "year": Value::Null,
+        "original_year": Value::Null,
         "duration_ms": Value::Null,
         "rating": Value::Null,
         "date_added": Value::Null,

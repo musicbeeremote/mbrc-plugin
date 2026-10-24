@@ -278,8 +278,8 @@ pub struct Track {
 /// One track's V6 tags for a path (`LibraryTrackTags`).
 ///
 /// The base browse fields plus the extended tags MusicBee ships as raw strings.
-/// The V6 `track` schema derives its typed `year`/`duration_ms`/`rating`/
-/// `date_added` from these (`server::commands_v6::track`). Kept separate from
+/// The V6 `track` schema derives its typed `year`/`original_year`/`duration_ms`/
+/// `rating`/`date_added` from these (`server::commands_v6::track`). Kept separate from
 /// [`Track`], which V4 `browsetracks` serializes byte-identically and so cannot
 /// grow fields.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -311,6 +311,9 @@ pub struct TrackTags {
     /// extracts the 4-digit year.
     #[serde(default)]
     pub year: String,
+    /// Raw MusicBee Original Year tag, the first release; parsed as [`Self::year`].
+    #[serde(default)]
+    pub original_year: String,
     /// Formatted duration (`"m:ss"` / `"h:mm:ss"`); parsed to ms core-side (#112).
     #[serde(default)]
     pub duration: String,

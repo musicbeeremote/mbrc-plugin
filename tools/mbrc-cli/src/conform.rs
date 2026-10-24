@@ -1294,7 +1294,28 @@ fn track_schema_check(c: &mut V6Client, ops: &[String]) -> Result<usize, String>
             }
         }
     }
+    if ops.iter().any(|o| o == "library_albums") {
+        let newest = json!({ "limit": 20, "sort": "original_year", "order": "desc" });
+        if let Ok(d) = c.request("library_albums", newest)?.ok() {
+            for item in d["items"].as_array().into_iter().flatten() {
+                check_album_years(item)?;
+            }
+        }
+    }
     Ok(seen)
+}
+
+/// An album's years are omitted when unknown, never `null` or zero.
+fn check_album_years(album: &Value) -> Result<(), String> {
+    for f in ["year", "original_year"] {
+        expect(
+            album
+                .get(f)
+                .is_none_or(|y| y.as_i64().is_some_and(|y| y > 0)),
+            &format!("album.{f} present but not a positive int"),
+        )?;
+    }
+    Ok(())
 }
 
 /// Assert a track object carries the canonical V6 schema with the right types.
@@ -1325,7 +1346,7 @@ fn check_track(t: &Value) -> Result<(), String> {
         }),
         "track.artist_credits not an array of {name, role}",
     )?;
-    for f in ["year", "duration_ms"] {
+    for f in ["year", "original_year", "duration_ms"] {
         expect(
             t[f].is_i64() || t[f].is_null(),
             &format!("track.{f} not int|null"),

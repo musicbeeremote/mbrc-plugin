@@ -33,7 +33,7 @@ namespace MusicBeePlugin.Providers
         };
 
         // The V6 typed-track tags: the browse fields plus the raw extended metadata
-        // tags the core parses (Year/Rating). Duration and DateAdded are file
+        // tags the core parses (Year/OriginalYear/Rating). Duration and DateAdded are file
         // properties (read via GetFileProperty), not metadata tags. Index order is
         // consumed by GetTrackTags.
         private static readonly Plugin.MetaDataType[] TrackTagFields =
@@ -43,6 +43,7 @@ namespace MusicBeePlugin.Providers
             Plugin.MetaDataType.TrackNo, Plugin.MetaDataType.DiscNo,
             Plugin.MetaDataType.Year, Plugin.MetaDataType.Rating,
             Plugin.MetaDataType.MultiArtist, Plugin.MetaDataType.MultiComposer,
+            Plugin.MetaDataType.OriginalYear,
         };
 
         private static readonly Plugin.MetaDataType[] AlbumTrackFields =
@@ -580,6 +581,7 @@ namespace MusicBeePlugin.Providers
                     rating = Tag(tags, 8),
                     multi_artist = Tag(tags, 9),
                     multi_composer = Tag(tags, 10),
+                    original_year = Tag(tags, 11),
                     // Duration parsed to ms core-side; DateAdded is locale-ambiguous as
                     // a display string, so convert to ISO-8601 UTC here (#114).
                     duration = duration ?? string.Empty,

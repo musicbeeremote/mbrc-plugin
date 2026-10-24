@@ -30,7 +30,7 @@ use mbrc_wire::v6::ErrorCode;
 use super::{OpResult, V6Error, internal, opt_bool, opt_str, page_args, page_json, track};
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
-    CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
+    AlbumYears, CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
 };
 use crate::protocol::messages::{AlbumData, ArtistData, GenreData, Page, Track, TrackTags};
 use crate::providers::Providers;
@@ -146,14 +146,14 @@ fn albums(
     // Derived from the tracks' own tags, since the album lookup carries no year.
     // Zero means undated, which sorts before every real year.
     let years = cache.map(MetadataCache::album_years).unwrap_or_default();
-    let mut all: Vec<(AlbumData, i32)> = all
+    let mut all: Vec<(AlbumData, AlbumYears)> = all
         .into_iter()
         .map(|al| {
-            let year = years
+            let dated = years
                 .get(&album_key(&al.artist, &al.artist, &al.album))
                 .copied()
-                .unwrap_or(0);
-            (al, year)
+                .unwrap_or_default();
+            (al, dated)
         })
         .collect();
 
@@ -167,8 +167,12 @@ fn albums(
         None => {}
         Some("name") => sort_names(&mut all, descending(data)?, |(al, _)| &al.album),
         Some("artist") => sort_names(&mut all, descending(data)?, |(al, _)| &al.artist),
-        Some("year") => {
-            all.sort_by_key(|(al, year)| (*year, collate(&al.album)));
+        Some(field @ ("year" | "original_year")) => {
+            let pick = |d: &AlbumYears| match field {
+                "year" => d.year,
+                _ => d.original_year,
+            };
+            all.sort_by_key(|(al, dated)| (pick(dated), collate(&al.album)));
             if descending(data)? {
                 all.reverse();
             }
@@ -187,13 +191,16 @@ fn albums(
     let total = all.len();
     let items = slice(all, offset, limit)
         .into_iter()
-        .map(|(al, year)| {
+        .map(|(al, dated)| {
             let mut obj = json!({ "album": al.album, "artist": al.artist, "count": al.count });
             if let Some(hash) = track::album_cover_hash(store, &al.artist, &al.album) {
                 obj["cover_hash"] = json!(hash);
             }
-            if year > 0 {
-                obj["year"] = json!(year);
+            if dated.year > 0 {
+                obj["year"] = json!(dated.year);
+            }
+            if dated.original_year > 0 {
+                obj["original_year"] = json!(dated.original_year);
             }
             obj
         })
@@ -1392,6 +1399,61 @@ mod tests {
         .unwrap();
 
         assert_eq!(out["items"][0]["album"], "25");
+    }
+
+    /// Two remasters reissued the same year still sort by when each first came
+    /// out, and each album says both years.
+    #[test]
+    fn albums_sort_by_original_year() {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join("mbrc-albums-original-year");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        let remaster = |src: &str, album: &str, original_year: i32| CachedTags {
+            src: src.into(),
+            artist: "Band".into(),
+            album_artist: "Band".into(),
+            album: album.into(),
+            year: 2017,
+            original_year,
+            ..CachedTags::default()
+        };
+        let rows = [
+            remaster("/b/1.mp3", "Second", 1985),
+            remaster("/a/1.mp3", "First", 1972),
+        ];
+        cache.replace_track_index(&rows.iter().map(|r| r.src.clone()).collect::<Vec<_>>());
+        cache.put_track_tags(&rows);
+        cache.rebuild_album_years();
+
+        let m = MockProviders {
+            artist_albums: ["Second", "First"]
+                .map(|album| AlbumData {
+                    album: album.into(),
+                    artist: "Band".into(),
+                    count: 1,
+                })
+                .to_vec(),
+            ..Default::default()
+        };
+        let out = dispatch(
+            "library_albums",
+            &json!({ "artist": "Band", "sort": "original_year" }),
+            &m,
+            None,
+            Some(&cache),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(out["items"][0]["album"], "First");
+        assert_eq!(out["items"][0]["year"], 2017);
+        assert_eq!(out["items"][0]["original_year"], 1972);
+        assert_eq!(out["items"][1]["original_year"], 1985);
     }
 
     /// Naming an artist and being handed the whole library is a wrong answer,

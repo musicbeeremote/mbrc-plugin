@@ -4,7 +4,8 @@
 //! by-path `track_get` and the content-addressed `cover_get` fetch (#136).
 //!
 //! The typed fields come from raw MusicBee tag strings (`TrackTags`), parsed here:
-//! `year` (4-digit extracted from a possibly-full-date), `duration_ms` (`m:ss`
+//! `year` and `original_year` (4-digit extracted from a possibly-full-date, each
+//! as tagged: which one a client falls back to is its call), `duration_ms` (`m:ss`
 //! parsed, #112), `rating` (comma-or-dot float, #114). `date_added` is already
 //! ISO-8601 (formatted C#-side) and passes through.
 //!
@@ -23,7 +24,7 @@ use super::{OpResult, V6Error, internal, req_str};
 use crate::cover::cover_identifier;
 use crate::cover::store::{Artwork, CoverStore, PLAYING_KEY_PREFIX, track_cover_key};
 use crate::credits::{self, Credit, Role};
-use crate::metadata_cache::{CachedTags, MetadataCache};
+use crate::metadata_cache::{CachedTags, MetadataCache, parse_year};
 use crate::multi_value;
 use crate::protocol::messages::TrackTags;
 use crate::providers::Providers;
@@ -263,7 +264,7 @@ fn composer_names(raw: &str) -> Vec<&str> {
 }
 
 /// Build the canonical V6 `track` from raw tags: base fields always present, the
-/// four typed fields `null` when unknown, `cover_hash` omitted when absent.
+/// five typed fields `null` when unknown, `cover_hash` omitted when absent.
 pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>, shown: Credits) -> Value {
     let (artist, artist_credits) = artist_json(&tags.multi_artist, &tags.artist, shown);
     let mut obj = json!({
@@ -279,6 +280,7 @@ pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>, shown: Cred
         "genre": multi_value::list(&tags.genre),
         "composer": composer_names(&tags.multi_composer),
         "year": parse_year(&tags.year),
+        "original_year": parse_year(&tags.original_year),
         "duration_ms": parse_duration_ms(&tags.duration),
         "rating": parse_rating(&tags.rating),
         "date_added": non_empty(&tags.date_added),
@@ -310,6 +312,7 @@ pub(crate) fn cached_track_json(tags: &CachedTags, cover_hash: Option<&str>) -> 
         "genre": multi_value::list(&tags.genre),
         "composer": composer_names(&tags.multi_composer),
         "year": (tags.year > 0).then_some(tags.year as i64),
+        "original_year": (tags.original_year > 0).then_some(tags.original_year as i64),
         "duration_ms": (tags.duration_ms > 0).then_some(tags.duration_ms),
         "rating": (tags.rating > 0.0).then_some(tags.rating as f64),
         "date_added": non_empty(&tags.date_added),
@@ -353,15 +356,6 @@ pub(crate) fn tags_for_paths(
 
 fn non_empty(s: &str) -> Option<&str> {
     (!s.is_empty()).then_some(s)
-}
-
-/// Extract the 4-digit year from a Year tag that may be a full date
-/// (`"12/03/2007"` -> 2007, `"2007"` -> 2007). A 2-digit year yields `None`.
-pub(crate) fn parse_year(raw: &str) -> Option<i64> {
-    raw.split(|c: char| !c.is_ascii_digit())
-        .filter(|t| t.len() == 4)
-        .filter_map(|t| t.parse::<i64>().ok())
-        .find(|y| (1000..=9999).contains(y))
 }
 
 /// `"m:ss"` / `"h:mm:ss"` / `"ss"` -> milliseconds (#112: only a formatted string
@@ -416,6 +410,7 @@ mod tests {
             multi_artist: "Artist".into(),
             multi_composer: String::new(),
             year: "12/03/2007".into(),
+            original_year: "1998".into(),
             duration: "4:17".into(),
             rating: "3,5".into(),
             date_added: "2025-07-09T01:27:00Z".into(),
@@ -458,6 +453,7 @@ mod tests {
             multi_artist: "A\0B".into(),
             multi_composer: "C\0D".into(),
             year: "12/03/2007".into(),
+            original_year: "1998-05-01".into(),
             duration: "3:45".into(),
             rating: "3.5".into(),
             date_added: "2024-01-02T03:04:05Z".into(),
@@ -485,9 +481,29 @@ mod tests {
         let out = cached_track_json(&cached, None);
         assert_eq!(track_json(&live, None, Credits::Lead), out);
         assert!(out["year"].is_null());
+        assert!(out["original_year"].is_null());
         assert!(out["duration_ms"].is_null());
         assert!(out["rating"].is_null());
         assert!(out["date_added"].is_null());
+    }
+
+    /// A remaster carries the year it was reissued and the year the record first
+    /// came out; each is reported as tagged, with no fallback between them.
+    #[test]
+    fn original_year_is_reported_apart_from_year() {
+        let years = |year: &str, original: &str| {
+            let mut t = tags();
+            t.year = year.into();
+            t.original_year = original.into();
+            let v = track_json(&t, None, Credits::Lead);
+            assert_eq!(v, cached_track_json(&CachedTags::from(&t), None));
+            (v["year"].clone(), v["original_year"].clone())
+        };
+        assert_eq!(years("2017", "1998"), (json!(2017), json!(1998)));
+        assert_eq!(years("2017", ""), (json!(2017), Value::Null));
+        assert_eq!(years("", "1998"), (Value::Null, json!(1998)));
+        assert_eq!(years("2017", "12/03/1998"), (json!(2017), json!(1998)));
+        assert_eq!(years("2017", "[1998]"), (json!(2017), json!(1998)));
     }
 
     #[test]
@@ -496,6 +512,7 @@ mod tests {
         assert_eq!(v["src"], "C:\\Music\\song.mp3");
         assert_eq!(v["track_no"], 4);
         assert_eq!(v["year"], 2007);
+        assert_eq!(v["original_year"], 1998);
         assert_eq!(v["duration_ms"], 257_000);
         assert_eq!(v["rating"], 3.5);
         assert_eq!(v["date_added"], "2025-07-09T01:27:00Z");

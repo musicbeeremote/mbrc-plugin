@@ -432,7 +432,7 @@ All enums are lowercase strings:
 
 Track objects are uniform across every domain (`track_get`, `now_playing_state`,
 `library_tracks`, `now_playing_list`, `playlist_tracks`). Base fields are always present; the
-four typed fields are `null` when unknown; `cover_hash` is omitted when there is no cover
+five typed fields are `null` when unknown; `cover_hash` is omitted when there is no cover
 to give (see below).
 
 `artist`, `composer` and `genre` are arrays of the individual values, `[]` when unset, the
@@ -468,6 +468,7 @@ A list may add index fields beside these - `order` and `position` on a playlist,
   "genre": ["Reggaeton", "Latin"],
   "composer": [],
   "year": 2007,            // int | null (4-digit year parsed from the raw tag)
+  "original_year": 1998,   // int | null (the first release, parsed the same way)
   "duration_ms": 240000,   // int | null (parsed from "m:ss" / "h:mm:ss")*
   "rating": 4.5,           // float | null (0-5)
   "date_added": "2024-01-02T03:04:05Z",  // ISO-8601 UTC | null
@@ -627,10 +628,10 @@ field in MusicBee: names change, collide with built-in names and are localized.
 | `now_playing_tags` | `{keys?}` | the playing track's values, every key when `keys` is absent |
 | `now_playing_set_tag` | `{"path":..,"key":..,"value":<value>}` | the value read back after the commit |
 
-Keys: `title`, `artist`, `artist_display`, `album`, `album_artist`, `year`, `genre`, `composer`,
-`grouping`, `publisher`, `comment`, `mood`, `occasion`, `bpm`, `custom1` .. `custom16`, and two
-that `tag_fields` does not list and `now_playing_tags` returns only when asked for by key:
-`artist_credits` and `lyrics`. Rating has ops of its own. An unknown key is `invalid_field`.
+Keys: `title`, `artist`, `artist_display`, `album`, `album_artist`, `year`, `original_year`,
+`genre`, `composer`, `grouping`, `publisher`, `comment`, `mood`, `occasion`, `bpm`, `custom1` ..
+`custom16`, and two that `tag_fields` does not list and `now_playing_tags` returns only when
+asked for by key: `artist_credits` and `lyrics`. Rating has ops of its own. An unknown key is `invalid_field`.
 
 The artist is three keys over two MusicBee fields, read as on the [track](#canonical-track):
 
@@ -743,7 +744,7 @@ gone, and the `version` has moved, so re-read the list.
 |----|----------------|----------|
 | `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}`; a file tagged with several genres (`Rock; Jazz`) counts under each, and a `genre` filter on the other ops finds it through any of them |
 | `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}`; each artist and guest a track credits is a row, the track counted under each |
-| `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` when the tracks agree on one) |
+| `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` and `original_year`, each the earliest its tracks carry, when known) |
 | `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
 | `library_play_all` | `{shuffle?}` | `{}` |
@@ -772,9 +773,10 @@ that the artist chooses between records that share a title and never trims a
 record's contents, so a list and what it queues cannot disagree.
 
 **Order.** `sort` on the name lists (`library_genres`, `library_artists`) takes only
-`name`. On `library_albums` and `library_tracks` it takes `title`, `artist`, `album`,
-`album_artist`, `track`, `year`, `rating` or `date_added`; `order` is `asc` (default)
-or `desc`. An unknown value is `invalid_field` rather than a silent fallback.
+`name`. On `library_albums` it takes `name`, `artist`, `year` or `original_year`. On
+`library_tracks` it takes `title`, `artist`, `album`, `album_artist`, `track`, `year`,
+`original_year`, `rating` or `date_added`. `order` is `asc` (default) or `desc`. An
+unknown value is `invalid_field` rather than a silent fallback.
 
 **Search.** `query` is a case-insensitive substring match, applied to the whole level
 rather than to the page that happens to be loaded. A searched list with no `sort`

@@ -51,6 +51,8 @@ pub struct CachedTags {
     pub multi_composer: String,
     /// Zero when the tag carried no year, which sorts before every real one.
     pub year: i32,
+    /// The first release's year, zero when untagged, as [`Self::year`].
+    pub original_year: i32,
     pub rating: f32,
     /// ISO-8601 UTC, converted host-side; empty when unknown.
     pub date_added: String,
@@ -66,7 +68,7 @@ pub struct CachedTags {
 /// A record that has grown makes every stored row stale in a way no library
 /// fingerprint would notice: the library did not change, the shape it is read
 /// into did.
-const TAGS_SCHEMA_VERSION: u32 = 4;
+const TAGS_SCHEMA_VERSION: u32 = 5;
 
 impl From<&TrackTags> for CachedTags {
     fn from(tags: &TrackTags) -> Self {
@@ -81,7 +83,8 @@ impl From<&TrackTags> for CachedTags {
             genre: tags.genre.clone(),
             multi_artist: tags.multi_artist.clone(),
             multi_composer: tags.multi_composer.clone(),
-            year: parse_year(&tags.year),
+            year: year_or_zero(&tags.year),
+            original_year: year_or_zero(&tags.original_year),
             rating: parse_rating(&tags.rating),
             date_added: tags.date_added.clone(),
             duration_ms: parse_duration_ms(&tags.duration),
@@ -138,8 +141,15 @@ impl From<&CachedTags> for Track {
     }
 }
 
-/// [`METADATA_CACHE`] key holding the derived album -> year map.
+/// [`METADATA_CACHE`] key holding the derived album -> years map.
 const KEY_ALBUM_YEARS: &str = "album_years";
+
+/// An album's years, derived from its tracks. Zero is undated.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlbumYears {
+    pub year: i32,
+    pub original_year: i32,
+}
 
 /// How an album is named across the cache: by the artist it is filed under.
 ///
@@ -168,15 +178,21 @@ pub fn collate(name: &str) -> String {
     lowered
 }
 
-/// The leading four-digit year of a MusicBee year tag, which may be a full date.
-fn parse_year(raw: &str) -> i32 {
-    raw.split(['/', '-', ' ', '.'])
-        .find_map(|part| {
-            part.parse::<i32>()
-                .ok()
-                .filter(|y| (1000..=9999).contains(y))
-        })
-        .unwrap_or(0)
+/// The first four-digit year in a MusicBee year tag, which may be a full date
+/// (`"12/03/2007"` -> 2007). A 2-digit year yields `None`.
+///
+/// The one parser for every year tag, so a track reads the same from the cache
+/// as from the host.
+pub(crate) fn parse_year(raw: &str) -> Option<i64> {
+    raw.split(|c: char| !c.is_ascii_digit())
+        .filter(|t| t.len() == 4)
+        .filter_map(|t| t.parse::<i64>().ok())
+        .find(|y| (1000..=9999).contains(y))
+}
+
+/// [`parse_year`] as the cache stores it: zero when the tag says nothing.
+fn year_or_zero(raw: &str) -> i32 {
+    parse_year(raw).map_or(0, |y| y as i32)
 }
 
 /// A rating tag, which may use either decimal separator.
@@ -205,18 +221,20 @@ pub enum SortField {
     AlbumArtist,
     Track,
     Year,
+    OriginalYear,
     Rating,
     DateAdded,
 }
 
 impl SortField {
-    pub const ALL: [SortField; 8] = [
+    pub const ALL: [SortField; 9] = [
         SortField::Title,
         SortField::Artist,
         SortField::Album,
         SortField::AlbumArtist,
         SortField::Track,
         SortField::Year,
+        SortField::OriginalYear,
         SortField::Rating,
         SortField::DateAdded,
     ];
@@ -230,6 +248,7 @@ impl SortField {
             SortField::AlbumArtist => "album_artist",
             SortField::Track => "track",
             SortField::Year => "year",
+            SortField::OriginalYear => "original_year",
             SortField::Rating => "rating",
             SortField::DateAdded => "date_added",
         }
@@ -254,6 +273,7 @@ impl SortField {
             SortField::AlbumArtist => then_track(by_name(&a.album_artist, &b.album_artist)),
             SortField::Track => then_track(std::cmp::Ordering::Equal),
             SortField::Year => then_track(a.year.cmp(&b.year)),
+            SortField::OriginalYear => then_track(a.original_year.cmp(&b.original_year)),
             SortField::Rating => then_track(
                 a.rating
                     .partial_cmp(&b.rating)
@@ -1151,29 +1171,33 @@ impl MetadataCache {
         page
     }
 
-    /// Derives each album's year from its own tracks. Returns albums dated.
+    /// Derives each album's years from its own tracks. Returns albums dated.
     ///
-    /// The earliest non-zero year its tracks carry, because a reissued track
-    /// stamped with the reissue year should not redate the record.
+    /// Each is the earliest non-zero one its tracks carry, because a reissued
+    /// track stamped with the reissue year should not redate the record.
     pub fn rebuild_album_years(&self) -> usize {
-        let mut years: HashMap<String, i32> = HashMap::new();
+        let earliest = |kept: &mut i32, seen: i32| {
+            if seen > 0 && (*kept == 0 || seen < *kept) {
+                *kept = seen;
+            }
+        };
+        let mut years: HashMap<String, AlbumYears> = HashMap::new();
         for tags in self.all_cached_tags() {
-            if tags.year <= 0 {
+            if tags.year <= 0 && tags.original_year <= 0 {
                 continue;
             }
             let key = album_key(&tags.album_artist, &tags.artist, &tags.album);
-            years
-                .entry(key)
-                .and_modify(|y| *y = (*y).min(tags.year))
-                .or_insert(tags.year);
+            let album = years.entry(key).or_default();
+            earliest(&mut album.year, tags.year);
+            earliest(&mut album.original_year, tags.original_year);
         }
         let dated = years.len();
         self.put(KEY_ALBUM_YEARS, &years);
         dated
     }
 
-    /// The derived album -> year map, empty until it has been built.
-    pub fn album_years(&self) -> HashMap<String, i32> {
+    /// The derived album -> years map, empty until it has been built.
+    pub fn album_years(&self) -> HashMap<String, AlbumYears> {
         self.get(KEY_ALBUM_YEARS).unwrap_or_default()
     }
 
@@ -1708,13 +1732,16 @@ mod tests {
 
     #[test]
     fn a_year_tag_that_is_a_whole_date_still_yields_its_year() {
-        assert_eq!(parse_year("2007"), 2007);
-        assert_eq!(parse_year("12/03/2007"), 2007);
-        assert_eq!(parse_year("2007-03-12"), 2007);
+        assert_eq!(parse_year("2007"), Some(2007));
+        assert_eq!(parse_year("12/03/2007"), Some(2007));
+        assert_eq!(parse_year("2007-03-12"), Some(2007));
+        assert_eq!(parse_year("[1998]"), Some(1998));
+        assert_eq!(parse_year("1998;2001"), Some(1998));
         // Nothing four-digit to take, so the album is undated rather than wrong.
-        assert_eq!(parse_year(""), 0);
-        assert_eq!(parse_year("07"), 0);
-        assert_eq!(parse_year("unknown"), 0);
+        assert_eq!(year_or_zero(""), 0);
+        assert_eq!(year_or_zero("07"), 0);
+        assert_eq!(year_or_zero("12345"), 0);
+        assert_eq!(year_or_zero("unknown"), 0);
     }
 
     /// MusicBee reports a rating in the running culture, so half a star arrives
@@ -1882,7 +1909,83 @@ mod tests {
             cache
                 .album_years()
                 .get(&album_key("Artist", "Artist", "Album")),
-            Some(&2012)
+            Some(&AlbumYears {
+                year: 2012,
+                original_year: 0
+            })
+        );
+    }
+
+    /// A remaster tagged from MusicBrainz stamps every track with the reissue
+    /// year, so the first release is dated by the original year alone.
+    #[test]
+    fn an_album_keeps_its_original_year_beside_its_year() {
+        let remaster = |src: &str, original_year: i32| CachedTags {
+            original_year,
+            ..track(src, src, 2017)
+        };
+        let cache = sorted_cache(
+            "original-years",
+            &[
+                remaster("/a.mp3", 1999),
+                remaster("/b.mp3", 1998),
+                remaster("/c.mp3", 0),
+            ],
+        );
+        cache.rebuild_album_years();
+
+        assert_eq!(
+            cache
+                .album_years()
+                .get(&album_key("Artist", "Artist", "Album")),
+            Some(&AlbumYears {
+                year: 2017,
+                original_year: 1998
+            })
+        );
+    }
+
+    /// A track with only an original year still dates its album by it.
+    #[test]
+    fn an_album_with_only_original_years_is_dated() {
+        let cache = sorted_cache(
+            "original-only",
+            &[CachedTags {
+                original_year: 1971,
+                ..track("/a.mp3", "A", 0)
+            }],
+        );
+        assert_eq!(cache.rebuild_album_years(), 1);
+        assert_eq!(
+            cache
+                .album_years()
+                .get(&album_key("Artist", "Artist", "Album"))
+                .map(|y| (y.year, y.original_year)),
+            Some((0, 1971))
+        );
+    }
+
+    #[test]
+    fn tracks_sort_by_original_year_apart_from_year() {
+        let reissue = |src: &str, original_year: i32| CachedTags {
+            original_year,
+            ..track(src, src, 2020)
+        };
+        let cache = sorted_cache(
+            "sorted-original",
+            &[
+                reissue("/b.mp3", 1985),
+                reissue("/a.mp3", 1972),
+                reissue("/c.mp3", 0),
+            ],
+        );
+        assert_eq!(
+            cache.sorted_track_page(SortField::OriginalYear, 0, 3, false),
+            vec!["/c.mp3".to_string(), "/a.mp3".into(), "/b.mp3".into()],
+        );
+        assert_eq!(
+            SortField::parse("original_year"),
+            Some(SortField::OriginalYear)
         );
     }
 
