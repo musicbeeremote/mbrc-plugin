@@ -93,6 +93,18 @@ impl From<&TrackTags> for CachedTags {
 }
 
 impl CachedTags {
+    /// The year the record first came out: the original year, else the year.
+    ///
+    /// Most files carry a Year and no Original Year, so sorting on the original
+    /// year alone would leave most of a library undated.
+    pub fn release_year(&self) -> i32 {
+        if self.original_year > 0 {
+            self.original_year
+        } else {
+            self.year
+        }
+    }
+
     /// The artists and guests the track credits, or its display artist when
     /// nobody split it.
     pub fn credited_names(&self) -> Vec<String> {
@@ -149,6 +161,17 @@ const KEY_ALBUM_YEARS: &str = "album_years";
 pub struct AlbumYears {
     pub year: i32,
     pub original_year: i32,
+}
+
+impl AlbumYears {
+    /// The original year, else the year, as [`CachedTags::release_year`].
+    pub fn release_year(&self) -> i32 {
+        if self.original_year > 0 {
+            self.original_year
+        } else {
+            self.year
+        }
+    }
 }
 
 /// How an album is named across the cache: by the artist it is filed under.
@@ -273,13 +296,44 @@ impl SortField {
             SortField::AlbumArtist => then_track(by_name(&a.album_artist, &b.album_artist)),
             SortField::Track => then_track(std::cmp::Ordering::Equal),
             SortField::Year => then_track(a.year.cmp(&b.year)),
-            SortField::OriginalYear => then_track(a.original_year.cmp(&b.original_year)),
+            SortField::OriginalYear => then_track(
+                a.release_year()
+                    .cmp(&b.release_year())
+                    .then(a.year.cmp(&b.year)),
+            ),
             SortField::Rating => then_track(
                 a.rating
                     .partial_cmp(&b.rating)
                     .unwrap_or(std::cmp::Ordering::Equal),
             ),
             SortField::DateAdded => then_track(a.date_added.cmp(&b.date_added)),
+        }
+    }
+
+    /// Whether this order keeps rows it cannot place at the end in both
+    /// directions, rather than mirroring them to the front when descending.
+    fn has_undated_tail(self) -> bool {
+        self == SortField::OriginalYear
+    }
+
+    /// The key a descending order is stored under, for an order that is not
+    /// its ascending one read backwards.
+    fn descending_key(self) -> Option<&'static str> {
+        self.has_undated_tail().then_some("original_year:desc")
+    }
+
+    fn undated(self, tags: &CachedTags) -> bool {
+        self.has_undated_tail() && tags.release_year() == 0
+    }
+
+    /// [`Self::compare`] in the asked direction, with undated rows last either way.
+    pub fn order(self, a: &CachedTags, b: &CachedTags, descending: bool) -> std::cmp::Ordering {
+        match (self.undated(a), self.undated(b)) {
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+            (true, true) => self.compare(a, b),
+            (false, false) if descending => self.compare(a, b).reverse(),
+            (false, false) => self.compare(a, b),
         }
     }
 }
@@ -1051,22 +1105,21 @@ impl MetadataCache {
         matched.sort_by_key(|(rank, _, _)| *rank);
         if let Some(field) = sort {
             matched.sort_by(|(_, a, _), (_, b, _)| match (a, b) {
-                (Some(a), Some(b)) => field.compare(a, b),
+                (Some(a), Some(b)) => field.order(a, b, descending),
                 // A row with no tags cannot be ordered by one; it goes last.
                 (Some(_), None) => std::cmp::Ordering::Less,
                 (None, Some(_)) => std::cmp::Ordering::Greater,
                 (None, None) => std::cmp::Ordering::Equal,
             });
-            if descending {
-                matched.reverse();
-            }
         }
         matched.into_iter().map(|(_, _, path)| path).collect()
     }
 
     /// Rebuilds every sort order from the cached tags. Returns rows indexed.
     ///
-    /// Only ascending is stored: descending is the same range walked backwards.
+    /// Ascending is stored, and descending is the same range walked backwards,
+    /// except for an order whose undated rows stay last: that one is stored
+    /// twice.
     pub fn rebuild_sort_orders(&self) -> usize {
         let all = self.all_cached_tags();
         if all.is_empty() {
@@ -1078,13 +1131,17 @@ impl MetadataCache {
             Ok(())
         });
         let mut indexed = 0;
-        for field in SortField::ALL {
+        let stored = SortField::ALL.into_iter().map(|f| (f, f.as_str(), false));
+        let mirrored = SortField::ALL
+            .into_iter()
+            .filter_map(|f| f.descending_key().map(|key| (f, key, true)));
+        for (field, key, descending) in stored.chain(mirrored) {
             let mut sorted: Vec<&CachedTags> = all.iter().collect();
-            sorted.sort_by(|a, b| field.compare(a, b));
+            sorted.sort_by(|a, b| field.order(a, b, descending));
             self.db.write(Durability::Immediate, |txn| {
                 let mut table = txn.open_table(TRACK_SORT)?;
                 for (position, tags) in sorted.iter().enumerate() {
-                    table.insert((field.as_str(), position as u32), tags.src.as_str())?;
+                    table.insert((key, position as u32), tags.src.as_str())?;
                 }
                 Ok(())
             });
@@ -1094,7 +1151,18 @@ impl MetadataCache {
     }
 
     /// How many rows one order holds, which says whether it is complete.
+    ///
+    /// An order stored in both directions is only as complete as its shorter
+    /// half, so a cache built before it gained one is rebuilt.
     pub fn sorted_track_count(&self, field: SortField) -> u64 {
+        let ascending = self.stored_order_rows(field.as_str());
+        match field.descending_key() {
+            Some(key) => ascending.min(self.stored_order_rows(key)),
+            None => ascending,
+        }
+    }
+
+    fn stored_order_rows(&self, key: &str) -> u64 {
         if !self.is_validated() {
             return 0;
         }
@@ -1105,7 +1173,7 @@ impl MetadataCache {
                     Err(_) => return Ok(0),
                 };
                 let mut count = 0u64;
-                for row in table.range((field.as_str(), 0u32)..(field.as_str(), u32::MAX))? {
+                for row in table.range((key, 0u32)..(key, u32::MAX))? {
                     row?;
                     count += 1;
                 }
@@ -1117,7 +1185,8 @@ impl MetadataCache {
     /// One page of a stored order.
     ///
     /// Descending is the mirror window read backwards rather than a second
-    /// stored order: the last page ascending is the first page descending.
+    /// stored order: the last page ascending is the first page descending. An
+    /// order that keeps undated rows last reads its own stored descending order.
     pub fn sorted_track_page(
         &self,
         field: SortField,
@@ -1128,6 +1197,10 @@ impl MetadataCache {
         if !self.is_validated() {
             return Vec::new();
         }
+        let (key, mirrored) = match field.descending_key() {
+            Some(key) if descending => (key, false),
+            _ => (field.as_str(), descending),
+        };
         let total = self.sorted_track_count(field) as i64;
         let offset = offset.max(0) as i64;
         let limit = if limit <= 0 {
@@ -1135,12 +1208,12 @@ impl MetadataCache {
         } else {
             limit as i64
         };
-        let start = if descending {
+        let start = if mirrored {
             (total - offset - limit).max(0)
         } else {
             offset
         };
-        let end = if descending {
+        let end = if mirrored {
             (total - offset).max(0)
         } else {
             (offset + limit).min(total)
@@ -1156,16 +1229,14 @@ impl MetadataCache {
                     Err(_) => return Ok(Vec::new()),
                 };
                 let mut paths = Vec::new();
-                for row in
-                    table.range((field.as_str(), start as u32)..(field.as_str(), end as u32))?
-                {
+                for row in table.range((key, start as u32)..(key, end as u32))? {
                     let (_key, path) = row?;
                     paths.push(path.value().to_string());
                 }
                 Ok(paths)
             })
             .unwrap_or_default();
-        if descending {
+        if mirrored {
             page.reverse();
         }
         page
@@ -1965,28 +2036,78 @@ mod tests {
         );
     }
 
-    #[test]
-    fn tracks_sort_by_original_year_apart_from_year() {
-        let reissue = |src: &str, original_year: i32| CachedTags {
+    fn dated(src: &str, year: i32, original_year: i32) -> CachedTags {
+        CachedTags {
             original_year,
-            ..track(src, src, 2020)
-        };
-        let cache = sorted_cache(
-            "sorted-original",
-            &[
-                reissue("/b.mp3", 1985),
-                reissue("/a.mp3", 1972),
-                reissue("/c.mp3", 0),
-            ],
+            ..track(src, src, year)
+        }
+    }
+
+    /// Most files carry a Year and no Original Year, so the original year falls
+    /// back to the year, and a track with neither stays last both ways.
+    #[test]
+    fn original_year_falls_back_to_year_and_keeps_undated_last() {
+        let tracks = [
+            dated("/undated.mp3", 0, 0),
+            dated("/year-only.mp3", 1980, 0),
+            dated("/remaster.mp3", 2020, 1972),
+            dated("/reissue.mp3", 2010, 1972),
+        ];
+        let cache = sorted_cache("sorted-original", &tracks);
+        let ascending = [
+            "/reissue.mp3",
+            "/remaster.mp3",
+            "/year-only.mp3",
+            "/undated.mp3",
+        ];
+        let descending = [
+            "/year-only.mp3",
+            "/remaster.mp3",
+            "/reissue.mp3",
+            "/undated.mp3",
+        ];
+
+        assert_eq!(cache.sorted_track_count(SortField::OriginalYear), 4);
+        assert_eq!(
+            cache.sorted_track_page(SortField::OriginalYear, 0, 4, false),
+            ascending,
         );
         assert_eq!(
-            cache.sorted_track_page(SortField::OriginalYear, 0, 3, false),
-            vec!["/c.mp3".to_string(), "/a.mp3".into(), "/b.mp3".into()],
+            cache.sorted_track_page(SortField::OriginalYear, 0, 4, true),
+            descending,
         );
+        assert_eq!(
+            cache.sorted_track_page(SortField::OriginalYear, 1, 2, true),
+            descending[1..3],
+            "a descending page is a window on the stored descending order"
+        );
+        let scanned = |descending| {
+            cache.track_paths_where(
+                &TrackFilter::default(),
+                Some(SortField::OriginalYear),
+                descending,
+            )
+        };
+        assert_eq!(scanned(false), ascending);
+        assert_eq!(scanned(true), descending);
         assert_eq!(
             SortField::parse("original_year"),
             Some(SortField::OriginalYear)
         );
+    }
+
+    /// A cache built before an order was stored both ways is not complete,
+    /// so the scanner rebuilds it rather than serving an empty descending page.
+    #[test]
+    fn an_order_missing_its_descending_half_is_incomplete() {
+        let cache = sorted_cache("sorted-half", &[dated("/a.mp3", 2000, 0)]);
+        cache.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(TRACK_SORT)?;
+            table.remove(("original_year:desc", 0u32))?;
+            Ok(())
+        });
+        assert_eq!(cache.sorted_track_count(SortField::OriginalYear), 0);
+        assert_eq!(cache.sorted_track_count(SortField::Year), 1);
     }
 
     /// Search matches tag content, which the ordinal index says nothing about,

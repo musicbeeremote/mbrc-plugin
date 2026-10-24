@@ -778,6 +778,12 @@ record's contents, so a list and what it queues cannot disagree.
 `original_year`, `rating` or `date_added`. `order` is `asc` (default) or `desc`. An
 unknown value is `invalid_field` rather than a silent fallback.
 
+`original_year` orders by when a record first came out: the original year, falling back to
+the year when there is none, then the year, then the name. Most files carry a year and no
+original year, so without the fallback most of a library would sort as undated. Rows with
+neither year come last in both directions. The fallback is only an order: each item still
+reports `year` and `original_year` as tagged.
+
 **Search.** `query` is a case-insensitive substring match, applied to the whole level
 rather than to the page that happens to be loaded. A searched list with no `sort`
 comes back **by relevance** - the name that *is* the search before the names merely

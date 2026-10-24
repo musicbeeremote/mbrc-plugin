@@ -129,7 +129,9 @@ pub async fn run(core: Arc<Core>, shutdown: Arc<Notify>) {
 /// Call only on a complete cache: a half-built order pages a reader through a
 /// fraction of the library and calls it the whole thing.
 fn rebuild_derived(cache: &MetadataCache) {
-    let orders_missing = cache.sorted_track_count(SortField::Title) != cache.track_count();
+    let orders_missing = SortField::ALL
+        .into_iter()
+        .any(|field| cache.sorted_track_count(field) != cache.track_count());
     let years_missing = cache.album_years().is_empty();
     if !orders_missing && !years_missing {
         return;
