@@ -285,9 +285,12 @@ fn filed_under(track: &CachedTags, artist: &str) -> bool {
     if artist.is_empty() {
         return track.artist.is_empty() && track.album_artist.is_empty();
     }
+    // A scan runs this for every track, so the credits are parsed only for a
+    // track whose stored list holds the name at all.
     equals(&track.artist, artist)
         || equals(&track.album_artist, artist)
-        || track.credited_names().iter().any(|n| equals(n, artist))
+        || (contains(&track.multi_artist, artist)
+            && track.credited_names().iter().any(|n| equals(n, artist)))
 }
 
 fn contains(haystack: &str, needle: &str) -> bool {

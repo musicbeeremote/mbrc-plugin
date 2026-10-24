@@ -171,7 +171,8 @@ fn set_tag(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> Op
 /// and guests, and every other credit is kept.
 ///
 /// The file is read first, since the write replaces the whole credit list. A
-/// track nobody split counts its display artist as its one artist.
+/// track nobody split counts its display artist as its one artist, and the
+/// names it was shown, sent back unchanged, keep the stored value as it was.
 fn stored_names(
     p: &dyn Providers,
     field: &TagField,
@@ -184,6 +185,9 @@ fn stored_names(
     let raw = read.values.first().map_or("", String::as_str);
     let display = read.values.get(1).map_or("", String::as_str);
     let current = credits::or_display(raw, display);
+    if credits::lead_names(&current) == names {
+        return Ok(raw.to_owned());
+    }
     Ok(credits::encode(&credits::with_lead_names(&current, &names)))
 }
 
@@ -829,6 +833,31 @@ mod tests {
             m.recorded()
         );
         assert_eq!(out["value"], json!(["A", "B", "E"]));
+    }
+
+    /// A file stored "A feat. B" while MusicBee showed it as "A & B"; saving
+    /// the name the editor showed must not replace what was stored.
+    #[test]
+    fn saving_the_names_it_was_shown_keeps_the_stored_artist() {
+        let m = library();
+        m.file_tags
+            .lock()
+            .unwrap()
+            .get_mut("/a.flac")
+            .unwrap()
+            .extend([(32, "A & B".to_string()), (33, "A feat. B\0".to_string())]);
+        run(
+            "now_playing_set_tag",
+            json!({ "path": "/a.flac", "key": "artist", "value": ["A & B"] }),
+            &m,
+        )
+        .unwrap();
+        assert!(
+            m.recorded()
+                .contains(&"write_now_playing_tag(33,A feat. B\0)".to_string()),
+            "{:?}",
+            m.recorded()
+        );
     }
 
     #[test]

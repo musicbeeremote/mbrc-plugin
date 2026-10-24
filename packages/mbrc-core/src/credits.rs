@@ -153,7 +153,8 @@ pub fn encode(credits: &[Credit]) -> String {
 pub fn or_display(raw: &str, display: &str) -> Vec<Credit> {
     let mut credits = parse(raw);
     let display = display.trim();
-    let split = credits.iter().filter(|c| c.role.is_lead()).count() > 1;
+    let split = credits.iter().filter(|c| c.role.is_lead()).count() > 1
+        || credits.iter().any(|c| c.role == Role::Guest);
     if display.is_empty() || split {
         return credits;
     }
@@ -270,6 +271,15 @@ mod tests {
             vec!["ProleteR & Mister Colfer & DJ Crabees"]
         );
         assert_eq!(credits[1].role, Role::Performer, "other credits are kept");
+    }
+
+    /// A guest alone is still a split: the display string must not join it as
+    /// a second, made-up artist.
+    #[test]
+    fn a_lone_guest_is_split() {
+        let credits = or_display("\u{1}Gadiel\0", "Tico feat. Gadiel");
+        assert_eq!(lead_names(&credits), vec!["Gadiel"]);
+        assert_eq!(credits[0].role, Role::Guest);
     }
 
     #[test]

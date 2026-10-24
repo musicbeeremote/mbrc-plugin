@@ -37,7 +37,7 @@ function albumsOf(name: string) {
 <template>
   <span v-if="isStream || parts.length === 0">{{ track?.artist_display }}</span>
   <span v-else>
-    <template v-for="part in parts" :key="part.name">
+    <template v-for="(part, i) in parts" :key="`${i}:${part.name}`">
       {{ joinerText(part.joiner) }}<RouterLink
         :to="albumsOf(part.name)"
         class="hover:text-ink hover:underline focus-visible:underline"

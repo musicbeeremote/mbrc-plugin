@@ -332,8 +332,8 @@ fn unalbumed_page(
     })
 }
 
-/// The albums an artist's own tracks name, for an artist the host reports none
-/// for.
+/// The albums an artist's tracks name, for an artist the host reports none
+/// for, each under the artist it is filed under.
 ///
 /// A track tagged with no artist and no album belongs to a group MusicBee's
 /// album enumeration does not report, which leaves the artist in the list and
@@ -349,7 +349,7 @@ fn albums_the_tags_name(cache: Option<&MetadataCache>, artist: &str) -> Vec<Albu
         ..Default::default()
     };
 
-    let mut counts: BTreeMap<String, i32> = BTreeMap::new();
+    let mut counts: BTreeMap<(String, String), i32> = BTreeMap::new();
     for path in cache.track_paths_where(&filter, None, false) {
         let Some(tags) = cache.track_tags(&path) else {
             continue;
@@ -359,17 +359,20 @@ fn albums_the_tags_name(cache: Option<&MetadataCache>, artist: &str) -> Vec<Albu
         } else {
             &tags.album_artist
         };
-        // Another artist's record is an appearance, filed under its owner.
-        if owner.eq_ignore_ascii_case(artist) {
-            *counts.entry(tags.album).or_default() += 1;
-        }
+        // Another artist's record opens as theirs: its cover and track list.
+        let filed_under = if owner.eq_ignore_ascii_case(artist) {
+            artist.to_string()
+        } else {
+            owner.clone()
+        };
+        *counts.entry((filed_under, tags.album)).or_default() += 1;
     }
 
     counts
         .into_iter()
-        .map(|(album, count)| AlbumData {
+        .map(|((artist, album), count)| AlbumData {
             album,
-            artist: artist.to_string(),
+            artist,
             count,
         })
         .collect()
@@ -1113,6 +1116,42 @@ mod tests {
             tagged("/prose.mp3", "Gadiel feat. Jayko", "", ""),
         ]);
         cache
+    }
+
+    /// While the tags are still being read, an artist the host has no albums
+    /// for keeps the records their tracks are on, under each record's artist.
+    #[test]
+    fn a_compilation_artist_keeps_their_albums_while_the_cache_warms() {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join("mbrc-v6-compilation-warmup");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        cache.replace_track_index(&["/va/1.mp3".into(), "/untagged.mp3".into()]);
+        cache.put_track_tags(&[CachedTags {
+            src: "/va/1.mp3".into(),
+            artist: "Gotay".into(),
+            album: "La Formula".into(),
+            album_artist: "Various Artists".into(),
+            ..CachedTags::default()
+        }]);
+        assert!(!cache.tags_complete(), "one track is still unread");
+
+        let out = dispatch(
+            "library_albums",
+            &json!({ "artist": "Gotay" }),
+            &MockProviders::default(),
+            None,
+            Some(&cache),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out["total"], 1);
+        assert_eq!(out["items"][0]["album"], "La Formula");
+        assert_eq!(out["items"][0]["artist"], "Various Artists");
     }
 
     /// MusicBee's artist lookup files a collaboration under its display string,
