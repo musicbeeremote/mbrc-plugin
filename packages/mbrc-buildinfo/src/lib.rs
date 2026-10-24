@@ -6,14 +6,19 @@
 //! same file through here, so there is never a second place to bump.
 //!
 //! A build script calls [`emit_version`], and the crate reads the result back
-//! with `env!("MBRC_VERSION")`.
+//! with `env!("MBRC_VERSION")`. A crate that ships a Windows binary also calls
+//! [`embed_resources`], so the file carries the same version and product name.
 //!
 //! Crate `version` fields in this workspace all stay at 0.1.0. They are
 //! workspace-internal numbers and nothing publishes them.
 
 #![forbid(unsafe_code)]
 
+mod resource;
+
 use std::path::{Path, PathBuf};
+
+pub use resource::{Binary, Kind, embed_resources};
 
 /// The props file every version comes from.
 pub const PROPS_FILE: &str = "Directory.Build.props";
@@ -25,9 +30,14 @@ pub const PROPS_FILE: &str = "Directory.Build.props";
 /// string that may carry a suffix the props file does not have (nightlies get
 /// `-nightly.<date>`) and passes it down.
 pub fn emit_version() {
+    println!("cargo:rustc-env=MBRC_VERSION={}", resolve_version());
+}
+
+/// The product version: `MBRC_VERSION` from the environment, else the props file.
+fn resolve_version() -> String {
     println!("cargo:rerun-if-env-changed=MBRC_VERSION");
 
-    let version = match std::env::var("MBRC_VERSION") {
+    match std::env::var("MBRC_VERSION") {
         Ok(v) if !v.trim().is_empty() => v.trim().to_owned(),
         _ => {
             let props = find_props();
@@ -38,9 +48,7 @@ pub fn emit_version() {
                 .unwrap_or_else(|e| panic!("{}: {e}", props.display()))
                 .to_owned()
         }
-    };
-
-    println!("cargo:rustc-env=MBRC_VERSION={version}");
+    }
 }
 
 /// Walks up from the calling crate until it finds the props file.
@@ -66,19 +74,24 @@ fn find_props() -> PathBuf {
 /// that silently reports the wrong version is discovered only after it has
 /// shipped in a release manifest.
 fn version_prefix(xml: &str) -> std::result::Result<&str, String> {
-    const OPEN: &str = "<VersionPrefix>";
-    const CLOSE: &str = "</VersionPrefix>";
+    element(xml, "VersionPrefix")
+}
 
-    let start = xml.find(OPEN).ok_or_else(|| format!("{OPEN} not found"))? + OPEN.len();
+/// The trimmed text of the first `<name>` element, which must not be empty.
+fn element<'a>(xml: &'a str, name: &str) -> std::result::Result<&'a str, String> {
+    let open = format!("<{name}>");
+    let close = format!("</{name}>");
+
+    let start = xml.find(&open).ok_or_else(|| format!("{open} not found"))? + open.len();
     let len = xml[start..]
-        .find(CLOSE)
-        .ok_or_else(|| format!("{CLOSE} not found"))?;
+        .find(&close)
+        .ok_or_else(|| format!("{close} not found"))?;
 
-    let version = xml[start..start + len].trim();
-    if version.is_empty() {
-        return Err(format!("{OPEN} is empty"));
+    let value = xml[start..start + len].trim();
+    if value.is_empty() {
+        return Err(format!("{open} is empty"));
     }
-    Ok(version)
+    Ok(value)
 }
 
 #[cfg(test)]

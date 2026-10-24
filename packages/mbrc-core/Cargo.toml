@@ -6,6 +6,7 @@ rust-version.workspace = true
 license-file.workspace = true
 authors.workspace = true
 publish = false
+description = "MusicBee Remote plugin core: the remote-control server, wire protocols, discovery and library caches."
 
 # cdylib -> mbrc_core.dll (the native library the C# plugin loads at cutover).
 # rlib   -> lets integration tests / the replay harness link the core in-process.

@@ -6,9 +6,12 @@ rust-version.workspace = true
 license-file.workspace = true
 authors.workspace = true
 publish = false
-description = "Build-script helper: stamps the product version from Directory.Build.props into a Rust crate."
+description = "Build-script helper: stamps the product version and Windows version resource from Directory.Build.props into a Rust crate."
 
 [dependencies]
+# Finds rc.exe in the Windows SDK and links the compiled resource into the
+# calling crate's exe or cdylib. A no-op when the target is not Windows.
+embed-resource = "=3.0.11"
 
 [lints]
 workspace = true
