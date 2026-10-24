@@ -55,7 +55,7 @@ struct Service {
 }
 
 /// Advertises until `shutdown` is signalled, then withdraw.
-pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
+pub async fn run(tcp_port: u16, server_id: Option<Arc<str>>, shutdown: Arc<Notify>) {
     let daemon = match ServiceDaemon::new() {
         Ok(daemon) => daemon,
         Err(e) => {
@@ -72,7 +72,7 @@ pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
         tracing::debug!("mDNS has no advertisable address yet");
     }
 
-    let services = services(tcp_port);
+    let services = services(tcp_port, server_id.as_deref());
     let mut registered = register_all(&daemon, &instance, &addresses, &services);
     tracing::info!(
         instance = %instance,
@@ -117,8 +117,9 @@ pub async fn run(tcp_port: u16, shutdown: Arc<Notify>) {
 /// What this host publishes. The TXT keys are identity plus one advisory hint:
 /// `protocol` lets a client that only speaks one version filter before
 /// connecting, but the handshake stays authoritative - a stale TXT must never be
-/// able to talk a client out of a server it could have used.
-fn services(tcp_port: u16) -> Vec<Service> {
+/// able to talk a client out of a server it could have used. `server_id` lets a
+/// picker show one entry for a host it sees on two addresses.
+fn services(tcp_port: u16, server_id: Option<&str>) -> Vec<Service> {
     let mut txt = HashMap::new();
     txt.insert("protocol".to_owned(), advertised_protocols_csv());
     txt.insert(
@@ -126,6 +127,9 @@ fn services(tcp_port: u16) -> Vec<Service> {
         crate::updates::CORE_VERSION.to_owned(),
     );
     txt.insert("name".to_owned(), crate::discovery::hostname());
+    if let Some(server_id) = server_id {
+        txt.insert("server_id".to_owned(), server_id.to_owned());
+    }
 
     vec![Service {
         service_type: SERVICE_TYPE,
@@ -255,7 +259,7 @@ mod tests {
 
     #[test]
     fn the_record_carries_the_port_and_the_txt_keys() {
-        let services = services(3000);
+        let services = services(3000, Some("3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34"));
         let service = services.first().expect("one service today");
         assert_eq!(service.port, 3000);
         assert_eq!(
@@ -264,6 +268,10 @@ mod tests {
         );
         assert!(service.txt.contains_key("version"));
         assert!(service.txt.contains_key("name"));
+        assert_eq!(
+            service.txt.get("server_id").map(String::as_str),
+            Some("3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34")
+        );
         // `path` is reserved by DNS-SD convention for HTTP-ish types; publishing
         // one here would mean something we do not mean.
         assert!(!service.txt.contains_key("path"));
@@ -289,7 +297,7 @@ mod tests {
 
     #[test]
     fn a_record_builds_from_real_inputs() {
-        let services = services(3000);
+        let services = services(3000, None);
         let addresses = vec![IpAddr::V4("192.168.1.20".parse().unwrap())];
         let info = info(&services[0], "TEST-PC", &addresses).expect("a valid record");
         assert_eq!(info.get_port(), 3000);

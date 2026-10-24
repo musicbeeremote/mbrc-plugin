@@ -59,6 +59,8 @@ pub struct Core {
     pub session: crate::session::SessionMarker,
     /// Party Mode's switch and refusal log, checked before every command.
     pub party_mode: Arc<crate::server::permissions::PartyMode>,
+    /// This installation's id and name for the V6 handshake.
+    pub server: crate::server_identity::ServerIdentity,
     conn_counter: AtomicU64,
     /// Wakes the background library Scanner to run a delta sooner. A library
     /// change notification (`FileAddedToLibrary`) is a debounced nudge on this,
@@ -107,6 +109,7 @@ impl Core {
         party_mode.open(db.clone());
         party_mode.set_enabled(config.party_mode_enabled);
         let session = crate::session::SessionMarker::open(&config.storage_path);
+        let server = crate::server_identity::ServerIdentity::load(&config.storage_path);
         Self {
             providers,
             config,
@@ -121,6 +124,7 @@ impl Core {
             clients,
             blocked: BlockedLog::default(),
             party_mode,
+            server,
             session,
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),

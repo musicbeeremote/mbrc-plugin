@@ -44,6 +44,7 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
     let mut session = V6Session::default()
         .with_party_mode(&core.party_mode)
         .with_pairing(&core.pairing, peer.ip())
+        .with_server(&core.server)
         .with_principal(principal);
     let mut subscribed = false;
 

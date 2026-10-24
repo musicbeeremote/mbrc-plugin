@@ -229,6 +229,7 @@ fn spawn_mdns(
     }
     Some(tokio::spawn(crate::mdns::run(
         core.config.port,
+        core.server.id.clone(),
         shutdown.clone(),
     )))
 }

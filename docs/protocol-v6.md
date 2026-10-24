@@ -332,12 +332,20 @@ The first frame must be the handshake, `id:0`:
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
 | `client_name` | no | what the device is called, for the Configure panel's device list ("Pixel 8"); trimmed and cut at 64 chars; a later handshake's name replaces it |
 
-Success replies with the server version, its capability surface, and what this client may
-do under [Party Mode](#what-a-client-is-told):
+Success replies with the server version, which server this is, its capability surface, and
+what this client may do under [Party Mode](#what-a-client-is-told):
 
 ```json
-{"id":0,"kind":"response","data":{"server_version":6,"capabilities":{"ops":["handshake","ping","pair",...],"events":["play_state_changed",...]},"permissions":{"party_mode":false,"role":"host","allowed":[...]}}}
+{"id":0,"kind":"response","data":{"server_version":6,"server_id":"3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34","server_name":"LIVING-ROOM-PC","capabilities":{"ops":["handshake","ping","pair",...],"events":["play_state_changed",...]},"permissions":{"party_mode":false,"role":"host","allowed":[...]}}}
 ```
+
+| Field | Notes |
+|-------|-------|
+| `server_id` | a UUID generated once per plugin installation. Stable across MusicBee restarts, plugin updates and address changes; it changes only if the plugin's storage folder is deleted. **Key anything you cache per server on this, not on the address**: one machine can move to a new IP, and two machines can take turns at one. Optional: absent when the plugin has no storage folder or cannot read or write the id file, in which case fall back to the address |
+| `server_name` | what to show the user: the machine name, the same one discovery reports |
+
+The same `server_id` is in the mDNS TXT record, so a picker can merge one server seen on two
+addresses before connecting.
 
 The client should use `capabilities.ops` / `capabilities.events` to degrade gracefully rather
 than assume an op exists. A validation failure replies with a typed error (echoing `id:0`) and

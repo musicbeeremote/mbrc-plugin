@@ -105,6 +105,8 @@ fn handle_handshake(req: &v6::IncomingRequest) -> String {
     };
     let mut data = json!({
         "server_version": 6,
+        "server_id": "3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34",
+        "server_name": "MOCK-PC",
         "capabilities": {
             "ops": ["handshake", "ping", "player_status", "library_genres", "now_playing_state"],
             "events": ["play_state_changed"],

@@ -279,7 +279,8 @@ fn hash(token: &str) -> String {
     hex(&sha1::Sha1::digest(token.as_bytes()))
 }
 
-fn hex(bytes: &[u8]) -> String {
+/// Lowercase hex of `bytes`.
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 

@@ -27,6 +27,7 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
+use crate::server_identity::ServerIdentity;
 use crate::web::auth::Pairing;
 
 /// Per-connection V6 state, built up at the handshake.
@@ -53,6 +54,8 @@ pub struct V6Session {
     pairing: Option<(Arc<Pairing>, IpAddr)>,
     /// The permissions this client was last told, in its handshake reply.
     told: Option<Value>,
+    /// Who this server is, sent in the handshake reply; absent in unit tests.
+    server: Option<ServerIdentity>,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -132,6 +135,12 @@ impl V6Session {
     /// Lets the `pair` op redeem codes, as offered from `peer`. Builder-style.
     pub fn with_pairing(mut self, pairing: &Arc<Pairing>, peer: IpAddr) -> Self {
         self.pairing = Some((Arc::clone(pairing), peer));
+        self
+    }
+
+    /// Names this installation in the handshake reply. Builder-style.
+    pub fn with_server(mut self, server: &ServerIdentity) -> Self {
+        self.server = Some(server.clone());
         self
     }
 
@@ -421,10 +430,14 @@ impl V6Session {
         );
         // Advertise the op/event surface so a client can degrade gracefully.
         // Additive (#118 §9 Q5); older clients ignore it.
-        let mut reply = json!({
-            "server_version": v6::PROTOCOL_VERSION,
-            "capabilities": commands_v6::capabilities(),
-        });
+        let mut reply = json!({ "server_version": v6::PROTOCOL_VERSION });
+        if let Some(server) = &self.server {
+            if let Some(id) = &server.id {
+                reply["server_id"] = json!(id.as_ref());
+            }
+            reply["server_name"] = json!(server.name.as_ref());
+        }
+        reply["capabilities"] = commands_v6::capabilities();
         if let Some(token) = issued {
             reply["client_token"] = json!(token);
         }
@@ -853,6 +866,43 @@ mod tests {
         assert_eq!(meta.client_id.as_deref(), Some("install-1"));
         assert!(meta.is_main);
         assert_eq!(meta.protocol, 6);
+    }
+
+    #[test]
+    fn handshake_names_the_server_after_its_version() {
+        let server = ServerIdentity {
+            id: Some(Arc::from("3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34")),
+            name: Arc::from("LIVING-ROOM-PC"),
+        };
+        let mut s = V6Session::default().with_server(&server);
+        let v = parse(&feed(&mut s, GOOD_HANDSHAKE).replies[0]);
+        assert_eq!(
+            v["data"]["server_id"],
+            "3f2b8c1e-9d4a-4b6f-8e2d-1a7c5b9e0f34"
+        );
+        assert_eq!(v["data"]["server_name"], "LIVING-ROOM-PC");
+        let keys: Vec<&str> = v["data"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            keys[..4],
+            ["server_version", "server_id", "server_name", "capabilities"]
+        );
+    }
+
+    #[test]
+    fn handshake_without_a_stored_id_omits_server_id_only() {
+        let server = ServerIdentity {
+            id: None,
+            name: Arc::from("LIVING-ROOM-PC"),
+        };
+        let mut s = V6Session::default().with_server(&server);
+        let v = parse(&feed(&mut s, GOOD_HANDSHAKE).replies[0]);
+        assert!(v["data"].get("server_id").is_none());
+        assert_eq!(v["data"]["server_name"], "LIVING-ROOM-PC");
     }
 
     #[test]

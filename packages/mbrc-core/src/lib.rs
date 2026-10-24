@@ -20,6 +20,7 @@ pub mod nowplaying;
 pub mod protocol;
 pub mod providers;
 pub mod server;
+pub mod server_identity;
 pub mod session;
 pub mod state;
 pub mod store;

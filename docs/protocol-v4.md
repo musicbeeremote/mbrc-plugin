@@ -2181,6 +2181,7 @@ TXT records:
 | `protocol` | `4,5,6` | protocols reachable on the command port, comma-separated |
 | `version` | `1.5.0` | the plugin's release version |
 | `name` | `LIVING-ROOM-PC` | friendly name; the instance name is DNS-escaped, this is not |
+| `server_id` | `3f2b8c1e-…` | this installation's id, the same one the V6 handshake sends; absent whenever the handshake omits it (no storage folder, or the id file could not be read or written) |
 
 **`protocol` is advisory.** It lets a client that speaks only one protocol filter before
 connecting, but the handshake remains authoritative - never refuse a server because its TXT

@@ -280,6 +280,29 @@ fn protocol_surface(
             "invalid_token did not name `client_token`",
         )
     });
+
+    r.check("server_id and server_name in the handshake", || {
+        let (_a, first) =
+            V6Client::open(host, port, timeout, &run_client_id("mbrc-conform-id"), None)?;
+        let (_b, second) =
+            V6Client::open(host, port, timeout, &run_client_id("mbrc-conform-id"), None)?;
+        let (first, second) = (first.ok()?, second.ok()?);
+        if let Some(name) = first.get("server_name") {
+            let name = name.as_str().ok_or("server_name is not a string")?;
+            expect(!name.trim().is_empty(), "server_name is empty")?;
+        }
+        if let Some(id) = first.get("server_id") {
+            let id = id.as_str().ok_or("server_id is not a string")?;
+            expect(
+                id.len() == 36 && id.matches('-').count() == 4,
+                "server_id is not a UUID",
+            )?;
+        }
+        expect(
+            second.get("server_id") == first.get("server_id"),
+            "server_id differs between two connections",
+        )
+    });
 }
 
 /// Tag fields (#225, #229): the playing track's values take the shape
