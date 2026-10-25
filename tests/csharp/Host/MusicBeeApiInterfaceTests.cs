@@ -15,7 +15,7 @@ namespace MusicBeeRemote.Core.Tests.Host
         [Fact]
         public void TheStructIsTheSizeOfApiRevision58()
         {
-            Marshal.SizeOf(typeof(Plugin.MusicBeeApiInterface)).Should().Be(704);
+            Marshal.SizeOf<Plugin.MusicBeeApiInterface>().Should().Be(704);
         }
 
         [Theory]
