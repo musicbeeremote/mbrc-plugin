@@ -23,3 +23,6 @@ trustPolicy: no-downgrade
 # The only dependency permitted to run its install script.
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  # Renovate security update: zod@4.6.6
+  - zod@4.6.6
