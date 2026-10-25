@@ -3,6 +3,7 @@
  */
 
 import type { LibraryScope } from '../api/ops'
+import type { AlbumEntry } from '../api/browse'
 
 /**
  * The four browse levels, which are also the four tabs.
@@ -57,7 +58,7 @@ export const ALBUM_TRACK_SORT = 'track'
 export const SORT_FIELDS: Record<LibraryLevel, string[]> = {
   [LibraryLevel.Genres]: ['name'],
   [LibraryLevel.Artists]: ['name'],
-  [LibraryLevel.Albums]: ['name', 'artist', 'year'],
+  [LibraryLevel.Albums]: ['name', 'artist', 'year', 'original_year'],
   [LibraryLevel.Tracks]: [
     'title',
     'artist',
@@ -65,6 +66,7 @@ export const SORT_FIELDS: Record<LibraryLevel, string[]> = {
     'album_artist',
     'track',
     'year',
+    'original_year',
     'rating',
     'date_added',
   ],
@@ -90,6 +92,18 @@ export function carriedSort(
 ): { sort?: string; descending?: boolean } {
   if (sort === undefined || !SORT_FIELDS[level].includes(sort)) return {}
   return { sort, descending }
+}
+
+/**
+ * The year an album tile shows: the one the list is ordered by.
+ *
+ * Ordered by original year, the server falls back to the year for an album
+ * with none, so the tile does too; showing the reissue year there would make a
+ * correctly ordered grid look shuffled.
+ */
+export function albumYear(entry: AlbumEntry, sort: string): number | undefined {
+  if (sort === 'original_year') return entry.original_year ?? entry.year
+  return entry.year
 }
 
 /** The order a position opens in when the address does not name one. */

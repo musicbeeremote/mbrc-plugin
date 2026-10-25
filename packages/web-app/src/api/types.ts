@@ -129,6 +129,8 @@ export const TrackSchema = z.object({
   disc_no: z.number(),
   genre: z.array(z.string()),
   year: z.number().nullable(),
+  /** The first release's year; absent from a plugin that predates it. */
+  original_year: z.number().nullable().optional(),
   duration_ms: z.number().nullable(),
   rating: z.number().nullable(),
   date_added: z.string().nullable(),
@@ -246,34 +248,6 @@ export const PodcastEpisodeSchema = z.object({
   author: z.string(),
 })
 export type PodcastEpisode = z.infer<typeof PodcastEpisodeSchema>
-
-export const GenreEntrySchema = z.object({
-  genre: z.string(),
-  count: z.number(),
-})
-export type GenreEntry = z.infer<typeof GenreEntrySchema>
-
-export const ArtistEntrySchema = z.object({
-  artist: z.string(),
-  count: z.number(),
-})
-export type ArtistEntry = z.infer<typeof ArtistEntrySchema>
-
-export const AlbumEntrySchema = z.object({
-  album: z.string(),
-  artist: z.string(),
-  count: z.number(),
-  cover_hash: z.string().optional(),
-  /** Derived from the album's tracks; absent when none of them carry a year. */
-  year: z.number().optional(),
-})
-export type AlbumEntry = z.infer<typeof AlbumEntrySchema>
-
-export const RadioEntrySchema = z.object({
-  name: z.string(),
-  url: z.string(),
-})
-export type RadioEntry = z.infer<typeof RadioEntrySchema>
 
 export const PlaylistEntrySchema = z.object({
   url: z.string(),

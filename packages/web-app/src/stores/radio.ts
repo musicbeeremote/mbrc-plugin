@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { client } from '../api/client'
 import { Op } from '../api/ops'
 import { QueueMode } from '../api/types'
-import type { RadioEntry } from '../api/types'
+import type { RadioEntry } from '../api/browse'
 
 /** One page per batch. Station lists are short, so this is usually all of it. */
 const PAGE_SIZE = 100

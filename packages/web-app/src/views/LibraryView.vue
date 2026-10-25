@@ -13,7 +13,8 @@ import IconShuffle from '~icons/lucide/shuffle'
 import IconClear from '~icons/lucide/x'
 
 import type { LibraryScope } from '../api/ops'
-import type { AlbumEntry, ArtistEntry, GenreEntry, Track } from '../api/types'
+import type { AlbumEntry, ArtistEntry, GenreEntry } from '../api/browse'
+import type { Track } from '../api/types'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
@@ -30,6 +31,7 @@ import type { FlatRow } from '../composables/flatRows'
 import { useLazyRows } from '../composables/useLazyRows'
 import {
   SORT_FIELDS,
+  albumYear,
   carriedSort,
   defaultSort,
   libraryTab,
@@ -449,8 +451,11 @@ function onGridScroll(event: Event) {
                 </span>
                 <!-- Derived from the album's tracks, so an album whose tags
                      carry no year simply has none to show. -->
-                <span v-if="entry.year" class="shrink-0 tabular-nums opacity-70">
-                  {{ entry.year }}
+                <span
+                  v-if="albumYear(entry, activeSort)"
+                  class="shrink-0 tabular-nums opacity-70"
+                >
+                  {{ albumYear(entry, activeSort) }}
                 </span>
               </span>
             </button>

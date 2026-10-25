@@ -10,7 +10,8 @@
  * track has a path, and only a genre row is named after a genre.
  */
 
-import type { ArtistEntry, GenreEntry, Track } from '../api/types'
+import type { ArtistEntry, GenreEntry } from '../api/browse'
+import type { Track } from '../api/types'
 
 export type FlatRow = GenreEntry | ArtistEntry | Track
 

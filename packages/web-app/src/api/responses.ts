@@ -9,11 +9,9 @@
 
 import { z } from 'zod'
 
+import { AlbumEntrySchema, ArtistEntrySchema, GenreEntrySchema, RadioEntrySchema } from './browse'
 import type { EventName, OpRequests } from './ops'
 import {
-  AlbumEntrySchema,
-  ArtistEntrySchema,
-  GenreEntrySchema,
   LastfmStatusSchema,
   LyricsSchema,
   pageSchema,
@@ -23,7 +21,6 @@ import {
   PodcastEpisodeSchema,
   PodcastSubscriptionSchema,
   QueuePageSchema,
-  RadioEntrySchema,
   RepeatModeSchema,
   ShuffleModeSchema,
   EmptySchema,

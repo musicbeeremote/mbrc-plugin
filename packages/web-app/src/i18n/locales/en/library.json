@@ -35,6 +35,7 @@
     "album_artist": "Album artist",
     "track": "Track number",
     "year": "Year",
+    "original_year": "Original year",
     "rating": "Rating",
     "date_added": "Date added",
     "duration": "Length"
