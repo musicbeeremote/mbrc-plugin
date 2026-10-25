@@ -42,7 +42,7 @@ base64 = "=0.23.1"
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
 # toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
 # - a good fit for the 32-bit i686 target (no mmap address-space ceiling).
-redb = "=4.3.0"
+redb = "=4.4.0"
 # SHA1 for cover cache identities (album key + content hash). Not cryptographic;
 # must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
 sha1 = "=0.11.0"
@@ -59,7 +59,7 @@ flate2 = { version = "=1.1.10", default-features = false, features = ["rust_back
 # takes mbrc-release with `client`, which already compiles zip in. `deflate-flate2`
 # rides on the pure-Rust miniz_oxide above, so i686-msvc stays free of a C
 # toolchain.
-zip = { version = "=9.0.1", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),
@@ -121,7 +121,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=3.0.7", features = ["full"] }
+syn = { version = "=3.0.9", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }

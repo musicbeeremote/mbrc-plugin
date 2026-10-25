@@ -21,7 +21,7 @@ serde_json.workspace = true
 # Zero-dependency Ed25519 minisign verification. The signing half never lives
 # here: releases are signed in CI with the `minisign` CLI.
 minisign-verify = "=0.3.0"
-sha2 = "=0.11.0"
+sha2 = "=0.11.1"
 hex = "=0.4.3"
 
 # Version comparison. Zero dependencies (std only, serde opted out), and it is
@@ -32,7 +32,7 @@ semver = { version = "=1.0.28", optional = true }
 # Reading the update zip. `deflate-flate2` and NOT `deflate`: the latter pulls in
 # zopfli, a *compressor*, and this crate only ever decompresses. flate2 rides on
 # pure-Rust miniz_oxide, so the i686 target stays free of a C toolchain.
-zip = { version = "=9.0.1", default-features = false, features = ["deflate-flate2"], optional = true }
+zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"], optional = true }
 # `deflate-flate2` selects flate2 but no backend, so the backend is chosen here:
 # miniz_oxide, the same pure-Rust one mbrc-core already uses for its log gzip. No
 # C toolchain, and one decompressor in the workspace rather than two.
@@ -56,8 +56,8 @@ windows-sys = { version = "=0.61.2", features = [
 # repeated here.
 [dev-dependencies]
 time = { workspace = true, features = ["parsing"] }
-zip = { version = "=9.0.1", default-features = false, features = ["deflate-flate2"] }
-sha2 = "=0.11.0"
+zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
+sha2 = "=0.11.1"
 hex = "=0.4.3"
 
 [lints]

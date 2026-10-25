@@ -11,7 +11,7 @@ description = "Build-script helper: stamps the product version and Windows versi
 [dependencies]
 # Finds rc.exe in the Windows SDK and links the compiled resource into the
 # calling crate's exe or cdylib. A no-op when the target is not Windows.
-embed-resource = "=3.0.11"
+embed-resource = "=3.0.12"
 
 [lints]
 workspace = true
