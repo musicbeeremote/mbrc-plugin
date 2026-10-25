@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@12.11.2",
+  "packageManager": "pnpm@12.14.0",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
@@ -13,21 +13,21 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.12.3",
-    "@tauri-apps/plugin-dialog": "2.8.2",
-    "@tauri-apps/plugin-opener": "2.7.1",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/plugin-dialog": "2.8.3",
+    "@tauri-apps/plugin-opener": "2.7.2",
     "@vueuse/core": "15.0.0",
-    "pinia": "4.0.3",
-    "vue": "3.5.43"
+    "pinia": "4.1.0",
+    "vue": "3.5.44"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
-    "@tauri-apps/cli": "2.12.1",
+    "@tauri-apps/cli": "2.12.3",
     "@vitejs/plugin-vue": "6.0.10",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "vite": "8.3.4",
-    "vitest": "5.0.3",
+    "vitest": "5.0.5",
     "vue-tsc": "3.3.13"
   }
 }
