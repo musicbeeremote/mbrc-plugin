@@ -26,6 +26,16 @@ namespace MusicBeeRemote.Core.Tests.Utilities
         }
 
         [Fact]
+        public void AllOf_SelectsTheWholeCategoryWithNoConditions()
+        {
+            var parsed = XElement.Parse(XmlFilterHelper.AllOf(LibrarySource.Library));
+
+            parsed.Attribute("Type").Value.Should().Be("1");
+            parsed.Element("Conditions").Attribute("CombineMethod").Value.Should().Be("All");
+            parsed.Element("Conditions").Elements().Should().BeEmpty();
+        }
+
+        [Fact]
         public void CreateFilter_WithoutASource_NamesNoCategory()
         {
             var result = XmlFilterHelper.CreateFilter(new[] { "Artist" }, "test", false);

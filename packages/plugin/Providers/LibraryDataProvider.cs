@@ -23,6 +23,16 @@ namespace MusicBeePlugin.Providers
         private static readonly string[] GenreSearchFields = { "Genre" };
         private static readonly string[] ArtistSearchFields = { "ArtistPeople" };
         private static readonly string[] AlbumSearchFields = { "Album" };
+        private static readonly string[] MultiValueSeparator = { "; " };
+
+        // The tags a banned track is matched on when a drill-down adds it back,
+        // standing in for the search fields above.
+        private static readonly Plugin.MetaDataType[] GenreMatchFields = { Plugin.MetaDataType.Genre };
+        private static readonly Plugin.MetaDataType[] AlbumMatchFields = { Plugin.MetaDataType.Album };
+        private static readonly Plugin.MetaDataType[] ArtistMatchFields =
+        {
+            Plugin.MetaDataType.Artist, Plugin.MetaDataType.AlbumArtist,
+        };
 
         // Tag sets read in one bulk Library_GetFileTags call per track (instead of
         // one MusicBee API round-trip per tag). Index order is consumed below.
@@ -221,40 +231,26 @@ namespace MusicBeePlugin.Providers
 
         #region Hierarchical Navigation
 
+        /// <summary>
+        ///     The tracks of one album, banned ones included, in disc and track order
+        ///     once a banned track had to be added back.
+        /// </summary>
         public IEnumerable<Track> GetAlbumTracks(string album)
         {
-            var filter = XmlFilterHelper.CreateFilter(
-                AlbumSearchFields, album, true, LibrarySource.Library);
+            var banned = ExcludedWhere(AlbumMatchFields, album);
+            var tracks = WalkFilter(XmlFilterHelper.CreateFilter(
+                    AlbumSearchFields, album, true, LibrarySource.Library))
+                .Select(path => ReadAlbumTrack(path, string.Empty))
+                .ToList();
+            if (banned.Count == 0)
+                return tracks;
 
-            if (!_api.Library_QueryFiles(filter))
-                yield break;
-
-            while (true)
-            {
-                var currentTrack = _api.Library_QueryGetNextFile();
-                if (string.IsNullOrEmpty(currentTrack))
-                    break;
-
-                _api.Library_GetFileTags(currentTrack, AlbumTrackFields, out var tags);
-
-                // album/genre are intentionally left empty here (the old
-                // ToTrackDto null-coalesced the unset internal fields to empty).
-                yield return new Track
-                {
-                    artist = Tag(tags, 0),
-                    title = Tag(tags, 1),
-                    album_artist = Tag(tags, 2),
-                    trackno = ParseTag(tags, 3),
-                    disc = ParseTag(tags, 4),
-                    src = currentTrack,
-                    album = string.Empty,
-                    genre = string.Empty
-                };
-            }
+            tracks.AddRange(banned.Select(path => ReadAlbumTrack(path, string.Empty)));
+            return tracks.OrderBy(t => t.disc).ThenBy(t => t.trackno).ToList();
         }
 
         /// <summary>
-        ///     Every track filed under one genre.
+        ///     Every track filed under one genre, banned ones included.
         /// </summary>
         /// <remarks>
         ///     Walking the genre's artists and their albums cannot answer this:
@@ -264,78 +260,156 @@ namespace MusicBeePlugin.Providers
         /// </remarks>
         public IEnumerable<Track> GetGenreTracks(string genre)
         {
-            var filter = XmlFilterHelper.CreateFilter(
-                GenreSearchFields, genre, true, LibrarySource.Library);
-
-            if (!_api.Library_QueryFiles(filter))
-                yield break;
-
-            while (true)
-            {
-                var currentTrack = _api.Library_QueryGetNextFile();
-                if (string.IsNullOrEmpty(currentTrack))
-                    break;
-
-                _api.Library_GetFileTags(currentTrack, AlbumTrackFields, out var tags);
-
-                yield return new Track
-                {
-                    artist = Tag(tags, 0),
-                    title = Tag(tags, 1),
-                    album_artist = Tag(tags, 2),
-                    trackno = ParseTag(tags, 3),
-                    disc = ParseTag(tags, 4),
-                    src = currentTrack,
-                    album = string.Empty,
-                    genre = genre
-                };
-            }
+            var banned = ExcludedWhere(GenreMatchFields, genre);
+            return WalkFilter(XmlFilterHelper.CreateFilter(
+                    GenreSearchFields, genre, true, LibrarySource.Library))
+                .Concat(banned)
+                .Select(path => ReadAlbumTrack(path, genre))
+                .ToList();
         }
 
         /// <summary>
         ///     One entry per (album artist, album) for the given artist, each
-        ///     carrying its track count. Unlike BrowseAlbums, the count here is
-        ///     real.
+        ///     carrying its track count, banned tracks included. Unlike
+        ///     BrowseAlbums, the count here is real.
         /// </summary>
         public List<AlbumData> GetArtistAlbums(string artist)
         {
-            // The retired internal AlbumData did this via IEquatable +
-            // IncreaseCount; here a Dictionary keyed on albumArtist\0album
-            // carries the count.
+            var banned = ExcludedWhere(ArtistMatchFields, artist);
+            var files = WalkFilter(XmlFilterHelper.CreateFilter(
+                ArtistSearchFields, artist, true, LibrarySource.Library));
+
             var albums = new Dictionary<string, AlbumData>(StringComparer.Ordinal);
-            var filter = XmlFilterHelper.CreateFilter(
-                ArtistSearchFields, artist, true, LibrarySource.Library);
+            foreach (var file in files.Concat(banned))
+            {
+                _api.Library_GetFileTags(file, ArtistAlbumFields, out var tags);
+                var albumArtist = Tag(tags, 0);
+                var album = Tag(tags, 1);
+                var key = albumArtist + "\0" + album;
 
-            if (_api.Library_QueryFiles(filter))
-                while (true)
-                {
-                    var currentFile = _api.Library_QueryGetNextFile();
-                    if (string.IsNullOrEmpty(currentFile))
-                        break;
-
-                    _api.Library_GetFileTags(currentFile, ArtistAlbumFields, out var tags);
-                    var albumArtist = Tag(tags, 0);
-                    var album = Tag(tags, 1);
-                    var key = albumArtist + "\0" + album;
-
-                    if (albums.TryGetValue(key, out var existing))
-                        existing.count++;
-                    else
-                        albums[key] = new AlbumData { artist = albumArtist, album = album, count = 1 };
-                }
+                if (albums.TryGetValue(key, out var existing))
+                    existing.count++;
+                else
+                    albums[key] = new AlbumData { artist = albumArtist, album = album, count = 1 };
+            }
 
             return albums.Values.ToList();
         }
 
+        /// <summary>
+        ///     The artists with tracks in one genre and how many each has, banned
+        ///     tracks included.
+        /// </summary>
         public IEnumerable<ArtistData> GetGenreArtists(string genre)
         {
+            var banned = ExcludedWhere(GenreMatchFields, genre);
+            var artists = LookupGenreArtists(genre);
+            foreach (var path in banned)
+            {
+                var name = _api.Library_GetFileTag(path, Plugin.MetaDataType.Artist) ?? string.Empty;
+                var known = artists.FirstOrDefault(
+                    a => string.Equals(a.artist, name, StringComparison.OrdinalIgnoreCase));
+                if (known != null)
+                    known.count++;
+                else
+                    artists.Add(new ArtistData { artist = name, count = 1 });
+            }
+
+            return artists;
+        }
+
+        /// <summary>
+        ///     The music library tracks MusicBee's filtered queries leave out, which
+        ///     are its banned ones. Empty when either listing fails.
+        /// </summary>
+        public List<string> GetExcludedPaths()
+        {
+            if (!_api.Library_QueryFilesEx(null, out var all) || all == null)
+                return new List<string>();
+            if (!_api.Library_QueryFilesEx(XmlFilterHelper.AllOf(LibrarySource.Library), out var kept) || kept == null)
+                return new List<string>();
+
+            var listed = new HashSet<string>(kept, StringComparer.OrdinalIgnoreCase);
+            return all.Where(path => !listed.Contains(path)).ToList();
+        }
+
+        /// <summary>
+        ///     The excluded tracks a drill-down's <c>Is</c> filter would match on
+        ///     <paramref name="fields" />, each <c>; </c>-joined value counting.
+        /// </summary>
+        /// <remarks>
+        ///     Called before the drill-down's own walk: a listing in the middle of a
+        ///     Library_QueryFiles walk would reset its cursor.
+        /// </remarks>
+        private List<string> ExcludedWhere(Plugin.MetaDataType[] fields, string value)
+        {
+            var wanted = value ?? string.Empty;
+            var matches = new List<string>();
+            foreach (var path in GetExcludedPaths())
+            {
+                _api.Library_GetFileTags(path, fields, out var tags);
+                if (Enumerable.Range(0, fields.Length).Any(i => Holds(Tag(tags, i), wanted)))
+                    matches.Add(path);
+            }
+
+            return matches;
+        }
+
+        private static bool Holds(string tag, string wanted)
+        {
+            return string.Equals(tag, wanted, StringComparison.OrdinalIgnoreCase)
+                   || tag.Split(MultiValueSeparator, StringSplitOptions.None)
+                       .Any(v => string.Equals(v, wanted, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Every file a filter selects, from one Library_QueryFiles walk.</summary>
+        private List<string> WalkFilter(string filter)
+        {
+            var files = new List<string>();
+            if (!_api.Library_QueryFiles(filter))
+                return files;
+
+            while (true)
+            {
+                var current = _api.Library_QueryGetNextFile();
+                if (string.IsNullOrEmpty(current))
+                    break;
+                files.Add(current);
+            }
+
+            return files;
+        }
+
+        /// <summary>
+        ///     A drill-down track: album is left empty and genre is the one asked
+        ///     for, as the V4 DTO has always carried them.
+        /// </summary>
+        private Track ReadAlbumTrack(string path, string genre)
+        {
+            _api.Library_GetFileTags(path, AlbumTrackFields, out var tags);
+            return new Track
+            {
+                artist = Tag(tags, 0),
+                title = Tag(tags, 1),
+                album_artist = Tag(tags, 2),
+                trackno = ParseTag(tags, 3),
+                disc = ParseTag(tags, 4),
+                src = path,
+                album = string.Empty,
+                genre = genre
+            };
+        }
+
+        private List<ArtistData> LookupGenreArtists(string genre)
+        {
+            var artists = new List<ArtistData>();
             var filter = XmlFilterHelper.CreateFilter(
                 GenreSearchFields, genre, true, LibrarySource.Library);
 
             if (!_api.Library_QueryLookupTable("artist", "count", filter))
             {
                 _api.Library_QueryLookupTable(null, null, null);
-                yield break;
+                return artists;
             }
 
             try
@@ -346,11 +420,11 @@ namespace MusicBeePlugin.Providers
                     var artistInfo = entry.Split(NullSeparator);
                     if (artistInfo.Length >= 2)
                     {
-                        yield return new ArtistData
+                        artists.Add(new ArtistData
                         {
                             artist = artistInfo[0] ?? string.Empty,
                             count = int.Parse(artistInfo[1], CultureInfo.InvariantCulture),
-                        };
+                        });
                     }
                 }
             }
@@ -358,6 +432,8 @@ namespace MusicBeePlugin.Providers
             {
                 _api.Library_QueryLookupTable(null, null, null);
             }
+
+            return artists;
         }
 
         #endregion

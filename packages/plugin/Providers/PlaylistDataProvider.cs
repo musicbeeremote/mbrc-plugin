@@ -2,6 +2,8 @@
 using MusicBeePlugin.Providers;
 using MusicBeePlugin.Models;
 using MusicBeePlugin.Ffi;
+using MusicBeePlugin.Ffi.Generated;
+using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin.Providers
 {
@@ -104,9 +106,9 @@ namespace MusicBeePlugin.Providers
             // Set shuffle to false
             _api.Player_SetShuffle(false);
 
-            // Get all library files
+            // MusicBee's own list of the library, which leaves banned tracks out.
             string[] songsList = null;
-            _api.Library_QueryFilesEx(null, out songsList);
+            _api.Library_QueryFilesEx(XmlFilterHelper.AllOf(LibrarySource.Library), out songsList);
 
             if (songsList != null && songsList.Length > 0)
             {

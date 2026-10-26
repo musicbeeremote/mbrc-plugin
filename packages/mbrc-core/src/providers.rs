@@ -160,6 +160,8 @@ pub trait Providers: Send + Sync {
     // batch-reads the 7 browse tags for just a page's paths (bounded to O(page)).
     // `sync_delta` lists library changes since a watermark for the Scanner.
     fn track_paths(&self) -> Result<Vec<String>, String>;
+    /// The music library tracks MusicBee's filtered queries leave out: banned ones.
+    fn excluded_paths(&self) -> Result<Vec<String>, String>;
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String>;
     /// V6 typed tags per path: the base browse fields plus the raw extended tags
     /// (Year/Duration/Rating/DateAdded) the V6 `track` schema derives its typed
@@ -601,6 +603,10 @@ impl Providers for FfiProviders {
     fn track_paths(&self) -> Result<Vec<String>, String> {
         self.callbacks.query_no_params(QueryType::LibraryTrackPaths)
     }
+    fn excluded_paths(&self) -> Result<Vec<String>, String> {
+        self.callbacks
+            .query_no_params(QueryType::LibraryExcludedPaths)
+    }
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String> {
         self.callbacks
             .query(QueryType::LibraryTracksForPaths, &PathsParams { paths })
@@ -963,6 +969,9 @@ impl Providers for NullProviders {
     fn track_paths(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    fn excluded_paths(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(Vec::new())
     }
@@ -1081,6 +1090,7 @@ pub struct MockProviders {
     pub artwork_raw: Vec<u8>,
     pub batch_metadata: Vec<TrackMetadata>,
     pub track_paths: Vec<String>,
+    pub excluded_paths: Vec<String>,
     pub tracks_for_paths: Vec<Track>,
     pub tracks_detailed: Vec<TrackTags>,
     pub sync_delta: SyncDelta,
@@ -1399,6 +1409,10 @@ impl Providers for MockProviders {
     fn track_paths(&self) -> Result<Vec<String>, String> {
         self.record("track_paths");
         Ok(self.track_paths.clone())
+    }
+    fn excluded_paths(&self) -> Result<Vec<String>, String> {
+        self.record("excluded_paths");
+        Ok(self.excluded_paths.clone())
     }
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String> {
         self.record(format!("tracks_for_paths({})", paths.len()));

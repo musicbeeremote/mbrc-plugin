@@ -37,6 +37,7 @@ namespace MusicBeePlugin.Ffi
             QueryType.LibraryArtistAlbums,
             QueryType.LibraryAlbumTracks,
             QueryType.LibraryTrackPaths,
+            QueryType.LibraryExcludedPaths,
             QueryType.AlbumIdentifiers,
             QueryType.PodcastSubscriptions,
             QueryType.NowPlayingTagWrite,

@@ -241,6 +241,9 @@ pub enum QueryType {
     TagsForPaths = 51,
     NowPlayingTags = 52,
     NowPlayingTagWrite = 53,
+    // Music library tracks MusicBee's filtered queries leave out, which are the
+    // banned ones. A scope queue drops them; browsing adds them back.
+    LibraryExcludedPaths = 54,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

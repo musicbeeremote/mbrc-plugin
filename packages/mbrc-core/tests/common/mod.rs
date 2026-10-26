@@ -424,6 +424,9 @@ impl Providers for FixtureProviders {
     fn track_paths(&self) -> Result<Vec<String>, String> {
         Ok(vec!["C:\\Music\\s.mp3".into()])
     }
+    fn excluded_paths(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(vec![track()])
     }

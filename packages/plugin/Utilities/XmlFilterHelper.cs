@@ -24,6 +24,16 @@ namespace MusicBeePlugin.Utilities
         }
 
         /// <summary>
+        ///     Every file of one library category, as MusicBee's own lists show it.
+        /// </summary>
+        public static string AllOf(LibrarySource source)
+        {
+            return new XElement("Source",
+                new XAttribute("Type", (int)source),
+                new XElement("Conditions", new XAttribute("CombineMethod", "All"))).ToString();
+        }
+
+        /// <summary>
         ///     A filter naming no library category, for the now playing list, whose
         ///     queries MusicBee does not split by one.
         /// </summary>

@@ -135,6 +135,12 @@ namespace MusicBeePlugin.Providers
         List<string> GetAllTrackPaths();
 
         /// <summary>
+        ///     The music library tracks MusicBee's filtered queries leave out, which
+        ///     are its banned ones. A scope queue drops them.
+        /// </summary>
+        List<string> GetExcludedPaths();
+
+        /// <summary>
         ///     Reads the 7 browse tags (artist, title, album, album artist, genre,
         ///     track no, disc) for each given path - one bulk Library_GetFileTags
         ///     per path. The core calls this for a single browse page's slice only,

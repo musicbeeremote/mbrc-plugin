@@ -20,7 +20,7 @@
 //! Every list but `library_changes` is a V6 `Page` (`{ total, offset, items }`).
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -421,7 +421,8 @@ fn radio(data: &Value, p: &dyn Providers) -> OpResult {
 /// Queues every track the given filters select, in browse order.
 ///
 /// Replies the number queued rather than the paths: the caller named a scope
-/// precisely so it would not have to handle the list.
+/// precisely so it would not have to handle the list. Banned tracks stay out,
+/// as MusicBee's own lists leave them out.
 ///
 /// With no `mode` a scope goes to the end of the queue: a whole artist should
 /// not cut in front of what is already waiting unless that was asked for.
@@ -429,6 +430,10 @@ fn queue(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpRe
     let mode = super::nowplaying_list::parse_queue_type(opt_str(data, "mode")?.unwrap_or("last"))?;
     let play = opt_str(data, "play")?.unwrap_or("");
     let mut paths = scope_paths(data, p, cache)?;
+    if !paths.is_empty() {
+        let excluded: HashSet<String> = p.excluded_paths().map_err(internal)?.into_iter().collect();
+        paths.retain(|path| !excluded.contains(path));
+    }
     if opt_bool(data, "shuffle")?.unwrap_or(false) {
         shuffle(&mut paths);
     }
@@ -1980,6 +1985,41 @@ mod tests {
         .unwrap();
         assert_eq!(out, json!({ "count": 0 }));
         assert!(!m.recorded().iter().any(|c| c.starts_with("queue")));
+    }
+
+    /// A banned track is still listed with its album, but a queued scope leaves
+    /// it out, as MusicBee's own lists do.
+    #[test]
+    fn a_queued_scope_leaves_banned_tracks_out() {
+        let track = |src: &str| Track {
+            src: src.into(),
+            album_artist: "The Absence".into(),
+            ..Default::default()
+        };
+        let m = MockProviders {
+            album_tracks: vec![track("intro.mp3"), track("necropolis.mp3")],
+            excluded_paths: vec!["intro.mp3".into()],
+            ..Default::default()
+        };
+
+        let out = dispatch(
+            "library_queue",
+            &json!({ "album": "From Your Grave", "mode": "now" }),
+            &m,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(out, json!({ "count": 1 }));
+        let calls = m.recorded();
+        assert!(
+            calls.iter().any(|c| c.starts_with("queue")
+                && c.contains("necropolis.mp3")
+                && !c.contains("intro.mp3")),
+            "{calls:?}"
+        );
     }
 
     /// A scope with no `mode` joins the end of the queue, as the docs say, rather

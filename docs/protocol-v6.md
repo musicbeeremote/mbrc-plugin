@@ -798,6 +798,10 @@ the server resolves the scope and answers how many it queued. `mode` is `now`, `
 or `last` (default `last`); `play` names one `src` to start from; `shuffle` shuffles
 the selection rather than turning the player's shuffle mode on.
 
+**Banned tracks.** A track banned in MusicBee (love/ban set to ban) is still listed and
+counted by every op above, but `library_queue` and `library_play_all` leave it out, as
+MusicBee's own lists do. Tracks queued by path (`now_playing_queue`) are queued as given.
+
 ### Library sync
 
 `library_changes` is for a client that keeps its own copy of the library and wants
