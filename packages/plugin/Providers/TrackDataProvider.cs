@@ -195,9 +195,13 @@ namespace MusicBeePlugin.Providers
 
         #region Now Playing List Operations
 
-        public string SearchNowPlayingList(string query, SearchSource searchSource)
+        /// <summary>
+        ///     The first queued file whose artist or title contains the query, of
+        ///     any kind: MusicBee ignores a filter's source on the now playing list.
+        /// </summary>
+        public string SearchNowPlayingList(string query)
         {
-            var filter = XmlFilterHelper.CreateFilter(SearchFields, query, false, searchSource);
+            var filter = XmlFilterHelper.CreateFilter(SearchFields, query, false);
             if (!_api.NowPlayingList_QueryFiles(filter))
                 return string.Empty;
 

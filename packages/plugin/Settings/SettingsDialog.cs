@@ -27,17 +27,6 @@ namespace MusicBeePlugin.Settings
     /// </summary>
     internal sealed class SettingsDialog : Form
     {
-        // Label + SearchSource flag value. Single-select in the UI (the common
-        // case); the value stored is the flag int the core round-trips verbatim.
-        private static readonly (string Label, int Value)[] Sources =
-        {
-            ("Library", 1),
-            ("Inbox", 2),
-            ("Podcasts", 4),
-            ("Audiobooks", 32),
-            ("Videos", 64),
-        };
-
         // Display label + the log_level value the core round-trips. Order is the
         // combo-box order (increasing verbosity).
         private static readonly (string Label, string Value)[] LogLevels =
@@ -85,7 +74,6 @@ namespace MusicBeePlugin.Settings
         private NumericUpDown _lastOctet;
         private TextBox _allowedAddresses;
         private Button _blockedBtn;
-        private ComboBox _searchSource;
         private ComboBox _logLevel;
         private CheckBox _firewall;
         private CheckBox _mdns;
@@ -257,7 +245,6 @@ namespace MusicBeePlugin.Settings
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // connection
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // access
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // library
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // advanced
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // cache
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // updates
@@ -269,7 +256,6 @@ namespace MusicBeePlugin.Settings
             // the version sits bottom-left in the button row instead.
             root.Controls.Add(BuildConnectionGroup());
             root.Controls.Add(BuildAccessGroup());
-            root.Controls.Add(BuildLibraryGroup());
             root.Controls.Add(BuildAdvancedGroup());
             root.Controls.Add(BuildCacheGroup());
             root.Controls.Add(BuildUpdatesGroup());
@@ -411,15 +397,6 @@ namespace MusicBeePlugin.Settings
             });
             AddRow(layout, "Blocked", _blockedBtn);
             return WrapGroup("Access control", layout);
-        }
-
-        private GroupBox BuildLibraryGroup()
-        {
-            _searchSource = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, Anchor = AnchorStyles.Left };
-            _searchSource.Items.AddRange(Sources.Select(x => (object)x.Label).ToArray());
-            var layout = GroupLayout();
-            AddRow(layout, "Search source", _searchSource);
-            return WrapGroup("Library", layout);
         }
 
         private GroupBox BuildAdvancedGroup()
@@ -1354,7 +1331,6 @@ namespace MusicBeePlugin.Settings
             _baseIp.Text = s.base_ip ?? string.Empty;
             _lastOctet.Value = Clamp(s.last_octet_max, 0, 255);
             _allowedAddresses.Lines = (s.allowed_addresses ?? new List<string>()).ToArray();
-            _searchSource.SelectedIndex = SourceToIndex(s.search_source);
             _logLevel.SelectedIndex = LogLevelToIndex(s.log_level);
             _firewall.Checked = s.update_firewall;
             _mdns.Checked = s.mdns_enabled;
@@ -1887,7 +1863,6 @@ namespace MusicBeePlugin.Settings
                     .Select(l => l.Trim())
                     .Where(l => l.Length > 0)
                     .ToList(),
-                search_source = IndexToSource(_searchSource.SelectedIndex),
                 update_firewall = _firewall.Checked,
                 mdns_enabled = _mdns.Checked,
                 web_enabled = _webEnabled.Checked,
@@ -1933,19 +1908,6 @@ namespace MusicBeePlugin.Settings
                 case 2: return "specific";
                 default: return "all";
             }
-        }
-
-        private static int SourceToIndex(int flags)
-        {
-            for (var i = 0; i < Sources.Length; i++)
-                if (Sources[i].Value == flags)
-                    return i;
-            return 0; // default to Library
-        }
-
-        private static int IndexToSource(int index)
-        {
-            return index >= 0 && index < Sources.Length ? Sources[index].Value : 1;
         }
 
         private static int LogLevelToIndex(string level)

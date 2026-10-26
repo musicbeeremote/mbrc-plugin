@@ -537,6 +537,15 @@ impl MetadataCache {
         self.changes.record(paths, updated)
     }
 
+    /// Those of `paths` in the music library as last listed. None until the
+    /// cache is validated.
+    pub fn in_library(&self, paths: &[String]) -> Vec<String> {
+        if !self.is_validated() {
+            return Vec::new();
+        }
+        self.changes.live_among(paths)
+    }
+
     /// Forgets everything tied to the library itself, for a switch to another one.
     ///
     /// The change log starts a new epoch and the sync watermark goes, since both

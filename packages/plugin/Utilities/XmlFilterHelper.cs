@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using System.Xml;
 using System.Xml.Linq;
-using MusicBeePlugin.Models;
+using MusicBeePlugin.Ffi.Generated;
 
 namespace MusicBeePlugin.Utilities
 {
@@ -16,12 +16,27 @@ namespace MusicBeePlugin.Utilities
         /// <param name="tags">The metadata fields to search in</param>
         /// <param name="query">The search query</param>
         /// <param name="isStrict">Whether to use exact match (Is) or partial match (Contains)</param>
-        /// <param name="source">The source to search in</param>
+        /// <param name="source">The library category to search in</param>
         /// <returns>XML filter string</returns>
-        public static string CreateFilter(string[] tags, string query, bool isStrict, SearchSource source)
+        public static string CreateFilter(string[] tags, string query, bool isStrict, LibrarySource source)
         {
-            var filter = new XElement("Source",
-                new XAttribute("Type", (short)source));
+            return Build(tags, query, isStrict, source);
+        }
+
+        /// <summary>
+        ///     A filter naming no library category, for the now playing list, whose
+        ///     queries MusicBee does not split by one.
+        /// </summary>
+        public static string CreateFilter(string[] tags, string query, bool isStrict)
+        {
+            return Build(tags, query, isStrict, null);
+        }
+
+        private static string Build(string[] tags, string query, bool isStrict, LibrarySource? source)
+        {
+            var filter = new XElement("Source");
+            if (source.HasValue)
+                filter.Add(new XAttribute("Type", (int)source.Value));
 
             var conditions = new XElement("Conditions",
                 new XAttribute("CombineMethod", "Any"));

@@ -56,37 +56,35 @@ namespace MusicBeePlugin.Providers
         /// <param name="limit">Maximum number of tracks to return</param>
         IEnumerable<Track> BrowseTracks(int offset = 0, int limit = 4000);
 
-        // Hierarchical Navigation
+        // Hierarchical Navigation: the music library only, never Inbox,
+        // Podcasts, Audiobooks or Videos.
 
         /// <summary>
         ///     Gets all tracks for a specific album.
         ///     Uses yield return for streaming results and proper query cleanup.
         /// </summary>
         /// <param name="album">Album name</param>
-        /// <param name="searchSource">Source to search in</param>
-        IEnumerable<Track> GetAlbumTracks(string album, SearchSource searchSource);
+        IEnumerable<Track> GetAlbumTracks(string album);
 
         /// <summary>
         ///     Every track filed under one genre, which walking the genre's
         ///     artists and albums cannot give: GetAlbumTracks reports no genre.
         /// </summary>
-        IEnumerable<Track> GetGenreTracks(string genre, SearchSource searchSource);
+        IEnumerable<Track> GetGenreTracks(string genre);
 
         /// <summary>
         ///     Gets all albums for a specific artist.
         ///     Returns List because deduplication requires Contains/IndexOf operations.
         /// </summary>
         /// <param name="artist">Artist name</param>
-        /// <param name="searchSource">Source to search in</param>
-        List<AlbumData> GetArtistAlbums(string artist, SearchSource searchSource);
+        List<AlbumData> GetArtistAlbums(string artist);
 
         /// <summary>
         ///     Gets all artists for a specific genre.
         ///     Uses yield return for streaming results and proper query cleanup.
         /// </summary>
         /// <param name="genre">Genre name</param>
-        /// <param name="searchSource">Source to search in</param>
-        IEnumerable<ArtistData> GetGenreArtists(string genre, SearchSource searchSource);
+        IEnumerable<ArtistData> GetGenreArtists(string genre);
 
         // Artwork
 

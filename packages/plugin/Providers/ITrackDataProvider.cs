@@ -65,9 +65,8 @@ namespace MusicBeePlugin.Providers
         ///     Searches the now playing list for a track matching the query.
         /// </summary>
         /// <param name="query">Search query string</param>
-        /// <param name="searchSource">Source to search in</param>
         /// <returns>File URL of the matching track, or null if not found</returns>
-        string SearchNowPlayingList(string query, SearchSource searchSource);
+        string SearchNowPlayingList(string query);
 
         /// <summary>
         ///     Gets the now playing list window [offset, offset+limit), ordered from

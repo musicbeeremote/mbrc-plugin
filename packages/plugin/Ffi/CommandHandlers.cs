@@ -22,7 +22,6 @@ namespace MusicBeePlugin.Ffi
         private readonly IPlayerDataProvider _player;
         private readonly ITrackDataProvider _track;
         private readonly IPlaylistDataProvider _playlist;
-        private readonly IUserSettings _userSettings;
         private readonly ISystemOperations _system;
         private readonly IPluginLogger _logger;
 
@@ -30,14 +29,12 @@ namespace MusicBeePlugin.Ffi
             IPlayerDataProvider player,
             ITrackDataProvider track,
             IPlaylistDataProvider playlist,
-            IUserSettings userSettings,
             ISystemOperations system,
             IPluginLogger logger)
         {
             _player = player;
             _track = track;
             _playlist = playlist;
-            _userSettings = userSettings;
             _system = system;
             _logger = logger;
         }
@@ -123,7 +120,7 @@ namespace MusicBeePlugin.Ffi
         {
             var query = Msgpack.Deserialize<StringValueParams>(p).value ?? string.Empty;
             if (string.IsNullOrWhiteSpace(query)) return false;
-            var match = _track.SearchNowPlayingList(query, SearchSourceHelper.GetSearchSource(_userSettings));
+            var match = _track.SearchNowPlayingList(query);
             if (string.IsNullOrEmpty(match)) return false;
             return _playlist.PlayNowPlayingTrack(match);
         }

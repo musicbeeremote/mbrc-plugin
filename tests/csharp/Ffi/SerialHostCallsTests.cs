@@ -54,8 +54,8 @@ namespace MusicBeeRemote.Core.Tests.Ffi
         {
             var host = new FakeMusicBee();
             var commands = new CommandHandlers(new PlayerDataProvider(host.Api), new TrackDataProvider(host.Api),
-                new PlaylistDataProvider(host.Api), Substitute.For<IUserSettings>(),
-                Substitute.For<ISystemOperations>(), Substitute.For<IPluginLogger>());
+                new PlaylistDataProvider(host.Api), Substitute.For<ISystemOperations>(),
+                Substitute.For<IPluginLogger>());
 
             foreach (var payload in Payloads())
                 RunUnlessPayloadMismatch(() => commands.Handle((int)kind, payload));

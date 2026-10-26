@@ -5,6 +5,7 @@ using System.Linq;
 using MusicBeePlugin.Providers;
 using MusicBeePlugin.Models;
 using MusicBeePlugin.Ffi;
+using MusicBeePlugin.Ffi.Generated;
 using MusicBeePlugin.Utilities;
 
 namespace MusicBeePlugin.Providers
@@ -220,10 +221,10 @@ namespace MusicBeePlugin.Providers
 
         #region Hierarchical Navigation
 
-        public IEnumerable<Track> GetAlbumTracks(string album, SearchSource searchSource)
+        public IEnumerable<Track> GetAlbumTracks(string album)
         {
             var filter = XmlFilterHelper.CreateFilter(
-                AlbumSearchFields, album, true, searchSource);
+                AlbumSearchFields, album, true, LibrarySource.Library);
 
             if (!_api.Library_QueryFiles(filter))
                 yield break;
@@ -261,10 +262,10 @@ namespace MusicBeePlugin.Providers
         ///     under two genres yields tracks nothing can tell apart. Asking the
         ///     library for the genre directly is both exact and one query.
         /// </remarks>
-        public IEnumerable<Track> GetGenreTracks(string genre, SearchSource searchSource)
+        public IEnumerable<Track> GetGenreTracks(string genre)
         {
             var filter = XmlFilterHelper.CreateFilter(
-                GenreSearchFields, genre, true, searchSource);
+                GenreSearchFields, genre, true, LibrarySource.Library);
 
             if (!_api.Library_QueryFiles(filter))
                 yield break;
@@ -296,14 +297,14 @@ namespace MusicBeePlugin.Providers
         ///     carrying its track count. Unlike BrowseAlbums, the count here is
         ///     real.
         /// </summary>
-        public List<AlbumData> GetArtistAlbums(string artist, SearchSource searchSource)
+        public List<AlbumData> GetArtistAlbums(string artist)
         {
             // The retired internal AlbumData did this via IEquatable +
             // IncreaseCount; here a Dictionary keyed on albumArtist\0album
             // carries the count.
             var albums = new Dictionary<string, AlbumData>(StringComparer.Ordinal);
             var filter = XmlFilterHelper.CreateFilter(
-                ArtistSearchFields, artist, true, searchSource);
+                ArtistSearchFields, artist, true, LibrarySource.Library);
 
             if (_api.Library_QueryFiles(filter))
                 while (true)
@@ -326,10 +327,10 @@ namespace MusicBeePlugin.Providers
             return albums.Values.ToList();
         }
 
-        public IEnumerable<ArtistData> GetGenreArtists(string genre, SearchSource searchSource)
+        public IEnumerable<ArtistData> GetGenreArtists(string genre)
         {
             var filter = XmlFilterHelper.CreateFilter(
-                GenreSearchFields, genre, true, searchSource);
+                GenreSearchFields, genre, true, LibrarySource.Library);
 
             if (!_api.Library_QueryLookupTable("artist", "count", filter))
             {

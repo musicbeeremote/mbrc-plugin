@@ -29,6 +29,14 @@ namespace MusicBeePlugin.Ffi.Generated
         NotAnUpgrade = 5,
     }
 
+    public enum LibrarySource
+    {
+        Library = 1,
+        Inbox = 4,
+        Audiobooks = 32,
+        Videos = 64,
+    }
+
     public enum NotificationType
     {
         TrackChanged = 0,

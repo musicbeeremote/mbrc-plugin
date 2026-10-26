@@ -126,6 +126,29 @@ impl ChangeLog {
             .flatten()
     }
 
+    /// Those of `paths` the last listing filed as in the music library.
+    pub fn live_among(&self, paths: &[String]) -> Vec<String> {
+        if paths.is_empty() {
+            return Vec::new();
+        }
+        self.db
+            .read(|txn| {
+                let known = match txn.open_table(TRACK_CHANGES) {
+                    Ok(t) => t,
+                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(Vec::new()),
+                    Err(e) => return Err(e.into()),
+                };
+                let mut live = Vec::new();
+                for path in paths {
+                    if matches!(known.get(path.as_str())?, Some(g) if g.value().1) {
+                        live.push(path.clone());
+                    }
+                }
+                Ok(live)
+            })
+            .unwrap_or_default()
+    }
+
     /// Files one index pass: what `paths` added or removed against the log, plus
     /// the `updated` paths still in the library.
     ///

@@ -27,8 +27,21 @@ fn free_port() -> u16 {
         .port()
 }
 
+/// A core whose music library holds `/a.mp3`, so an edit to it is the library's.
 fn core(port: u16) -> Arc<Core> {
-    Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)))
+    let dir = std::env::temp_dir().join(format!("mbrc-notifications-v6-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = Config {
+        storage_path: dir.to_string_lossy().into_owned(),
+        ..Config::for_test(port)
+    };
+    let core = Arc::new(Core::new(Arc::new(NullProviders), config));
+    let library = vec!["/a.mp3".to_string()];
+    core.metadata_cache.reconcile(&[], 1);
+    core.metadata_cache.replace_track_index(&library);
+    core.metadata_cache.record_changes(Some(&library), &[]);
+    core
 }
 
 fn connect(port: u16) -> (TcpStream, BufReader<TcpStream>) {

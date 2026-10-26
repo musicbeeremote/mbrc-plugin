@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Xml.Linq;
 using AwesomeAssertions;
-using MusicBeePlugin.Models;
+using MusicBeePlugin.Ffi.Generated;
 using MusicBeePlugin.Utilities;
 using Xunit;
 
@@ -18,11 +18,22 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
             parsed.Should().NotBeNull();
+        }
+
+        [Fact]
+        public void CreateFilter_WithoutASource_NamesNoCategory()
+        {
+            var result = XmlFilterHelper.CreateFilter(new[] { "Artist" }, "test", false);
+
+            var parsed = XElement.Parse(result);
+            parsed.Name.LocalName.Should().Be("Source");
+            parsed.Attribute("Type").Should().BeNull();
+            parsed.Element("Conditions").Elements("Condition").Should().HaveCount(1);
         }
 
         [Fact]
@@ -33,7 +44,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -48,7 +59,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -64,7 +75,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: true, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: true, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -80,7 +91,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -96,7 +107,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "Beatles";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -112,7 +123,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -128,7 +139,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -136,12 +147,11 @@ namespace MusicBeeRemote.Core.Tests.Utilities
         }
 
         [Theory]
-        [InlineData(SearchSource.Library, "1")]
-        [InlineData(SearchSource.Inbox, "2")]
-        [InlineData(SearchSource.Podcasts, "4")]
-        [InlineData(SearchSource.Audiobooks, "32")]
-        [InlineData(SearchSource.Videos, "64")]
-        public void CreateFilter_SetsCorrectSourceTypeForEachSource(SearchSource source, string expectedType)
+        [InlineData(LibrarySource.Library, "1")]
+        [InlineData(LibrarySource.Inbox, "4")]
+        [InlineData(LibrarySource.Audiobooks, "32")]
+        [InlineData(LibrarySource.Videos, "64")]
+        public void CreateFilter_UsesMusicBeesSourceTypeFlagForEachSource(LibrarySource source, string expectedType)
         {
             // Arrange
             var tags = new[] { "Artist" };
@@ -163,7 +173,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -179,7 +189,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -195,7 +205,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "Test & <Special> \"Characters\"";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -209,7 +219,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var tags = new[] { "Genre" };
             var query = "Ro\u0000ck\u0001\u001f \U0001F3B5";
 
-            var result = XmlFilterHelper.CreateFilter(tags, query, true, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, true, LibrarySource.Library);
 
             var parsed = XElement.Parse(result);
             var condition = parsed.Element("Conditions").Element("Condition");
@@ -219,7 +229,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
         [Fact]
         public void CreateFilter_TreatsNullQueryAsEmpty()
         {
-            var result = XmlFilterHelper.CreateFilter(new[] { "Genre" }, null, true, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(new[] { "Genre" }, null, true, LibrarySource.Library);
 
             var condition = XElement.Parse(result).Element("Conditions").Element("Condition");
             condition.Attribute("Value").Value.Should().BeEmpty();
@@ -233,7 +243,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -252,7 +262,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "SearchTerm";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -271,7 +281,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: true, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, isStrict: true, LibrarySource.Library);
 
             // Assert
             var parsed = XElement.Parse(result);
@@ -290,7 +300,7 @@ namespace MusicBeeRemote.Core.Tests.Utilities
             var query = "test";
 
             // Act
-            var result = XmlFilterHelper.CreateFilter(tags, query, false, SearchSource.Library);
+            var result = XmlFilterHelper.CreateFilter(tags, query, false, LibrarySource.Library);
 
             // Assert
             result.Should().StartWith("<Source");

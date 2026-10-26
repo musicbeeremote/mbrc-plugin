@@ -706,7 +706,7 @@ way in either.
 | `now_playing_list_remove` | `{"orders":[N,..], "version?":V}` | `{}` - removes every listed slot |
 | `now_playing_list_move` | `{"from":N,"to":M, "version?":V}` | `{}` - `from`/`to` are `order` values |
 | `now_playing_list_clear` | `{"version?":V}` | `{}` - empties the queue |
-| `now_playing_list_search` | `{"query":"<text>"}` | `{}` |
+| `now_playing_list_search` | `{"query":"<text>"}` | `{}` - plays the first queued track, of any kind, whose artist or title contains `query` |
 | `now_playing_queue` | `{"paths":[..],"mode?":"next"\|"last"\|"now"\|"add_all","play?":"<path>"}` | `{}` |
 
 `totals: true` adds **`total_duration_ms`**, how long what `total` counts runs: the whole
@@ -739,6 +739,10 @@ gone, and the `version` has moved, so re-read the list.
 > `play_position: -1` marker is the answer instead (#118 §7 / #94).
 
 ### Library
+
+These ops serve MusicBee's music library only. Files in the Inbox, audiobooks, videos and
+podcasts are never listed, counted or queued here, and an edit to one of them does not raise
+`library_changed`.
 
 | Op | Request `data` | Response |
 |----|----------------|----------|

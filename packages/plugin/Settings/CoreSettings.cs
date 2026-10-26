@@ -25,9 +25,6 @@ namespace MusicBeePlugin.Settings
         /// <summary>Specific mode: exact addresses and/or CIDR blocks allowed.</summary>
         public List<string> allowed_addresses { get; set; } = new List<string>();
 
-        /// <summary>MusicBee <c>SearchSource</c> flags value (Library=1, ...).</summary>
-        public int search_source { get; set; } = 1;
-
         /// <summary>Whether the host adds a Windows firewall rule on save.</summary>
         public bool update_firewall { get; set; }
 

@@ -123,7 +123,7 @@ namespace MusicBeePlugin.Ffi
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             _queries = new QueryHandlers(player, track, playlist, library, podcast, userSettings);
-            _commands = new CommandHandlers(player, track, playlist, userSettings, system, logger);
+            _commands = new CommandHandlers(player, track, playlist, system, logger);
             PreloadNativeLibrary();
         }
 

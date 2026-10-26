@@ -73,11 +73,8 @@ namespace MusicBeePlugin.Host
         {
             _bridge.Initialize(_userSettings.StoragePath);
 
-            // Rust owns settings: pull the core's config into the C# read-cache so
-            // the search source etc. mirror it, and set the core's log level to
-            // match the persisted debug flag.
+            // Rust owns settings: set the core's log level to the persisted one.
             var settings = _bridge.ReadSettings() ?? new CoreSettings();
-            SyncSettingsCache(settings);
             _bridge.SetLogLevel(settings.log_level);
 
             _bridge.StartNetworking();
@@ -232,9 +229,6 @@ namespace MusicBeePlugin.Host
             if (!_bridge.WriteSettings(updated))
                 return false; // rejected (e.g. bad port); nothing changed
 
-            // Reflect the new values in the C# read-cache (search source, etc.).
-            SyncSettingsCache(updated);
-
             // The log level is applied live - no restart needed.
             if (!string.Equals(updated.log_level, current.log_level, StringComparison.OrdinalIgnoreCase))
                 _bridge.SetLogLevel(updated.log_level);
@@ -271,18 +265,6 @@ namespace MusicBeePlugin.Host
             _disposed = true;
             _bridge.StopNetworking();
             _bridge.Dispose();
-        }
-
-        /// <summary>
-        ///     Mirror the Rust-owned settings into the C# read-cache so the parts
-        ///     the host still reads (search source, alternative search) reflect the
-        ///     core. CurrentVersion is preserved (set at construction).
-        /// </summary>
-        private void SyncSettingsCache(CoreSettings s)
-        {
-            // Only the search source is consumed at runtime; the rest of the Rust
-            // config is edited/read through the panel (CoreSettings), not here.
-            _userSettings.Source = (SearchSource)s.search_source;
         }
 
         /// <summary>

@@ -64,6 +64,19 @@ pub enum UpdateLaunch {
     NotAnUpgrade = 5,
 }
 
+/// A MusicBee library category, as its `<Source Type>` filter flag.
+///
+/// Podcasts (flag 2) are absent: they have their own API and V6 domain.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum LibrarySource {
+    Library = 1,
+    Inbox = 4,
+    Audiobooks = 32,
+    Videos = 64,
+}
+
 /// Notifications forwarded from MusicBee via `Plugin.ReceiveNotification`.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

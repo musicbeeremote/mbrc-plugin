@@ -221,16 +221,16 @@ namespace MusicBeePlugin.Ffi
             Paginate(_library.BrowseTracks(0, FetchAll), p.offset, p.limit);
 
         private List<ArtistData> BuildGenreArtists(QueryParams p) =>
-            (_library.GetGenreArtists(p.query ?? string.Empty, Source()) ?? Enumerable.Empty<ArtistData>()).ToList();
+            (_library.GetGenreArtists(p.query ?? string.Empty) ?? Enumerable.Empty<ArtistData>()).ToList();
 
         private List<AlbumData> BuildArtistAlbums(QueryParams p) =>
-            _library.GetArtistAlbums(p.query ?? string.Empty, Source()) ?? new List<AlbumData>();
+            _library.GetArtistAlbums(p.query ?? string.Empty) ?? new List<AlbumData>();
 
         private List<Track> BuildAlbumTracks(QueryParams p) =>
-            (_library.GetAlbumTracks(p.query ?? string.Empty, Source()) ?? Enumerable.Empty<Track>()).ToList();
+            (_library.GetAlbumTracks(p.query ?? string.Empty) ?? Enumerable.Empty<Track>()).ToList();
 
         private List<Track> BuildGenreTracks(QueryParams p) =>
-            (_library.GetGenreTracks(p.query ?? string.Empty, Source()) ?? Enumerable.Empty<Track>()).ToList();
+            (_library.GetGenreTracks(p.query ?? string.Empty) ?? Enumerable.Empty<Track>()).ToList();
 
         // Cover-cache leaf providers: the host supplies raw ingredients, the Rust
         // core owns resize/hash/cache/serve. See ILibraryDataProvider for why the
@@ -282,8 +282,6 @@ namespace MusicBeePlugin.Ffi
         private static QueryReply Reply<T>(T value) => QueryReply.Of(value);
         private static PaginationParams Page(byte[] p) => Msgpack.Deserialize<PaginationParams>(p);
         private static QueryParams Q(byte[] p) => Msgpack.Deserialize<QueryParams>(p);
-
-        private SearchSource Source() => SearchSourceHelper.GetSearchSource(_userSettings);
 
         /// <summary>
         ///     Pass to a provider's (offset, limit) to request the entire

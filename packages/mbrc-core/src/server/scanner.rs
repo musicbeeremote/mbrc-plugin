@@ -47,9 +47,12 @@ pub struct LibraryEvents(Mutex<Reported>);
 /// What a pass has to apply.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Reported {
-    /// The browse index may have moved: a file was added, removed or retagged.
+    /// The browse index may have moved: a file was added or removed, or an
+    /// edit named no file.
     pub relist: bool,
-    /// Files whose tags changed.
+    /// An edit named no file, so the change log cannot say what moved.
+    pub unnamed_edit: bool,
+    /// Files whose tags changed. Only those in the music library move its index.
     pub tagged: BTreeSet<String>,
     /// Files whose rating changed, which moves nothing in the browse order.
     pub rated: BTreeSet<String>,
@@ -70,9 +73,14 @@ impl LibraryEvents {
     /// A file's tags changed. Without a path, only the re-list can say what moved.
     pub fn tags_changed(&self, path: Option<&str>) {
         let mut queued = self.lock();
-        queued.relist = true;
-        if let Some(path) = path {
-            queued.tagged.insert(path.to_string());
+        match path {
+            Some(path) => {
+                queued.tagged.insert(path.to_string());
+            }
+            None => {
+                queued.relist = true;
+                queued.unnamed_edit = true;
+            }
         }
     }
 
@@ -92,6 +100,7 @@ impl LibraryEvents {
     fn put_back(&self, batch: Reported) {
         let mut queued = self.lock();
         queued.relist |= batch.relist;
+        queued.unnamed_edit |= batch.unnamed_edit;
         queued.tagged.extend(batch.tagged);
         queued.rated.extend(batch.rated);
     }
@@ -226,25 +235,29 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
 
     let cache = &core.metadata_cache;
     let tagged: Vec<String> = reported.tagged.into_iter().collect();
+    let relist = reported.relist || !tagged.is_empty();
     let mut edited = tagged.clone();
     edited.extend(reported.rated);
     edited.sort_unstable();
     edited.dedup();
-    if reported.relist {
-        commands::library::relist_library(cache, core.providers.as_ref(), &edited);
+    let filed = if relist {
+        commands::library::relist_library(cache, core.providers.as_ref(), &edited)
     } else {
-        commands::library::file_reported_edits(cache, &edited);
+        commands::library::file_reported_edits(cache, &edited)
+    };
+    if filed.is_some() || (reported.unnamed_edit && cache.is_validated()) {
+        crate::state::broadcast_library_changed(core);
     }
-    crate::state::broadcast_library_changed(core);
-    super::commands_v6::tags::refresh_rows(core.providers.as_ref(), Some(cache), &tagged);
+    let library_tagged = cache.in_library(&tagged);
+    super::commands_v6::tags::refresh_rows(core.providers.as_ref(), Some(cache), &library_tagged);
     announce_playing_edit(core, &tagged);
 
     if backfill_tags(core) {
         core.tag_backfill.notify_one();
     }
     // A rating moves no artwork, so a pass of ratings alone leaves covers be.
-    if reported.relist {
-        super::refresh_covers_delta(core, &tagged);
+    if relist {
+        super::refresh_covers_delta(core, &library_tagged);
     }
     // Released before the finish event: the panel answers that event by
     // re-reading `is_reconciling`, so the guard must already be gone.
@@ -290,13 +303,13 @@ mod tests {
     use crate::config::Config;
 
     #[test]
-    fn reports_collapse_per_file_and_an_unnamed_tag_edit_asks_for_a_relist() {
+    fn reports_collapse_per_file_and_only_an_unnamed_tag_edit_asks_for_a_relist() {
         let events = LibraryEvents::default();
         events.tags_changed(Some("/a.mp3"));
         events.tags_changed(Some("/a.mp3"));
         events.rating_changed(Some("/b.mp3"));
         let batch = events.take();
-        assert!(batch.relist);
+        assert!(!batch.relist, "the pass decides from where the file is");
         assert_eq!(batch.tagged.len(), 1);
         assert_eq!(batch.rated.len(), 1);
         assert_eq!(events.take(), Reported::default());
@@ -305,11 +318,12 @@ mod tests {
         assert!(!events.take().relist, "a rating moves nothing in the order");
 
         events.tags_changed(None);
-        assert!(events.take().relist);
+        let batch = events.take();
+        assert!(batch.relist && batch.unnamed_edit);
     }
 
     fn core_with(m: Arc<crate::providers::MockProviders>, name: &str) -> Arc<Core> {
-        let dir = std::env::temp_dir().join(format!("mbrc-scanner-{name}"));
+        let dir = std::env::temp_dir().join(format!("mbrc-scanner-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let config = Config {
@@ -424,6 +438,95 @@ mod tests {
         assert!(m.recorded().iter().any(|c| c == "track_paths"));
         assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 2);
         assert_eq!(core.metadata_cache.track_count(), 3);
+    }
+
+    fn library_changed_frames(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> usize {
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .filter(|frame| frame.contains("\"library_changed\""))
+            .count()
+    }
+
+    /// An audiobook, video or Inbox file is not in the music library, so its
+    /// edit moves nothing clients browse.
+    #[test]
+    fn a_tag_edit_outside_the_music_library_tells_no_one() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "outside-edit");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events
+            .tags_changed(Some("/books/chapter-01.mp3"));
+        apply_reported_now(&core);
+
+        assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 1);
+        assert_eq!(library_changed_frames(&mut rx), 0);
+
+        core.library_events.tags_changed(Some("/a.mp3"));
+        apply_reported_now(&core);
+        assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 2);
+        assert_eq!(library_changed_frames(&mut rx), 1);
+    }
+
+    /// A file can enter the music library with only a tag edit to show for it,
+    /// as when it moves out of the Inbox.
+    #[test]
+    fn a_tag_edit_to_a_file_new_to_the_music_library_files_it() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "tagged-into-library");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events.tags_changed(Some("/c.mp3"));
+        apply_reported_now(&core);
+
+        assert_eq!(core.metadata_cache.track_count(), 3);
+        assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 2);
+        assert_eq!(library_changed_frames(&mut rx), 1);
+    }
+
+    /// An edit that names no file files nothing, yet something clients show moved.
+    #[test]
+    fn an_unnamed_tag_edit_tells_clients_to_refresh() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "unnamed-edit");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events.tags_changed(None);
+        apply_reported_now(&core);
+
+        assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 1);
+        assert_eq!(library_changed_frames(&mut rx), 1);
+    }
+
+    /// MusicBee announces an audiobook add like a music one; the listing is
+    /// what shows the music library did not move.
+    #[test]
+    fn an_add_that_leaves_the_music_library_unchanged_tells_no_one() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "outside-add");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events.membership_changed();
+        apply_reported_now(&core);
+
+        assert!(m.recorded().iter().any(|c| c == "track_paths"));
+        assert_eq!(core.metadata_cache.changes().head().unwrap().generation, 1);
+        assert_eq!(library_changed_frames(&mut rx), 0);
     }
 
     fn tags(src: &str) -> crate::protocol::messages::TrackTags {

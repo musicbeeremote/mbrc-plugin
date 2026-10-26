@@ -224,35 +224,39 @@ pub fn build_track_index(cache: &MetadataCache, p: &dyn Providers) -> usize {
 /// drops the cached tags of `edited`, files the pass in the change log, re-reads
 /// the small browse lists and advances the watermark. If the library cannot be
 /// listed, the edits are still filed. No-op until the cache is validated.
-pub fn relist_library(cache: &MetadataCache, p: &dyn Providers, edited: &[String]) {
+/// Returns the generation filed, or `None` when nothing moved.
+pub fn relist_library(cache: &MetadataCache, p: &dyn Providers, edited: &[String]) -> Option<u64> {
     if !cache.is_validated() {
-        return;
+        return None;
     }
     cache.drop_track_tags(edited);
-    match p.track_paths() {
+    let filed = match p.track_paths() {
         Ok(paths) => {
             cache.replace_track_index(&paths);
-            cache.record_changes(Some(&paths), edited);
+            cache.record_changes(Some(&paths), edited)
         }
         Err(e) => {
             tracing::warn!(error = %e, "scanner: track path refetch failed");
-            cache.record_changes(None, edited);
+            cache.record_changes(None, edited)
         }
-    }
+    };
     prewarm_browse_lists(cache, p);
     cache.set_tracks_synced_at(now_unix_seconds());
+    filed
 }
 
 /// Files edits that move nothing in the browse order, such as a rating.
 ///
 /// Their cached tags go and the log records them; the library is not listed.
-pub fn file_reported_edits(cache: &MetadataCache, paths: &[String]) {
+/// Returns the generation filed, or `None` when nothing moved.
+pub fn file_reported_edits(cache: &MetadataCache, paths: &[String]) -> Option<u64> {
     if paths.is_empty() || !cache.is_validated() {
-        return;
+        return None;
     }
     cache.drop_track_tags(paths);
-    cache.record_changes(None, paths);
+    let filed = cache.record_changes(None, paths);
     cache.set_tracks_synced_at(now_unix_seconds());
+    filed
 }
 
 /// The paths the host reports edited or removed since `since`, their cached

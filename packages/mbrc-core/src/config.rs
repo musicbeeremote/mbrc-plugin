@@ -26,10 +26,6 @@ fn default_last_octet_max() -> u32 {
     254
 }
 
-fn default_search_source() -> i32 {
-    1 // SearchSource.Library
-}
-
 /// Which clients may connect, mirroring the shipped plugin's three modes.
 ///
 /// The server checks each inbound peer against the active mode (loopback is
@@ -158,10 +154,6 @@ pub struct Config {
     pub last_octet_max: u32,
     /// Specific mode: the exact client addresses allowed to connect.
     pub allowed_addresses: Vec<String>,
-    /// Which MusicBee sources library search/browse targets, as the C#
-    /// `SearchSource` flags value (Library=1, Inbox=2, Podcasts=4, ...). C#
-    /// reads it from its settings snapshot and casts back. Default 1 (Library).
-    pub search_source: i32,
     /// Whether the host adds a Windows firewall rule on save (host-facing
     /// preference; persisted here, acted on C#-side by launching mbrc-helper).
     pub update_firewall: bool,
@@ -271,7 +263,6 @@ impl Default for Config {
             base_ip: String::new(),
             last_octet_max: default_last_octet_max(),
             allowed_addresses: Vec::new(),
-            search_source: default_search_source(),
             update_firewall: false,
             log_level: LogLevel::default(),
             ping_interval_secs: default_ping_interval_secs(),
@@ -470,9 +461,6 @@ fn config_from_legacy_xml(xml: &str) -> Config {
             FilterMode::All => {}
         }
     }
-    if let Some(source) = xml_tag(xml, "source").and_then(|v| v.parse::<i32>().ok()) {
-        config.search_source = source;
-    }
     config.log_level = if xml_bool(xml, "logs_enabled") {
         LogLevel::Debug
     } else {
@@ -542,6 +530,26 @@ mod tests {
             Config::load(dir.to_str().unwrap()).log_level,
             LogLevel::Info
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_with_the_retired_search_source_still_loads() {
+        let dir = std::env::temp_dir().join(format!(
+            "mbrc-cfg-retired-search-source-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("core_settings.json"),
+            r#"{"port":3456,"search_source":2,"log_level":"debug"}"#,
+        )
+        .unwrap();
+        let c = Config::load(dir.to_str().unwrap());
+        assert_eq!(c.port, 3456);
+        assert_eq!(c.log_level, LogLevel::Debug);
+        let saved = serde_json::to_value(&c).unwrap();
+        assert!(saved.get("search_source").is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -656,7 +664,6 @@ mod tests {
         assert_eq!(c.port, 3456);
         assert_eq!(c.filter_mode, FilterMode::Specific);
         assert_eq!(c.allowed_addresses, vec!["192.168.1.10", "192.168.1.11"]);
-        assert_eq!(c.search_source, 2);
         assert_eq!(c.log_level, LogLevel::Debug);
         assert!(c.update_firewall);
     }
