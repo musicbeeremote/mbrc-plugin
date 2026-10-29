@@ -34,7 +34,7 @@
     "eslint": "10.13.0",
     "eslint-plugin-oxlint": "1.88.0",
     "eslint-plugin-vue": "10.11.1",
-    "happy-dom": "21.0.3",
+    "happy-dom": "21.0.4",
     "oxlint": "1.88.0",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",

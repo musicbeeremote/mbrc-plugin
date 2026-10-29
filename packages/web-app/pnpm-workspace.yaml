@@ -23,3 +23,6 @@ trustPolicy: no-downgrade
 # The only dependency permitted to run its install script.
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  # Renovate security update: happy-dom@21.0.4
+  - happy-dom@21.0.4
