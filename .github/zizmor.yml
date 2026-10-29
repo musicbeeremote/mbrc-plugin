@@ -1,0 +1,4 @@
+rules:
+  # `./` local references are the documented form; `$/` buys nothing here.
+  self-repository:
+    disable: true

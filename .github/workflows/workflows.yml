@@ -1,0 +1,57 @@
+name: workflows
+
+# Lints the GitHub Actions themselves: actionlint for correctness (expressions,
+# shell, job wiring), zizmor for security (injection, credential persistence,
+# over-broad permissions, unpinned actions).
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # renovate: datasource=pypi depName=zizmor
+      ZIZMOR_VERSION: 1.31.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Annotations instead of SARIF upload, so the job needs no
+      # `security-events: write` and fails the PR on a finding.
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: ${{ env.ZIZMOR_VERSION }}
+          advanced-security: false
+          annotations: true
+          online-audits: false
