@@ -427,6 +427,12 @@ impl Providers for FixtureProviders {
     fn excluded_paths(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    fn media_paths(
+        &self,
+        _source: mbrc_core::ffi::types::LibrarySource,
+    ) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(vec![track()])
     }

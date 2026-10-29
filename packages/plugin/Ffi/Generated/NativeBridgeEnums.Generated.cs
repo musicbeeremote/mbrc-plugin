@@ -54,6 +54,7 @@ namespace MusicBeePlugin.Ffi.Generated
         FileDeleted = 12,
         ShuffleChanged = 13,
         RepeatChanged = 14,
+        InboxChanged = 15,
     }
 
     public enum QueryType
@@ -112,6 +113,7 @@ namespace MusicBeePlugin.Ffi.Generated
         NowPlayingTags = 52,
         NowPlayingTagWrite = 53,
         LibraryExcludedPaths = 54,
+        MediaPaths = 55,
     }
 
     public enum CommandType

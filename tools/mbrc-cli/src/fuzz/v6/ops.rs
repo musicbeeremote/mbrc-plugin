@@ -69,6 +69,7 @@ const OFFSET: Field = opt("offset", Kind::Offset);
 const LIMIT: Field = opt("limit", Kind::Limit);
 const ORDER: Field = opt("order", Kind::Choice(&["asc", "desc"]));
 const QUERY: Field = opt("query", Kind::From(Pool::Query));
+const MEDIA_SOURCE: Field = req("source", Kind::Choice(&["audiobooks", "videos", "inbox"]));
 const TRACK_SORTS: &[&str] = &[
     "title",
     "artist",
@@ -235,6 +236,38 @@ pub const SPECS: &[OpSpec] = &[
     OpSpec {
         op: "podcast_episode",
         fields: &[req("id", Kind::Episode)],
+    },
+    OpSpec {
+        op: "media_sources",
+        fields: &[],
+    },
+    OpSpec {
+        op: "media_albums",
+        fields: &[
+            MEDIA_SOURCE,
+            OFFSET,
+            LIMIT,
+            opt("artist", Kind::From(Pool::Artist)),
+            QUERY,
+            opt(
+                "sort",
+                Kind::Choice(&["name", "artist", "year", "original_year"]),
+            ),
+            ORDER,
+        ],
+    },
+    OpSpec {
+        op: "media_tracks",
+        fields: &[
+            MEDIA_SOURCE,
+            OFFSET,
+            LIMIT,
+            QUERY,
+            opt("sort", Kind::Choice(TRACK_SORTS)),
+            ORDER,
+            opt("artist", Kind::From(Pool::Artist)),
+            opt("album", Kind::Album),
+        ],
     },
 ];
 

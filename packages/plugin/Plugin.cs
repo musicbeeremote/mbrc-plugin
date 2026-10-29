@@ -122,9 +122,11 @@ namespace MusicBeePlugin
                 _about.MinApiRevision = MinApiRevision;
                 // PlayerEvents drives the now-playing broadcasts; TagEvents
                 // delivers the library changes the Scanner reacts to, so a tag or
-                // artwork edit refreshes the caches without a restart.
+                // artwork edit refreshes the caches without a restart. DownloadEvents
+                // brings the Inbox adds the media domain re-lists on.
                 _about.ReceiveNotifications =
-                    ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents;
+                    ReceiveNotificationFlags.PlayerEvents | ReceiveNotificationFlags.TagEvents
+                    | ReceiveNotificationFlags.DownloadEvents;
                 // Non-zero height tells MusicBee this plugin has a preferences panel;
                 // MusicBee then calls Configure(panelHandle) to populate it. The panel
                 // now holds only a Configure button, so it needs little room.
@@ -583,6 +585,10 @@ namespace MusicBeePlugin
                     break;
                 case NotificationType.LibrarySwitched:
                     coreType = FfiGen.NotificationType.LibrarySwitched;
+                    break;
+                case NotificationType.FileAddedToInbox:
+                case NotificationType.FileRemovedFromInbox:
+                    coreType = FfiGen.NotificationType.InboxChanged;
                     break;
                 case NotificationType.StopAfterCurrentChanged:
                     coreType = FfiGen.NotificationType.StopAfterCurrentChanged;

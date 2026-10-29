@@ -822,6 +822,20 @@ impl CoverStore {
         dropped
     }
 
+    /// Drops the item covers under `prefix` that `kept` does not name, for
+    /// items that went away. Their files go with the next orphan prune.
+    pub fn retain_items(&self, prefix: &str, kept: &std::collections::HashSet<String>) {
+        let stale: Vec<String> = self
+            .items
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .filter(|key| key.starts_with(prefix) && !kept.contains(*key))
+            .cloned()
+            .collect();
+        self.remove_items(&stale);
+    }
+
     /// Removes these item covers from memory and from redb.
     fn remove_items(&self, keys: &[String]) {
         let mut items = self.items.write().unwrap_or_else(|e| e.into_inner());

@@ -17,7 +17,7 @@
 //! Nothing runs on a timer. Every pass is blocking MusicBee FFI on a blocking
 //! worker, under the reconcile single-flight guard.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -56,6 +56,8 @@ pub struct Reported {
     pub tagged: BTreeSet<String>,
     /// Files whose rating changed, which moves nothing in the browse order.
     pub rated: BTreeSet<String>,
+    /// Files added to or removed from the library, of any category.
+    pub moved: BTreeSet<String>,
 }
 
 impl Reported {
@@ -66,8 +68,12 @@ impl Reported {
 
 impl LibraryEvents {
     /// A file was added to or removed from the library.
-    pub fn membership_changed(&self) {
-        self.lock().relist = true;
+    pub fn membership_changed(&self, path: Option<&str>) {
+        let mut queued = self.lock();
+        queued.relist = true;
+        if let Some(path) = path {
+            queued.moved.insert(path.to_string());
+        }
     }
 
     /// A file's tags changed. Without a path, only the re-list can say what moved.
@@ -103,6 +109,7 @@ impl LibraryEvents {
         queued.unnamed_edit |= batch.unnamed_edit;
         queued.tagged.extend(batch.tagged);
         queued.rated.extend(batch.rated);
+        queued.moved.extend(batch.moved);
     }
 
     fn lock(&self) -> MutexGuard<'_, Reported> {
@@ -234,6 +241,10 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
         .emit_event(HostEventType::CacheStatusChanged, &[]);
 
     let cache = &core.metadata_cache;
+    let split = cache
+        .media()
+        .holds_listings()
+        .then(|| MediaSplit::before_pass(cache, &reported));
     let tagged: Vec<String> = reported.tagged.into_iter().collect();
     let relist = reported.relist || !tagged.is_empty();
     let mut edited = tagged.clone();
@@ -251,6 +262,9 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
     let library_tagged = cache.in_library(&tagged);
     super::commands_v6::tags::refresh_rows(core.providers.as_ref(), Some(cache), &library_tagged);
     announce_playing_edit(core, &tagged);
+    if let Some(split) = split {
+        cache.media().files_changed(&split.outside(cache));
+    }
 
     if backfill_tags(core) {
         core.tag_backfill.notify_one();
@@ -264,6 +278,55 @@ pub(crate) fn apply_reported_now(core: &Arc<Core>) {
     drop(reconcile);
     core.providers
         .emit_event(HostEventType::CacheStatusChanged, &[]);
+}
+
+/// The reported files that belong to the media categories (#145), told apart
+/// by the music index as it stood before the pass.
+///
+/// The music pass still sees every file: a tag edit is how a file can enter
+/// the music library, and one it does not hold is never filed. Until the
+/// library is first listed nothing can be told apart, so every file also goes
+/// to the media categories, where a miss costs one re-list. Taken only once
+/// some category is listed: before that no client holds media to refresh.
+struct MediaSplit {
+    validated: bool,
+    /// Edits to files the music library did not hold.
+    edited: Vec<String>,
+    /// Adds and removals the music library did not hold before the pass.
+    moved: Vec<String>,
+}
+
+impl MediaSplit {
+    fn before_pass(cache: &crate::metadata_cache::MetadataCache, reported: &Reported) -> Self {
+        let edited = reported.tagged.iter().chain(&reported.rated);
+        let validated = cache.is_validated();
+        if !validated {
+            return Self {
+                validated,
+                edited: edited.cloned().collect(),
+                moved: reported.moved.iter().cloned().collect(),
+            };
+        }
+        let named: Vec<String> = edited.clone().chain(&reported.moved).cloned().collect();
+        let in_music: HashSet<String> = cache.in_library(&named).into_iter().collect();
+        let outside = |p: &&String| !in_music.contains(*p);
+        Self {
+            validated,
+            edited: edited.filter(outside).cloned().collect(),
+            moved: reported.moved.iter().filter(outside).cloned().collect(),
+        }
+    }
+
+    /// The files for the media categories, leaving out adds the pass just
+    /// filed in the music library.
+    fn outside(mut self, cache: &crate::metadata_cache::MetadataCache) -> Vec<String> {
+        if self.validated {
+            let in_music: HashSet<String> = cache.in_library(&self.moved).into_iter().collect();
+            self.moved.retain(|p| !in_music.contains(p));
+        }
+        self.edited.extend(self.moved);
+        self.edited
+    }
 }
 
 /// Re-reads the playing track and tells V6 clients, when it is among `tagged`.
@@ -300,7 +363,6 @@ async fn backfill_burst(core: &Arc<Core>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
 
     #[test]
     fn reports_collapse_per_file_and_only_an_unnamed_tag_edit_asks_for_a_relist() {
@@ -323,14 +385,7 @@ mod tests {
     }
 
     fn core_with(m: Arc<crate::providers::MockProviders>, name: &str) -> Arc<Core> {
-        let dir = std::env::temp_dir().join(format!("mbrc-scanner-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let config = Config {
-            storage_path: dir.to_string_lossy().into_owned(),
-            ..Config::for_test(0)
-        };
-        let core = Arc::new(Core::new(m, config));
+        let core = crate::state::test_core(m, &format!("scanner-{name}"));
         core.metadata_cache.reconcile(&[], 1);
         let library = vec!["/a.mp3".to_string(), "/b.mp3".to_string()];
         core.metadata_cache.replace_track_index(&library);
@@ -380,6 +435,98 @@ mod tests {
             0,
             "another file's edit is not the playing track's"
         );
+    }
+
+    /// Lists the audiobooks (empty) as a client reading them would.
+    fn list_media(core: &Core) {
+        core.metadata_cache
+            .media()
+            .paths(
+                core.providers.as_ref(),
+                crate::media::MediaSource::Audiobooks,
+            )
+            .unwrap();
+    }
+
+    /// An audiobook, video or inbox file is not the music library's: its edit
+    /// goes to the media listings, files nothing in the music library, and is
+    /// still announced when it is the playing track.
+    #[test]
+    fn an_edit_outside_the_music_library_goes_to_media_and_is_still_announced() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_info: crate::protocol::messages::TrackInfo {
+                path: "/books/dune.mp3".into(),
+                ..Default::default()
+            },
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m.clone(), "media-edit");
+        list_media(&core);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events.tags_changed(Some("/books/dune.mp3"));
+        apply_reported_now(&core);
+
+        let frames: Vec<String> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert!(
+            frames
+                .iter()
+                .any(|f| f.contains("now_playing_tags_changed")),
+            "{frames:?}"
+        );
+        assert!(
+            !frames.iter().any(|f| f.contains("library_changed")),
+            "{frames:?}"
+        );
+        assert!(!core.metadata_cache.media().take_pending().relist.is_empty());
+    }
+
+    /// A file added to the music library is the music library's; one that is
+    /// in it neither before nor after the pass belongs to a media category.
+    #[test]
+    fn only_adds_and_removals_outside_the_music_library_reach_media() {
+        let m = Arc::new(crate::providers::MockProviders {
+            track_paths: vec!["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()],
+            ..Default::default()
+        });
+        let core = core_with(m, "media-moved");
+        list_media(&core);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        core.v6_broadcaster.register(1, tx);
+
+        core.library_events.membership_changed(Some("/c.mp3"));
+        apply_reported_now(&core);
+        assert_eq!(
+            core.metadata_cache.media().take_pending(),
+            crate::media::Pending::default()
+        );
+        assert_eq!(
+            crate::state::drain_events(&mut rx, "library_changed").len(),
+            1
+        );
+
+        core.library_events
+            .membership_changed(Some("/books/gone.mp3"));
+        apply_reported_now(&core);
+        assert!(!core.metadata_cache.media().take_pending().relist.is_empty());
+    }
+
+    /// Before the music library is listed nothing tells the two apart, so an
+    /// edit reaches media too rather than neither.
+    #[test]
+    fn before_the_first_listing_an_edit_reaches_media_too() {
+        let core = crate::state::test_core(
+            Arc::new(crate::providers::MockProviders::default()),
+            "scanner-unlisted",
+        );
+
+        core.library_events.tags_changed(Some("/books/dune.mp3"));
+        let reported = core.library_events.take();
+        let split = MediaSplit::before_pass(&core.metadata_cache, &reported);
+
+        assert_eq!(split.outside(&core.metadata_cache), ["/books/dune.mp3"]);
     }
 
     #[test]
@@ -432,7 +579,7 @@ mod tests {
         });
         let core = core_with(m.clone(), "add");
 
-        core.library_events.membership_changed();
+        core.library_events.membership_changed(None);
         apply_reported_now(&core);
 
         assert!(m.recorded().iter().any(|c| c == "track_paths"));
@@ -521,7 +668,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         core.v6_broadcaster.register(1, tx);
 
-        core.library_events.membership_changed();
+        core.library_events.membership_changed(None);
         apply_reported_now(&core);
 
         assert!(m.recorded().iter().any(|c| c == "track_paths"));
@@ -572,7 +719,7 @@ mod tests {
         let events = LibraryEvents::default();
         events.rating_changed(Some("/a.mp3"));
         let batch = events.take();
-        events.membership_changed();
+        events.membership_changed(None);
         events.put_back(batch);
         let merged = events.take();
         assert!(merged.relist);

@@ -665,6 +665,13 @@ namespace MusicBeePlugin.Providers
             return result;
         }
 
+        public List<string> GetSourcePaths(LibrarySource source)
+        {
+            return _api.Library_QueryFilesEx(XmlFilterHelper.AllOf(source), out var files) && files != null
+                ? files.ToList()
+                : new List<string>();
+        }
+
         /// <summary>
         ///     Every track path in the library, in the same browse order as
         ///     BrowseTracks. The order is the contract, not a side effect: the

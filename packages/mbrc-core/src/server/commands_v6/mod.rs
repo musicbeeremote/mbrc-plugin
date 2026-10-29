@@ -8,6 +8,7 @@
 
 pub mod library;
 pub mod library_sync;
+pub mod media;
 pub mod nowplaying;
 pub mod nowplaying_list;
 pub mod player;
@@ -47,6 +48,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "now_playing_list_changed",
     "cover_cache_changed",
     "library_changed",
+    "media_changed",
     "server_shutdown",
     crate::server::permissions::gate::PERMISSIONS_CHANGED,
 ];
@@ -66,6 +68,7 @@ pub fn capabilities() -> Value {
         .chain(nowplaying::OPS)
         .chain(nowplaying_list::OPS)
         .chain(podcast::OPS)
+        .chain(media::OPS)
         .chain(tags::OPS)
         .copied()
         .collect();
@@ -122,6 +125,7 @@ pub fn dispatch(
         .or_else(|| playlist::dispatch(op, data, providers, metadata_cache, cover_store))
         .or_else(|| nowplaying::dispatch(op, data, providers, now_playing, cover_store))
         .or_else(|| podcast::dispatch(op, data, providers, cover_store))
+        .or_else(|| media::dispatch(op, data, providers, cover_store, metadata_cache))
         .or_else(|| tags::dispatch(op, data, providers, metadata_cache))
         .or_else(|| {
             nowplaying_list::dispatch(

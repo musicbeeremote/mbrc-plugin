@@ -46,6 +46,7 @@ pub fn on_notification(core: &Core, ntype: NotificationType) -> (Vec<String>, Ve
         | NotificationType::TagsChanged
         | NotificationType::RatingChanged
         | NotificationType::FileDeleted
+        | NotificationType::InboxChanged
         | NotificationType::LibrarySwitched => {}
     }
 
@@ -135,6 +136,7 @@ fn build(ntype: NotificationType, snap: &NowPlaying, position: Option<Value>) ->
         | NotificationType::TagsChanged
         | NotificationType::RatingChanged
         | NotificationType::FileDeleted
+        | NotificationType::InboxChanged
         | NotificationType::LibrarySwitched
         | NotificationType::StopAfterCurrentChanged
         | NotificationType::ShuffleChanged

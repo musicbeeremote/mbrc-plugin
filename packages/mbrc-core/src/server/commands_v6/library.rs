@@ -33,7 +33,9 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
     AlbumYears, CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
 };
-use crate::protocol::messages::{AlbumData, ArtistData, GenreData, Page, Track, TrackTags};
+use crate::protocol::messages::{
+    AlbumData, ArtistData, GenreData, Page, QueueType, Track, TrackTags,
+};
 use crate::providers::Providers;
 use crate::server::commands::library::{KEY_BROWSE_ALBUMS, KEY_BROWSE_GENRES, key_browse_artists};
 
@@ -145,9 +147,8 @@ fn albums(
     };
 
     // Derived from the tracks' own tags, since the album lookup carries no year.
-    // Zero means undated, which sorts before every real year.
     let years = cache.map(MetadataCache::album_years).unwrap_or_default();
-    let mut all: Vec<(AlbumData, AlbumYears)> = all
+    let all: Vec<(AlbumData, AlbumYears)> = all
         .into_iter()
         .map(|al| {
             let dated = years
@@ -158,8 +159,23 @@ fn albums(
         })
         .collect();
 
-    // The artist is shown beside the album, so it is part of what a search of
-    // this level searches, and of what makes a hit a good one.
+    albums_page(data, offset, limit, all, |al| {
+        track::album_cover_hash(store, &al.artist, &al.album)
+    })
+}
+
+/// Searches, sorts and pages a list of albums, each with its years.
+///
+/// The artist is shown beside the album, so it is part of what a search of
+/// this level searches, and of what makes a hit a good one. Zero years mean
+/// undated, which sorts before every real year.
+pub(super) fn albums_page(
+    data: &Value,
+    offset: i64,
+    limit: i64,
+    mut all: Vec<(AlbumData, AlbumYears)>,
+    cover: impl Fn(&AlbumData) -> Option<String>,
+) -> OpResult {
     let needle = needle(data)?;
     if let Some(n) = &needle {
         all.retain(|(al, _)| contains(&al.album, n) || contains(&al.artist, n));
@@ -194,7 +210,7 @@ fn albums(
         .into_iter()
         .map(|(al, dated)| {
             let mut obj = json!({ "album": al.album, "artist": al.artist, "count": al.count });
-            if let Some(hash) = track::album_cover_hash(store, &al.artist, &al.album) {
+            if let Some(hash) = cover(&al) {
                 obj["cover_hash"] = json!(hash);
             }
             if dated.year > 0 {
@@ -427,8 +443,7 @@ fn radio(data: &Value, p: &dyn Providers) -> OpResult {
 /// With no `mode` a scope goes to the end of the queue: a whole artist should
 /// not cut in front of what is already waiting unless that was asked for.
 fn queue(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
-    let mode = super::nowplaying_list::parse_queue_type(opt_str(data, "mode")?.unwrap_or("last"))?;
-    let play = opt_str(data, "play")?.unwrap_or("");
+    let request = QueueRequest::parse(data)?;
     let mut paths = scope_paths(data, p, cache)?;
     if !paths.is_empty() {
         let excluded: HashSet<String> = p
@@ -441,14 +456,42 @@ fn queue(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpRe
             .collect();
         paths.retain(|path| !excluded.contains(path));
     }
-    if opt_bool(data, "shuffle")?.unwrap_or(false) {
-        shuffle(&mut paths);
+    request.queue(p, paths)
+}
+
+/// How a scope op asks for its tracks to be queued: `mode` (default `last`),
+/// `play` and `shuffle`.
+///
+/// Read before the scope is resolved, so a request the op would refuse costs
+/// no listing of the library.
+pub(super) struct QueueRequest<'d> {
+    mode: QueueType,
+    play: &'d str,
+    shuffle: bool,
+}
+
+impl<'d> QueueRequest<'d> {
+    pub(super) fn parse(data: &'d Value) -> Result<Self, V6Error> {
+        Ok(Self {
+            mode: super::nowplaying_list::parse_queue_type(
+                opt_str(data, "mode")?.unwrap_or("last"),
+            )?,
+            play: opt_str(data, "play")?.unwrap_or(""),
+            shuffle: opt_bool(data, "shuffle")?.unwrap_or(false),
+        })
     }
-    let count = paths.len();
-    if count > 0 {
-        p.queue(mode, paths, play).map_err(internal)?;
+
+    /// Queues `paths`, replying the number queued.
+    pub(super) fn queue(&self, p: &dyn Providers, mut paths: Vec<String>) -> OpResult {
+        if self.shuffle {
+            shuffle(&mut paths);
+        }
+        let count = paths.len();
+        if count > 0 {
+            p.queue(self.mode, paths, self.play).map_err(internal)?;
+        }
+        Ok(json!({ "count": count }))
     }
-    Ok(json!({ "count": count }))
 }
 
 /// Shuffles the selection in place, Fisher-Yates.
@@ -677,7 +720,7 @@ fn sorted_ready(cache: &MetadataCache, sort: Option<SortField>) -> bool {
 }
 
 /// The `sort` parameter, or nothing when the caller did not ask for an order.
-fn sort_field(data: &Value) -> Result<Option<SortField>, V6Error> {
+pub(super) fn sort_field(data: &Value) -> Result<Option<SortField>, V6Error> {
     let Some(raw) = opt_str(data, "sort")? else {
         return Ok(None);
     };
@@ -691,7 +734,7 @@ fn sort_field(data: &Value) -> Result<Option<SortField>, V6Error> {
 }
 
 /// Whether `order` asks for descending. Absent is ascending.
-fn descending(data: &Value) -> Result<bool, V6Error> {
+pub(super) fn descending(data: &Value) -> Result<bool, V6Error> {
     match opt_str(data, "order")? {
         None | Some("asc") => Ok(false),
         Some("desc") => Ok(true),
@@ -708,14 +751,14 @@ fn descending(data: &Value) -> Result<bool, V6Error> {
 /// The `query` parameter, lowercased once for the whole op. A blank query is
 /// no query: a search box that has been typed into and cleared must not read as
 /// a filter that matches nothing.
-fn needle(data: &Value) -> Result<Option<String>, V6Error> {
+pub(super) fn needle(data: &Value) -> Result<Option<String>, V6Error> {
     Ok(opt_str(data, "query")?
         .map(|q| q.trim().to_lowercase())
         .filter(|q| !q.is_empty()))
 }
 
 /// Case-insensitive substring test against an already-lowercased needle.
-fn contains(haystack: &str, needle: &str) -> bool {
+pub(super) fn contains(haystack: &str, needle: &str) -> bool {
     haystack.to_lowercase().contains(needle)
 }
 
@@ -726,7 +769,7 @@ fn rank_by_relevance<T>(all: &mut [T], needle: &str, name: impl Fn(&T) -> &str +
 }
 
 /// Slice a full list to `[offset, offset+limit)` (`limit <= 0` = to the end).
-fn slice<T>(all: Vec<T>, offset: i64, limit: i64) -> Vec<T> {
+pub(super) fn slice<T>(all: Vec<T>, offset: i64, limit: i64) -> Vec<T> {
     let start = (offset.max(0) as usize).min(all.len());
     let take = if limit > 0 { limit as usize } else { all.len() };
     all.into_iter().skip(start).take(take).collect()

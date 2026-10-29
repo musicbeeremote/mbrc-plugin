@@ -24,7 +24,7 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
             placement(data, "next"),
             data.get("paths").and_then(Value::as_array).map(Vec::len),
         ),
-        "library_queue" => Action::queue(placement(data, "last"), None),
+        "library_queue" | "media_queue" => Action::queue(placement(data, "last"), None),
         "podcast_episode_play" => Action::queue(placement(data, "now"), Some(1)),
         "library_play_all" | "playlist_play" => change(QueueReplace),
         "now_playing_list_remove" | "now_playing_list_move" | "now_playing_list_clear" => {
@@ -70,6 +70,9 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "podcast_subscription"
         | "podcast_episodes"
         | "podcast_episode"
+        | "media_sources"
+        | "media_albums"
+        | "media_tracks"
         | "tag_fields"
         | "tag_values"
         | "now_playing_tags" => Action::Read,
@@ -180,6 +183,10 @@ mod tests {
         assert!(!guest(
             "library_queue",
             json!({ "album": "x", "mode": "last" })
+        ));
+        assert!(!guest(
+            "media_queue",
+            json!({ "source": "audiobooks", "album": "x", "mode": "last" })
         ));
         assert!(!guest(
             "podcast_episode_play",

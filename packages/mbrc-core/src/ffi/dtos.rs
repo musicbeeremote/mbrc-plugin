@@ -101,6 +101,12 @@ pub struct QueryParams {
     pub query: String,
 }
 
+/// `MediaPaths`: the category to list, as its `LibrarySource` flag.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SourceParams {
+    pub source: i32,
+}
+
 /// Paginated-browse payload. `album_artists` is only consulted by
 /// `LibraryBrowseArtists`; the other browse variants ignore it.
 #[derive(Debug, Serialize, Deserialize)]

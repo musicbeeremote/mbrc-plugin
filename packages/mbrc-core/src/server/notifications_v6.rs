@@ -75,6 +75,7 @@ pub fn build(ntype: NotificationType, snap: &NowPlaying) -> Vec<String> {
         | NotificationType::TagsChanged
         | NotificationType::RatingChanged
         | NotificationType::FileDeleted
+        | NotificationType::InboxChanged
         | NotificationType::LibrarySwitched
         | NotificationType::StopAfterCurrentChanged
         | NotificationType::ShuffleChanged

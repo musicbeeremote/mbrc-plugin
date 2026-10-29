@@ -136,10 +136,15 @@ impl<'a> Covers<'a> {
     /// An albumless track's own cover. A file the core cannot see the modified
     /// time of, such as a stream, has none.
     fn own(&self, src: &str) -> Option<String> {
+        self.item(&track_cover_key(src), src)
+    }
+
+    /// The cover kept under `key`, read from `src`'s artwork the first time and
+    /// again whenever that file changes.
+    pub(crate) fn item(&self, key: &str, src: &str) -> Option<String> {
         let store = self.store?;
         let modified = modified_secs(src)?;
-        let key = track_cover_key(src);
-        if let Some(cover) = store.item_cover(&key).filter(|c| c.is_current(modified)) {
+        if let Some(cover) = store.item_cover(key).filter(|c| c.is_current(modified)) {
             return cover.hash;
         }
         if Instant::now() >= self.deadline {
@@ -151,7 +156,7 @@ impl<'a> Covers<'a> {
             Artwork::Unavailable => return None,
         };
         store
-            .cache_item_cover(&key, raw.as_deref(), modified)
+            .cache_item_cover(key, raw.as_deref(), modified)
             .unwrap_or_else(|error| {
                 tracing::debug!(src, %error, "track cover: store failed");
                 None
@@ -160,7 +165,7 @@ impl<'a> Covers<'a> {
 }
 
 /// The artist half of the album key: the album artist, else the artist.
-fn album_key_artist<'t>(album_artist: &'t str, artist: &'t str) -> &'t str {
+pub(crate) fn album_key_artist<'t>(album_artist: &'t str, artist: &'t str) -> &'t str {
     if album_artist.is_empty() {
         artist
     } else {

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using MusicBeePlugin.Models;
 using MusicBeePlugin.Ffi;
+using MusicBeePlugin.Ffi.Generated;
 
 namespace MusicBeePlugin.Providers
 {
@@ -133,6 +134,9 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         /// <returns>All track paths, in browse order.</returns>
         List<string> GetAllTrackPaths();
+
+        /// <summary>Every file of one non-music category, empty when MusicBee lists none.</summary>
+        List<string> GetSourcePaths(LibrarySource source);
 
         /// <summary>
         ///     The music library tracks MusicBee's filtered queries leave out, which

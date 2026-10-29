@@ -179,6 +179,14 @@ pub struct AlbumYears {
 }
 
 impl AlbumYears {
+    /// Takes one track's years in. Each stays the earliest non-zero one seen,
+    /// because a reissued track stamped with the reissue year should not
+    /// redate the record.
+    pub fn absorb(&mut self, year: i32, original_year: i32) {
+        earliest(&mut self.year, year);
+        earliest(&mut self.original_year, original_year);
+    }
+
     /// The original year, else the year, as [`CachedTags::release_year`].
     pub fn release_year(&self) -> i32 {
         if self.original_year > 0 {
@@ -186,6 +194,12 @@ impl AlbumYears {
         } else {
             self.year
         }
+    }
+}
+
+fn earliest(kept: &mut i32, seen: i32) {
+    if seen > 0 && (*kept == 0 || seen < *kept) {
+        *kept = seen;
     }
 }
 
@@ -229,7 +243,7 @@ pub(crate) fn parse_year(raw: &str) -> Option<i64> {
 }
 
 /// [`parse_year`] as the cache stores it: zero when the tag says nothing.
-fn year_or_zero(raw: &str) -> i32 {
+pub(crate) fn year_or_zero(raw: &str) -> i32 {
     parse_year(raw).map_or(0, |y| y as i32)
 }
 
@@ -417,6 +431,11 @@ pub fn relevance(name: &str, needle: &str) -> u8 {
 }
 
 impl TrackFilter<'_> {
+    /// Whether a track whose tags are in hand passes the filter.
+    pub(crate) fn admits_tags(&self, track: &CachedTags) -> bool {
+        self.admits(Some(track), &track.src)
+    }
+
     /// The best answer a track gives to the search, over the fields it matched.
     fn relevance_of(&self, track: Option<&CachedTags>, path: &str) -> u8 {
         let Some(needle) = self.query else { return 0 };
@@ -524,6 +543,8 @@ pub struct MetadataCache {
     /// Moved by every drop of the nav lists, so a drill-down fetched across
     /// one is not kept.
     nav_generation: AtomicU64,
+    /// The non-music categories, held in memory only and never written here.
+    media: crate::media::MediaLibrary,
 }
 
 impl MetadataCache {
@@ -537,7 +558,13 @@ impl MetadataCache {
             tag_rows_read: Mutex::new(()),
             tags_generation: AtomicU64::new(0),
             nav_generation: AtomicU64::new(0),
+            media: crate::media::MediaLibrary::default(),
         }
+    }
+
+    /// The non-music categories' listings.
+    pub fn media(&self) -> &crate::media::MediaLibrary {
+        &self.media
     }
 
     /// The library change log a syncing client reads.
@@ -1328,25 +1355,19 @@ impl MetadataCache {
         page
     }
 
-    /// Derives each album's years from its own tracks. Returns albums dated.
-    ///
-    /// Each is the earliest non-zero one its tracks carry, because a reissued
-    /// track stamped with the reissue year should not redate the record.
+    /// Derives each album's years from its own tracks, as
+    /// [`AlbumYears::absorb`] folds them. Returns albums dated.
     pub fn rebuild_album_years(&self) -> usize {
-        let earliest = |kept: &mut i32, seen: i32| {
-            if seen > 0 && (*kept == 0 || seen < *kept) {
-                *kept = seen;
-            }
-        };
         let mut years: HashMap<String, AlbumYears> = HashMap::new();
         for tags in self.all_cached_tags() {
             if tags.year <= 0 && tags.original_year <= 0 {
                 continue;
             }
             let key = album_key(&tags.album_artist, &tags.artist, &tags.album);
-            let album = years.entry(key).or_default();
-            earliest(&mut album.year, tags.year);
-            earliest(&mut album.original_year, tags.original_year);
+            years
+                .entry(key)
+                .or_default()
+                .absorb(tags.year, tags.original_year);
         }
         let dated = years.len();
         self.put(KEY_ALBUM_YEARS, &years);

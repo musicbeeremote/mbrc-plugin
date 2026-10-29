@@ -15,10 +15,10 @@ use crate::ffi::dtos::{
     IndexParams, MoveParams, NowPlayingQueueParams, PaginationParams, PathParams, PathTags,
     PathsParams, PlaylistCreateParams, PlaylistFilesParams, PodcastEpisodeParams,
     PodcastEpisodesParams, QueryParams, SetBoolParams, SetIntParams, SetLfmRatingParams,
-    SetRepeatParams, StringValueParams, SyncDeltaParams, TagChangeParams, TagWriteParams,
-    TagWriteResult, TagsForPathsParams,
+    SetRepeatParams, SourceParams, StringValueParams, SyncDeltaParams, TagChangeParams,
+    TagWriteParams, TagWriteResult, TagsForPathsParams,
 };
-use crate::ffi::types::{CommandType, QueryType};
+use crate::ffi::types::{CommandType, LibrarySource, QueryType};
 use crate::protocol::messages::{
     AlbumCover, AlbumCoverItem, AlbumData, AlbumIdentifier, ArtistData, Cover, GenreData,
     LastfmStatus, Lyrics, NowPlayingListTrack, NowPlayingOrder, OutputDevices, Page,
@@ -162,6 +162,8 @@ pub trait Providers: Send + Sync {
     fn track_paths(&self) -> Result<Vec<String>, String>;
     /// The music library tracks MusicBee's filtered queries leave out: banned ones.
     fn excluded_paths(&self) -> Result<Vec<String>, String>;
+    /// Every file of one non-music category, in MusicBee's order.
+    fn media_paths(&self, source: LibrarySource) -> Result<Vec<String>, String>;
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String>;
     /// V6 typed tags per path: the base browse fields plus the raw extended tags
     /// (Year/Duration/Rating/DateAdded) the V6 `track` schema derives its typed
@@ -607,6 +609,14 @@ impl Providers for FfiProviders {
         self.callbacks
             .query_no_params(QueryType::LibraryExcludedPaths)
     }
+    fn media_paths(&self, source: LibrarySource) -> Result<Vec<String>, String> {
+        self.callbacks.query(
+            QueryType::MediaPaths,
+            &SourceParams {
+                source: source as i32,
+            },
+        )
+    }
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String> {
         self.callbacks
             .query(QueryType::LibraryTracksForPaths, &PathsParams { paths })
@@ -972,6 +982,9 @@ impl Providers for NullProviders {
     fn excluded_paths(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    fn media_paths(&self, _source: LibrarySource) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(Vec::new())
     }
@@ -1091,6 +1104,8 @@ pub struct MockProviders {
     pub batch_metadata: Vec<TrackMetadata>,
     pub track_paths: Vec<String>,
     pub excluded_paths: Vec<String>,
+    /// Each category's listing, keyed by its `LibrarySource` flag.
+    pub media_paths: std::sync::Mutex<std::collections::HashMap<i32, Vec<String>>>,
     pub tracks_for_paths: Vec<Track>,
     pub tracks_detailed: Vec<TrackTags>,
     pub sync_delta: SyncDelta,
@@ -1413,6 +1428,16 @@ impl Providers for MockProviders {
     fn excluded_paths(&self) -> Result<Vec<String>, String> {
         self.record("excluded_paths");
         Ok(self.excluded_paths.clone())
+    }
+    fn media_paths(&self, source: LibrarySource) -> Result<Vec<String>, String> {
+        self.record(format!("media_paths({})", source as i32));
+        Ok(self
+            .media_paths
+            .lock()
+            .unwrap()
+            .get(&(source as i32))
+            .cloned()
+            .unwrap_or_default())
     }
     fn tracks_for_paths(&self, paths: Vec<String>) -> Result<Vec<Track>, String> {
         self.record(format!("tracks_for_paths({})", paths.len()));

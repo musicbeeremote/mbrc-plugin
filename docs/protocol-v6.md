@@ -222,9 +222,9 @@ Reads (status, browsing, lists, covers, lyrics) are allowed in every role.
 | Capability | Ops |
 |------------|-----|
 | `playback` | `player_play`, `player_pause`, `player_play_pause`, `player_stop`, `player_next`, `player_previous`, `now_playing_seek`, `now_playing_list_play`, `now_playing_list_search` |
-| `queue_add` | `now_playing_queue`, `library_queue`, `podcast_episode_play` with mode `last` |
-| `queue_insert` | the same three with mode `next` |
-| `queue_replace` | the same three with mode `now` or `add_all`; `library_play_all`, `playlist_play` |
+| `queue_add` | `now_playing_queue`, `library_queue`, `media_queue`, `podcast_episode_play` with mode `last` |
+| `queue_insert` | the same four with mode `next` |
+| `queue_replace` | the same four with mode `now` or `add_all`; `library_play_all`, `playlist_play` |
 | `queue_edit` | `now_playing_list_remove`, `now_playing_list_move`, `now_playing_list_clear` |
 | `volume` | `player_set_volume`, `player_set_mute` |
 | `modes` | `player_set_shuffle`, `player_set_repeat`, `player_set_stop_after_current`, `player_set_scrobbling` |
@@ -233,11 +233,11 @@ Reads (status, browsing, lists, covers, lyrics) are allowed in every role.
 | `output` | `player_set_output` |
 
 A queueing op is judged by its **effective** mode, defaults included: `now_playing_queue`
-defaults to `next`, `library_queue` to `last`, `podcast_episode_play` to `now`. A `mode` the
+defaults to `next`, `library_queue` and `media_queue` to `last`, `podcast_episode_play` to `now`. A `mode` the
 op would reject counts as `queue_replace`. A guest may queue exactly one track to the end:
 `now_playing_queue` with `mode:"last"` and one path, or `podcast_episode_play` with
-`mode:"last"`. `library_queue` names a scope whose size only the server knows, so a guest may
-not use it at all.
+`mode:"last"`. `library_queue` and `media_queue` name a scope whose size only the server
+knows, so a guest may not use either.
 
 A refused op answers `forbidden` (HTTP 403 on HTTP-RPC) with a message naming the capability
 it needed, or the one-track limit:
@@ -742,7 +742,7 @@ gone, and the `version` has moved, so re-read the list.
 
 These ops serve MusicBee's music library only. Files in the Inbox, audiobooks, videos and
 podcasts are never listed, counted or queued here, and an edit to one of them does not raise
-`library_changed`.
+`library_changed`: see [Media](#media) and [Podcast](#podcast).
 
 | Op | Request `data` | Response |
 |----|----------------|----------|
@@ -993,6 +993,67 @@ there. The single-item ops do say `not_found`.
 client re-reads when it wants to be current (#118 §8). The one exception is the playback that
 `podcast_episode_play` causes, which surfaces through the ordinary now-playing events.
 
+### Media
+
+MusicBee's other library categories: Audiobooks, Videos and the Inbox (#145). Each is
+named by a `source`:
+
+```
+media_source : "audiobooks" | "videos" | "inbox"
+```
+
+Every op but `media_sources` requires `source`; an unknown one is `invalid_field`. A file in
+any of them is an ordinary library file, so items are the canonical
+[`track`](#canonical-track) and the same album object `library_albums` returns. A book is an
+`album` (its author the album's `artist`), and a chapter is a `track`.
+
+| Op | Request `data` | Response |
+|----|----------------|----------|
+| `media_sources` | `{}` | `{"items":[{"source":"audiobooks","count":42}, ..]}` |
+| `media_albums` | `{source, offset?, limit?, artist?, query?, sort?, order?}` | page of album |
+| `media_tracks` | `{source, album?, artist?, offset?, limit?, query?, sort?, order?}` | page of `track` |
+| `media_queue` | `{source, album?, artist?, query?, mode?, play?, shuffle?}` | `{"count":N}` |
+
+```json
+{ "id": 7, "kind": "request", "op": "media_albums", "data": { "source": "audiobooks", "offset": 0, "limit": 100 } }
+```
+
+**`media_sources` lists only the sources with files in them**, so a client shows an
+Audiobooks tab only when there are audiobooks. A source is also empty when the user has it
+turned off in MusicBee (video is off by default). `count` is a hint for the UI, not a page
+`total`.
+
+**`media_albums`** groups a source's files by album artist and album, case-insensitively, as
+the music library does. It takes the
+`library_albums` sorts (`name`, `artist`, `year`, `original_year`) and its `query`. Files
+with no album are not albums; `media_tracks` lists them.
+
+**`media_tracks`** narrows a source to an `album`, an `artist` and a `query` exactly as
+[`library_tracks`](#library) narrows the music library: an artist matches the album
+artist, the artist or any credited artist, and `query` searches title and artist. It takes the
+`library_tracks` sorts, including `date_added`, so a client can list Inbox arrivals newest
+first. Without a `sort` it reads in order: album artist, album, then disc and track, so a
+book's chapters come in sequence.
+
+**`media_queue`** queues what `media_tracks` would list for the same filters, in reading
+order, with `mode` (default `last`), `play` and `shuffle` as [`library_queue`](#library)
+takes them. A banned track never reaches it: MusicBee's listing of a category leaves banned
+files out.
+
+`cover_hash` on albums and tracks is resolved for the page being served, from the album's
+first file, in the same store album art uses (`media:` namespace), and fetched with
+`cover_get` like any other cover. A track with no album has its own.
+
+**Served live.** Nothing about these sources is written to the plugin's library cache, and
+[`library_changes`](#library-sync) stays music only. The server keeps each source's last
+listing in memory and announces a change with [`media_changed`](#events). MusicBee does not
+say which category a changed file is in, and announces some changes not at all (a video
+dragged onto Videos sends nothing), so the server re-lists after a library notification for
+a file outside the music library or an Inbox add, after a client calls `media_sources`
+(which answers from the listings as they stand), and every five minutes while a V6 client is
+connected. It re-lists at most once every 30
+seconds; a tag edit to a file it already lists is announced without waiting.
+
 ## Events
 
 Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker
@@ -1015,6 +1076,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list`. Sent once per burst, about 150ms after the first change, so a multi-step edit such as play-now is one event; the list `version` still moves with every step |
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
+| `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 

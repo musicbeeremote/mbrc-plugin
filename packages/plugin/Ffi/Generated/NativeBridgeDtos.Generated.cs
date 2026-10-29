@@ -320,6 +320,11 @@ namespace MusicBeePlugin.Ffi
         public string query { get; set; }
     }
 
+    public class SourceParams
+    {
+        public int source { get; set; }
+    }
+
     public class BrowseParams
     {
         public int offset { get; set; }

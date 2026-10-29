@@ -106,6 +106,8 @@ pub enum NotificationType {
     ShuffleChanged = 13,
     /// The repeat mode changed, from a client or MusicBee's own window.
     RepeatChanged = 14,
+    /// A file was added to or removed from MusicBee's Inbox. Carries the path.
+    InboxChanged = 15,
 }
 
 impl NotificationType {
@@ -127,6 +129,7 @@ impl NotificationType {
             12 => Some(Self::FileDeleted),
             13 => Some(Self::ShuffleChanged),
             14 => Some(Self::RepeatChanged),
+            15 => Some(Self::InboxChanged),
             _ => None,
         }
     }
@@ -244,6 +247,9 @@ pub enum QueryType {
     // Music library tracks MusicBee's filtered queries leave out, which are the
     // banned ones. A scope queue drops them; browsing adds them back.
     LibraryExcludedPaths = 54,
+    // Every file of one non-music category (audiobooks, videos, inbox), as
+    // MusicBee lists it.
+    MediaPaths = 55,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).
@@ -545,10 +551,10 @@ mod tests {
 
     #[test]
     fn notification_type_roundtrips() {
-        for raw in 0..=14 {
+        for raw in 0..=15 {
             assert_eq!(NotificationType::from_i32(raw).map(|n| n as i32), Some(raw));
         }
-        assert_eq!(NotificationType::from_i32(15), None);
+        assert_eq!(NotificationType::from_i32(16), None);
         assert_eq!(NotificationType::from_i32(-1), None);
     }
 

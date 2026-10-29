@@ -795,6 +795,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             // the gap; the reconcile re-fingerprints, re-prewarms, re-validates.
             core.metadata_cache.invalidate();
             core.metadata_cache.forget_library();
+            core.metadata_cache.media().forget();
             broadcast_library_changed(core);
             let reconcile_core = core.clone();
             std::thread::spawn(move || server::reconcile_library(&reconcile_core));
@@ -803,7 +804,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
         // Queued, not applied: the Scanner debounces these, so a big import or
         // a bulk edit collapses to one pass, which then broadcasts.
         NotificationType::FileAddedToLibrary | NotificationType::FileDeleted => {
-            core.library_events.membership_changed();
+            core.library_events.membership_changed(path);
             core.scanner_nudge.notify_one();
             return;
         }
@@ -815,6 +816,12 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
         NotificationType::RatingChanged => {
             core.library_events.rating_changed(path);
             core.scanner_nudge.notify_one();
+            return;
+        }
+        NotificationType::InboxChanged => {
+            core.metadata_cache
+                .media()
+                .request_relist(&[crate::media::MediaSource::Inbox]);
             return;
         }
         NotificationType::NowPlayingListChanged => {
@@ -937,6 +944,30 @@ pub fn stop_networking() -> MbrcResult {
         }
         None => MbrcResult::NotRunning,
     }
+}
+
+/// A core over `providers`, storing under a fresh temp folder named `name`.
+#[cfg(test)]
+pub(crate) fn test_core(providers: Arc<dyn Providers>, name: &str) -> Arc<Core> {
+    let dir = std::env::temp_dir().join(format!("mbrc-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = Config {
+        storage_path: dir.to_string_lossy().into_owned(),
+        ..Config::for_test(0)
+    };
+    Arc::new(Core::new(providers, config))
+}
+
+/// The broadcast frames waiting on `rx` that carry `event`.
+#[cfg(test)]
+pub(crate) fn drain_events(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>,
+    event: &str,
+) -> Vec<String> {
+    std::iter::from_fn(|| rx.try_recv().ok())
+        .filter(|frame| frame.contains(event))
+        .collect()
 }
 
 #[cfg(test)]

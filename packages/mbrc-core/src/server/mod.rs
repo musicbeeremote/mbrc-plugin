@@ -11,6 +11,7 @@ pub mod commands;
 pub mod commands_v6;
 pub mod connection;
 pub mod list_changes;
+pub mod media;
 pub mod monitor;
 pub mod notifications;
 pub mod notifications_v6;
@@ -155,6 +156,7 @@ fn run_thread(
         let monitor = tokio::spawn(monitor::run(core.clone(), shutdown.clone()));
         let scanner = tokio::spawn(scanner::run(core.clone(), shutdown.clone()));
         let list_changes = tokio::spawn(list_changes::run(core.clone(), shutdown.clone()));
+        let media = tokio::spawn(media::run(core.clone(), shutdown.clone()));
         seed_now_playing(&core);
         spawn_library_reconcile(&core);
         spawn_staging_sweep(&core);
@@ -171,6 +173,7 @@ fn run_thread(
         monitor.abort();
         scanner.abort();
         list_changes.abort();
+        media.abort();
     });
 }
 
