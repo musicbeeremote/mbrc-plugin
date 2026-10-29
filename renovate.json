@@ -9,6 +9,7 @@
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
     "minimumReleaseAge": null,
+    "dependencyDashboardApproval": true,
     "addLabels": ["security"]
   },
   "dependencyDashboard": true,
