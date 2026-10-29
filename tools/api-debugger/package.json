@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@12.14.0",
+  "packageManager": "pnpm@12.15.0",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
@@ -22,11 +22,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
-    "@tauri-apps/cli": "2.12.3",
+    "@tauri-apps/cli": "2.12.4",
     "@vitejs/plugin-vue": "6.0.10",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vitest": "5.0.5",
     "vue-tsc": "3.3.13"
   }
