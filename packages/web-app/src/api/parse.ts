@@ -27,6 +27,11 @@ export class OpError extends Error {
   }
 }
 
+/** The text a failure is shown as: the server's message for a refusal, else the error itself. */
+export function reasonOf(error: unknown): string {
+  return error instanceof OpError ? error.message : String(error)
+}
+
 /**
  * A frame that is not JSON is dropped rather than thrown, so one malformed frame
  * cannot take the socket down with it.

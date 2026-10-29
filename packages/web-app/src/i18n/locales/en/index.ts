@@ -7,6 +7,7 @@
 
 import common from './common.json'
 import library from './library.json'
+import media from './media.json'
 import pairing from './pairing.json'
 import player from './player.json'
 import playlists from './playlists.json'
@@ -14,6 +15,6 @@ import podcasts from './podcasts.json'
 import queue from './queue.json'
 import radio from './radio.json'
 
-const en = { common, player, queue, library, playlists, podcasts, radio, pairing }
+const en = { common, player, queue, library, playlists, podcasts, media, radio, pairing }
 
 export default en

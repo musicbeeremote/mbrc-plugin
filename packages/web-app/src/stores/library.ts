@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { client } from '../api/client'
-import { OpError } from '../api/parse'
+import { reasonOf } from '../api/parse'
 import { Op, WireEvent } from '../api/ops'
 import type { LibraryScope, OpRequests } from '../api/ops'
 import type { OpResponses } from '../api/responses'
@@ -23,7 +23,7 @@ interface ViewOptions {
 }
 
 /** How a scope goes into the queue: where, from which track, in what order. */
-interface QueueOptions {
+export interface QueueOptions {
   mode?: QueueMode
   /** The track to start from, for "play all from here". */
   play?: string
@@ -168,7 +168,7 @@ export const useLibraryStore = defineStore('library', () => {
         }
       }
     } catch (error) {
-      failure.value = error instanceof OpError ? error.message : String(error)
+      failure.value = reasonOf(error)
     } finally {
       loading.value = false
     }

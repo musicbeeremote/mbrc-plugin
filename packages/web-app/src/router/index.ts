@@ -15,6 +15,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
 import LibraryView from '../views/LibraryView.vue'
+import MediaView from '../views/MediaView.vue'
 import NowPlayingView from '../views/NowPlayingView.vue'
 import PlaylistsView from '../views/PlaylistsView.vue'
 import PodcastsView from '../views/PodcastsView.vue'
@@ -30,6 +31,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/library/:level?', name: RouteName.Library, component: LibraryView },
   { path: '/lists', name: RouteName.Playlists, component: PlaylistsView },
   { path: '/podcasts', name: RouteName.Podcasts, component: PodcastsView },
+  { path: '/media', name: RouteName.Media, component: MediaView },
   { path: '/radio', name: RouteName.Radio, component: RadioView },
   { path: '/:rest(.*)*', redirect: '/playing' },
 ]

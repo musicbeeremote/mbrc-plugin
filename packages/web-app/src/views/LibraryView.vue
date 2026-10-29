@@ -18,6 +18,7 @@ import type { Track } from '../api/types'
 import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
+import AlbumTile from '../components/AlbumTile.vue'
 import CoverPlaceholder from '../components/CoverPlaceholder.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
@@ -28,6 +29,7 @@ import { albumSummary } from '../composables/albumSummary'
 import { emptyHintKey } from '../composables/emptyHint'
 import { isArtist, isGenre, isTrack } from '../composables/flatRows'
 import type { FlatRow } from '../composables/flatRows'
+import { useGridPaging } from '../composables/useGridPaging'
 import { useLazyRows } from '../composables/useLazyRows'
 import {
   SORT_FIELDS,
@@ -277,20 +279,11 @@ watch(
   () => scrollTo(0),
 )
 
-/**
- * The cover grid's own paging.
- *
- * It is not virtualized - its rows hold several items each, and a screenful of
- * album art is a few dozen elements rather than a few thousand - so it pages on
- * the scrollbar reaching the end rather than on a row index.
- */
-function onGridScroll(event: Event) {
-  const el = event.target as HTMLElement
-  const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
-  if (remaining < el.clientHeight && library.hasMore && !library.loading) {
-    void library.load(true)
-  }
-}
+const onGridScroll = useGridPaging({
+  hasMore: () => library.hasMore,
+  loading: () => library.loading,
+  loadMore: () => library.load(true),
+})
 
 </script>
 
@@ -411,63 +404,17 @@ function onGridScroll(event: Event) {
     >
       <ul class="grid grid-cols-2 gap-x-4 gap-y-5 p-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
         <li v-for="entry in library.albums" :key="`${entry.artist}/${entry.album}`">
-          <button
-            class="block w-full transition-transform active:scale-[0.98]"
-            @click="openAlbum(entry)"
-          >
-            <!-- A blank tile reads as a cover still loading. The placeholder says
-                 the album has none, which is a different and permanent thing. -->
-            <div
-              class="relative flex aspect-square items-center justify-center overflow-hidden rounded-control bg-surface-2 text-outline"
-            >
-              <img
-                v-if="coverUrl(entry.cover_hash)"
-                :src="coverUrl(entry.cover_hash) ?? undefined"
-                alt=""
-                loading="lazy"
-                class="h-full w-full object-cover"
-              />
-              <CoverPlaceholder v-else :name="entry.album || entry.artist" large />
-            </div>
-          </button>
-
-          <!-- The menu button is taller than the two lines of caption beside it,
-               so its padding is pulled back out: left to itself it would set the
-               caption's height and break the grid's vertical rhythm. -->
-          <div class="mt-2 flex items-start gap-1">
-            <button
-              class="min-w-0 flex-1 text-left"
-              @click="openAlbum(entry)"
-            >
-              <span class="block truncate text-sm/tight">
-                {{ entry.album || $t('common.unknown.album') }}
-              </span>
-              <span class="mt-0.5 flex items-baseline gap-1.5 text-2xs/tight text-outline">
-                <!-- The artist takes the whole line so the year is pushed to the
-                     tile's edge, where it reads as a column down the grid rather
-                     than as a word trailing each name at its own length. -->
-                <span class="min-w-0 flex-1 truncate">
-                  {{ entry.artist || $t('common.unknown.artist') }}
-                </span>
-                <!-- Derived from the album's tracks, so an album whose tags
-                     carry no year simply has none to show. -->
-                <span
-                  v-if="albumYear(entry, activeSort)"
-                  class="shrink-0 tabular-nums opacity-70"
-                >
-                  {{ albumYear(entry, activeSort) }}
-                </span>
-              </span>
-            </button>
-            <QueueMenu
-              class="-mt-1.5 -mr-2"
-              :label="$t('library.action.more', { title: entry.album })"
-              playlist
-              :tracks="wholeScope"
-              @select="(mode) => queueScope(albumScope(entry), mode)"
-              @playlist="picker.show({ ...library.scope, ...albumScope(entry) })"
-            />
-          </div>
+          <!-- The year is derived from the album's tracks, so an album whose
+               tags carry no year simply has none to show. -->
+          <AlbumTile
+            :entry="entry"
+            :label="$t('library.action.more', { title: entry.album })"
+            playlist
+            :detail="albumYear(entry, activeSort)"
+            @open="openAlbum(entry)"
+            @select="(mode) => queueScope(albumScope(entry), mode)"
+            @playlist="picker.show({ ...library.scope, ...albumScope(entry) })"
+          />
         </li>
       </ul>
     </div>

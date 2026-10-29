@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import IconPlaylists from '~icons/lucide/list'
 import IconPlus from '~icons/lucide/plus'
 
-import { OpError } from '../api/parse'
+import { reasonOf } from '../api/parse'
 import { playlistLabel, playlistSegments } from '../composables/playlistFolders'
 import { playlistTracksRoute } from '../router/locations'
 import { useLibraryStore } from '../stores/library'
@@ -74,7 +74,7 @@ async function run(action: () => Promise<void>) {
   try {
     await action()
   } catch (error) {
-    failure.value = error instanceof OpError ? error.message : String(error)
+    failure.value = reasonOf(error)
   } finally {
     busy.value = false
   }

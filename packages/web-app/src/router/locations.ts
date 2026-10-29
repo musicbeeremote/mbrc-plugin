@@ -7,6 +7,8 @@
 
 import type { RouteLocationRaw } from 'vue-router'
 
+import { isMediaSource } from '../api/browse'
+import type { MediaSource } from '../api/browse'
 import type { LibraryScope } from '../api/ops'
 import type { QueryField } from '../api/types'
 import type { LibraryLevel, Position } from '../composables/libraryLevels'
@@ -18,6 +20,7 @@ export const RouteName = {
   Library: 'library',
   Playlists: 'playlists',
   Podcasts: 'podcasts',
+  Media: 'media',
   Radio: 'radio',
 } as const
 export type RouteName = (typeof RouteName)[keyof typeof RouteName]
@@ -122,6 +125,11 @@ export function wideRedirect(wide: boolean, name: unknown): string | null {
   return wide && name === RouteName.Playing ? '/library' : null
 }
 
+/** Where the media pane goes while media is turned off, or null to stay. */
+export function mediaRedirect(showMedia: boolean, name: unknown): string | null {
+  return !showMedia && name === RouteName.Media ? '/library' : null
+}
+
 /**
  * The address of one playlist's contents.
  *
@@ -155,6 +163,47 @@ export function podcastsRoute(id?: string): RouteLocationRaw {
 /** The subscription a podcasts URL has open, or nothing when it names none. */
 export function openPodcastFromRoute(query: Record<string, unknown>): string | undefined {
   return one(query.show)
+}
+
+/**
+ * Where the media pane is: a category, and inside it a book or every file.
+ *
+ * `all` lists the category's files whatever their album, which is the only way
+ * to reach a file with no album: the book grid has no tile for it.
+ */
+export interface MediaPlace {
+  source?: MediaSource
+  album?: string
+  artist?: string
+  all?: boolean
+}
+
+/** The address of a media place, with anything unset left out of the URL. */
+export function mediaRoute({ source, album, artist, all = false }: MediaPlace = {}): RouteLocationRaw {
+  const query: Record<string, string> = {}
+  if (source !== undefined) query.source = source
+  if (album !== undefined) {
+    query.album = album
+    if (artist !== undefined) query.artist = artist
+  } else if (all) {
+    query.all = '1'
+  }
+  return { name: RouteName.Media, query }
+}
+
+/** The media place a URL names. An unknown category is no category. */
+export function mediaFromRoute(query: Record<string, unknown>): MediaPlace {
+  const source = one(query.source)
+  const place: MediaPlace = isMediaSource(source) ? { source } : {}
+  const album = one(query.album)
+  if (album !== undefined) {
+    place.album = album
+    const artist = scoped(query.artist)
+    if (artist !== undefined) place.artist = artist
+  } else if (one(query.all) === '1') {
+    place.all = true
+  }
+  return place
 }
 
 /** The folder segments a playlists URL names. */

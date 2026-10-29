@@ -13,7 +13,7 @@ import { computed, ref } from 'vue'
 import { client } from '../api/client'
 import { Op } from '../api/ops'
 import type { OpRequests, PlaylistSource } from '../api/ops'
-import { OpError } from '../api/parse'
+import { OpError, reasonOf } from '../api/parse'
 import type { PlaylistTrack, QueryField } from '../api/types'
 import { ErrorCode, QueryField as Field } from '../api/types'
 
@@ -21,10 +21,6 @@ import { useLibraryStore } from './library'
 
 /** Rows per request, matching the library's own page size. */
 const PAGE_SIZE = 200
-
-function reasonOf(error: unknown): string {
-  return error instanceof OpError ? error.message : String(error)
-}
 
 /** The edits that name slots of the open playlist, and so carry its `version`. */
 type GuardedOp = typeof Op.PlaylistRemoveTracks | typeof Op.PlaylistMoveTracks

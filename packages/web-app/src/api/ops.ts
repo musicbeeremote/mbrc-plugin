@@ -10,6 +10,7 @@
  * instead, and live in `responses`.
  */
 
+import type { MediaSource } from './browse'
 import type { TagValue } from './tags'
 import type {
   Empty,
@@ -54,6 +55,14 @@ export interface LibraryScope {
  * refuses a request that names two.
  */
 export type PlaylistSource = { paths: string[] } | LibraryScope | { now_playing: true }
+
+/**
+ * What narrows a media category: a book is an album, its author the artist.
+ *
+ * The same set names what `media_queue` queues, as `LibraryScope` does for the
+ * library.
+ */
+export type MediaScope = Omit<LibraryScope, 'genre'>
 
 /** The `version` a playlist page was read at, echoed so a moved list is refused. */
 interface PlaylistGuard {
@@ -125,6 +134,16 @@ export interface OpRequests {
   podcast_episodes: PageArgs & { id: string }
   podcast_episode: { id: string; index: number }
   podcast_episode_play: { id: string; index: number; mode?: QueueMode }
+
+  media_sources: Empty
+  media_albums: PageArgs & LibraryOrder & { source: MediaSource } & Omit<MediaScope, 'album'>
+  // Without a sort the files come in reading order, so a book's chapters are in sequence.
+  media_tracks: PageArgs & LibraryOrder & { source: MediaSource } & MediaScope
+  media_queue: { source: MediaSource } & MediaScope & {
+    mode?: QueueMode
+    play?: string
+    shuffle?: boolean
+  }
 
   playlist_list: PageArgs
   playlist_play: { url: string }
@@ -206,6 +225,11 @@ export const Op = {
   LibraryQueue: 'library_queue',
   LibraryPlayAll: 'library_play_all',
 
+  MediaSources: 'media_sources',
+  MediaAlbums: 'media_albums',
+  MediaTracks: 'media_tracks',
+  MediaQueue: 'media_queue',
+
   PlaylistList: 'playlist_list',
   PlaylistPlay: 'playlist_play',
   PlaylistTracks: 'playlist_tracks',
@@ -242,6 +266,7 @@ export const WireEvent = {
   NowPlayingListChanged: 'now_playing_list_changed',
   CoverCacheChanged: 'cover_cache_changed',
   LibraryChanged: 'library_changed',
+  MediaChanged: 'media_changed',
   ServerShutdown: 'server_shutdown',
   PermissionsChanged: 'permissions_changed',
 } as const

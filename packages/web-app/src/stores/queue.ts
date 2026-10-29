@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { client } from '../api/client'
-import { OpError } from '../api/parse'
+import { OpError, reasonOf } from '../api/parse'
 import { Op, WireEvent } from '../api/ops'
 import type { OpRequests } from '../api/ops'
 import { ErrorCode } from '../api/types'
@@ -11,10 +11,6 @@ import type { QueueItem } from '../api/types'
 import { usePlayerStore } from './player'
 
 const PAGE_SIZE = 200
-
-function reasonOf(error: unknown): string {
-  return error instanceof OpError ? error.message : String(error)
-}
 
 /** The queue ops that carry the `version` the page was read at. */
 type MutationOp =

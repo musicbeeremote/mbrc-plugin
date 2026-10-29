@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
+import { MediaSource } from '../api/browse'
 import { LibraryLevel, carriedSort, libraryTab, parentPosition } from '../composables/libraryLevels'
 
 import {
   RouteName,
   libraryRoute,
+  mediaRedirect,
+  mediaFromRoute,
+  mediaRoute,
   openPlaylistFromRoute,
   playlistPathFromRoute,
   playlistQueryFieldFromRoute,
@@ -225,5 +229,45 @@ describe('a playlist search field', () => {
   it('reads an unknown column as every column', () => {
     expect(playlistQueryFieldFromRoute({ qf: 'genre' })).toBe('any')
     expect(playlistQueryFieldFromRoute({ qf: '' })).toBe('any')
+  })
+})
+
+describe('a media address', () => {
+  it('names a category, and a book inside it with its author', () => {
+    const route = mediaRoute({
+      source: MediaSource.Audiobooks,
+      album: 'Dune',
+      artist: 'Herbert',
+    }) as { query: Record<string, string> }
+
+    expect(route.query).toStrictEqual({ source: 'audiobooks', album: 'Dune', artist: 'Herbert' })
+    expect(mediaFromRoute(route.query)).toStrictEqual({
+      source: MediaSource.Audiobooks,
+      album: 'Dune',
+      artist: 'Herbert',
+    })
+  })
+
+  /** Files with no album have no tile, so every file is a place of its own. */
+  it('round-trips the list of every file', () => {
+    const route = mediaRoute({ source: MediaSource.Inbox, all: true }) as {
+      query: Record<string, string>
+    }
+    expect(mediaFromRoute(route.query)).toStrictEqual({ source: MediaSource.Inbox, all: true })
+  })
+
+  it('keeps an author filed under no name apart from a missing one', () => {
+    expect(mediaFromRoute({ source: 'audiobooks', album: 'Dune', artist: '' }).artist).toBe('')
+    expect(mediaFromRoute({ source: 'audiobooks', album: 'Dune' })).not.toHaveProperty('artist')
+  })
+
+  it('reads an unknown category as none', () => {
+    expect(mediaFromRoute({ source: 'music' })).toStrictEqual({})
+  })
+
+  it('leaves for the library while media is turned off', () => {
+    expect(mediaRedirect(false, RouteName.Media)).toBe('/library')
+    expect(mediaRedirect(true, RouteName.Media)).toBeNull()
+    expect(mediaRedirect(false, RouteName.Library)).toBeNull()
   })
 })

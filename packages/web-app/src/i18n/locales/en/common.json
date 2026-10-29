@@ -21,6 +21,7 @@
     "library": "Library",
     "playlists": "Lists",
     "podcasts": "Podcasts",
+    "media": "Media",
     "radio": "Radio"
   },
   "action": {
@@ -35,6 +36,10 @@
     "artist": "Unknown artist",
     "album": "Unknown album",
     "genre": "[Empty]"
+  },
+  "settings": {
+    "label": "Settings",
+    "showMedia": "Show audiobooks, videos and inbox"
   },
   "theme": {
     "label": {

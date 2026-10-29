@@ -9,7 +9,13 @@
 
 import { z } from 'zod'
 
-import { AlbumEntrySchema, ArtistEntrySchema, GenreEntrySchema, RadioEntrySchema } from './browse'
+import {
+  AlbumEntrySchema,
+  ArtistEntrySchema,
+  GenreEntrySchema,
+  MediaSourceEntrySchema,
+  RadioEntrySchema,
+} from './browse'
 import type { EventName, OpRequests } from './ops'
 import {
   LastfmStatusSchema,
@@ -158,6 +164,12 @@ export const OpResponseSchemas = {
   /** How many tracks the scope selected and queued. */
   library_queue: z.object({ count: z.number() }),
 
+  /** Only the categories that hold something. */
+  media_sources: z.object({ items: z.array(MediaSourceEntrySchema) }),
+  media_albums: pageSchema(AlbumEntrySchema),
+  media_tracks: pageSchema(TrackSchema),
+  media_queue: z.object({ count: z.number() }),
+
   playlist_list: pageSchema(PlaylistEntrySchema),
   playlist_play: EmptySchema,
   playlist_tracks: PlaylistPageSchema,
@@ -214,6 +226,8 @@ export const EventPayloadSchemas = {
   now_playing_list_changed: EmptySchema,
   cover_cache_changed: z.object({ building: z.boolean() }),
   library_changed: EmptySchema,
+  /** One category's files changed; the source says which to re-read. */
+  media_changed: z.object({ source: z.string() }),
   server_shutdown: EmptySchema,
   /** Also raised by the client itself with what the handshake reported. */
   permissions_changed: PermissionsSchema,

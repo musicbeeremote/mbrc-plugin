@@ -31,6 +31,32 @@ export const AlbumEntrySchema = z.object({
 })
 export type AlbumEntry = z.infer<typeof AlbumEntrySchema>
 
+/** The categories MusicBee files apart from the music library. */
+export const MediaSource = {
+  Audiobooks: 'audiobooks',
+  Videos: 'videos',
+  Inbox: 'inbox',
+} as const
+export type MediaSource = (typeof MediaSource)[keyof typeof MediaSource]
+
+const MEDIA_SOURCES: readonly string[] = Object.values(MediaSource)
+
+export function isMediaSource(value: unknown): value is MediaSource {
+  return typeof value === 'string' && MEDIA_SOURCES.includes(value)
+}
+
+/**
+ * A category with something in it, and roughly how many files.
+ *
+ * The source stays a string: a category this build has not heard of is left
+ * out by the store rather than failing the whole answer.
+ */
+export const MediaSourceEntrySchema = z.object({
+  source: z.string(),
+  count: z.number(),
+})
+export type MediaSourceEntry = z.infer<typeof MediaSourceEntrySchema>
+
 export const RadioEntrySchema = z.object({
   name: z.string(),
   url: z.string(),

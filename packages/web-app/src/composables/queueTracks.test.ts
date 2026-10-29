@@ -7,6 +7,7 @@ import { QueueMode } from '../api/types'
 import { usePermissionsStore } from '../stores/permissions'
 
 import { queueTrack, trackOrLevel, wholeScope } from './queueTracks'
+import type { ScopeQueuer } from './queueTracks'
 
 const { call } = vi.hoisted(() => ({
   call: vi.fn<(op: string, data?: Record<string, unknown>) => Promise<unknown>>(),
@@ -46,6 +47,16 @@ describe('queueing a library track', () => {
 
   // A tap on a track plays it now, which a guest may not: the tap does nothing
   // rather than sending a request the server will only refuse.
+  it('hands add-all to the scope it is given', async () => {
+    const queueScope = vi.fn<ScopeQueuer>()
+    queueScope.mockResolvedValue(0)
+
+    await queueTrack('a.mp3', QueueMode.AddAll, queueScope)
+
+    expect(queueScope).toHaveBeenCalledWith({ mode: QueueMode.AddAll, play: 'a.mp3' })
+    expect(call).not.toHaveBeenCalled()
+  })
+
   it('sends nothing the role may not do', async () => {
     usePermissionsStore().apply(GUEST)
     await queueTrack('a.mp3', QueueMode.Now)

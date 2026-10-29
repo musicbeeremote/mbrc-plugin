@@ -5,6 +5,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import IconLibrary from '~icons/lucide/library'
+import IconMedia from '~icons/lucide/book-headphones'
 import IconMusic from '~icons/lucide/music'
 import IconPlaylists from '~icons/lucide/list'
 import IconQueue from '~icons/lucide/list-music'
@@ -16,26 +17,20 @@ import { WireEvent } from './api/ops'
 import { Capability } from './api/permissions'
 import AddToPlaylistSheet from './components/AddToPlaylistSheet.vue'
 import NowPlayingBar from './components/NowPlayingBar.vue'
+import SettingsMenu from './components/SettingsMenu.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
+import { usePreferences } from './composables/usePreferences'
 import { useShortcuts } from './composables/useShortcuts'
 import { useUpdateWatch } from './composables/useUpdateWatch'
 import { useLibraryStore } from './stores/library'
+import { useMediaStore } from './stores/media'
 import { usePermissionsStore } from './stores/permissions'
 import { useTagsStore } from './stores/tags'
 import { usePlayerStore } from './stores/player'
 import { useQueueStore } from './stores/queue'
-import { RouteName, wideRedirect } from './router/locations'
+import { RouteName, mediaRedirect, wideRedirect } from './router/locations'
 import NowPlayingView from './views/NowPlayingView.vue'
 import PairingView from './views/PairingView.vue'
-
-const TABS: { id: RouteName; to: string; label: string; icon: Component }[] = [
-  { id: RouteName.Playing, to: '/playing', label: 'common.nav.playing', icon: IconMusic },
-  { id: RouteName.Queue, to: '/queue', label: 'common.nav.queue', icon: IconQueue },
-  { id: RouteName.Library, to: '/library', label: 'common.nav.library', icon: IconLibrary },
-  { id: RouteName.Playlists, to: '/lists', label: 'common.nav.playlists', icon: IconPlaylists },
-  { id: RouteName.Podcasts, to: '/podcasts', label: 'common.nav.podcasts', icon: IconPodcast },
-  { id: RouteName.Radio, to: '/radio', label: 'common.nav.radio', icon: IconRadio },
-]
 
 /**
  * Two layouts, not one that stretches.
@@ -60,8 +55,46 @@ const player = usePlayerStore()
 const update = useUpdateWatch()
 const queue = useQueueStore()
 const library = useLibraryStore()
+const media = useMediaStore()
 const permissions = usePermissionsStore()
 const tags = useTagsStore()
+const preferences = usePreferences()
+
+interface Tab {
+  id: RouteName
+  to: string
+  label: string
+  icon: Component
+  /** Whether the tab is a destination right now; always, when absent. */
+  visible?: () => boolean
+}
+
+const TABS: Tab[] = [
+  // Now playing owns the right rail on a wide screen, so it is not a destination
+  // there. A phone rotated into a tablet layout on the Playing tab would
+  // otherwise land on a pane that no longer exists.
+  {
+    id: RouteName.Playing,
+    to: '/playing',
+    label: 'common.nav.playing',
+    icon: IconMusic,
+    visible: () => !isWide.value,
+  },
+  { id: RouteName.Queue, to: '/queue', label: 'common.nav.queue', icon: IconQueue },
+  { id: RouteName.Library, to: '/library', label: 'common.nav.library', icon: IconLibrary },
+  { id: RouteName.Playlists, to: '/lists', label: 'common.nav.playlists', icon: IconPlaylists },
+  { id: RouteName.Podcasts, to: '/podcasts', label: 'common.nav.podcasts', icon: IconPodcast },
+  // Media is a place only once turned on and while MusicBee files something
+  // there: most libraries have none, and a tab that always opens empty is noise.
+  {
+    id: RouteName.Media,
+    to: '/media',
+    label: 'common.nav.media',
+    icon: IconMedia,
+    visible: () => preferences.showMedia && media.sources.length > 0,
+  },
+  { id: RouteName.Radio, to: '/radio', label: 'common.nav.radio', icon: IconRadio },
+]
 
 /** Keys do only what the buttons for them would, so a refused key is a quiet one. */
 function when(capability: Capability, action: () => void): () => void {
@@ -97,12 +130,7 @@ function onPairedForRole() {
   void permissions.refresh()
 }
 
-// Now playing owns the right rail on a wide screen, so it is not a destination
-// there. A phone rotated into a tablet layout on the Playing tab would
-// otherwise land on a pane that no longer exists.
-const tabs = computed(() =>
-  isWide.value ? TABS.filter((entry) => entry.id !== RouteName.Playing) : TABS,
-)
+const tabs = computed(() => TABS.filter((entry) => entry.visible?.() ?? true))
 
 // Immediate, because the redirect has to happen on the first evaluation too: a
 // window that is already wide when the app loads never fires a change, and
@@ -111,6 +139,17 @@ watch(
   [isWide, tab],
   ([wide, name]) => {
     const target = wideRedirect(wide, name)
+    if (target) void router.replace(target)
+  },
+  { immediate: true },
+)
+
+// Media turned off, or never on, is not a place: a bookmark or the switch
+// itself must not leave the reader on a pane the navigation no longer offers.
+watch(
+  [() => preferences.showMedia, tab],
+  ([show, name]) => {
+    const target = mediaRedirect(show, name)
     if (target) void router.replace(target)
   },
   { immediate: true },
@@ -143,6 +182,7 @@ function start() {
   player.bind()
   queue.bind()
   library.bind()
+  media.bind()
   update.bind()
   permissions.bind()
   tags.bind()
@@ -261,6 +301,7 @@ function onPaired() {
         </RouterLink>
 
         <ThemeToggle variant="rail" />
+        <SettingsMenu variant="rail" />
       </nav>
 
       <main class="min-w-0 flex-1">
@@ -303,6 +344,7 @@ function onPaired() {
       </nav>
 
       <ThemeToggle variant="bar" />
+      <SettingsMenu variant="bar" />
     </div>
 
     <AddToPlaylistSheet />

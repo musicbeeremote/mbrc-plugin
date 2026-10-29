@@ -1,0 +1,22 @@
+{
+  "source": {
+    "audiobooks": "Audiobooks",
+    "videos": "Videos",
+    "inbox": "Inbox"
+  },
+  "allFiles": "All files",
+  "bookCount": "nothing | 1 album | {count} albums",
+  "fileCount": "no files | 1 file | {count} files",
+  "action": {
+    "play": "Play {title}",
+    "queue": "Add {title} to the queue"
+  },
+  "empty": {
+    "title": "No audiobooks, videos or inbox.",
+    "hint": "Files MusicBee keeps apart from the music library appear here.",
+    "books": "No albums here.",
+    "booksHint": "Files with no album tag are listed under All files.",
+    "files": "No files."
+  },
+  "failed": "Could not read this list: {reason}"
+}
