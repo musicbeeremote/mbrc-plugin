@@ -7,6 +7,7 @@ using MusicBeePlugin.Models;
 using MusicBeePlugin.Logging;
 using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Settings;
+using CoreNotification = MusicBeePlugin.Ffi.Generated.NotificationType;
 
 namespace MusicBeePlugin.Host
 {
@@ -20,6 +21,7 @@ namespace MusicBeePlugin.Host
     public sealed class PluginHost : IDisposable
     {
         private readonly NativeBridge _bridge;
+        private readonly LibraryDataProvider _library;
 
         /// <summary>
         ///     MusicBee's API struct. Kept (a copy of the delegate table) only for
@@ -48,6 +50,7 @@ namespace MusicBeePlugin.Host
             var track = new TrackDataProvider(api);
             var playlist = new PlaylistDataProvider(api);
             var library = new LibraryDataProvider(api);
+            _library = library;
             var podcast = new PodcastDataProvider(api);
 
             // Settings are Rust-owned; C# caches only what the host reads,
@@ -89,8 +92,28 @@ namespace MusicBeePlugin.Host
             _logger.Debug("musicbee notification: {0} {1}", type, path ?? string.Empty);
 
         /// <summary>Forward a MusicBee notification (already mapped to the core's type) to the core.</summary>
-        public void HandleNotification(int notificationType, string path) =>
+        public void HandleNotification(int notificationType, string path)
+        {
+            if (ChangesLibrary((CoreNotification)notificationType))
+                _library.ForgetExcludedPaths();
             _bridge.HandleNotification(notificationType, path);
+        }
+
+        /// <summary>Whether a notification can change the tracks filtered queries leave out.</summary>
+        private static bool ChangesLibrary(CoreNotification type)
+        {
+            switch (type)
+            {
+                case CoreNotification.FileAddedToLibrary:
+                case CoreNotification.LibrarySwitched:
+                case CoreNotification.TagsChanged:
+                case CoreNotification.RatingChanged:
+                case CoreNotification.FileDeleted:
+                    return true;
+                default:
+                    return false;
+            }
+        }
 
         /// <summary>
         ///     The folder holding the log files (<c>mbrc-core.log</c> +

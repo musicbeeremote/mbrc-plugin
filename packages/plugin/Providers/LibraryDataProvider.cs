@@ -26,12 +26,19 @@ namespace MusicBeePlugin.Providers
         private static readonly string[] MultiValueSeparator = { "; " };
 
         // The tags a banned track is matched on when a drill-down adds it back,
-        // standing in for the search fields above.
+        // standing in for the search fields above. ArtistPeople names track artists only.
         private static readonly Plugin.MetaDataType[] GenreMatchFields = { Plugin.MetaDataType.Genre };
         private static readonly Plugin.MetaDataType[] AlbumMatchFields = { Plugin.MetaDataType.Album };
         private static readonly Plugin.MetaDataType[] ArtistMatchFields =
         {
-            Plugin.MetaDataType.Artist, Plugin.MetaDataType.AlbumArtist,
+            Plugin.MetaDataType.Artist, Plugin.MetaDataType.Artists,
+        };
+
+        // A banned track's artists as the artist lookup table counts them: the
+        // split artist-role credits, or the artist tag when nobody split it.
+        private static readonly Plugin.MetaDataType[] ArtistCreditFields =
+        {
+            Plugin.MetaDataType.ArtistsWithArtistRole, Plugin.MetaDataType.Artist,
         };
 
         // Tag sets read in one bulk Library_GetFileTags call per track (instead of
@@ -69,6 +76,9 @@ namespace MusicBeePlugin.Providers
         };
 
         private readonly Plugin.MusicBeeApiInterface _api;
+        private readonly object _excludedLock = new object();
+        private List<string> _excluded;
+        private int _excludedGeneration;
 
         public LibraryDataProvider(Plugin.MusicBeeApiInterface api)
         {
@@ -237,7 +247,7 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         public IEnumerable<Track> GetAlbumTracks(string album)
         {
-            var banned = ExcludedWhere(AlbumMatchFields, album);
+            var banned = ExcludedWhere(AlbumMatchFields, album, false);
             var tracks = WalkFilter(XmlFilterHelper.CreateFilter(
                     AlbumSearchFields, album, true, LibrarySource.Library))
                 .Select(path => ReadAlbumTrack(path, string.Empty))
@@ -246,7 +256,28 @@ namespace MusicBeePlugin.Providers
                 return tracks;
 
             tracks.AddRange(banned.Select(path => ReadAlbumTrack(path, string.Empty)));
-            return tracks.OrderBy(t => t.disc).ThenBy(t => t.trackno).ToList();
+            return InAlbumOrder(tracks);
+        }
+
+        /// <summary>
+        ///     Tracks grouped by album artist, in the order each first appears, then
+        ///     by disc and track, so two albums sharing a name stay apart.
+        /// </summary>
+        private static List<Track> InAlbumOrder(List<Track> tracks)
+        {
+            var groups = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var track in tracks)
+            {
+                var albumArtist = track.album_artist ?? string.Empty;
+                if (!groups.ContainsKey(albumArtist))
+                    groups[albumArtist] = groups.Count;
+            }
+
+            return tracks
+                .OrderBy(t => groups[t.album_artist ?? string.Empty])
+                .ThenBy(t => t.disc)
+                .ThenBy(t => t.trackno)
+                .ToList();
         }
 
         /// <summary>
@@ -260,7 +291,7 @@ namespace MusicBeePlugin.Providers
         /// </remarks>
         public IEnumerable<Track> GetGenreTracks(string genre)
         {
-            var banned = ExcludedWhere(GenreMatchFields, genre);
+            var banned = ExcludedWhere(GenreMatchFields, genre, true);
             return WalkFilter(XmlFilterHelper.CreateFilter(
                     GenreSearchFields, genre, true, LibrarySource.Library))
                 .Concat(banned)
@@ -275,7 +306,7 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         public List<AlbumData> GetArtistAlbums(string artist)
         {
-            var banned = ExcludedWhere(ArtistMatchFields, artist);
+            var banned = ExcludedWhere(ArtistMatchFields, artist, true);
             var files = WalkFilter(XmlFilterHelper.CreateFilter(
                 ArtistSearchFields, artist, true, LibrarySource.Library));
 
@@ -302,11 +333,10 @@ namespace MusicBeePlugin.Providers
         /// </summary>
         public IEnumerable<ArtistData> GetGenreArtists(string genre)
         {
-            var banned = ExcludedWhere(GenreMatchFields, genre);
+            var banned = ExcludedWhere(GenreMatchFields, genre, true);
             var artists = LookupGenreArtists(genre);
-            foreach (var path in banned)
+            foreach (var name in banned.SelectMany(CreditedArtists))
             {
-                var name = _api.Library_GetFileTag(path, Plugin.MetaDataType.Artist) ?? string.Empty;
                 var known = artists.FirstOrDefault(
                     a => string.Equals(a.artist, name, StringComparison.OrdinalIgnoreCase));
                 if (known != null)
@@ -318,16 +348,62 @@ namespace MusicBeePlugin.Providers
             return artists;
         }
 
+        private IEnumerable<string> CreditedArtists(string path)
+        {
+            _api.Library_GetFileTags(path, ArtistCreditFields, out var tags);
+            var credits = Tag(tags, 0);
+            return (credits.Length > 0 ? credits : Tag(tags, 1))
+                .Split(MultiValueSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+        }
+
         /// <summary>
         ///     The music library tracks MusicBee's filtered queries leave out, which
         ///     are its banned ones. Empty when either listing fails.
         /// </summary>
+        /// <remarks>
+        ///     Kept until <see cref="ForgetExcludedPaths" />: a scope queue walks one
+        ///     drill-down per album, and each would otherwise list the library twice.
+        /// </remarks>
         public List<string> GetExcludedPaths()
         {
+            int generation;
+            lock (_excludedLock)
+            {
+                if (_excluded != null)
+                    return _excluded;
+                generation = _excludedGeneration;
+            }
+
+            var excluded = ListExcludedPaths();
+            if (excluded == null)
+                return new List<string>();
+
+            lock (_excludedLock)
+            {
+                if (generation == _excludedGeneration)
+                    _excluded = excluded;
+            }
+
+            return excluded;
+        }
+
+        /// <summary>Drops the kept excluded paths, for a library change MusicBee reported.</summary>
+        public void ForgetExcludedPaths()
+        {
+            lock (_excludedLock)
+            {
+                _excluded = null;
+                _excludedGeneration++;
+            }
+        }
+
+        private List<string> ListExcludedPaths()
+        {
             if (!_api.Library_QueryFilesEx(null, out var all) || all == null)
-                return new List<string>();
+                return null;
             if (!_api.Library_QueryFilesEx(XmlFilterHelper.AllOf(LibrarySource.Library), out var kept) || kept == null)
-                return new List<string>();
+                return null;
 
             var listed = new HashSet<string>(kept, StringComparer.OrdinalIgnoreCase);
             return all.Where(path => !listed.Contains(path)).ToList();
@@ -335,31 +411,32 @@ namespace MusicBeePlugin.Providers
 
         /// <summary>
         ///     The excluded tracks a drill-down's <c>Is</c> filter would match on
-        ///     <paramref name="fields" />, each <c>; </c>-joined value counting.
+        ///     <paramref name="fields" />, each <c>; </c>-joined value counting when
+        ///     the fields are <paramref name="multiValue" />.
         /// </summary>
         /// <remarks>
         ///     Called before the drill-down's own walk: a listing in the middle of a
         ///     Library_QueryFiles walk would reset its cursor.
         /// </remarks>
-        private List<string> ExcludedWhere(Plugin.MetaDataType[] fields, string value)
+        private List<string> ExcludedWhere(Plugin.MetaDataType[] fields, string value, bool multiValue)
         {
             var wanted = value ?? string.Empty;
             var matches = new List<string>();
             foreach (var path in GetExcludedPaths())
             {
                 _api.Library_GetFileTags(path, fields, out var tags);
-                if (Enumerable.Range(0, fields.Length).Any(i => Holds(Tag(tags, i), wanted)))
+                if (Enumerable.Range(0, fields.Length).Any(i => Holds(Tag(tags, i), wanted, multiValue)))
                     matches.Add(path);
             }
 
             return matches;
         }
 
-        private static bool Holds(string tag, string wanted)
+        private static bool Holds(string tag, string wanted, bool multiValue)
         {
             return string.Equals(tag, wanted, StringComparison.OrdinalIgnoreCase)
-                   || tag.Split(MultiValueSeparator, StringSplitOptions.None)
-                       .Any(v => string.Equals(v, wanted, StringComparison.OrdinalIgnoreCase));
+                   || (multiValue && tag.Split(MultiValueSeparator, StringSplitOptions.None)
+                       .Any(v => string.Equals(v, wanted, StringComparison.OrdinalIgnoreCase)));
         }
 
         /// <summary>Every file a filter selects, from one Library_QueryFiles walk.</summary>

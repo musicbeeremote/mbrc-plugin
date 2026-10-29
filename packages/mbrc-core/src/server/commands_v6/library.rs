@@ -431,7 +431,14 @@ fn queue(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpRe
     let play = opt_str(data, "play")?.unwrap_or("");
     let mut paths = scope_paths(data, p, cache)?;
     if !paths.is_empty() {
-        let excluded: HashSet<String> = p.excluded_paths().map_err(internal)?.into_iter().collect();
+        let excluded: HashSet<String> = p
+            .excluded_paths()
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "library_queue: banned tracks unknown, queueing the scope as listed");
+                Vec::new()
+            })
+            .into_iter()
+            .collect();
         paths.retain(|path| !excluded.contains(path));
     }
     if opt_bool(data, "shuffle")?.unwrap_or(false) {
