@@ -12,6 +12,7 @@
     "addLabels": ["security"]
   },
   "dependencyDashboard": true,
+  "dependencyDashboardApproval": true,
   "automerge": false,
   "rangeStrategy": "pin",
   "minimumReleaseAge": "7 days",
