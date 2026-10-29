@@ -800,7 +800,8 @@ the selection rather than turning the player's shuffle mode on.
 
 **Banned tracks.** A track banned in MusicBee (love/ban set to ban) is still listed and
 counted by every op above, but `library_queue` and `library_play_all` leave it out, as
-MusicBee's own lists do. Tracks queued by path (`now_playing_queue`) are queued as given.
+MusicBee's own lists do. Tracks queued by path (`now_playing_queue`) are queued as given,
+and a playlist scope ([`<tracks>`](#playlist)) keeps banned tracks: a playlist outlasts a ban.
 
 ### Library sync
 
@@ -902,7 +903,8 @@ is false rather than offering one that will be refused.
 - `"paths":[..]` - the `src` of each track, in order.
 - a library scope - `genre`, `artist`, `album` and `query`, exactly as
   [`library_queue`](#library) takes them. The server resolves it, so adding an artist
-  never pulls its paths to the client and back. A blank `query` is no scope.
+  never pulls its paths to the client and back. A blank `query` is no scope. Unlike
+  `library_queue`, a scope keeps banned tracks.
 - `"now_playing":true` - the whole queue, in queue order. `playlist_create` with it is
   "save the queue as a playlist".
 

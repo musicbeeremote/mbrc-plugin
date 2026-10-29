@@ -311,9 +311,10 @@ fn written_version(p: &dyn Providers, url: &str) -> Result<String, V6Error> {
 /// The tracks a request names, or `None` when it names none.
 ///
 /// One of three ways: `paths`; a library scope (`genre`, `artist`, `album`,
-/// `query`) resolved as `library_queue` resolves it, so a client never pulls an
-/// artist's paths only to send them back; or `now_playing: true`, the whole
-/// queue. Naming two is refused rather than guessed between.
+/// `query`) resolved as `library_queue` resolves it, banned tracks kept, so a
+/// client never pulls an artist's paths only to send them back; or
+/// `now_playing: true`, the whole queue. Naming two is refused rather than
+/// guessed between.
 fn named_tracks(
     data: &Value,
     p: &dyn Providers,
@@ -1250,6 +1251,71 @@ mod tests {
         .unwrap();
         assert_eq!(out["added"], 2);
         assert_eq!(written(&m), ["/x/1.mp3", "/x/2.mp3"]);
+    }
+
+    /// A playlist outlasts a ban, so a scope adds the banned tracks that
+    /// `library_queue` leaves out.
+    #[test]
+    fn a_scope_adds_banned_tracks_to_a_playlist() {
+        let mut m = mbp(&[]);
+        m.album_tracks = ["/x/1.mp3", "/x/2.mp3"]
+            .iter()
+            .map(|src| Track {
+                src: (*src).into(),
+                album_artist: "X".into(),
+                ..Default::default()
+            })
+            .collect();
+        m.excluded_paths = vec!["/x/1.mp3".into()];
+
+        edit(
+            &m,
+            "playlist_add_tracks",
+            json!({ "url": URL, "album": "Album" }),
+        )
+        .unwrap();
+
+        assert_eq!(written(&m), ["/x/1.mp3", "/x/2.mp3"]);
+        assert!(!m.recorded().iter().any(|c| c == "excluded_paths"));
+    }
+
+    /// Once every track's tags are cached, an artist scope is answered from the
+    /// cache, which indexes banned tracks too.
+    #[test]
+    fn a_cached_artist_scope_adds_banned_tracks_to_a_playlist() {
+        use crate::metadata_cache::CachedTags;
+        use crate::store::Db;
+
+        let dir = std::env::temp_dir().join("mbrc-v6-playlist-banned-scope");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        let paths = ["/x/1.mp3".to_string(), "/x/2.mp3".to_string()];
+        cache.replace_track_index(&paths);
+        cache.put_track_tags(&paths.clone().map(|src| CachedTags {
+            src,
+            artist: "X".into(),
+            album: "Album".into(),
+            album_artist: "X".into(),
+            ..CachedTags::default()
+        }));
+        assert!(cache.tags_complete());
+        let mut m = mbp(&[]);
+        m.excluded_paths = vec!["/x/1.mp3".into()];
+
+        dispatch(
+            "playlist_add_tracks",
+            &json!({ "url": URL, "artist": "X" }),
+            &m,
+            Some(&cache),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(written(&m), paths);
+        assert!(!m.recorded().iter().any(|c| c == "excluded_paths"));
     }
 
     #[test]
