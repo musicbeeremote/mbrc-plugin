@@ -40,8 +40,8 @@ jobs:
 
           if [ -z "$LAST_RUN" ] || [ "$LAST_RUN" = "null" ]; then
             echo "No previous successful nightly found, should build"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "version=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "version=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -60,7 +60,7 @@ jobs:
 
           if [ $((CURRENT_EPOCH - LAST_RUN_EPOCH)) -lt $SEVEN_DAYS ]; then
             echo "Last nightly is less than 7 days old, skipping"
-            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -69,13 +69,13 @@ jobs:
 
           if [ "$COMMITS_SINCE" -eq 0 ]; then
             echo "No new commits since last nightly, skipping"
-            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "Nightly needed: $COMMITS_SINCE new commits, last nightly is $DAYS_AGO days old"
-          echo "should_build=true" >> $GITHUB_OUTPUT
-          echo "version=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "version=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
   build:
     name: build nightly
