@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 use crate::library_changes::ChangeLog;
 use crate::protocol::messages::{Track, TrackTags};
 use crate::store::{
-    ALBUM_STAMPS, Db, LIBRARY_FINGERPRINT, META, METADATA_CACHE, TAGS_SCHEMA, TRACK_PATHS,
-    TRACK_SORT, TRACK_TAGS, TRACKS_SYNCED_AT,
+    ALBUM_STAMPS, Db, LIBRARY_FINGERPRINT, META, METADATA_CACHE, NAV_LISTS_SCHEMA, TAGS_SCHEMA,
+    TRACK_PATHS, TRACK_SORT, TRACK_TAGS, TRACKS_SYNCED_AT,
 };
 
 /// The tags this cache keeps per track.
@@ -155,6 +155,21 @@ impl From<&CachedTags> for Track {
 
 /// [`METADATA_CACHE`] key holding the derived album -> years map.
 const KEY_ALBUM_YEARS: &str = "album_years";
+
+/// [`METADATA_CACHE`] key prefix of a genre's cached artist list.
+pub const NAV_GENRE_ARTISTS: &str = "genre_artists:";
+/// [`METADATA_CACHE`] key prefix of an artist's cached album list.
+pub const NAV_ARTIST_ALBUMS: &str = "artist_albums:";
+/// [`METADATA_CACHE`] key prefix of an album's cached track list.
+pub const NAV_ALBUM_TRACKS: &str = "album_tracks:";
+const NAV_LIST_PREFIXES: [&str; 3] = [NAV_GENRE_ARTISTS, NAV_ARTIST_ALBUMS, NAV_ALBUM_TRACKS];
+
+/// The version of what a cached nav list holds.
+///
+/// Raise it when a drill-down starts answering differently for the same
+/// library: no fingerprint or stamp moves for that, so the stored lists
+/// would be served as they were.
+const NAV_LISTS_VERSION: u32 = 1;
 
 /// An album's years, derived from its tracks. Zero is undated.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,6 +521,9 @@ pub struct MetadataCache {
     /// Moved by every change to the tag rows, so rows read across one are
     /// not kept.
     tags_generation: AtomicU64,
+    /// Moved by every drop of the nav lists, so a drill-down fetched across
+    /// one is not kept.
+    nav_generation: AtomicU64,
 }
 
 impl MetadataCache {
@@ -518,6 +536,7 @@ impl MetadataCache {
             tag_rows: Mutex::new(None),
             tag_rows_read: Mutex::new(()),
             tags_generation: AtomicU64::new(0),
+            nav_generation: AtomicU64::new(0),
         }
     }
 
@@ -846,8 +865,66 @@ impl MetadataCache {
         if moved || !self.has_album_stamps() {
             self.store_album_stamps(albums);
         }
+        if moved || self.stored_nav_lists_version() != Some(NAV_LISTS_VERSION) {
+            self.drop_nav_lists();
+        }
         self.set_validated(true);
         moved
+    }
+
+    /// Drops every cached genre, artist and album drill-down.
+    ///
+    /// They are cached per name on first request, so no stamp says which of
+    /// them an add, a delete or a tag edit touched.
+    pub fn drop_nav_lists(&self) {
+        self.nav_generation.fetch_add(1, Ordering::AcqRel);
+        self.db.write(Durability::Immediate, |txn| {
+            let mut table = txn.open_table(METADATA_CACHE)?;
+            table.retain(|key, _| !NAV_LIST_PREFIXES.iter().any(|p| key.starts_with(p)))?;
+            let mut meta = txn.open_table(META)?;
+            meta.insert(NAV_LISTS_SCHEMA, NAV_LISTS_VERSION.to_le_bytes().as_slice())?;
+            Ok(())
+        });
+    }
+
+    /// A cached drill-down, and the generation a fresh fetch is stored under.
+    pub fn nav_list<T: DeserializeOwned>(&self, key: &str) -> (Option<T>, u64) {
+        let generation = self.nav_generation.load(Ordering::Acquire);
+        (self.get(key), generation)
+    }
+
+    /// Caches a drill-down fetched at `generation`, unless the nav lists were
+    /// dropped since: the fetch may have read the library before the change.
+    pub fn put_nav_list<T: Serialize>(&self, key: &str, value: &T, generation: u64) {
+        if !self.is_validated() {
+            return;
+        }
+        let Ok(bytes) = rmp_serde::to_vec_named(value) else {
+            return;
+        };
+        self.db.write(Durability::Immediate, |txn| {
+            if self.nav_generation.load(Ordering::Acquire) != generation {
+                return Ok(());
+            }
+            let mut table = txn.open_table(METADATA_CACHE)?;
+            table.insert(key, bytes.as_slice())?;
+            Ok(())
+        });
+    }
+
+    fn stored_nav_lists_version(&self) -> Option<u32> {
+        self.db
+            .read(|txn| {
+                let table = match txn.open_table(META) {
+                    Ok(t) => t,
+                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+                    Err(e) => return Err(e.into()),
+                };
+                Ok(table
+                    .get(NAV_LISTS_SCHEMA)?
+                    .and_then(|v| <[u8; 4]>::try_from(v.value()).ok().map(u32::from_le_bytes)))
+            })
+            .flatten()
     }
 
     /// Whether [`CachedTags`] has gained fields since the store was written.
@@ -2319,5 +2396,57 @@ mod tests {
         let same = albums.clone();
         assert!(cache.reconcile(&same, 3), "fingerprint moved");
         assert_eq!(cache.get::<u32>("k"), Some(7), "stamps agree, cache kept");
+    }
+
+    #[test]
+    fn nav_lists_drop_when_the_library_moves() {
+        let cache = MetadataCache::new(temp_db("nav-moved"));
+        cache.reconcile(&[(album_key("Artist", "Artist", "one"), 100)], 1);
+        let nav = format!("{NAV_ALBUM_TRACKS}one");
+        cache.put(&nav, &7u32);
+        cache.put("k", &7u32);
+
+        assert!(cache.reconcile(&[(album_key("Artist", "Artist", "one"), 200)], 2));
+        assert_eq!(cache.get::<u32>(&nav), None);
+        assert_eq!(cache.get::<u32>("k"), Some(7), "only the nav lists go");
+    }
+
+    #[test]
+    fn a_drill_down_fetched_before_a_drop_is_not_kept() {
+        let cache = MetadataCache::new(temp_db("nav-race"));
+        cache.reconcile(&[], 1);
+        let nav = format!("{NAV_ALBUM_TRACKS}one");
+        let (_, generation) = cache.nav_list::<u32>(&nav);
+
+        cache.drop_nav_lists();
+        cache.put_nav_list(&nav, &7u32, generation);
+
+        assert_eq!(cache.get::<u32>(&nav), None);
+        let (_, fresh) = cache.nav_list::<u32>(&nav);
+        cache.put_nav_list(&nav, &7u32, fresh);
+        assert_eq!(cache.get::<u32>(&nav), Some(7));
+    }
+
+    #[test]
+    fn nav_lists_from_an_older_version_drop_once() {
+        let cache = MetadataCache::new(temp_db("nav-version"));
+        cache.reconcile(&[], 1);
+        let nav = format!("{NAV_ARTIST_ALBUMS}Artist");
+        cache.put(&nav, &7u32);
+        cache.db.write(Durability::Immediate, |txn| {
+            let mut meta = txn.open_table(META)?;
+            meta.insert(NAV_LISTS_SCHEMA, 0u32.to_le_bytes().as_slice())?;
+            Ok(())
+        });
+
+        assert!(!cache.reconcile(&[], 1), "the library did not move");
+        assert_eq!(cache.get::<u32>(&nav), None, "written by the older version");
+        cache.put(&nav, &7u32);
+        cache.reconcile(&[], 1);
+        assert_eq!(
+            cache.get::<u32>(&nav),
+            Some(7),
+            "dropped once, not every start"
+        );
     }
 }

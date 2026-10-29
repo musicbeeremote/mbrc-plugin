@@ -112,6 +112,8 @@ pub const LAST_CHECK: &str = "last_check";
 pub const COVER_SIZE: &str = "cover_size";
 /// [`META`] key holding the cached-tag schema version (u32 LE).
 pub const TAGS_SCHEMA: &str = "tags_schema";
+/// [`META`] key holding the version of the cached nav lists (u32 LE).
+pub const NAV_LISTS_SCHEMA: &str = "nav_lists_schema";
 /// [`META`] key holding the last library fingerprint (u64 LE).
 pub const LIBRARY_FINGERPRINT: &str = "library_fingerprint";
 /// [`META`] key holding the tracks-cache sync watermark (unix seconds, i64 LE) -

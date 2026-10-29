@@ -15,7 +15,9 @@ use super::{
     reply_dto,
 };
 use crate::cover::{cover_identifier, store::CoverStore};
-use crate::metadata_cache::{CachedTags, MetadataCache};
+use crate::metadata_cache::{
+    CachedTags, MetadataCache, NAV_ALBUM_TRACKS, NAV_ARTIST_ALBUMS, NAV_GENRE_ARTISTS,
+};
 use crate::protocol::messages::{AlbumCover, AlbumCoverItem, Page, Track};
 use crate::providers::Providers;
 
@@ -230,6 +232,7 @@ pub fn relist_library(cache: &MetadataCache, p: &dyn Providers, edited: &[String
         return None;
     }
     cache.drop_track_tags(edited);
+    cache.drop_nav_lists();
     let filed = match p.track_paths() {
         Ok(paths) => {
             cache.replace_track_index(&paths);
@@ -323,7 +326,7 @@ pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
         let list = crate::server::commands_v6::library::artist_data(counts);
         return reply_dto("librarygenreartists", &list);
     }
-    let list = nav_cached(ctx, &format!("genre_artists:{genre}"), || {
+    let list = nav_cached(ctx, &format!("{NAV_GENRE_ARTISTS}{genre}"), || {
         ctx.providers.genre_artists(&genre)
     })?;
     reply_dto("librarygenreartists", &list)
@@ -331,7 +334,7 @@ pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
 
 pub fn artist_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
     let artist = as_set_string(data).unwrap_or_default();
-    let list = nav_cached(ctx, &format!("artist_albums:{artist}"), || {
+    let list = nav_cached(ctx, &format!("{NAV_ARTIST_ALBUMS}{artist}"), || {
         ctx.providers.artist_albums(&artist)
     })?;
     reply_dto("libraryartistalbums", &list)
@@ -339,7 +342,7 @@ pub fn artist_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
 
 pub fn album_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
     let album = as_set_string(data).unwrap_or_default();
-    let list = nav_cached(ctx, &format!("album_tracks:{album}"), || {
+    let list = nav_cached(ctx, &format!("{NAV_ALBUM_TRACKS}{album}"), || {
         ctx.providers.album_tracks(&album)
     })?;
     reply_dto("libraryalbumtracks", &list)
@@ -403,14 +406,17 @@ where
     T: Serialize + DeserializeOwned,
     F: FnOnce() -> Result<Vec<T>, String>,
 {
-    if let Some(cache) = ctx.metadata_cache
-        && let Some(list) = cache.get::<Vec<T>>(key)
-    {
-        return Ok(list);
+    let mut generation = 0;
+    if let Some(cache) = ctx.metadata_cache {
+        let (cached, seen) = cache.nav_list::<Vec<T>>(key);
+        if let Some(list) = cached {
+            return Ok(list);
+        }
+        generation = seen;
     }
     let list = fetch()?;
     if let Some(cache) = ctx.metadata_cache {
-        cache.put(key, &list);
+        cache.put_nav_list(key, &list, generation);
     }
     Ok(list)
 }
@@ -828,6 +834,17 @@ mod tests {
             },
         ]);
         cache
+    }
+
+    #[test]
+    fn relisting_drops_the_cached_drill_downs() {
+        let cache = validated_cache("relist-nav");
+        let nav = format!("{NAV_ALBUM_TRACKS}One");
+        cache.put(&nav, &Vec::<Track>::new());
+
+        relist_library(&cache, &MockProviders::default(), &[]);
+
+        assert!(!cache.contains(&nav));
     }
 
     #[test]
