@@ -10,9 +10,16 @@ namespace MusicBeePlugin.Settings
     {
         private static readonly ModelessWindow<SettingsDialog> Window = new ModelessWindow<SettingsDialog>();
 
-        /// <summary>Show the settings window, or bring the open one to the front. No-op if the host failed to start.</summary>
-        public static void Open(PluginHost host, string version) =>
-            Window.Open(host, () => new SettingsDialog(host, version));
+        /// <summary>
+        ///     Show the settings window, or bring the open one to the front. No-op if the host failed to start.
+        ///
+        ///     Opens on <paramref name="page" /> when given, otherwise on the page shown last.
+        /// </summary>
+        public static void Open(PluginHost host, string version, SettingsPage? page = null)
+        {
+            if (page.HasValue) SettingsDialog.LastPage = page.Value;
+            Window.Open(host, () => new SettingsDialog(host, version))?.ShowPage(SettingsDialog.LastPage);
+        }
 
         /// <inheritdoc cref="ModelessWindow{T}.CloseIfOpen" />
         public static void CloseIfOpen() => Window.CloseIfOpen();

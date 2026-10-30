@@ -39,20 +39,27 @@ namespace MusicBeePlugin.Settings
         // Plugin help / documentation, opened from the footer link.
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
 
-        // Fixed width, and the height wanted when the screen has room. The
-        // groups plus the footer do not fit 720p, so height is what gets clamped
-        // (see PreferredDialogHeight) and anything shorter scrolls.
-        private const int DialogWidth = 560;
-        private const int DialogHeight = 860;
+        // Logical sizes at 96 DPI; AutoScaleDimensions scales them with the font.
+        // The height is a floor: the window grows to its tallest page on load.
+        private const int DialogWidth = 720;
+        private const int DialogHeight = 440;
+
+        private const int NavWidth = 150;
+        private const int PagePadding = 12;
+
+        // Space after each block on a page: a status with its actions, or a group of settings.
+        private const int BlockGap = 12;
 
         // The label column every settings row lays its caption in; the value
         // column takes the rest of the width.
-        private const int LabelColumnWidth = 140;
+        private const int LabelColumnWidth = 130;
 
-        // Usable width of a value column: client width less the label column and
-        // padding, with headroom so a vertical scrollbar appearing on a short
-        // screen cannot force a horizontal one as well.
-        private const int StatusWidth = 355;
+        // What is left for a value: the page less its padding, the table's own
+        // padding (4 + 4), the label column and the value's margins (3 + 3).
+        private const int ValueColumnWidth = DialogWidth - NavWidth - 2 * PagePadding - 8 - LabelColumnWidth - 6;
+
+        /// <summary>The page shown last, so reopening the window returns to it for the rest of the session.</summary>
+        internal static SettingsPage LastPage = SettingsPage.Connection;
 
         // Closing MusicBee after an update is handed to the helper: the same
         // message its own title bar sends.
@@ -108,12 +115,17 @@ namespace MusicBeePlugin.Settings
         /// <summary>The paired count when the panel last looked.</summary>
         private int _pairedBefore;
         private Label _status;
+        private ListBox _nav;
+        private Panel _content;
+        private Font _headingFont;
+        private readonly Dictionary<SettingsPage, Control> _pages = new Dictionary<SettingsPage, Control>();
+        private readonly SettingsRows _rows = new SettingsRows(ValueColumnWidth, BlockGap);
+        private readonly PageEdits _edits = new PageEdits();
+        private IList<SettingsPage> _editedPages = new List<SettingsPage>();
 
-        /// <summary>
-        ///     The settings as the core last reported them, for telling an edit
-        ///     from the value that was already there.
-        /// </summary>
-        private byte[] _savedShape;
+        // Shown only for the filter mode that uses them.
+        private Control _rangePanel;
+        private Label _allowedHint;
 
         /// <summary>True while the controls are being filled from the core.</summary>
         private bool _loading;
@@ -155,18 +167,24 @@ namespace MusicBeePlugin.Settings
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
-            AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(DialogWidth, PreferredDialogHeight());
 
+            // Every size below is written for 96 DPI; the font measured against
+            // this baseline scales them all, margins and column widths included.
+            SuspendLayout();
+            AutoScaleDimensions = new SizeF(6F, 13F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(DialogWidth, DialogHeight);
+            _headingFont = new Font(Font.FontFamily, Font.Size + 3, FontStyle.Bold);
             BuildLayout();
+            ResumeLayout(false);
+            _nav.ItemHeight = _nav.Font.Height * 2;
+
+            _edits.InputChanged += (s, e) => ShowEdits();
             LoadFromCore();
-            WatchForEdits(this);
             LoadListeningAddresses();
             LoadCacheStatus();
-            LoadBlockedCount();
             LoadUpdateStatus();
-            LoadCaptureStatus();
-            LoadPartyMode();
+            ShowPage(LastPage);
             RunConnectionTest();
 
             // The core pushes CacheStatusChanged when a rebuild starts or
@@ -174,19 +192,18 @@ namespace MusicBeePlugin.Settings
             // refresh those lines live while this dialog is open.
             _host.CoreEvent += OnCoreEvent;
 
-            // Two things have no event to wait on: the blocked-connections log
-            // never pushes, and a running capture's countdown ticks on its own
-            // while the core only raises an event on a state change.
+            // What has no event to wait on is polled, for the visible page only:
+            // a page catches up the moment it is shown (see RefreshPage).
             _blockedTimer = new System.Windows.Forms.Timer { Interval = 3000 };
-            _blockedTimer.Tick += (s, e) =>
-            {
-                LoadBlockedCount();
-                LoadPartyMode();
-                // A code made in the Party Mode window shows here too, counting down.
-                LoadWebStatus();
-                if (_captureState == CaptureStates.Capturing) LoadCaptureStatus();
-            };
+            _blockedTimer.Tick += (s, e) => RefreshPage(LastPage);
             _blockedTimer.Start();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            FitPairedColumns();
+            FitTallestPage();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -194,100 +211,169 @@ namespace MusicBeePlugin.Settings
             _host.CoreEvent -= OnCoreEvent;
             _blockedTimer?.Stop();
             _blockedTimer?.Dispose();
+            _headingFont.Dispose();
             base.OnFormClosed(e);
         }
 
-        /// <summary>
-        ///     The dialog's client height: what the layout wants, or as much of it
-        ///     as the screen can actually show. A fixed-size window taller than the
-        ///     work area puts its bottom-docked footer - Save included - off-screen
-        ///     with no way to scroll to it, which is worse than a shorter window
-        ///     that scrolls. Measured against the work area, so the taskbar counts.
-        /// </summary>
-        private static int PreferredDialogHeight()
+        /// <summary>Switch to <paramref name="page" />, keeping every page's edits.</summary>
+        public void ShowPage(SettingsPage page)
         {
-            try
+            _nav.SelectedIndex = (int)page;
+        }
+
+        /// <summary>
+        ///     Re-read the core state a page shows that no event announces: the
+        ///     blocked log, Party Mode, web pairing, and a capture's countdown.
+        /// </summary>
+        private void RefreshPage(SettingsPage page)
+        {
+            switch (page)
             {
-                // Screen coordinates are physical pixels and ClientSize is logical,
-                // but the form has not been created yet, so there is no scale factor
-                // to ask for. The margin below absorbs the difference; getting this
-                // slightly conservative is the harmless direction.
-                var available = Screen.PrimaryScreen.WorkingArea.Height - ChromeAllowance;
-                return available < DialogHeight ? Math.Max(available, MinimumDialogHeight) : DialogHeight;
-            }
-            catch (Exception)
-            {
-                // No screen to ask (a headless or unusual session): take the small
-                // size, which fits everywhere.
-                return MinimumDialogHeight;
+                case SettingsPage.Access:
+                    LoadBlockedCount();
+                    LoadPartyMode();
+                    break;
+                case SettingsPage.WebRemote:
+                    // A code made in the Party Mode window shows here too, counting down.
+                    LoadWebStatus();
+                    break;
+                case SettingsPage.Diagnostics:
+                    LoadCaptureStatus();
+                    break;
             }
         }
 
-        // Room left for the title bar and borders, plus a little slack so the
-        // window does not sit flush against the taskbar.
-        private const int ChromeAllowance = 60;
+        /// <summary>
+        ///     Grow the window to the tallest page, within the screen's work area.
+        ///
+        ///     A page that still does not fit scrolls rather than clipping its
+        ///     last rows, so nothing it holds is ever out of reach.
+        /// </summary>
+        private void FitTallestPage()
+        {
+            PerformLayout();
+            var tallest = _pages.Values.Max(p => p.GetPreferredSize(new Size(_content.Width, 0)).Height);
+            var extra = tallest - _content.ClientSize.Height;
+            if (extra <= 0) return;
 
-        // Below this the dialog stops shrinking and just scrolls further.
-        private const int MinimumDialogHeight = 420;
+            var chrome = Height - ClientSize.Height;
+            var room = Screen.FromControl(this).WorkingArea.Height - chrome;
+            ClientSize = new Size(ClientSize.Width, Math.Min(ClientSize.Height + extra, room));
+        }
+
+        /// <summary>Split the paired list's width between its columns, leaving room for the scrollbar.</summary>
+        private void FitPairedColumns()
+        {
+            var width = _webPaired.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+            _webPaired.Columns[0].Width = width / 2;
+            _webPaired.Columns[1].Width = width / 4;
+            _webPaired.Columns[2].Width = width - width / 2 - width / 4;
+        }
+
+        /// <summary>Ctrl+Tab and Ctrl+Shift+Tab step through the pages, as in a tabbed dialog.</summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Tab) || keyData == (Keys.Control | Keys.Shift | Keys.Tab))
+            {
+                var step = (keyData & Keys.Shift) == Keys.Shift ? -1 : 1;
+                var count = SettingsPages.All.Length;
+                _nav.SelectedIndex = (_nav.SelectedIndex + step + count) % count;
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
 
         private void BuildLayout()
         {
-            // Top-docked and auto-sizing, so the table grows past the window and
-            // gives the scroller something to scroll. A Dock=Fill table lays out
-            // inside its own bounds and clips, leaving AutoScroll nothing to do.
-            var root = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                ColumnCount = 1,
-                Padding = new Padding(12),
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            };
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // connection
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // access
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // advanced
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // cache
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // updates
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // web remote
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // party mode
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // diagnostics
-
-            // No title label: the window title bar already reads "MusicBee Remote";
-            // the version sits bottom-left in the button row instead.
-            root.Controls.Add(BuildConnectionGroup());
-            root.Controls.Add(BuildAccessGroup());
-            root.Controls.Add(BuildAdvancedGroup());
-            root.Controls.Add(BuildCacheGroup());
-            root.Controls.Add(BuildUpdatesGroup());
-            root.Controls.Add(BuildWebGroup());
-            root.Controls.Add(BuildPartyGroup());
-            root.Controls.Add(BuildDiagnosticsGroup());
-            // No trailing spacer row: a Percent-100 row would absorb every
-            // overflow and the scroller below would never see one.
-
-            // The scrolling viewport: groups in, footer out, so Save and Close
-            // stay put on a short screen. The scroll extent stops where the child
-            // controls end, counting neither the table's bottom padding nor the
-            // last group's margin, which is what AutoScrollMargin has to clear.
-            var scroller = new Panel
+            _nav = new ListBox
             {
                 Dock = DockStyle.Fill,
-                AutoScroll = true,
-                AutoScrollMargin = new Size(0, 24),
+                DrawMode = DrawMode.OwnerDrawFixed,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.None,
+                Margin = new Padding(0),
             };
-            scroller.Controls.Add(root);
+            _nav.Items.AddRange(SettingsPages.All.Select(p => (object)p.Title).ToArray());
+            _nav.DrawItem += DrawNavItem;
+            _nav.SelectedIndexChanged += (s, e) => OnPageSelected();
 
-            // Bottom-docked so the row and its footer stay on-screen when the
-            // settings overflow. Added before the fill panel, so the fill claims
-            // only the space left above it.
+            _content = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+            AddPage(SettingsPage.Connection, BuildConnectionPage());
+            AddPage(SettingsPage.Access, BuildAccessPage());
+            AddPage(SettingsPage.WebRemote, BuildWebPage());
+            AddPage(SettingsPage.Library, BuildLibraryPage());
+            AddPage(SettingsPage.Updates, BuildUpdatesPage());
+            AddPage(SettingsPage.Diagnostics, BuildDiagnosticsPage());
+
             var footer = BuildButtonRow();
-            footer.Dock = DockStyle.Bottom;
             footer.Padding = new Padding(12, 6, 12, 10);
-            Controls.Add(footer);
-            Controls.Add(scroller);
+
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, NavWidth));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.Controls.Add(_nav, 0, 0);
+            root.Controls.Add(_content, 1, 0);
+            root.Controls.Add(footer, 0, 1);
+            root.SetColumnSpan(footer, 2);
+            Controls.Add(root);
         }
 
-        private GroupBox BuildConnectionGroup()
+        /// <summary>Add a page: a heading over its rows, hidden until selected.</summary>
+        private void AddPage(SettingsPage page, TableLayoutPanel rows)
+        {
+            var heading = new Label
+            {
+                Text = SettingsPages.Title(page),
+                AutoSize = true,
+                Font = _headingFont,
+                Margin = new Padding(7, 0, 0, 10),
+            };
+            // Top and auto-sized: a filled table hands its spare height to the last row.
+            rows.Dock = DockStyle.Top;
+            rows.AutoSize = true;
+
+            var frame = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                Padding = new Padding(PagePadding, PagePadding, PagePadding, 0),
+                AutoScroll = true,
+                Visible = false,
+            };
+            frame.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            frame.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            frame.Controls.Add(heading, 0, 0);
+            frame.Controls.Add(rows, 0, 1);
+
+            _pages[page] = frame;
+            _edits.Track(page, rows);
+            _content.Controls.Add(frame);
+        }
+
+        private void OnPageSelected()
+        {
+            if (_nav.SelectedIndex < 0) return;
+            LastPage = (SettingsPage)_nav.SelectedIndex;
+            foreach (var entry in _pages)
+                entry.Value.Visible = entry.Key == LastPage;
+            RefreshPage(LastPage);
+        }
+
+        /// <summary>Draws an item's own text, indented; the text carries the unsaved marker (see ShowEdits).</summary>
+        private void DrawNavItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            e.DrawBackground();
+            var text = (string)_nav.Items[e.Index];
+            var bounds = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 12, e.Bounds.Height);
+            TextRenderer.DrawText(e.Graphics, text, e.Font, bounds, e.ForeColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        private TableLayoutPanel BuildConnectionPage()
         {
             _port = new NumericUpDown { Minimum = 1, Maximum = 65535, Width = 100, Anchor = AnchorStyles.Left };
 
@@ -296,63 +382,51 @@ namespace MusicBeePlugin.Settings
                 Text = "Test connection",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
             };
             _testConn.Click += (s, e) => RunConnectionTest();
             _connStatus = new Label
             {
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 4, 0, 0),
+                Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
             };
 
-            var statusRow = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
-            };
-            statusRow.Controls.Add(_testConn);
-            statusRow.Controls.Add(_connStatus);
-
-            // Read-only list of the addresses a client can reach this server on
-            // (each interface IPv4 + the bound port), so the user knows what to
-            // enter in the phone app - as the shipped 1.4.1 panel showed.
+            // The addresses a phone app can be pointed at: each interface IPv4
+            // with the bound port.
             _addresses = new Label
             {
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 4, 0, 0),
+                Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
             };
 
             // Additive to the custom UDP discovery every shipped client uses, so
-            // clearing it costs nothing those clients depend on - it only stops
-            // the plugin appearing in Bonjour/NsdManager browsers.
+            // clearing it only hides the plugin from Bonjour/NsdManager browsers.
             _mdns = new CheckBox
             {
                 Text = "Also advertise over mDNS (Bonjour)",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
             };
+            _firewall = new CheckBox { Text = "Add a Windows firewall rule on save", AutoSize = true, Anchor = AnchorStyles.Left };
 
-            var layout = GroupLayout();
-            AddRow(layout, "Listening port", _port);
-            AddRow(layout, "Status", statusRow);
-            AddRow(layout, "Reachable at", _addresses);
-            AddRow(layout, "Discovery", _mdns);
-            return WrapGroup("Connection", layout);
+            var layout = PageLayout();
+            _rows.Add(layout, "Status", _connStatus);
+            _rows.Add(layout, string.Empty, ActionRow(_testConn), endsBlock: true);
+            _rows.Add(layout, "Reachable at", _addresses, endsBlock: true);
+            _rows.Add(layout, "Listening port", _port);
+            _rows.Add(layout, "Discovery", _mdns);
+            _rows.Add(layout, "Firewall", _firewall);
+            return layout;
         }
 
-        private GroupBox BuildAccessGroup()
+        private TableLayoutPanel BuildAccessPage()
         {
             _filterMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, Anchor = AnchorStyles.Left };
             _filterMode.Items.AddRange(new object[] { "All clients", "Address range", "Specific addresses" });
-            _filterMode.SelectedIndexChanged += (s, e) => UpdateFilterEnabled();
+            _filterMode.SelectedIndexChanged += (s, e) => ShowFilterRows();
 
             _baseIp = new TextBox { Width = 130 };
             _lastOctet = new NumericUpDown { Minimum = 0, Maximum = 255, Width = 60 };
@@ -369,71 +443,49 @@ namespace MusicBeePlugin.Settings
                 Height = 70,
                 Anchor = AnchorStyles.Left,
             };
-
-            // A count-only button that opens the blocked-connections view; kept
-            // out of the main layout so the panel stays uncluttered when nothing
-            // is being blocked. Disabled (greyed) while the count is zero.
-            _blockedBtn = new Button
-            {
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
-                Enabled = false,
-                Text = "Blocked connections (0)",
-            };
-            _blockedBtn.Click += (s, e) => ShowBlockedConnections();
-
-            var layout = GroupLayout();
-            AddRow(layout, "Allowed clients", _filterMode);
-            AddRow(layout, "Range (base IPv4)", rangePanel);
-            AddRow(layout, "Allowed addresses", _allowedAddresses);
-            AddRow(layout, string.Empty, new Label
+            _allowedHint = new Label
             {
                 Text = "One per line: an IP (192.168.1.50) or a subnet (192.168.1.0/24).",
                 AutoSize = true,
                 ForeColor = SystemColors.GrayText,
                 Anchor = AnchorStyles.Left,
-            });
-            AddRow(layout, "Blocked", _blockedBtn);
-            return WrapGroup("Access control", layout);
-        }
-
-        private GroupBox BuildAdvancedGroup()
-        {
-            _logLevel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-            _logLevel.Items.AddRange(LogLevels.Select(x => (object)x.Label).ToArray());
-
-            var openLogs = new Button
-            {
-                Text = "Open log folder",
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(8, 1, 0, 0),
             };
-            openLogs.Click += (s, e) => OpenLogFolder();
 
-            // Log level + the open-folder button on one row.
-            var logRow = new FlowLayoutPanel
+            // Greyed while nothing has been blocked; opens the detail view otherwise.
+            _blockedBtn = new Button
             {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
+                Enabled = false,
+                Text = "Blocked connections (0)",
             };
-            logRow.Controls.Add(_logLevel);
-            logRow.Controls.Add(openLogs);
+            _blockedBtn.Click += (s, e) => ShowBlockedConnections();
 
-            _firewall = new CheckBox { Text = "Add a Windows firewall rule on save", AutoSize = true, Anchor = AnchorStyles.Left };
-            var layout = GroupLayout();
-            AddRow(layout, "Log level", logRow);
-            AddRow(layout, string.Empty, _firewall);
-            return WrapGroup("Advanced", layout);
+            // Party Mode applies at once in its own window rather than on Save.
+            _partyStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 6, 0, 0),
+                ForeColor = SystemColors.GrayText,
+            };
+            var openParty = new Button { Text = "Open Party Mode...", AutoSize = true };
+            openParty.Click += (s, e) => PartyModeWindow.Open(_host);
+
+            var layout = PageLayout();
+            _rows.Add(layout, "Allowed clients", _filterMode);
+            _rangePanel = rangePanel;
+            _rows.Add(layout, "Range (base IPv4)", rangePanel);
+            _rows.Add(layout, "Allowed addresses", _allowedAddresses);
+            _rows.Add(layout, string.Empty, _allowedHint);
+            _rows.Add(layout, "Blocked", _blockedBtn, endsBlock: true);
+            _rows.Add(layout, "Party Mode", _partyStatus);
+            _rows.Add(layout, string.Empty, ActionRow(openParty), endsBlock: true);
+            return layout;
         }
 
-        private GroupBox BuildCacheGroup()
+        private TableLayoutPanel BuildLibraryPage()
         {
             _cacheStatus = new Label
             {
@@ -447,7 +499,6 @@ namespace MusicBeePlugin.Settings
                 Text = "Rebuild metadata",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
             };
             _rebuildMeta.Click += (s, e) => RebuildMetadata();
             _rebuildCovers = new Button
@@ -455,29 +506,16 @@ namespace MusicBeePlugin.Settings
                 Text = "Rebuild covers",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0),
             };
             _rebuildCovers.Click += (s, e) => RebuildCovers();
 
-            var buttons = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
-            };
-            buttons.Controls.Add(_rebuildMeta);
-            buttons.Controls.Add(_rebuildCovers);
-
-            var layout = GroupLayout();
-            AddRow(layout, "Status", _cacheStatus);
-            AddRow(layout, string.Empty, buttons);
-            return WrapGroup("Cache", layout);
+            var layout = PageLayout();
+            _rows.Add(layout, "Cache", _cacheStatus);
+            _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
+            return layout;
         }
 
-        private GroupBox BuildUpdatesGroup()
+        private TableLayoutPanel BuildUpdatesPage()
         {
             _updateStatus = new Label
             {
@@ -488,7 +526,6 @@ namespace MusicBeePlugin.Settings
                 // Wrap instead of running off the fixed-width dialog: this line
                 // carries whole sentences (a failure reason, a build
                 // requirement), not the one-word status the other groups show.
-                MaximumSize = new Size(StatusWidth, 0),
             };
 
             // One button whose meaning follows the state (check / download /
@@ -499,7 +536,6 @@ namespace MusicBeePlugin.Settings
                 Text = "Check now",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
             };
             _updateAction.Click += (s, e) => RunUpdateAction();
 
@@ -508,7 +544,6 @@ namespace MusicBeePlugin.Settings
                 Text = "Skip this version",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
                 Visible = false,
             };
             _updateSkip.Click += (s, e) => SkipUpdate();
@@ -518,23 +553,11 @@ namespace MusicBeePlugin.Settings
                 Text = "Release notes",
                 AutoSize = true,
                 Padding = new Padding(0, 5, 0, 0),
-                Margin = new Padding(0),
                 Visible = false,
             };
             _releaseNotes.LinkClicked += (s, e) => OpenReleaseNotes();
 
-            var buttons = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
-            };
-            buttons.Controls.Add(_updateAction);
-            buttons.Controls.Add(_updateSkip);
-            buttons.Controls.Add(_releaseNotes);
+            var buttons = ActionRow(_updateAction, _updateSkip, _releaseNotes);
 
             _autoCheck = new CheckBox
             {
@@ -543,33 +566,41 @@ namespace MusicBeePlugin.Settings
                 Anchor = AnchorStyles.Left,
             };
 
-            var layout = GroupLayout();
-            AddRow(layout, "Status", _updateStatus);
-            AddRow(layout, string.Empty, buttons);
-            AddRow(layout, string.Empty, _autoCheck);
-            return WrapGroup("Updates", layout);
+            var layout = PageLayout();
+            _rows.Add(layout, "Status", _updateStatus);
+            _rows.Add(layout, string.Empty, buttons, endsBlock: true);
+            _rows.Add(layout, "Schedule", _autoCheck);
+            return layout;
         }
 
-        // The Diagnostics group: Start capture -> reproduce the problem -> Stop
-        // capture, which leaves one zip on the Desktop to attach to an issue.
-        // Structurally the Cache group with a countdown: a wrapping grey status
-        // line over a row of buttons.
-        private GroupBox BuildDiagnosticsGroup()
+        // Start capture -> reproduce the problem -> Stop capture, which leaves
+        // one zip on the Desktop to attach to an issue.
+        private TableLayoutPanel BuildDiagnosticsPage()
         {
+            _logLevel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160, Anchor = AnchorStyles.Left };
+            _logLevel.Items.AddRange(LogLevels.Select(x => (object)x.Label).ToArray());
+
+            var openLogs = new Button
+            {
+                Text = "Open log folder",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Anchor = AnchorStyles.Left,
+            };
+            openLogs.Click += (s, e) => OpenLogFolder();
+
             _captureStatus = new Label
             {
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
-                MaximumSize = new Size(StatusWidth, 0),
             };
             _captureStart = new Button
             {
                 Text = "Start capture",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
             };
             _captureStart.Click += (s, e) => StartCapture();
             _captureStop = new Button
@@ -577,7 +608,6 @@ namespace MusicBeePlugin.Settings
                 Text = "Stop and save",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 8, 0),
             };
             _captureStop.Click += (s, e) => StopCapture();
             _captureCancel = new Button
@@ -585,27 +615,17 @@ namespace MusicBeePlugin.Settings
                 Text = "Cancel",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0),
             };
             _captureCancel.Click += (s, e) => CancelCapture();
 
-            var buttons = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
-            };
-            buttons.Controls.Add(_captureStart);
-            buttons.Controls.Add(_captureStop);
-            buttons.Controls.Add(_captureCancel);
+            var buttons = ActionRow(_captureStart, _captureStop, _captureCancel);
 
-            var layout = GroupLayout();
-            AddRow(layout, "Status", _captureStatus);
-            AddRow(layout, string.Empty, buttons);
-            return WrapGroup("Diagnostics", layout);
+            var layout = PageLayout();
+            _rows.Add(layout, "Log level", _logLevel);
+            _rows.Add(layout, string.Empty, ActionRow(openLogs), endsBlock: true);
+            _rows.Add(layout, "Capture", _captureStatus);
+            _rows.Add(layout, string.Empty, buttons, endsBlock: true);
+            return layout;
         }
 
         private TableLayoutPanel BuildButtonRow()
@@ -677,14 +697,12 @@ namespace MusicBeePlugin.Settings
             return row;
         }
 
-        private static TableLayoutPanel GroupLayout()
+        private static TableLayoutPanel PageLayout()
         {
             var layout = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                AutoSize = true,
-                Padding = new Padding(8, 4, 8, 8),
+                Padding = new Padding(4, 0, 4, 0),
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColumnWidth));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -692,10 +710,10 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>
-        ///     The Web remote group: the two toggles, plus the pairing controls
+        ///     The Web remote page: the two toggles, plus the pairing controls
         ///     that only matter while pairing is enforced.
         /// </summary>
-        private GroupBox BuildWebGroup()
+        private TableLayoutPanel BuildWebPage()
         {
             _webEnabled = new CheckBox
             {
@@ -716,7 +734,7 @@ namespace MusicBeePlugin.Settings
             {
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 4, 0, 0),
+                Padding = new Padding(0, 6, 0, 0),
                 ForeColor = SystemColors.GrayText,
             };
 
@@ -752,14 +770,12 @@ namespace MusicBeePlugin.Settings
                 HideSelection = false,
                 HeaderStyle = ColumnHeaderStyle.Nonclickable,
                 Height = 112,
-                Width = 360,
-                Margin = new Padding(0, 2, 0, 2)
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Margin = new Padding(3, 2, 3, 2)
             };
-            // The columns leave room for the vertical scrollbar, or a second,
-            // horizontal one appears and covers a row.
-            _webPaired.Columns.Add("Browser", 165);
-            _webPaired.Columns.Add("Paired", 85);
-            _webPaired.Columns.Add("Last seen", 85);
+            _webPaired.Columns.Add("Browser");
+            _webPaired.Columns.Add("Paired");
+            _webPaired.Columns.Add("Last seen");
             _webPaired.ShowItemToolTips = true;
             // Edited in place, which fills the box with the current name: a
             // rename is nearly always a correction to it rather than a fresh
@@ -769,20 +785,14 @@ namespace MusicBeePlugin.Settings
             _webPaired.AfterLabelEdit += RenameBrowser;
             _webPaired.SelectedIndexChanged += (s, e) => FollowSelection();
 
-            var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0) };
-            buttons.Controls.Add(_webPairBtn);
-            buttons.Controls.Add(_webCopyCodeBtn);
-            buttons.Controls.Add(_webRenameBtn);
-            buttons.Controls.Add(_webUnpairOneBtn);
-            buttons.Controls.Add(_webRevokeBtn);
-
-            var layout = GroupLayout();
-            AddRow(layout, "Web remote", _webEnabled);
-            AddRow(layout, "Pairing", _webAuth);
-            AddRow(layout, "Status", _webStatus);
-            AddRow(layout, "Paired", _webPaired);
-            AddRow(layout, string.Empty, buttons);
-            return WrapGroup("Web remote", layout);
+            var layout = PageLayout();
+            _rows.Add(layout, "Web remote", _webEnabled);
+            _rows.Add(layout, "Pairing", _webAuth);
+            _rows.Add(layout, "Status", _webStatus);
+            _rows.Add(layout, string.Empty, ActionRow(_webPairBtn, _webCopyCodeBtn), endsBlock: true);
+            _rows.Add(layout, "Paired", _webPaired);
+            _rows.Add(layout, string.Empty, ActionRow(_webRenameBtn, _webUnpairOneBtn, _webRevokeBtn), endsBlock: true);
+            return layout;
         }
 
         /// <summary>
@@ -979,28 +989,16 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>
-        ///     The Party Mode group: whether it is on, and the way to its own window,
-        ///     where everything applies at once rather than on Save.
+        ///     A row of controls that act at once, under the status they change.
+        ///
+        ///     Its left edge lines up with the status text above; buttons are
+        ///     spaced by the row, whatever margins they were built with.
         /// </summary>
-        private GroupBox BuildPartyGroup()
+        private static FlowLayoutPanel ActionRow(params Control[] controls)
         {
-            // Anchored Left only, so the row centres it on the button beside it.
-            _partyStatus = new Label
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                ForeColor = SystemColors.GrayText,
-            };
-            var open = new Button { Text = "Open Party Mode...", AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
-            open.Click += (s, e) => PartyModeWindow.Open(_host);
+            foreach (var control in controls)
+                control.Margin = new Padding(0, 0, 6, 0);
 
-            var layout = GroupLayout();
-            AddRow(layout, "Party Mode", Row(open, _partyStatus));
-            return WrapGroup("Party Mode", layout);
-        }
-
-        private static FlowLayoutPanel Row(params Control[] controls)
-        {
             var row = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.LeftToRight,
@@ -1008,7 +1006,7 @@ namespace MusicBeePlugin.Settings
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Anchor = AnchorStyles.Left,
-                Margin = new Padding(0),
+                Margin = new Padding(3, 2, 3, 0),
             };
             row.Controls.AddRange(controls);
             return row;
@@ -1034,36 +1032,6 @@ namespace MusicBeePlugin.Settings
             _partyStatus.Text = promoted == 1
                 ? "On - 1 device has a role"
                 : "On - " + promoted + " devices have a role";
-        }
-
-        private static GroupBox WrapGroup(string title, Control content)
-        {
-            var box = new GroupBox
-            {
-                Text = title,
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Margin = new Padding(0, 0, 0, 10),
-                Padding = new Padding(4, 4, 4, 4),
-            };
-            box.Controls.Add(content);
-            return box;
-        }
-
-        private static void AddRow(TableLayoutPanel layout, string label, Control control)
-        {
-            var row = layout.RowCount;
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.Controls.Add(new Label
-            {
-                Text = label,
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Padding = new Padding(0, 6, 0, 0),
-            }, 0, row);
-            layout.Controls.Add(control, 1, row);
-            layout.RowCount = row + 1;
         }
 
         /// <summary>Open the log folder (mbrc-core.log + bootstrap) in Explorer.</summary>
@@ -1337,7 +1305,7 @@ namespace MusicBeePlugin.Settings
             _webEnabled.Checked = s.web_enabled;
             _webAuth.Checked = s.web_auth_required;
             _autoCheck.Checked = s.update_check_enabled;
-            UpdateFilterEnabled();
+            ShowFilterRows();
             UpdateWebEnabled();
             LoadWebStatus();
             _loading = false;
@@ -1812,43 +1780,33 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>
-        ///     Watch every editable control under <paramref name="root" />, so an
-        ///     edit anywhere in the panel is noticed without each control having
-        ///     to remember to say so.
-        /// </summary>
-        private void WatchForEdits(Control root)
-        {
-            foreach (Control child in root.Controls)
-            {
-                if (child is CheckBox check) check.CheckedChanged += (s, e) => NoteEdit();
-                else if (child is NumericUpDown number) number.ValueChanged += (s, e) => NoteEdit();
-                else if (child is ComboBox combo) combo.SelectedIndexChanged += (s, e) => NoteEdit();
-                else if (child is TextBox text) text.TextChanged += (s, e) => NoteEdit();
-
-                WatchForEdits(child);
-            }
-        }
-
-        /// <summary>
-        ///     Say whether what is on screen is still what the core holds.
+        ///     Flag the pages whose inputs differ from what the core holds, in the list and the footer.
         ///
-        ///     Compared as serialized bytes rather than field by field, so a
-        ///     setting added later is covered without anyone remembering to add
-        ///     it here.
+        ///     The marker is part of each item's text, so a screen reader reads it
+        ///     too. Nothing is redrawn while typing keeps the same pages edited.
         /// </summary>
-        private void NoteEdit()
+        private void ShowEdits()
         {
-            if (_loading || _savedShape == null) return;
+            if (_loading) return;
 
-            var edited = !Msgpack.Serialize(Collect()).SequenceEqual(_savedShape);
-            SetStatus(edited ? "Unsaved changes - press Save to apply them." : string.Empty, true);
+            var edited = _edits.EditedPages();
+            if (edited.SequenceEqual(_editedPages)) return;
+            _editedPages = edited;
+
+            foreach (var entry in SettingsPages.All)
+            {
+                var text = edited.Contains(entry.Page) ? entry.Title + " *" : entry.Title;
+                if (!text.Equals(_nav.Items[(int)entry.Page])) _nav.Items[(int)entry.Page] = text;
+            }
+
+            SetStatus(PageEdits.Describe(edited), true);
         }
 
         /// <summary>Takes what is on screen as the saved state.</summary>
         private void MarkSaved()
         {
-            _savedShape = Msgpack.Serialize(Collect());
-            SetStatus(string.Empty, true);
+            _edits.MarkSaved();
+            ShowEdits();
         }
 
         private CoreSettings Collect()
@@ -1872,16 +1830,15 @@ namespace MusicBeePlugin.Settings
             };
         }
 
-        // Enable only the inputs the selected filter mode uses: base IP + last
+        // Show only the inputs the selected filter mode uses: base IP + last
         // octet for Range, the address list for Specific, neither for All.
-        private void UpdateFilterEnabled()
+        private void ShowFilterRows()
         {
-            var isRange = _filterMode.SelectedIndex == 1;
-            var isSpecific = _filterMode.SelectedIndex == 2;
-            _baseIp.Enabled = isRange;
-            _lastOctet.Enabled = isRange;
-            _allowedAddresses.Enabled = isSpecific;
+            _rows.SetVisible(_rangePanel, _filterMode.SelectedIndex == 1);
+            _rows.SetVisible(_allowedAddresses, _filterMode.SelectedIndex == 2);
+            _rows.SetVisible(_allowedHint, _filterMode.SelectedIndex == 2);
         }
+
 
         private void SetStatus(string text, bool ok)
         {

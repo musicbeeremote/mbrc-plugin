@@ -18,10 +18,11 @@ namespace MusicBeePlugin.Settings
         private T _current;
 
         /// <summary>Show a new window from <paramref name="create" />, or bring the open one to the front.</summary>
-        public void Open(PluginHost host, Func<T> create)
+        /// <returns>The window on screen, or null when there is no host to open it for.</returns>
+        public T Open(PluginHost host, Func<T> create)
         {
             if (host == null)
-                return;
+                return null;
 
             if (_current != null && !_current.IsDisposed)
             {
@@ -29,7 +30,7 @@ namespace MusicBeePlugin.Settings
                 if (_current.WindowState == FormWindowState.Minimized)
                     _current.WindowState = FormWindowState.Normal;
                 _current.Activate();
-                return;
+                return _current;
             }
 
             var window = create();
@@ -54,6 +55,8 @@ namespace MusicBeePlugin.Settings
                 window.ShowInTaskbar = true;
                 window.Show();
             }
+
+            return window;
         }
 
         /// <summary>
