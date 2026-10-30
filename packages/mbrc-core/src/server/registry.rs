@@ -371,6 +371,16 @@ impl ConnectionRegistry {
         }
     }
 
+    /// Handshaked connections from other machines: the apps on the network, not
+    /// this PC. Web remote browsers never register here.
+    pub fn remote_connections(&self) -> usize {
+        self.lock()
+            .conns
+            .values()
+            .filter(|m| !m.ip.is_loopback())
+            .count()
+    }
+
     #[cfg(test)]
     fn ip_count(&self, ip: IpAddr) -> usize {
         self.lock().by_ip.get(&ip).copied().unwrap_or(0)
@@ -411,6 +421,17 @@ mod tests {
         // Releasing frees a slot.
         r.release_ip(peer);
         assert_eq!(r.admit_ip(peer), IpAdmit::Admitted);
+    }
+
+    #[test]
+    fn remote_connections_leave_out_this_pc() {
+        let r = ConnectionRegistry::new(20, 3);
+        let phone = ip("192.168.1.5");
+        r.admit_ip(phone);
+        r.register(1, phone, None, Role::Subscriber, notify());
+        r.register(2, ip("127.0.0.1"), None, Role::Auxiliary, notify());
+
+        assert_eq!(r.remote_connections(), 1);
     }
 
     #[test]

@@ -231,6 +231,10 @@ pub struct Config {
     /// guesses wrong and the user would otherwise have no recourse.
     #[serde(default)]
     pub proxy_override: String,
+    /// The setup wizard version this install last finished or skipped. Below
+    /// [`crate::setup::CURRENT_SETUP_VERSION`], the host opens the wizard.
+    #[serde(default)]
+    pub setup_version: u32,
     /// The storage directory handed to `mbrc_initialize` (not read from JSON;
     /// set by [`Config::load`]). Roots the on-disk cover cache. Empty in unit
     /// tests that build a `Config` literal - the cover build is skipped then.
@@ -279,6 +283,7 @@ impl Default for Config {
             update_channel: UpdateChannel::default(),
             update_check_interval_hours: default_update_check_interval_hours(),
             proxy_override: String::new(),
+            setup_version: 0,
             storage_path: String::new(),
         }
     }

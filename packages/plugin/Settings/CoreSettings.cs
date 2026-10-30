@@ -57,5 +57,8 @@ namespace MusicBeePlugin.Settings
         ///     The panel's "Check now" button works regardless of this.
         /// </summary>
         public bool update_check_enabled { get; set; }
+
+        /// <summary>Release channel: <c>stable</c>, or <c>testing</c> to also be offered pre-releases.</summary>
+        public string update_channel { get; set; } = "stable";
     }
 }

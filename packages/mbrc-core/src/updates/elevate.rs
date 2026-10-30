@@ -565,19 +565,21 @@ unsafe fn settled_exit_code(process: windows_sys::Win32::Foundation::HANDLE) -> 
     Some(status)
 }
 
-/// Starts the helper through the shell's `runas` verb, raising the UAC prompt.
+/// Starts `exe` through the shell's `runas` verb, raising the UAC prompt.
 ///
-/// `SEE_MASK_NOASYNC` because this process is about to be asked to exit: the
-/// shell must finish launching before we can go away. `SEE_MASK_NOCLOSEPROCESS`
-/// so `hProcess` comes back and the launch can be confirmed the way the direct
-/// paths confirm theirs, with the handle ours to close.
+/// `SEE_MASK_NOASYNC` because a caller may be about to exit: the shell must
+/// finish launching first. `SEE_MASK_NOCLOSEPROCESS` so the process handle comes
+/// back, ours to close; it is null when the shell reused a process. The error is
+/// the Win32 code, `ERROR_CANCELLED` for a declined prompt.
 #[cfg(windows)]
-fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
-    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
+fn runas(
+    exe: &Path,
+    arguments: &[String],
+    show: i32,
+) -> Result<windows_sys::Win32::Foundation::HANDLE, u32> {
     use windows_sys::Win32::UI::Shell::{
         SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     let verb = wide("runas");
     let file = wide(&exe.display().to_string());
@@ -589,42 +591,111 @@ fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
     info.lpVerb = verb.as_ptr();
     info.lpFile = file.as_ptr();
     info.lpParameters = parameters.as_ptr();
-    info.nShow = SW_SHOWNORMAL;
+    info.nShow = show;
 
     // SAFETY: every pointer in `info` is a null-terminated wide string that
     // outlives the call, and `cbSize` is the struct's real size.
-    let ok = unsafe { ShellExecuteExW(&mut info) };
-    if ok != 0 {
-        // Null when the shell reused an existing process: nothing to watch,
-        // and nothing to close.
-        if !info.hProcess.is_null() {
-            // SAFETY: non-null after a successful `ShellExecuteExW` with
-            // NOCLOSEPROCESS, and closed only below.
-            let status = unsafe { settled_exit_code(info.hProcess) };
-            // SAFETY: the handle came from a successful ShellExecuteExW with
-            // NOCLOSEPROCESS, so closing it is this function's job.
-            unsafe { CloseHandle(info.hProcess) };
-            if let Some(status) = status {
-                tracing::error!(
-                    status,
-                    "the elevated update helper exited immediately; see mbrc-helper.log"
-                );
-                return UpdateLaunch::Failed;
-            }
-        }
-        return UpdateLaunch::Launched;
+    if unsafe { ShellExecuteExW(&mut info) } != 0 {
+        Ok(info.hProcess)
+    } else {
+        Err(last_error())
     }
+}
 
-    match last_error() {
-        ERROR_CANCELLED => {
+/// Starts the update helper elevated and confirms it did not refuse at once.
+#[cfg(windows)]
+fn spawn_elevated(exe: &Path, arguments: &[String]) -> UpdateLaunch {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    match runas(exe, arguments, SW_SHOWNORMAL) {
+        Ok(process) => {
+            if !process.is_null() {
+                // SAFETY: a live handle from `runas`, closed only below.
+                let status = unsafe { settled_exit_code(process) };
+                // SAFETY: the handle is ours to close, per `runas`.
+                unsafe { CloseHandle(process) };
+                if let Some(status) = status {
+                    tracing::error!(
+                        status,
+                        "the elevated update helper exited immediately; see mbrc-helper.log"
+                    );
+                    return UpdateLaunch::Failed;
+                }
+            }
+            UpdateLaunch::Launched
+        }
+        Err(ERROR_CANCELLED) => {
             tracing::info!("the user declined the elevation prompt");
             UpdateLaunch::Cancelled
         }
-        code => {
+        Err(code) => {
             tracing::error!(code, "ShellExecuteExW failed");
             UpdateLaunch::Failed
         }
     }
+}
+
+/// How an elevated run that is waited for ended.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) enum Elevated {
+    Exited(u32),
+    /// The user declined the permission prompt.
+    Declined,
+    /// Still running at the deadline; it may yet succeed.
+    TimedOut,
+    Failed,
+}
+
+/// Runs `exe` elevated with no window and waits up to `timeout` for its exit code.
+#[cfg(windows)]
+pub(crate) fn run_elevated(
+    exe: &Path,
+    arguments: &[String],
+    timeout: std::time::Duration,
+) -> Elevated {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let process = match runas(exe, arguments, SW_HIDE) {
+        Ok(process) if !process.is_null() => process,
+        Ok(_) => {
+            tracing::error!("the shell started the elevated helper without a handle to wait on");
+            return Elevated::Failed;
+        }
+        Err(ERROR_CANCELLED) => return Elevated::Declined,
+        Err(code) => {
+            tracing::error!(code, "ShellExecuteExW failed");
+            return Elevated::Failed;
+        }
+    };
+
+    let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+    // SAFETY: a live handle from `runas`, closed below.
+    let outcome = if unsafe { WaitForSingleObject(process, millis) } != WAIT_OBJECT_0 {
+        Elevated::TimedOut
+    } else {
+        let mut status: u32 = 0;
+        // SAFETY: the same live handle, plus `status` as a plain out-parameter.
+        if unsafe { GetExitCodeProcess(process, &mut status) } == 0 {
+            Elevated::Failed
+        } else {
+            Elevated::Exited(status)
+        }
+    };
+    // SAFETY: the handle is ours to close, per `runas`.
+    unsafe { CloseHandle(process) };
+    outcome
+}
+
+#[cfg(not(windows))]
+pub(crate) fn run_elevated(
+    _exe: &Path,
+    _arguments: &[String],
+    _timeout: std::time::Duration,
+) -> Elevated {
+    Elevated::Failed
 }
 
 #[cfg(not(windows))]

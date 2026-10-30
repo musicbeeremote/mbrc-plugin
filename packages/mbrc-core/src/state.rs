@@ -256,8 +256,15 @@ pub fn read_settings_bytes() -> Option<Vec<u8>> {
 pub fn set_party_mode(enabled: bool) -> Result<(), String> {
     let core = core_handle().ok_or("core not initialized")?;
     core.party_mode.set_enabled(enabled);
-    let patch = serde_json::json!({ "party_mode_enabled": enabled });
-    write_settings_bytes(&rmp_serde::to_vec_named(&patch).map_err(|e| e.to_string())?)
+    write_settings_patch(&serde_json::json!({ "party_mode_enabled": enabled }))
+}
+
+/// Persists `patch` over the saved settings; the keys it names win, the rest keep their value.
+///
+/// # Errors
+/// As [`write_settings_bytes`].
+pub fn write_settings_patch(patch: &serde_json::Value) -> Result<(), String> {
+    write_settings_bytes(&rmp_serde::to_vec_named(patch).map_err(|e| e.to_string())?)
 }
 
 /// Validates and persists new settings (MessagePack from the host) to
@@ -376,7 +383,7 @@ struct CacheStatus {
 /// or the handler has no answer. The generic entry point for the C# host's
 /// app-level reads; add a [`HostQueryType`] variant + arm here rather than a
 /// new FFI export.
-pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
+pub fn host_query(kind: HostQueryType, params: &[u8]) -> Option<Vec<u8>> {
     match kind {
         HostQueryType::CacheStatus => cache_status_bytes(),
         HostQueryType::RecentBlocked => recent_blocked_bytes(),
@@ -387,7 +394,20 @@ pub fn host_query(kind: HostQueryType, _params: &[u8]) -> Option<Vec<u8>> {
         HostQueryType::CaptureStatus => crate::diagnostics::capture::status_bytes(),
         HostQueryType::WebStatus => web_status_bytes(),
         HostQueryType::PartyModeStatus => party_mode_status_bytes(),
+        HostQueryType::SetupStatus => crate::setup::status_bytes(),
+        HostQueryType::FirewallStatus => firewall_port(params)
+            .and_then(crate::firewall::check)
+            .and_then(|status| rmp_serde::to_vec_named(&status).ok()),
+        HostQueryType::FixFirewall => firewall_port(params)
+            .map(crate::firewall::fix)
+            .and_then(|outcome| rmp_serde::to_vec_named(&outcome).ok()),
     }
+}
+
+/// The port a firewall query names, when it is a valid one.
+fn firewall_port(params: &[u8]) -> Option<u16> {
+    let request: crate::ffi::dtos::FirewallRequest = rmp_serde::from_slice(params).ok()?;
+    u16::try_from(request.port).ok().filter(|port| *port != 0)
 }
 
 /// Dispatches a host -> core command (fire-and-forget). The generic entry point
@@ -433,6 +453,7 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
             core.party_mode.clear_refusals();
             MbrcResult::Ok
         }),
+        HostCommandType::CompleteSetup => crate::setup::complete(params),
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
             core.party_mode.unassign_browsers();

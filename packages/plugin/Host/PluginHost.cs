@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using MusicBeePlugin.Providers;
 using MusicBeePlugin.Models;
 using MusicBeePlugin.Logging;
@@ -204,6 +205,30 @@ namespace MusicBeePlugin.Host
 
         public bool RevokeWebPairings() => _bridge.RevokeWebPairings();
 
+        /// <inheritdoc cref="NativeBridge.ReadSetupStatus" />
+        public SetupStatus ReadSetupStatus() => _bridge.ReadSetupStatus();
+
+        /// <summary>
+        ///     Record that setup was finished with <paramref name="choices" />, or skipped
+        ///     (null), and rebind networking when the web remote choices changed it.
+        /// </summary>
+        public bool CompleteSetup(SetupChoices choices)
+        {
+            var current = _bridge.ReadSettings() ?? new CoreSettings();
+            if (!_bridge.CompleteSetup(choices)) return false;
+            if (choices != null
+                && (choices.web_enabled != current.web_enabled
+                    || choices.web_auth_required != current.web_auth_required))
+                _bridge.Reload();
+            return true;
+        }
+
+        /// <inheritdoc cref="NativeBridge.ReadFirewallStatus" />
+        public FirewallStatus ReadFirewallStatus(int port) => _bridge.ReadFirewallStatus(port);
+
+        /// <inheritdoc cref="NativeBridge.FixFirewall" />
+        public string FixFirewall(int port) => _bridge.FixFirewall(port);
+
         /// <summary>Unpair a single browser by the id the panel shows.</summary>
         public bool RevokeWebPairing(string id) => _bridge.RevokeWebPairing(id);
 
@@ -321,31 +346,17 @@ namespace MusicBeePlugin.Host
         }
 
         /// <summary>
-        ///     Run the bundled mbrc-helper (elevated) to add/refresh the inbound
-        ///     rule for the listening port. Best-effort - a missing helper or a
-        ///     declined UAC prompt is logged, never fatal.
+        ///     Add or refresh the inbound rule for the listening port, in the background.
+        ///     Best-effort: a missing helper or a declined prompt is logged, never fatal.
         /// </summary>
         private void UpdateFirewallRule(int port)
         {
-            try
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                var cmd = $"{AppDomain.CurrentDomain.BaseDirectory}\\Plugins\\mbrc-helper.exe";
-                if (!File.Exists(cmd))
-                {
-                    _logger.Warn("mbrc-helper.exe not found; skipping firewall rule");
-                    return;
-                }
-
-                Process.Start(new ProcessStartInfo(cmd)
-                {
-                    Verb = "runas",
-                    Arguments = $"firewall --port {port}"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to update firewall rule");
-            }
+                var outcome = _bridge.FixFirewall(port);
+                if (outcome != "done")
+                    _logger.Warn($"Firewall rule for port {port} not updated: {outcome}");
+            });
         }
     }
 }

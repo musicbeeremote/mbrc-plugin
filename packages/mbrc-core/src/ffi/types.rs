@@ -350,6 +350,21 @@ pub enum HostQueryType {
     /// their roles, the outstanding pairing code and the role it grants, and the
     /// recent refusals. Returns a MessagePack `PartyModeStatus`.
     PartyModeStatus = 7,
+    /// Whether the host should open its setup wizard, whether this start is an
+    /// upgrade, and how many clients are connected, for the wizard's last step.
+    /// Returns a MessagePack `SetupStatus`.
+    SetupStatus = 8,
+    /// Whether our firewall rule lets the port in, read by `mbrc-helper firewall
+    /// --check`. The params are a MessagePack `FirewallRequest`. Returns a
+    /// MessagePack `FirewallStatus`, or nothing when the helper could not tell.
+    /// Blocks for up to ten seconds; call it off the UI thread.
+    FirewallStatus = 9,
+    /// Add or refresh our firewall rule through the elevated helper, and wait for
+    /// it: a query rather than a command because the host needs the outcome. The
+    /// params are a MessagePack `FirewallRequest`. Returns a MessagePack
+    /// `FirewallFixResult`. Blocks while the permission prompt is up; call it off
+    /// the UI thread.
+    FixFirewall = 10,
 }
 
 impl HostQueryType {
@@ -362,6 +377,9 @@ impl HostQueryType {
             5 => Some(Self::CaptureStatus),
             6 => Some(Self::WebStatus),
             7 => Some(Self::PartyModeStatus),
+            8 => Some(Self::SetupStatus),
+            9 => Some(Self::FirewallStatus),
+            10 => Some(Self::FixFirewall),
             _ => None,
         }
     }
@@ -431,6 +449,10 @@ pub enum HostCommandType {
     SetPartyRole = 15,
     /// Clear the in-memory Party Mode refusal log.
     ClearPartyRefusals = 16,
+    /// Record that the user finished or skipped the setup wizard, so it does
+    /// not open again until a release adds a step. The params are an optional
+    /// MessagePack `SetupChoices`, saved in the same write; empty for Skip.
+    CompleteSetup = 17,
 }
 
 impl HostCommandType {
@@ -452,6 +474,7 @@ impl HostCommandType {
             14 => Some(Self::SetPartyMode),
             15 => Some(Self::SetPartyRole),
             16 => Some(Self::ClearPartyRefusals),
+            17 => Some(Self::CompleteSetup),
             _ => None,
         }
     }
@@ -571,6 +594,9 @@ mod tests {
             (5, HostQueryType::CaptureStatus),
             (6, HostQueryType::WebStatus),
             (7, HostQueryType::PartyModeStatus),
+            (8, HostQueryType::SetupStatus),
+            (9, HostQueryType::FirewallStatus),
+            (10, HostQueryType::FixFirewall),
         ];
         for (value, expected) in queries {
             assert_eq!(
@@ -599,6 +625,7 @@ mod tests {
             (14, HostCommandType::SetPartyMode),
             (15, HostCommandType::SetPartyRole),
             (16, HostCommandType::ClearPartyRefusals),
+            (17, HostCommandType::CompleteSetup),
         ];
         for (value, expected) in commands {
             assert_eq!(

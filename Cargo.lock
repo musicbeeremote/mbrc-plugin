@@ -841,6 +841,8 @@ version = "0.1.0"
 dependencies = [
  "mbrc-buildinfo",
  "mbrc-release",
+ "serde",
+ "serde_json",
  "windows",
 ]
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 using MusicBeePlugin.Ffi;
@@ -191,6 +192,55 @@ namespace MusicBeePlugin
             submenu.DropDownItems.Add("Party Mode", null, (sender, args) => OpenPartyMode());
         }
 
+        /// <summary>
+        ///     Open the setup wizard if setup is due, on MusicBee's UI thread.
+        ///
+        ///     Queued rather than shown inline: <c>PluginStartup</c> may arrive off
+        ///     the UI thread, and MusicBee's own startup is never held up waiting
+        ///     for a window.
+        /// </summary>
+        private void OpenSetupIfDue()
+        {
+            var host = _host;
+            try
+            {
+                var ui = UiControl();
+                if (ui == null)
+                {
+                    LogToFallback("Setup wizard", "no MusicBee window to open it on");
+                    return;
+                }
+
+                ui.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        SetupWindow.OpenIfDue(host);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogToFallback("Setup wizard failed", ex);
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                LogToFallback("Setup wizard could not be queued", ex);
+            }
+        }
+
+        /// <summary>A live control on MusicBee's UI thread: the menu our Tools entry sits in, or an open form.</summary>
+        private Control UiControl()
+        {
+            for (var item = _menuItem; item != null; item = item.OwnerItem)
+            {
+                var owner = item.Owner;
+                if (owner != null && owner.IsHandleCreated) return owner;
+            }
+
+            return Application.OpenForms.Cast<Form>().FirstOrDefault(form => form.IsHandleCreated);
+        }
+
         /// <summary>Open the Party Mode window. No-op if the host failed to start.</summary>
         private void OpenPartyMode()
         {
@@ -335,6 +385,7 @@ namespace MusicBeePlugin
                 // they must not outlive what they read through.
                 SettingsWindow.CloseIfOpen();
                 PartyModeWindow.CloseIfOpen();
+                SetupWindow.CloseIfOpen();
                 _host?.Dispose();
             }
             catch (Exception ex)
@@ -376,6 +427,7 @@ namespace MusicBeePlugin
             {
                 SettingsWindow.CloseIfOpen();
                 PartyModeWindow.CloseIfOpen();
+                SetupWindow.CloseIfOpen();
                 _host?.Dispose();
             }
             catch (Exception ex)
@@ -534,6 +586,12 @@ namespace MusicBeePlugin
                 return;
 
             _host.LogNotification(type.ToString(), sourceFileUrl);
+
+            if (type == NotificationType.PluginStartup)
+            {
+                OpenSetupIfDue();
+                return;
+            }
 
             // Map MusicBee's notification to the core's NotificationType (the
             // generated FFI enum). Only the events the core re-queries are

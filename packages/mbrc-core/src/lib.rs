@@ -10,6 +10,7 @@ pub mod credits;
 pub mod diagnostics;
 pub mod discovery;
 pub mod ffi;
+pub mod firewall;
 pub mod legacy;
 pub mod library_changes;
 pub mod logging;
@@ -23,6 +24,7 @@ pub mod providers;
 pub mod server;
 pub mod server_identity;
 pub mod session;
+pub mod setup;
 pub mod state;
 pub mod store;
 pub mod tag_fields;
@@ -101,6 +103,7 @@ pub unsafe extern "C" fn mbrc_initialize(
         let storage_path = unsafe { cstr(storage_path) };
         logging::init(&storage_path);
 
+        setup::note_existing_install(&storage_path);
         // Rust owns settings: if only the legacy C# settings.xml exists, migrate
         // it to core_settings.json before loading (one-time, best-effort).
         config::migrate_legacy_settings(&storage_path);

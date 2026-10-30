@@ -35,12 +35,31 @@ namespace MusicBeePlugin.Settings
                 Text = "Configure...",
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left,
+                Margin = new Padding(0, 0, 6, 0),
+            };
+            configure.Click += (s, e) => OpenDialog();
+
+            var setup = new Button
+            {
+                Text = "Run setup again...",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0),
+            };
+            setup.Click += (s, e) => SetupWindow.Open(_host);
+
+            var row = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Location = new Point(0, 2),
                 Margin = new Padding(0),
             };
-            configure.Click += (s, e) => OpenDialog();
-            parent.Controls.Add(configure);
+            row.Controls.Add(configure);
+            row.Controls.Add(setup);
+            parent.Controls.Add(row);
         }
 
         /// <summary>

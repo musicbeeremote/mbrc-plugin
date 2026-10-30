@@ -491,6 +491,28 @@ namespace MusicBeePlugin.Ffi
         /// </summary>
         public WebStatus ReadWebStatus() => Query<WebStatus>(HostQueryType.WebStatus);
 
+        /// <summary>Whether to open the setup wizard, whether this start is an upgrade, and how many clients are connected.</summary>
+        public SetupStatus ReadSetupStatus() => Query<SetupStatus>(HostQueryType.SetupStatus);
+
+        /// <summary>Record that setup was finished with <paramref name="choices" />, or skipped (null).</summary>
+        public bool CompleteSetup(SetupChoices choices) =>
+            Command(HostCommandType.CompleteSetup, choices == null ? null : Msgpack.Serialize(choices));
+
+        /// <summary>
+        ///     Whether our firewall rule lets <paramref name="port" /> in, or null when the
+        ///     helper could not tell. Blocks for up to ten seconds; call it off the UI thread.
+        /// </summary>
+        public FirewallStatus ReadFirewallStatus(int port) =>
+            Query<FirewallStatus>(HostQueryType.FirewallStatus, Msgpack.Serialize(new FirewallRequest { port = port }));
+
+        /// <summary>
+        ///     Add or refresh our firewall rule through the elevated helper and return how
+        ///     it ended. Blocks while the permission prompt is up; call it off the UI thread.
+        /// </summary>
+        public string FixFirewall(int port) =>
+            Query<FirewallFixResult>(HostQueryType.FixFirewall, Msgpack.Serialize(new FirewallRequest { port = port }))
+                ?.outcome ?? "failed";
+
         /// <summary>
         ///     Mint a pairing code, replacing any still outstanding. The code
         ///     itself arrives through <see cref="ReadWebStatus" />, so the panel

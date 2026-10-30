@@ -15,6 +15,7 @@ using MusicBeePlugin.Ffi;
 using MusicBeePlugin.Ffi.Generated;
 using MusicBeePlugin.Host;
 using MusicBeePlugin.Utilities;
+using static MusicBeePlugin.Settings.SettingsLayout;
 
 namespace MusicBeePlugin.Settings
 {
@@ -38,25 +39,6 @@ namespace MusicBeePlugin.Settings
 
         // Plugin help / documentation, opened from the footer link.
         private const string HelpUrl = "https://mbrc.kelsos.net/help/plugin/";
-
-        // Logical sizes at 96 DPI; AutoScaleDimensions scales them with the font.
-        // The height is a floor: the window grows to its tallest page on load.
-        private const int DialogWidth = 720;
-        private const int DialogHeight = 440;
-
-        private const int NavWidth = 150;
-        private const int PagePadding = 12;
-
-        // Space after each block on a page: a status with its actions, or a group of settings.
-        private const int BlockGap = 12;
-
-        // The label column every settings row lays its caption in; the value
-        // column takes the rest of the width.
-        private const int LabelColumnWidth = 130;
-
-        // What is left for a value: the page less its padding, the table's own
-        // padding (4 + 4), the label column and the value's margins (3 + 3).
-        private const int ValueColumnWidth = DialogWidth - NavWidth - 2 * PagePadding - 8 - LabelColumnWidth - 6;
 
         /// <summary>The page shown last, so reopening the window returns to it for the rest of the session.</summary>
         internal static SettingsPage LastPage = SettingsPage.Connection;
@@ -168,10 +150,9 @@ namespace MusicBeePlugin.Settings
             MinimizeBox = false;
             ShowInTaskbar = false;
 
-            // Every size below is written for 96 DPI; the font measured against
-            // this baseline scales them all, margins and column widths included.
+            // Sizes are written for 96 DPI and scale with the font (see SettingsLayout).
             SuspendLayout();
-            AutoScaleDimensions = new SizeF(6F, 13F);
+            AutoScaleDimensions = BaseScale;
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(DialogWidth, DialogHeight);
             _headingFont = new Font(Font.FontFamily, Font.Size + 3, FontStyle.Bold);
@@ -203,7 +184,7 @@ namespace MusicBeePlugin.Settings
         {
             base.OnLoad(e);
             FitPairedColumns();
-            FitTallestPage();
+            FitTallestPage(this, _content, _pages.Values);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -241,24 +222,6 @@ namespace MusicBeePlugin.Settings
                     LoadCaptureStatus();
                     break;
             }
-        }
-
-        /// <summary>
-        ///     Grow the window to the tallest page, within the screen's work area.
-        ///
-        ///     A page that still does not fit scrolls rather than clipping its
-        ///     last rows, so nothing it holds is ever out of reach.
-        /// </summary>
-        private void FitTallestPage()
-        {
-            PerformLayout();
-            var tallest = _pages.Values.Max(p => p.GetPreferredSize(new Size(_content.Width, 0)).Height);
-            var extra = tallest - _content.ClientSize.Height;
-            if (extra <= 0) return;
-
-            var chrome = Height - ClientSize.Height;
-            var room = Screen.FromControl(this).WorkingArea.Height - chrome;
-            ClientSize = new Size(ClientSize.Width, Math.Min(ClientSize.Height + extra, room));
         }
 
         /// <summary>Split the paired list's width between its columns, leaving room for the scrollbar.</summary>
@@ -324,30 +287,7 @@ namespace MusicBeePlugin.Settings
         /// <summary>Add a page: a heading over its rows, hidden until selected.</summary>
         private void AddPage(SettingsPage page, TableLayoutPanel rows)
         {
-            var heading = new Label
-            {
-                Text = SettingsPages.Title(page),
-                AutoSize = true,
-                Font = _headingFont,
-                Margin = new Padding(7, 0, 0, 10),
-            };
-            // Top and auto-sized: a filled table hands its spare height to the last row.
-            rows.Dock = DockStyle.Top;
-            rows.AutoSize = true;
-
-            var frame = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                Padding = new Padding(PagePadding, PagePadding, PagePadding, 0),
-                AutoScroll = true,
-                Visible = false,
-            };
-            frame.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            frame.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            frame.Controls.Add(heading, 0, 0);
-            frame.Controls.Add(rows, 0, 1);
-
+            var frame = PageFrame(SettingsPages.Title(page), rows, _headingFont);
             _pages[page] = frame;
             _edits.Track(page, rows);
             _content.Controls.Add(frame);
@@ -412,7 +352,7 @@ namespace MusicBeePlugin.Settings
             };
             _firewall = new CheckBox { Text = "Add a Windows firewall rule on save", AutoSize = true, Anchor = AnchorStyles.Left };
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Status", _connStatus);
             _rows.Add(layout, string.Empty, ActionRow(_testConn), endsBlock: true);
             _rows.Add(layout, "Reachable at", _addresses, endsBlock: true);
@@ -473,7 +413,7 @@ namespace MusicBeePlugin.Settings
             var openParty = new Button { Text = "Open Party Mode...", AutoSize = true };
             openParty.Click += (s, e) => PartyModeWindow.Open(_host);
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Allowed clients", _filterMode);
             _rangePanel = rangePanel;
             _rows.Add(layout, "Range (base IPv4)", rangePanel);
@@ -509,7 +449,7 @@ namespace MusicBeePlugin.Settings
             };
             _rebuildCovers.Click += (s, e) => RebuildCovers();
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Cache", _cacheStatus);
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
             return layout;
@@ -566,7 +506,7 @@ namespace MusicBeePlugin.Settings
                 Anchor = AnchorStyles.Left,
             };
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Status", _updateStatus);
             _rows.Add(layout, string.Empty, buttons, endsBlock: true);
             _rows.Add(layout, "Schedule", _autoCheck);
@@ -620,7 +560,7 @@ namespace MusicBeePlugin.Settings
 
             var buttons = ActionRow(_captureStart, _captureStop, _captureCancel);
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Log level", _logLevel);
             _rows.Add(layout, string.Empty, ActionRow(openLogs), endsBlock: true);
             _rows.Add(layout, "Capture", _captureStatus);
@@ -695,18 +635,6 @@ namespace MusicBeePlugin.Settings
             row.Controls.Add(left, 0, 0);
             row.Controls.Add(buttons, 1, 0);
             return row;
-        }
-
-        private static TableLayoutPanel PageLayout()
-        {
-            var layout = new TableLayoutPanel
-            {
-                ColumnCount = 2,
-                Padding = new Padding(4, 0, 4, 0),
-            };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColumnWidth));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            return layout;
         }
 
         /// <summary>
@@ -785,7 +713,7 @@ namespace MusicBeePlugin.Settings
             _webPaired.AfterLabelEdit += RenameBrowser;
             _webPaired.SelectedIndexChanged += (s, e) => FollowSelection();
 
-            var layout = PageLayout();
+            var layout = Table();
             _rows.Add(layout, "Web remote", _webEnabled);
             _rows.Add(layout, "Pairing", _webAuth);
             _rows.Add(layout, "Status", _webStatus);
@@ -986,30 +914,6 @@ namespace MusicBeePlugin.Settings
                 _webUnpairOneBtn.Enabled = chosen;
                 _webRenameBtn.Enabled = chosen;
             }
-        }
-
-        /// <summary>
-        ///     A row of controls that act at once, under the status they change.
-        ///
-        ///     Its left edge lines up with the status text above; buttons are
-        ///     spaced by the row, whatever margins they were built with.
-        /// </summary>
-        private static FlowLayoutPanel ActionRow(params Control[] controls)
-        {
-            foreach (var control in controls)
-                control.Margin = new Padding(0, 0, 6, 0);
-
-            var row = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(3, 2, 3, 0),
-            };
-            row.Controls.AddRange(controls);
-            return row;
         }
 
         /// <summary>Summarize Party Mode: off, or on with how many devices hold a role.</summary>
@@ -1260,14 +1164,8 @@ namespace MusicBeePlugin.Settings
         /// <summary>Open the online plugin documentation in the default browser.</summary>
         private void OpenHelp()
         {
-            try
-            {
-                Process.Start(new ProcessStartInfo(HelpUrl) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                SetStatus($"Couldn't open help: {ex.Message}", false);
-            }
+            if (!TryOpenUrl(HelpUrl, out var error))
+                SetStatus($"Couldn't open help: {error}", false);
         }
 
         /// <summary>Persist the edited settings to the core.</summary>
@@ -1335,9 +1233,7 @@ namespace MusicBeePlugin.Settings
                 return;
             }
 
-            _addresses.Text = string.Join(
-                Environment.NewLine,
-                info.addresses.Select(a => a + ":" + info.port.ToString(CultureInfo.InvariantCulture)));
+            _addresses.Text = string.Join(Environment.NewLine, PanelText.Addresses(info));
         }
 
         /// <summary>Read the cache status from the core and render the line.</summary>
@@ -1556,14 +1452,8 @@ namespace MusicBeePlugin.Settings
         private void OpenReleaseNotes()
         {
             if (string.IsNullOrEmpty(_notesUrl)) return;
-            try
-            {
-                Process.Start(new ProcessStartInfo(_notesUrl) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                SetStatus($"Couldn't open the release notes: {ex.Message}", false);
-            }
+            if (!TryOpenUrl(_notesUrl, out var error))
+                SetStatus($"Couldn't open the release notes: {error}", false);
         }
 
         /// <summary>
@@ -1667,26 +1557,18 @@ namespace MusicBeePlugin.Settings
             _connStatus.Text = "Testing...";
             _connStatus.ForeColor = SystemColors.GrayText;
 
-            ThreadPool.QueueUserWorkItem(_ =>
+            OffThread(this, () =>
             {
                 var ok = ProbeVerifyConnection(port, out var detail);
-                if (IsDisposed || !IsHandleCreated) return;
-                try
-                {
-                    BeginInvoke((Action)(() =>
-                    {
-                        var p = port.ToString(CultureInfo.InvariantCulture);
-                        _connStatus.Text = ok
-                            ? "Listening on port " + p + " (local)."
-                            : "No response on port " + p + (string.IsNullOrEmpty(detail) ? "." : " (" + detail + ").");
-                        _connStatus.ForeColor = ok ? Color.Green : Color.Firebrick;
-                        _testConn.Enabled = true;
-                    }));
-                }
-                catch (Exception)
-                {
-                    // The dialog is closing; nothing to update.
-                }
+                return (ok, detail);
+            }, result =>
+            {
+                var p = port.ToString(CultureInfo.InvariantCulture);
+                _connStatus.Text = result.ok
+                    ? "Listening on port " + p + " (local)."
+                    : "No response on port " + p + (string.IsNullOrEmpty(result.detail) ? "." : " (" + result.detail + ").");
+                _connStatus.ForeColor = result.ok ? Color.Green : Color.Firebrick;
+                _testConn.Enabled = true;
             });
         }
 

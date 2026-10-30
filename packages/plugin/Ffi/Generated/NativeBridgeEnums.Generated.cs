@@ -164,6 +164,9 @@ namespace MusicBeePlugin.Ffi.Generated
         CaptureStatus = 5,
         WebStatus = 6,
         PartyModeStatus = 7,
+        SetupStatus = 8,
+        FirewallStatus = 9,
+        FixFirewall = 10,
     }
 
     public enum HostCommandType
@@ -184,6 +187,7 @@ namespace MusicBeePlugin.Ffi.Generated
         SetPartyMode = 14,
         SetPartyRole = 15,
         ClearPartyRefusals = 16,
+        CompleteSetup = 17,
     }
 
     public enum HostEventType

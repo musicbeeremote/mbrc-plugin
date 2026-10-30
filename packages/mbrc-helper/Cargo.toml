@@ -22,6 +22,8 @@ path = "src/main.rs"
 # this buys is the dependency edge: nothing the helper calls can reach into that
 # half, and building the helper on its own does not pull semver/zip/time in.
 mbrc-release.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [build-dependencies]
 mbrc-buildinfo.workspace = true

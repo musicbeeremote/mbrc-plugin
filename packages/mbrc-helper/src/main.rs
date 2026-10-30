@@ -10,6 +10,7 @@
 //!
 //! ```text
 //! mbrc-helper firewall --port <n>
+//! mbrc-helper firewall --check --port <n>
 //! mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
 //!                    [--relaunch-aumid <aumid>]
 //! ```
@@ -64,15 +65,18 @@ mbrc-helper - elevated helper for MusicBee Remote
 
 USAGE:
     mbrc-helper firewall --port <n>
+    mbrc-helper firewall --check --port <n>
     mbrc-helper update --pid <n> --staged <dir> --target <dir> --relaunch <exe>
                        [--relaunch-aumid <aumid>]
     mbrc-helper --version
 
 COMMANDS:
     firewall    Add or update the inbound firewall rule for the listening port.
+                With --check, print whether the rule lets the port in, as one
+                JSON object, and change nothing.
     update      Re-verify and apply a staged update, then relaunch MusicBee.
 
-Both commands require administrative rights.
+Both commands require administrative rights, except firewall --check.
 
 EXIT CODES:
     0  success                    5  the staged update did not verify
@@ -110,7 +114,9 @@ fn run(args: &[String]) -> Result<u8, String> {
             Ok(EXIT_OK)
         }
         "firewall" => {
-            let flags = parse_flags(&args[1..], &["port"])?;
+            let check = args.get(1).map(String::as_str) == Some("--check");
+            let rest = if check { &args[2..] } else { &args[1..] };
+            let flags = parse_flags(rest, &["port"])?;
             let port = require(&flags, "port")?;
             let port: u16 = port
                 .parse()
@@ -118,7 +124,7 @@ fn run(args: &[String]) -> Result<u8, String> {
             if port == 0 {
                 return Err("--port must be in 1..=65535, got 0".into());
             }
-            Ok(run_firewall(port))
+            Ok(run_firewall(port, check))
         }
         "update" => {
             // Accepted but not required: only a packaged (Store) MusicBee has one.
@@ -197,14 +203,32 @@ fn run_update(request: &update::Request<'_>) -> u8 {
     }
 }
 
+/// Adds or refreshes the rule for `port`, or with `check` prints whether it lets
+/// the port in, as one JSON line on stdout, and changes nothing.
 #[cfg(windows)]
-fn run_firewall(port: u16) -> u8 {
-    use firewall::{RULE_NAME, ensure_rule};
+fn run_firewall(port: u16, check: bool) -> u8 {
+    use firewall::{RULE_NAME, check_rule, ensure_rule};
 
     let policy = match firewall::com::ComPolicy::new() {
         Ok(policy) => policy,
         Err(e) => return report(e),
     };
+
+    if check {
+        return match check_rule(&policy, RULE_NAME, port) {
+            Ok(found) => match serde_json::to_string(&found) {
+                Ok(json) => {
+                    println!("{json}");
+                    EXIT_OK
+                }
+                Err(e) => {
+                    eprintln!("mbrc-helper: {e}");
+                    EXIT_FAILED
+                }
+            },
+            Err(e) => report(e),
+        };
+    }
 
     match ensure_rule(&policy, RULE_NAME, port) {
         Ok(report) => {
@@ -216,7 +240,7 @@ fn run_firewall(port: u16) -> u8 {
 }
 
 #[cfg(not(windows))]
-fn run_firewall(_port: u16) -> u8 {
+fn run_firewall(_port: u16, _check: bool) -> u8 {
     eprintln!("mbrc-helper: the firewall command is Windows-only");
     EXIT_NOT_IMPLEMENTED
 }

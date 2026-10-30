@@ -414,6 +414,50 @@ pub struct PairedBrowserName {
     pub label: String,
 }
 
+/// What the setup wizard asks the core.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupStatus {
+    /// The stored setup version is below the current one.
+    pub needed: bool,
+    /// Settings existed before this start, so the wizard says they carried over.
+    pub upgrade: bool,
+    /// App connections from other machines; the last step waits for one.
+    pub connected_devices: i32,
+}
+
+/// The wizard's choices, saved with the setup version in one write.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupChoices {
+    pub web_enabled: bool,
+    pub web_auth_required: bool,
+    pub update_check_enabled: bool,
+    /// `stable` or `testing`.
+    pub update_channel: String,
+}
+
+/// The port a firewall query is about.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirewallRequest {
+    pub port: i32,
+}
+
+/// Whether our firewall rule lets the port in, as `mbrc-helper firewall --check` prints it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirewallStatus {
+    /// `missing`, `disabled`, `other_port` or `open`.
+    pub rule: String,
+    /// `on`, `off` or `unknown`: the firewall on any active profile.
+    pub firewall: String,
+    /// `on`, `off` or `unknown`: the Public profile among the active ones.
+    pub public_network: String,
+}
+
+/// How a firewall fix ended: `done`, `declined`, `not_elevated`, `pending` or `failed`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirewallFixResult {
+    pub outcome: String,
+}
+
 /// Party Mode as the panel's group shows it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PartyModeStatus {

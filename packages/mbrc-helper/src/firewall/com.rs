@@ -4,7 +4,7 @@
 //! it is kept as thin as possible: every decision lives in
 //! [`super::ensure_rule`], which is tested against a fake.
 
-use super::{Error, FirewallPolicy, Result};
+use super::{Error, FirewallPolicy, Result, RuleState};
 
 use windows::Win32::Foundation::{E_ACCESSDENIED, VARIANT_TRUE};
 use windows::Win32::NetworkManagement::WindowsFirewall::{
@@ -154,6 +154,12 @@ impl FirewallPolicy for ComPolicy {
         unsafe { rule.SetLocalPorts(&BSTR::from(ports)).map_err(map_err) }
     }
 
+    fn enable_rule(&self, rule: &Self::Rule) -> Result<()> {
+        // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and the
+        // rule came from a checked enumeration.
+        unsafe { rule.SetEnabled(VARIANT_TRUE).map_err(map_err) }
+    }
+
     fn add_rule(&self, name: &str, ports: &str) -> Result<()> {
         unsafe {
             // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and every
@@ -177,6 +183,22 @@ impl FirewallPolicy for ComPolicy {
                 .map_err(map_err)?
                 .Add(&rule)
                 .map_err(map_err)
+        }
+    }
+
+    fn active_profiles(&self) -> Result<i32> {
+        // SAFETY: COM is initialised for this thread by `ComPolicy::new`.
+        unsafe { self.policy.CurrentProfileTypes().map_err(map_err) }
+    }
+
+    fn rule_state(&self, rule: &Self::Rule) -> Result<RuleState> {
+        // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and the
+        // rule came from a checked enumeration.
+        unsafe {
+            Ok(RuleState {
+                enabled: rule.Enabled().map_err(map_err)?.as_bool(),
+                local_ports: rule.LocalPorts().map_err(map_err)?.to_string(),
+            })
         }
     }
 }

@@ -490,6 +490,38 @@ namespace MusicBeePlugin.Ffi
         public string label { get; set; }
     }
 
+    public class SetupStatus
+    {
+        public bool needed { get; set; }
+        public bool upgrade { get; set; }
+        public int connected_devices { get; set; }
+    }
+
+    public class SetupChoices
+    {
+        public bool web_enabled { get; set; }
+        public bool web_auth_required { get; set; }
+        public bool update_check_enabled { get; set; }
+        public string update_channel { get; set; }
+    }
+
+    public class FirewallRequest
+    {
+        public int port { get; set; }
+    }
+
+    public class FirewallStatus
+    {
+        public string rule { get; set; }
+        public string firewall { get; set; }
+        public string public_network { get; set; }
+    }
+
+    public class FirewallFixResult
+    {
+        public string outcome { get; set; }
+    }
+
     public class PartyModeStatus
     {
         public bool enabled { get; set; }

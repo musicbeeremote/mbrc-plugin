@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using MusicBeePlugin.Ffi;
 
 namespace MusicBeePlugin.Settings
 {
-    /// <summary>Short time phrases the settings windows share.</summary>
+    /// <summary>Short phrases the settings windows share.</summary>
     internal static class PanelText
     {
         /// <summary>How long ago a moment was, for a column that has to be short.</summary>
@@ -16,6 +19,14 @@ namespace MusicBeePlugin.Settings
             if (elapsed.TotalMinutes < 60) return (int)elapsed.TotalMinutes + " min ago";
             if (elapsed.TotalHours < 24) return (int)elapsed.TotalHours + "h ago";
             return when.ToString("d MMM HH:mm", CultureInfo.CurrentCulture);
+        }
+
+        /// <summary>The <c>address:port</c> pairs a client can reach; empty when there are none.</summary>
+        public static IList<string> Addresses(ListeningInfo info)
+        {
+            if (info?.addresses == null) return new List<string>();
+            var port = info.port.ToString(CultureInfo.InvariantCulture);
+            return info.addresses.Select(a => a + ":" + port).ToList();
         }
 
         /// <summary>Seconds left on a pairing code, as m:ss or Ns.</summary>
