@@ -1,4 +1,4 @@
-namespace MusicBeePlugin.Settings
+﻿namespace MusicBeePlugin.Settings
 {
     /// <summary>A page of the settings window. The value is its position in the navigation list.</summary>
     internal enum SettingsPage
