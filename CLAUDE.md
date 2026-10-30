@@ -56,6 +56,7 @@ dotnet format            # or: --verify-no-changes, whitespace, style, analyzers
 ```bash
 cargo test -p mbrc-core --target i686-pc-windows-msvc   # Rust core + integration suites
 # C# xUnit suite: MusicBeeRemote.Core.Tests (built by MBRC.sln, sources under tests/csharp/)
+.\tools\render-ui.ps1   # settings pages + setup wizard to PNG in build\ui-renders, no MusicBee
 ```
 
 ### Development Environment
