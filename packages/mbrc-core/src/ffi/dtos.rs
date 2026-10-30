@@ -444,7 +444,7 @@ pub struct FirewallRequest {
 /// Whether our firewall rule lets the port in, as `mbrc-helper firewall --check` prints it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FirewallStatus {
-    /// `missing`, `disabled`, `other_port` or `open`.
+    /// `missing`, `disabled`, `blocking`, `other_port`, `other_profile` or `open`.
     pub rule: String,
     /// `on`, `off` or `unknown`: the firewall on any active profile.
     pub firewall: String,

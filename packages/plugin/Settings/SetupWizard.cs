@@ -97,6 +97,16 @@ namespace MusicBeePlugin.Settings
             FitTallestPage(this, _content, _pages);
         }
 
+        /// <summary>
+        ///     Close for a MusicBee shutdown or a disabled plugin, which is not the
+        ///     user skipping: the wizard asks again on the next start.
+        /// </summary>
+        internal void CloseWithoutCompleting()
+        {
+            _done = true;
+            Close();
+        }
+
         /// <summary>Closing the window counts as Skip: the wizard never asks twice.</summary>
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
@@ -476,7 +486,7 @@ namespace MusicBeePlugin.Settings
         {
             _back.Enabled = _step > 0;
             _next.Text = OnLastStep ? "Finish" : "Next";
-            var unconfirmedPublic = _firewall?.public_network == "on" && !_publicConfirm.Checked;
+            var unconfirmedPublic = _firewall?.public_network == FirewallStates.On && !_publicConfirm.Checked;
             _next.Enabled = _pages[_step] != _firewallPage || (!_firewallBusy && !unconfirmedPublic);
             _fixFirewall.Enabled = !_firewallBusy;
             _recheckFirewall.Enabled = !_firewallBusy;
@@ -503,19 +513,19 @@ namespace MusicBeePlugin.Settings
                 SetFirewallStatus(
                     "Could not read the firewall's state. You can continue; if your phone cannot connect, "
                     + "check the firewall.", SystemColors.GrayText);
-            else if (status.firewall == "off")
+            else if (status.firewall == FirewallStates.Off)
                 SetFirewallStatus("Windows Firewall is off, so nothing blocks port " + port + ".", Color.Green);
-            else if (status.rule == "open")
+            else if (status.rule == FirewallStates.RuleOpen)
                 SetFirewallStatus("Port " + port + " is open to MusicBee Remote.", Color.Green);
             else
             {
                 blocked = true;
                 SetFirewallStatus(DescribeBlocked(status.rule, port), Color.Firebrick);
-                _fixFirewall.Text = status.rule == "missing" ? "Add the rule" : "Fix the rule";
+                _fixFirewall.Text = status.rule == FirewallStates.RuleMissing ? "Add the rule" : "Fix the rule";
             }
 
             _fixFirewall.Visible = blocked;
-            var isPublic = status?.public_network == "on";
+            var isPublic = status?.public_network == FirewallStates.On;
             _rows.SetVisible(_publicWarning, isPublic);
             _rows.SetVisible(_publicConfirm, isPublic);
             UpdateButtons();
@@ -525,9 +535,16 @@ namespace MusicBeePlugin.Settings
         {
             switch (rule)
             {
-                case "missing": return "No firewall rule lets phones reach port " + port + " yet.";
-                case "disabled": return "The MusicBee Remote firewall rule is turned off.";
-                default: return "The MusicBee Remote firewall rule does not include port " + port + ".";
+                case FirewallStates.RuleMissing:
+                    return "No firewall rule lets phones reach port " + port + " yet.";
+                case FirewallStates.RuleDisabled:
+                    return "The MusicBee Remote firewall rule is turned off.";
+                case FirewallStates.RuleBlocking:
+                    return "The MusicBee Remote firewall rule blocks connections instead of allowing them.";
+                case FirewallStates.RuleOtherProfile:
+                    return "The MusicBee Remote firewall rule does not apply to the network this PC is on.";
+                default:
+                    return "The MusicBee Remote firewall rule does not include port " + port + ".";
             }
         }
 
@@ -541,14 +558,19 @@ namespace MusicBeePlugin.Settings
             {
                 switch (outcome)
                 {
-                    case "done":
-                    case "pending":
+                    case FirewallStates.FixDone:
                         CheckFirewall();
                         return;
-                    case "declined":
+                    case FirewallStates.FixPending:
+                        // The helper is still at it: checking now would offer the fix a second time.
+                        SetFirewallStatus("Windows is still applying the change. Press Check again in a moment.",
+                            SystemColors.GrayText);
+                        _fixFirewall.Visible = false;
+                        break;
+                    case FirewallStates.FixDeclined:
                         SetFirewallStatus("The permission prompt was declined, so nothing changed.", Color.Firebrick);
                         break;
-                    case "not_elevated":
+                    case FirewallStates.FixNotElevated:
                         SetFirewallStatus("Adding the rule needs administrator rights.", Color.Firebrick);
                         break;
                     default:

@@ -112,16 +112,19 @@ fn hide_window(_command: &mut Command) {}
 mod tests {
     use super::*;
 
+    /// What `mbrc-helper firewall --check` prints; its own test serializes to this same file.
+    const HELPER_CONTRACT: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/golden/firewall-check.json"
+    ));
+
     #[test]
     fn the_helpers_check_output_reads_as_a_status() {
-        let status: FirewallStatus = serde_json::from_str(
-            r#"{"rule":"other_port","firewall":"on","public_network":"unknown"}"#,
-        )
-        .unwrap();
+        let status: FirewallStatus = serde_json::from_str(HELPER_CONTRACT.trim()).unwrap();
 
-        assert_eq!(status.rule, "other_port");
-        assert_eq!(status.firewall, "on");
-        assert_eq!(status.public_network, "unknown");
+        assert_eq!(status.rule, "other_profile");
+        assert_eq!(status.firewall, "unknown");
+        assert_eq!(status.public_network, "on");
     }
 
     #[test]

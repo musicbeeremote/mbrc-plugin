@@ -216,9 +216,10 @@ namespace MusicBeePlugin.Host
         {
             var current = _bridge.ReadSettings() ?? new CoreSettings();
             if (!_bridge.CompleteSetup(choices)) return false;
-            if (choices != null
-                && (choices.web_enabled != current.web_enabled
-                    || choices.web_auth_required != current.web_auth_required))
+            if (choices == null) return true;
+
+            var updated = _bridge.ReadSettings() ?? current;
+            if (NeedsRestart(current, updated))
                 _bridge.Reload();
             return true;
         }
@@ -354,7 +355,7 @@ namespace MusicBeePlugin.Host
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 var outcome = _bridge.FixFirewall(port);
-                if (outcome != "done")
+                if (outcome != FirewallStates.FixDone)
                     _logger.Warn($"Firewall rule for port {port} not updated: {outcome}");
             });
         }

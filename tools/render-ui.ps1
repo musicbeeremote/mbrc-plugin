@@ -20,7 +20,8 @@
     on a real display before trusting them.
 
 .PARAMETER OutDir
-    Where the PNGs go. Emptied first.
+    Where the PNG files go. Earlier renders there (settings-*.png, setup-*.png) are
+    replaced; nothing else is touched.
 
 .EXAMPLE
     .\tools\render-ui.ps1
@@ -44,8 +45,9 @@ if (-not (Test-Path $runner)) {
 }
 
 $OutDir = [System.IO.Path]::GetFullPath($OutDir)
-if (Test-Path $OutDir) { Remove-Item $OutDir -Recurse -Force }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
+# Only images this script writes: OutDir may be any folder the caller names.
+Get-ChildItem -Path (Join-Path $OutDir '*') -File -Include 'settings-*.png', 'setup-*.png' | Remove-Item -Force
 
 $failed = $false
 try {
@@ -61,7 +63,6 @@ finally {
     Remove-Item Env:MBRC_RENDER_DIR, Env:MBRC_RENDER_SCALE -ErrorAction SilentlyContinue
 }
 
-Remove-Item (Join-Path $OutDir 'storage') -Recurse -Force -ErrorAction SilentlyContinue
 $count = (Get-ChildItem $OutDir -Filter *.png).Count
 Write-Host "$count image(s) in $OutDir"
 if ($failed) { throw 'A render test failed; see the output above.' }

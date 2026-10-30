@@ -17,6 +17,9 @@ namespace MusicBeePlugin.Settings
     {
         private T _current;
 
+        /// <summary>The window on screen, or null.</summary>
+        public T Current => _current != null && !_current.IsDisposed ? _current : null;
+
         /// <summary>Show a new window from <paramref name="create" />, or bring the open one to the front.</summary>
         /// <returns>The window on screen, or null when there is no host to open it for.</returns>
         public T Open(PluginHost host, Func<T> create)

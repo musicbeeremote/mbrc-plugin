@@ -9,8 +9,8 @@ use super::{Error, FirewallPolicy, Result, RuleState};
 use windows::Win32::Foundation::{E_ACCESSDENIED, VARIANT_TRUE};
 use windows::Win32::NetworkManagement::WindowsFirewall::{
     INetFwPolicy2, INetFwRule, NET_FW_ACTION_ALLOW, NET_FW_IP_PROTOCOL_TCP, NET_FW_PROFILE_TYPE2,
-    NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC, NET_FW_RULE_DIR_IN,
-    NetFwPolicy2, NetFwRule,
+    NET_FW_PROFILE2_ALL, NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC,
+    NET_FW_RULE_DIR_IN, NetFwPolicy2, NetFwRule,
 };
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IDispatch,
@@ -154,10 +154,15 @@ impl FirewallPolicy for ComPolicy {
         unsafe { rule.SetLocalPorts(&BSTR::from(ports)).map_err(map_err) }
     }
 
-    fn enable_rule(&self, rule: &Self::Rule) -> Result<()> {
+    fn restore_rule(&self, rule: &Self::Rule) -> Result<()> {
         // SAFETY: COM is initialised for this thread by `ComPolicy::new`, and the
         // rule came from a checked enumeration.
-        unsafe { rule.SetEnabled(VARIANT_TRUE).map_err(map_err) }
+        unsafe {
+            rule.SetEnabled(VARIANT_TRUE).map_err(map_err)?;
+            rule.SetAction(NET_FW_ACTION_ALLOW).map_err(map_err)?;
+            rule.SetDirection(NET_FW_RULE_DIR_IN).map_err(map_err)?;
+            rule.SetProfiles(NET_FW_PROFILE2_ALL.0).map_err(map_err)
+        }
     }
 
     fn add_rule(&self, name: &str, ports: &str) -> Result<()> {
@@ -197,7 +202,10 @@ impl FirewallPolicy for ComPolicy {
         unsafe {
             Ok(RuleState {
                 enabled: rule.Enabled().map_err(map_err)?.as_bool(),
+                allows_inbound: rule.Action().map_err(map_err)? == NET_FW_ACTION_ALLOW
+                    && rule.Direction().map_err(map_err)? == NET_FW_RULE_DIR_IN,
                 local_ports: rule.LocalPorts().map_err(map_err)?.to_string(),
+                profiles: rule.Profiles().map_err(map_err)?,
             })
         }
     }

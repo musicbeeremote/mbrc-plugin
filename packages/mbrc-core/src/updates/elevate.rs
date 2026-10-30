@@ -654,7 +654,9 @@ pub(crate) fn run_elevated(
     arguments: &[String],
     timeout: std::time::Duration,
 ) -> Elevated {
-    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, WAIT_OBJECT_0};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_CANCELLED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    };
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
@@ -673,15 +675,20 @@ pub(crate) fn run_elevated(
 
     let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
     // SAFETY: a live handle from `runas`, closed below.
-    let outcome = if unsafe { WaitForSingleObject(process, millis) } != WAIT_OBJECT_0 {
-        Elevated::TimedOut
-    } else {
-        let mut status: u32 = 0;
-        // SAFETY: the same live handle, plus `status` as a plain out-parameter.
-        if unsafe { GetExitCodeProcess(process, &mut status) } == 0 {
+    let outcome = match unsafe { WaitForSingleObject(process, millis) } {
+        WAIT_OBJECT_0 => {
+            let mut status: u32 = 0;
+            // SAFETY: the same live handle, plus `status` as a plain out-parameter.
+            if unsafe { GetExitCodeProcess(process, &mut status) } == 0 {
+                Elevated::Failed
+            } else {
+                Elevated::Exited(status)
+            }
+        }
+        WAIT_TIMEOUT => Elevated::TimedOut,
+        other => {
+            tracing::error!(code = other, "could not wait for the elevated helper");
             Elevated::Failed
-        } else {
-            Elevated::Exited(status)
         }
     };
     // SAFETY: the handle is ours to close, per `runas`.

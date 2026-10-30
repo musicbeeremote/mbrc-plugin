@@ -68,6 +68,7 @@ namespace MusicBeeRemote.Core.Tests.Settings
                     {
                         wizard.ShowStep(step);
                         Settle();
+                        WaitForFirewallCheck(wizard);
                         Save(wizard, "setup-" + step.ToString(CultureInfo.InvariantCulture));
                         AssertNoPageScrolls(wizard);
                     }
@@ -111,7 +112,7 @@ namespace MusicBeeRemote.Core.Tests.Settings
                 {
                     // MusicBee draws with visual styles; without them controls render in the flat classic look.
                     Application.EnableVisualStyles();
-                    var storage = Path.Combine(OutputDir, "storage");
+                    var storage = Path.Combine(Path.GetTempPath(), "mbrc-render-storage");
                     Directory.CreateDirectory(storage);
                     using (var host = new PluginHost(new Plugin.MusicBeeApiInterface(), storage, "2.0.0"))
                     {
@@ -140,6 +141,17 @@ namespace MusicBeeRemote.Core.Tests.Settings
             form.Show();
             Settle();
             return form;
+        }
+
+        /// <summary>
+        ///     Wait out the firewall step's background check, so its reply cannot land
+        ///     after a status the test sets by hand.
+        /// </summary>
+        private static void WaitForFirewallCheck(Form wizard)
+        {
+            var recheck = Find<Button>(wizard, b => b.Text == "Check again");
+            for (var i = 0; i < 300 && !recheck.Enabled; i++)
+                Settle();
         }
 
         /// <summary>Let layout and background replies land: the firewall check answers through BeginInvoke.</summary>

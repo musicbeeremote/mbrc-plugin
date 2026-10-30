@@ -30,7 +30,7 @@ pub const RULE_NAME: &str = "MusicBee Remote: Listening Port";
 pub enum Outcome {
     /// No rule with this name existed, so one was added.
     Created,
-    /// A rule with this name existed; it was turned on and its port list rewritten.
+    /// A rule with this name existed; it was restored to an inbound allow rule and pointed at the port.
     Updated,
 }
 
@@ -38,7 +38,7 @@ impl fmt::Display for Outcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Outcome::Created => f.write_str("rule created"),
-            Outcome::Updated => f.write_str("rule already present; enabled and port updated"),
+            Outcome::Updated => f.write_str("rule already present; restored and port updated"),
         }
     }
 }
@@ -98,8 +98,12 @@ pub const PUBLIC_PROFILE: i32 = 0x4;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleState {
     pub enabled: bool,
+    /// The rule allows traffic, and inbound traffic: what our rule is for.
+    pub allows_inbound: bool,
     /// The rule's `LocalPorts`: `*`, or a comma list of ports and `a-b` ranges.
     pub local_ports: String,
+    /// The `NET_FW_PROFILE2_*` profiles the rule applies to.
+    pub profiles: i32,
 }
 
 /// The slice of the firewall API this port needs, behind a trait so the
@@ -123,8 +127,9 @@ pub trait FirewallPolicy {
     /// Rewrites an existing rule's local port list.
     fn set_local_ports(&self, rule: &Self::Rule, ports: &str) -> Result<()>;
 
-    /// Turns an existing rule on.
-    fn enable_rule(&self, rule: &Self::Rule) -> Result<()>;
+    /// Makes an existing rule what [`FirewallPolicy::add_rule`] creates: on,
+    /// allowing inbound traffic, for every profile.
+    fn restore_rule(&self, rule: &Self::Rule) -> Result<()>;
 
     /// Adds a new inbound allow rule for `ports`.
     fn add_rule(&self, name: &str, ports: &str) -> Result<()>;
@@ -132,7 +137,7 @@ pub trait FirewallPolicy {
     /// The profiles active now, as a `NET_FW_PROFILE2_*` bit mask.
     fn active_profiles(&self) -> Result<i32>;
 
-    /// Whether `rule` is enabled, and the local ports it opens.
+    /// What `rule` does: on or off, allow or block, its ports and profiles.
     fn rule_state(&self, rule: &Self::Rule) -> Result<RuleState>;
 }
 
@@ -145,8 +150,12 @@ pub enum RuleStatus {
     Missing,
     /// Every rule with our name is turned off.
     Disabled,
-    /// An enabled rule with our name exists, but none opens the port.
+    /// It blocks, or applies to outgoing traffic, instead of letting phones in.
+    Blocking,
+    /// It lets traffic in, but not on the port.
     OtherPort,
+    /// It opens the port, but not on the network profile that is active now.
+    OtherProfile,
     Open,
 }
 
@@ -188,31 +197,38 @@ pub struct Check {
 /// # Errors
 /// The rule collection could not be read.
 pub fn check_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Result<Check> {
+    // No active profile at all is no answer: a running firewall always has one.
+    let active = policy.active_profiles().ok().filter(|mask| *mask != 0);
     let mut rule = RuleStatus::Missing;
     for (rule_name, handle) in policy.rules()? {
         if rule_name != name {
             continue;
         }
-        let Ok(state) = policy.rule_state(&handle) else {
-            continue;
-        };
-        let this = match (state.enabled, ports_cover(&state.local_ports, port)) {
-            (false, _) => RuleStatus::Disabled,
-            (true, false) => RuleStatus::OtherPort,
-            (true, true) => RuleStatus::Open,
-        };
-        rule = rule.max(this);
+        if let Ok(state) = policy.rule_state(&handle) {
+            rule = rule.max(status_of(&state, port, active));
+        }
     }
 
     Ok(Check {
         rule,
         firewall: policy.is_enabled().ok().into(),
-        public_network: policy
-            .active_profiles()
-            .ok()
-            .map(|mask| mask & PUBLIC_PROFILE != 0)
-            .into(),
+        public_network: active.map(|mask| mask & PUBLIC_PROFILE != 0).into(),
     })
+}
+
+/// What one rule does for `port` on the `active` profiles; unreadable profiles do not count against it.
+fn status_of(state: &RuleState, port: u16, active: Option<i32>) -> RuleStatus {
+    if !state.enabled {
+        RuleStatus::Disabled
+    } else if !state.allows_inbound {
+        RuleStatus::Blocking
+    } else if !ports_cover(&state.local_ports, port) {
+        RuleStatus::OtherPort
+    } else if active.is_some_and(|mask| state.profiles & mask == 0) {
+        RuleStatus::OtherProfile
+    } else {
+        RuleStatus::Open
+    }
 }
 
 /// Whether a `LocalPorts` value opens `port`. Keywords such as `RPC` open nothing here.
@@ -231,7 +247,7 @@ pub fn ports_cover(local_ports: &str, port: u16) -> bool {
     })
 }
 
-/// Creates the rule, or turns the existing one on and points it at `port`.
+/// Creates the rule, or restores the existing one and points it at `port`.
 ///
 /// Runs regardless of whether the firewall is enabled; see the module docs for
 /// why. Idempotent by design: running it twice with the same port is a no-op the
@@ -252,7 +268,7 @@ pub fn ensure_rule<P: FirewallPolicy>(policy: &P, name: &str, port: u16) -> Resu
 
     let outcome = match existing {
         Some((_, rule)) => {
-            policy.enable_rule(&rule)?;
+            policy.restore_rule(&rule)?;
             policy.set_local_ports(&rule, &ports)?;
             Outcome::Updated
         }
@@ -288,7 +304,7 @@ mod tests {
         fail_profiles: bool,
         added: RefCell<Vec<(String, String)>>,
         updated: RefCell<Vec<(String, String)>>,
-        enabled_rules: RefCell<Vec<String>>,
+        restored: RefCell<Vec<String>>,
         fail_enumeration: bool,
         fail_enabled_query: bool,
     }
@@ -317,8 +333,8 @@ mod tests {
             Ok(())
         }
 
-        fn enable_rule(&self, rule: &Self::Rule) -> Result<()> {
-            self.enabled_rules.borrow_mut().push(rule.clone());
+        fn restore_rule(&self, rule: &Self::Rule) -> Result<()> {
+            self.restored.borrow_mut().push(rule.clone());
             Ok(())
         }
 
@@ -342,17 +358,19 @@ mod tests {
                 .iter()
                 .find(|(name, _)| name == rule)
                 .map(|(_, state)| state.clone())
-                .unwrap_or(RuleState {
-                    enabled: true,
-                    local_ports: "3000".into(),
-                }))
+                .unwrap_or_else(|| state(true, "3000")))
         }
     }
+
+    const ALL_PROFILES: i32 = 0x7fff_ffff;
+    const PRIVATE_PROFILE: i32 = 0x2;
 
     fn state(enabled: bool, local_ports: &str) -> RuleState {
         RuleState {
             enabled,
+            allows_inbound: true,
             local_ports: local_ports.into(),
+            profiles: ALL_PROFILES,
         }
     }
 
@@ -447,17 +465,23 @@ mod tests {
         assert_eq!(check(&unreadable).public_network, Tristate::Unknown);
     }
 
+    /// The core parses this same file into its `FirewallStatus`, so a rename on either side fails a test.
+    const CORE_CONTRACT: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/golden/firewall-check.json"
+    ));
+
     #[test]
     fn check_serializes_as_the_core_reads_it() {
         let report = Check {
-            rule: RuleStatus::OtherPort,
+            rule: RuleStatus::OtherProfile,
             firewall: Tristate::Unknown,
             public_network: Tristate::On,
         };
 
         assert_eq!(
             serde_json::to_string(&report).unwrap(),
-            r#"{"rule":"other_port","firewall":"unknown","public_network":"on"}"#
+            CORE_CONTRACT.trim()
         );
     }
 
@@ -542,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_rule_is_turned_back_on() {
+    fn an_existing_rule_is_restored() {
         let policy = FakePolicy {
             rules: vec![RULE_NAME.to_string()],
             states: vec![(RULE_NAME.into(), state(false, "3000"))],
@@ -551,8 +575,40 @@ mod tests {
 
         ensure_rule(&policy, RULE_NAME, 3000).unwrap();
         assert_eq!(
-            policy.enabled_rules.borrow().as_slice(),
+            policy.restored.borrow().as_slice(),
             &[RULE_NAME.to_string()]
+        );
+    }
+
+    #[test]
+    fn a_rule_that_blocks_or_faces_outward_is_not_open() {
+        let blocking = RuleState {
+            allows_inbound: false,
+            ..state(true, "3000")
+        };
+
+        assert_eq!(status_of(&blocking, 3000, None), RuleStatus::Blocking);
+    }
+
+    #[test]
+    fn a_rule_for_another_profile_is_not_open_on_this_one() {
+        let private_only = RuleState {
+            profiles: PRIVATE_PROFILE,
+            ..state(true, "3000")
+        };
+
+        assert_eq!(
+            status_of(&private_only, 3000, Some(PUBLIC_PROFILE)),
+            RuleStatus::OtherProfile
+        );
+        assert_eq!(
+            status_of(&private_only, 3000, Some(PRIVATE_PROFILE)),
+            RuleStatus::Open
+        );
+        assert_eq!(
+            status_of(&private_only, 3000, None),
+            RuleStatus::Open,
+            "unreadable profiles do not count"
         );
     }
 

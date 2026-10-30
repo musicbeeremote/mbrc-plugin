@@ -47,8 +47,8 @@ namespace MusicBeePlugin.Settings
         private static void Open(PluginHost host, SetupStatus status) =>
             Window.Open(host, () => new SetupWizard(host, status));
 
-        /// <inheritdoc cref="ModelessWindow{T}.CloseIfOpen" />
-        public static void CloseIfOpen() => Window.CloseIfOpen();
+        /// <summary>Close the wizard for a shutdown, leaving setup due so it opens next time.</summary>
+        public static void CloseIfOpen() => Window.Current?.CloseWithoutCompleting();
     }
 
     /// <summary>
