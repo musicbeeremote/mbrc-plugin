@@ -6,6 +6,8 @@ export const CreditSchema = z.object({
   role: z.enum(['artist', 'guest', 'performer', 'remixer']),
   /** A performer's instrument or part. */
   detail: z.string().optional(),
+  /** The artist's picture, on one track's own view and only when one is stored. */
+  image_hash: z.string().optional(),
 })
 export type Credit = z.infer<typeof CreditSchema>
 
