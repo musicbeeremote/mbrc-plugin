@@ -112,6 +112,7 @@ namespace MusicBeePlugin.Settings
         /// <summary>True while the controls are being filled from the core.</summary>
         private bool _loading;
         private Label _cacheStatus;
+        private CheckBox _artistImages;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
         private Button _rebuildCovers;
@@ -453,9 +454,25 @@ namespace MusicBeePlugin.Settings
             };
             _rebuildCovers.Click += (s, e) => RebuildCovers();
 
+            _artistImages = new CheckBox
+            {
+                Text = "Download artist pictures",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+            var artistImagesHint = new Label
+            {
+                Text = "Sends the names of the artists you browse and play to MusicBrainz and Wikimedia.",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                ForeColor = SystemColors.GrayText,
+            };
+
             var layout = Table();
             _rows.Add(layout, "Cache", _cacheStatus);
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
+            _rows.Add(layout, "Artist pictures", _artistImages);
+            _rows.Add(layout, string.Empty, artistImagesHint);
             return layout;
         }
 
@@ -1207,6 +1224,7 @@ namespace MusicBeePlugin.Settings
             _webEnabled.Checked = s.web_enabled;
             _webAuth.Checked = s.web_auth_required;
             _autoCheck.Checked = s.update_check_enabled;
+            _artistImages.Checked = s.artist_images_enabled;
             ShowFilterRows();
             UpdateWebEnabled();
             LoadWebStatus();
@@ -1713,6 +1731,7 @@ namespace MusicBeePlugin.Settings
                 web_auth_required = _webAuth.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
+                artist_images_enabled = _artistImages.Checked,
             };
         }
 

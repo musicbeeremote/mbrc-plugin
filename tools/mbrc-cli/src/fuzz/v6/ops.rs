@@ -35,6 +35,8 @@ pub enum Kind {
     Album,
     /// `id` and `index` from one harvested podcast episode.
     Episode,
+    /// A few names from a pool, as an array.
+    ListFrom(Pool),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -183,6 +185,10 @@ pub const SPECS: &[OpSpec] = &[
             opt("artist", Kind::From(Pool::Artist)),
             opt("album", Kind::Album),
         ],
+    },
+    OpSpec {
+        op: "library_artist_images",
+        fields: &[req("artists", Kind::ListFrom(Pool::Artist))],
     },
     OpSpec {
         op: "library_radio",
@@ -354,8 +360,11 @@ pub fn valid(rng: &mut Rng, spec: &OpSpec, harvest: &Harvest) -> Option<(Value, 
         if !filled && field.required {
             return None;
         }
-        names_an_item |=
-            filled && matches!(field.kind, Kind::From(_) | Kind::Album | Kind::Episode);
+        names_an_item |= filled
+            && matches!(
+                field.kind,
+                Kind::From(_) | Kind::ListFrom(_) | Kind::Album | Kind::Episode
+            );
     }
     Some((Value::Object(data), names_an_item))
 }
@@ -369,6 +378,13 @@ fn fill(rng: &mut Rng, field: &Field, harvest: &Harvest, data: &mut Map<String, 
         Kind::From(pool) => match harvest.pool(pool) {
             [] => return false,
             values => json!(rng.choice(values)),
+        },
+        Kind::ListFrom(pool) => match harvest.pool(pool) {
+            [] => return false,
+            values => {
+                let count = 1 + rng.below(5);
+                json!((0..count).map(|_| rng.choice(values)).collect::<Vec<_>>())
+            }
         },
         Kind::Album => {
             let Some((album, artist)) = pick(rng, &harvest.albums) else {

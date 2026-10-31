@@ -44,6 +44,15 @@ pub const COVER_ITEMS: TableDefinition<&str, (&str, i64, i64)> =
 /// `state.json` `paths` field - a legacy naming quirk, dropped now that the value
 /// is its own row).
 pub const COVER_META: TableDefinition<&str, i64> = TableDefinition::new("cover_meta");
+/// Artist pictures (#116): artist key -> content hash, owned by
+/// `cover::artists`. The files are the album covers' content-addressed ones.
+pub const ARTIST_IMAGE: TableDefinition<&str, &str> = TableDefinition::new("artist_image");
+/// What the artist picture fetcher learned per artist key: (MusicBrainz id,
+/// source, status, retry after in unix seconds, consecutive errors).
+///
+/// Owned by `cover::artists`, which decides when a miss is asked again.
+pub const ARTIST_LOOKUP: TableDefinition<&str, (&str, &str, &str, i64, u32)> =
+    TableDefinition::new("artist_lookup");
 /// Core-wide scalars: migration markers and the library fingerprint. Values are
 /// opaque bytes (a 1-byte marker, a u64 LE, ...).
 pub const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");

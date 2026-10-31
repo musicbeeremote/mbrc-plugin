@@ -12,6 +12,8 @@ use std::io::Cursor;
 use base64::Engine;
 use sha1::{Digest, Sha1};
 
+pub mod artist_fetch;
+pub mod artists;
 pub mod source;
 pub mod store;
 
@@ -416,6 +418,25 @@ pub(crate) fn test_jpeg_bytes(w: u32, h: u32) -> Vec<u8> {
         .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Jpeg)
         .unwrap();
     buf
+}
+
+/// A fresh temp directory for one test, named by `name`, with a `Db` on it.
+///
+/// redb locks its file, so a test that reopens a store there reuses this `Db`.
+#[cfg(test)]
+pub(crate) fn test_storage(name: &str) -> (crate::store::Db, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("mbrc-test-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = crate::store::Db::open(dir.to_str().unwrap());
+    (db, dir)
+}
+
+/// A [`store::CoverStore`] over [`test_storage`].
+#[cfg(test)]
+pub(crate) fn test_cover_store(name: &str) -> store::CoverStore {
+    let (db, dir) = test_storage(name);
+    store::CoverStore::new(db, dir)
 }
 
 #[cfg(test)]
