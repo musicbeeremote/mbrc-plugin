@@ -14,13 +14,13 @@ export default defineConfig({
       // renders them in a test, so counting them would report a number about
       // tests that do not exist rather than about the code.
       //
-      // The tests themselves and the one stand-in they import are excluded:
+      // The tests themselves and the stand-ins they import are excluded:
       // counting the harness as covered says nothing about the product.
       // `all` so a module no test touches is reported as uncovered instead of
       // being left out of the total, which is how a gap hides.
       all: true,
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/api/fake-socket.ts', 'src/**/*.d.ts'],
+      exclude: ['src/**/*.test.ts', 'src/api/fake-socket.ts', 'src/api/fake-client.ts', 'src/**/*.fixtures.ts', 'src/**/*.d.ts'],
     },
   },
 })

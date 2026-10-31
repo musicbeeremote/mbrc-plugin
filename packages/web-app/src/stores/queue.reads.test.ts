@@ -1,18 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, on } from '../api/fake-client'
+
 
 import { useQueueStore } from './queue'
 
-const { call, on } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data: Record<string, unknown>) => Promise<unknown>>(),
-  on: vi.fn<(event: string, handler: () => void) => () => void>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on } as unknown as typeof V6Client,
-}))
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 /** A page of `count` rows from a queue of `total`, rows ordered from `offset`. */
 function page(count: number, total: number, { version = 1, offset = 0 } = {}) {

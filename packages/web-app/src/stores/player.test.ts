@@ -1,22 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, on } from '../api/fake-client'
+
 import { OpError } from '../api/parse'
 import { ErrorCode, LyricsType, PlayState, ShuffleMode } from '../api/types'
 
 import { usePlayerStore } from './player'
 
-// Hoisted with the mock factory, which vitest lifts above every other statement
-// in the file: a plain `const` here is not yet initialised when it runs.
-const { call, on } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data?: Record<string, unknown>) => Promise<unknown>>(),
-  on: vi.fn<(event: string, listener: () => void) => () => void>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on } as unknown as typeof V6Client,
-}))
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 function ops(): string[] {
   return call.mock.calls.map(([op]) => op)

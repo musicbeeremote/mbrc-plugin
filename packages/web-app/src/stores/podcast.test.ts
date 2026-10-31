@@ -1,22 +1,13 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, lastCall } from '../api/fake-client'
+
 import { QueueMode } from '../api/types'
 
 import { usePodcastStore } from './podcast'
 
-const { call } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data: Record<string, unknown>) => Promise<unknown>>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on: vi.fn<() => () => void>() } as unknown as typeof V6Client,
-}))
-
-function lastCall(): [string, Record<string, unknown>] {
-  return call.mock.calls.at(-1) as [string, Record<string, unknown>]
-}
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 function subscriptions(count: number, total = count) {
   return {

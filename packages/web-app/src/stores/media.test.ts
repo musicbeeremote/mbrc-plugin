@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, lastCall, on } from '../api/fake-client'
+
 import { MediaSource } from '../api/browse'
 import { QueueMode } from '../api/types'
 import { queueTrack } from '../composables/queueTracks'
@@ -9,53 +10,9 @@ import { queueTrack } from '../composables/queueTracks'
 import { usePreferences } from '../composables/usePreferences'
 
 import { useMediaStore } from './media'
+import { albums, chapters } from './media.fixtures'
 
-const { call, on } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data: Record<string, unknown>) => Promise<unknown>>(),
-  on: vi.fn<(event: string, listener: (data: unknown) => void) => () => void>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on } as unknown as typeof V6Client,
-}))
-
-function lastCall(): [string, Record<string, unknown>] {
-  return call.mock.calls.at(-1) as [string, Record<string, unknown>]
-}
-
-function albums(count: number, total = count) {
-  return {
-    total,
-    offset: 0,
-    items: Array.from({ length: count }, (_, i) => ({
-      album: `Book ${i}`,
-      artist: `Author ${i}`,
-      count: 10,
-    })),
-  }
-}
-
-function chapters(count: number, total = count) {
-  return {
-    total,
-    offset: 0,
-    items: Array.from({ length: count }, (_, i) => ({
-      src: `C:/books/dune/${i + 1}.mp3`,
-      artist: ['Herbert'],
-      artist_display: 'Herbert',
-      title: `Chapter ${i + 1}`,
-      album: 'Dune',
-      album_artist: 'Herbert',
-      track_no: i + 1,
-      disc_no: 1,
-      genre: [],
-      year: null,
-      duration_ms: 60_000,
-      rating: null,
-      date_added: null,
-    })),
-  }
-}
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 /** A promise the test settles by hand, to land an answer after the reader moved on. */
 function held() {

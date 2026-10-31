@@ -1,51 +1,21 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, lastCall } from '../api/fake-client'
+
 import { QueueMode } from '../api/types'
 
-import type { LibraryScope } from '../api/ops'
 
 import { LibraryLevel, useLibraryStore } from './library'
+import { drill, openTab, search } from './library.fixtures'
 
-type Store = ReturnType<typeof useLibraryStore>
-
-/** Opening a tab, as the router does it: a level with nothing in scope. */
-function openTab(library: Store, level: LibraryLevel) {
-  return library.show({ level, scope: {} })
-}
-
-/** Drilling in, as the router does it: the scope in hand plus one more filter. */
-function drill(library: Store, level: LibraryLevel, add: LibraryScope) {
-  return library.show({ level, scope: { ...library.scope, ...add } })
-}
-
-/** Searching, as the router does it: the same position, a different `q`. */
-function search(library: Store, term: string) {
-  return library.show({ level: library.level, scope: library.scope }, { query: term })
-}
-
-// Hoisted with the mock factory, which vitest lifts above every other statement
-// in the file: a plain `const` here is not yet initialised when it runs.
-const { call } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data: Record<string, unknown>) => Promise<unknown>>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call } as unknown as typeof V6Client,
-}))
-
-/** The last call as `[op, data]`, which is what every assertion here is about. */
-function lastCall(): [string, Record<string, unknown>] {
-  return call.mock.calls.at(-1) as [string, Record<string, unknown>]
-}
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 beforeEach(() => {
   setActivePinia(createPinia())
   call.mockReset()
   call.mockResolvedValue({ total: 0, offset: 0, items: [] })
 })
-
 
 describe('queueing', () => {
   // The browser holds one page of the library, so it cannot name an artist's

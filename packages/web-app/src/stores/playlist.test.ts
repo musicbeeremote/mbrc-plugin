@@ -1,46 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, lastCall } from '../api/fake-client'
 
 import { usePlaylistStore } from './playlist'
+import { page } from './playlist.fixtures'
 
-const { call } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data: Record<string, unknown>) => Promise<unknown>>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on: vi.fn<() => () => void>() } as unknown as typeof V6Client,
-}))
-
-function lastCall(): [string, Record<string, unknown>] {
-  return call.mock.calls.at(-1) as [string, Record<string, unknown>]
-}
-
-function page(count: number, total: number, from = 0) {
-  return {
-    total,
-    offset: from,
-    name: 'My Playlist',
-    version: 'abc123',
-    editable: true,
-    items: Array.from({ length: count }, (_, i) => ({
-      src: `/${from + i}.mp3`,
-      artist: 'A',
-      title: `T${from + i}`,
-      album: '',
-      album_artist: '',
-      track_no: 0,
-      disc_no: 0,
-      genre: '',
-      year: null,
-      duration_ms: null,
-      rating: null,
-      date_added: null,
-      order: from + i,
-    })),
-  }
-}
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 describe('playlist store', () => {
   beforeEach(() => {

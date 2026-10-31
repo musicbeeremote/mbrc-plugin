@@ -1,17 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call } from '../api/fake-client'
+
 
 import { useOutputStore } from './output'
 
-const { call } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data?: Record<string, unknown>) => Promise<unknown>>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on: vi.fn<() => () => void>() } as unknown as typeof V6Client,
-}))
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 beforeEach(() => {
   setActivePinia(createPinia())

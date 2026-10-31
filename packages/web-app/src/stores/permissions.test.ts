@@ -1,17 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { on } from '../api/fake-client'
+
 import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
 
 import { capabilityFor, usePermissionsStore } from './permissions'
 
-const { on } = vi.hoisted(() => ({ on: vi.fn<(event: string, listener: unknown) => () => void>() }))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call: vi.fn<() => Promise<unknown>>(), on } as unknown as typeof V6Client,
-}))
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 const GUEST = {
   party_mode: true,

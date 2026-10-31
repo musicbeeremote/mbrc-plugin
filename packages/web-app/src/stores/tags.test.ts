@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { client as V6Client } from '../api/client'
+import { call, on } from '../api/fake-client'
+
 import { OpError } from '../api/parse'
 import { ErrorCode } from '../api/types'
 
@@ -9,14 +10,7 @@ import { usePermissionsStore } from './permissions'
 
 import { useTagsStore } from './tags'
 
-const { call, on } = vi.hoisted(() => ({
-  call: vi.fn<(op: string, data?: Record<string, unknown>) => Promise<unknown>>(),
-  on: vi.fn<(event: string, listener: () => void) => () => void>(),
-}))
-
-vi.mock(import('../api/client'), () => ({
-  client: { call, on } as unknown as typeof V6Client,
-}))
+vi.mock(import('../api/client'), () => import('../api/fake-client'))
 
 const FIELDS = [
   { key: 'title', name: 'Title', multi_value: false },
