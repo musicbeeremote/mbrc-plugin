@@ -21,7 +21,6 @@ use std::time::{Duration, Instant};
 
 use mbrc_wire::{ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use crate::args::{endpoint, flag_value, has_flag};
@@ -117,12 +116,9 @@ async fn run_async(
 
     let mut hs = ClientHandshake::new(client_type, protocol, no_broadcast);
     let initial = hs.initial();
-    if wr.write_all(frame_line(&initial).as_bytes()).await.is_err() {
-        eprintln!("write failed");
+    if !write_echoed(&mut wr, &frame_line(&initial), &initial).await {
         return ExitCode::FAILURE;
     }
-    let _ = wr.flush().await;
-    println!("> {initial}");
 
     let mut acc = FrameAccumulator::default();
     let mut buf = vec![0u8; 8192];
@@ -178,16 +174,9 @@ async fn run_async_v6(
     // unrecognized (the legacy default is "Android").
     let ct = v6::ClientType::parse(&client_type.to_lowercase()).unwrap_or(v6::ClientType::Cli);
     let handshake = v6::handshake_request(&client_id, ct, no_broadcast);
-    if wr
-        .write_all(v6::frame_line(&handshake).as_bytes())
-        .await
-        .is_err()
-    {
-        eprintln!("write failed");
+    if !write_echoed(&mut wr, &v6::frame_line(&handshake), &handshake).await {
         return ExitCode::FAILURE;
     }
-    let _ = wr.flush().await;
-    println!("> {handshake}");
 
     let mut acc = FrameAccumulator::default();
     let mut buf = vec![0u8; 8192];
@@ -228,16 +217,21 @@ async fn run_async_v6(
 
 /// Connects to the plugin, or says why it could not.
 async fn open(host: &str, port: u16) -> Option<(OwnedReadHalf, OwnedWriteHalf)> {
-    match TcpStream::connect((host, port)).await {
-        Ok(stream) => {
-            stream.set_nodelay(true).ok();
-            Some(stream.into_split())
-        }
-        Err(e) => {
-            eprintln!("connect {host}:{port} failed: {e}");
-            None
-        }
+    crate::net::connect(host, port)
+        .await
+        .inspect_err(|e| eprintln!("connect {host}:{port} failed: {e}"))
+        .ok()
+}
+
+/// Writes `framed`, flushes it, and echoes `shown`; false when the write failed.
+async fn write_echoed(wr: &mut OwnedWriteHalf, framed: &str, shown: &str) -> bool {
+    if wr.write_all(framed.as_bytes()).await.is_err() {
+        eprintln!("write failed");
+        return false;
     }
+    let _ = wr.flush().await;
+    println!("> {shown}");
+    true
 }
 
 /// Reads what arrives before `deadline`.

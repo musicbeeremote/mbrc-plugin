@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::args::{flag_value, run_client_id};
+use crate::args::{endpoint, flag_value, run_client_id};
 use crate::conform::{RespExt, V6Client};
 use crate::monitor::parse_duration;
 
@@ -39,8 +39,7 @@ struct OpStats {
 }
 
 pub fn run(args: &[String]) -> ExitCode {
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let Some(port) = number(args, "--port", 3000) else {
+    let Some((host, port)) = endpoint(args) else {
         return ExitCode::from(2);
     };
     let Some(connections) = number(args, "--connections", 8) else {

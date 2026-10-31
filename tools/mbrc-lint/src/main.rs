@@ -213,8 +213,8 @@ fn walk(root: &Path) -> Vec<PathBuf> {
     found.into_values().collect()
 }
 
-/// The files under `root` that `keep` accepts, descending only into entries
-/// whose name `enter` accepts.
+/// The files under `root` that `keep` accepts, passing over any file or
+/// directory whose name `enter` rejects.
 fn files_under(
     root: &Path,
     enter: impl Fn(&str) -> bool,

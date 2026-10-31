@@ -14,7 +14,7 @@ pub fn has_flag(args: &[String], flag: &str) -> bool {
 
 /// The `--host` and `--port` the plugin listens on, defaulting to the local one.
 ///
-/// `None` once it has told the user `--port` is not a number.
+/// `None` once it has told the user `--port` is not a usable port.
 pub fn endpoint(args: &[String]) -> Option<(String, u16)> {
     let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
     match flag_value(args, "--port")
@@ -22,9 +22,9 @@ pub fn endpoint(args: &[String]) -> Option<(String, u16)> {
         .unwrap_or("3000")
         .parse()
     {
-        Ok(port) => Some((host, port)),
-        Err(_) => {
-            eprintln!("--port must be a number");
+        Ok(port) if port > 0 => Some((host, port)),
+        _ => {
+            eprintln!("--port must be a number from 1 to {}", u16::MAX);
             None
         }
     }
@@ -71,6 +71,8 @@ mod tests {
         let a = v(&["--host", "10.0.0.1", "--port", "3001"]);
         assert_eq!(endpoint(&a), Some(("10.0.0.1".to_string(), 3001)));
         assert_eq!(endpoint(&v(&["--port", "x"])), None);
+        assert_eq!(endpoint(&v(&["--port", "0"])), None);
+        assert_eq!(endpoint(&v(&["--port", "70000"])), None);
     }
 
     #[test]

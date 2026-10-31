@@ -26,7 +26,6 @@ use std::time::Duration;
 use mbrc_capture::{Frame, Record, parse_line};
 use mbrc_wire::{CTX_PLAYER, ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
 
 use crate::args::{endpoint, flag_value, has_flag};
 use crate::compare::{diff_report, parse_ignore};
@@ -251,9 +250,7 @@ async fn drive_one(
     seq: &mut u64,
     lines: &mut Vec<String>,
 ) -> std::io::Result<()> {
-    let stream = TcpStream::connect((host, port)).await?;
-    stream.set_nodelay(true).ok();
-    let (mut rd, mut wr) = stream.into_split();
+    let (mut rd, mut wr) = crate::net::connect(host, port).await?;
     let mut hs = ClientHandshake::new(plan.client_type.clone(), plan.protocol, false);
     let mut acc = FrameAccumulator::default();
     let mut buf = vec![0u8; 8192];

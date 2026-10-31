@@ -16,6 +16,7 @@ mod fuzz;
 mod inspect;
 mod library_bind;
 mod monitor;
+mod net;
 mod replay;
 mod rng;
 mod send;

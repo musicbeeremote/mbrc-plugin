@@ -28,10 +28,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use mbrc_wire::{ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
-use crate::args::flag_value;
+use crate::args::{endpoint, flag_value};
 
 /// Contexts the monitor is permitted to send. STRICTLY read-only: pointing at a
 /// real library, it must never mutate. Anything not here (play/pause/stop/next/
@@ -178,9 +177,7 @@ impl Conn {
     /// `protocol`). `no_broadcast=true` for the paging sweep (quiet channel),
     /// false for the idle subscriber (wants the broadcast stream).
     async fn connect(cfg: &Cfg, no_broadcast: bool) -> io::Result<Conn> {
-        let stream = TcpStream::connect((cfg.host.as_str(), cfg.port)).await?;
-        stream.set_nodelay(true).ok();
-        let (rd, wr) = stream.into_split();
+        let (rd, wr) = crate::net::connect(&cfg.host, cfg.port).await?;
         let mut c = Conn {
             rd,
             wr,
@@ -718,10 +715,8 @@ fn parse_u64(args: &[String], flag: &str, default: u64) -> Result<u64, ExitCode>
 }
 
 pub fn run(args: &[String]) -> ExitCode {
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let port = match parse_u64(args, "--port", 3000) {
-        Ok(p) => p as u16,
-        Err(c) => return c,
+    let Some((host, port)) = endpoint(args) else {
+        return ExitCode::from(2);
     };
     let client_type = flag_value(args, "--client-type").unwrap_or_else(|| "Android".to_string());
     if !matches!(client_type.as_str(), "Android" | "iOS") {
@@ -852,8 +847,9 @@ async fn run_async(cfg: Arc<Cfg>, stats: Arc<Stats>, sink: Arc<Sink>) -> ExitCod
     }
 
     // Final summary.
-    let fails = stats.invariant_fail.load(Ordering::Relaxed);
-    sink.line(&stats.line("end"));
+    let end = stats.line("end");
+    let fails = end["invariant_fail"].as_u64().unwrap_or_default();
+    sink.line(&end);
 
     if fails > 0 {
         ExitCode::FAILURE
