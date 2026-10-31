@@ -8,18 +8,18 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod harness;
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
 use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
-use mbrc_core::state::Core;
+
+use harness::start_on_free_port;
 
 const V4_HANDSHAKE: &str = concat!(
     r#"{"context":"player","data":"Android"}"#,
@@ -27,19 +27,6 @@ const V4_HANDSHAKE: &str = concat!(
     r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":true}}"#,
     "\r\n",
 );
-
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn start(config: Config) -> server::NetHandle {
-    let core = Arc::new(Core::new(Arc::new(NullProviders), config));
-    server::start(core).expect("server should bind and start")
-}
 
 /// xorshift64*, enough to vary chunk sizes reproducibly.
 struct Rng(u64);
@@ -152,8 +139,7 @@ const V4_REQUESTS: &str = concat!(
 
 #[test]
 fn v4_frames_sent_a_byte_at_a_time_get_the_same_replies_as_one_write() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = harness::start();
     let script = format!("{V4_HANDSHAKE}{V4_REQUESTS}");
 
     let mut whole = Client::connect(port);
@@ -171,8 +157,7 @@ fn v4_frames_sent_a_byte_at_a_time_get_the_same_replies_as_one_write() {
 
 #[test]
 fn v6_frames_sent_a_byte_at_a_time_are_each_answered_once() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = harness::start();
     let (script, pings) = v6_script("transport-dribble", "d");
 
     let mut client = Client::connect(port);
@@ -184,8 +169,7 @@ fn v6_frames_sent_a_byte_at_a_time_are_each_answered_once() {
 
 #[test]
 fn v6_frames_split_at_any_point_including_inside_a_utf8_character_round_trip() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = harness::start();
 
     for seed in 1..=20u64 {
         let (script, pings) = v6_script(&format!("transport-split-{seed}"), "s");
@@ -206,8 +190,7 @@ fn v6_frames_split_at_any_point_including_inside_a_utf8_character_round_trip() {
 
 #[test]
 fn concurrent_v4_and_v6_connections_interleaving_partial_frames_get_their_own_replies() {
-    let port = free_port();
-    let net = start(Config::for_test(port));
+    let (port, net) = harness::start();
     let script = format!("{V4_HANDSHAKE}{V4_REQUESTS}");
     let mut baseline = Client::connect(port);
     baseline.writer.write_all(script.as_bytes()).unwrap();
@@ -240,8 +223,7 @@ fn concurrent_v4_and_v6_connections_interleaving_partial_frames_get_their_own_re
 
 #[test]
 fn android_auxiliary_sockets_share_a_client_id_without_superseding_the_main_one() {
-    let port = free_port();
-    let net = start(Config {
+    let (port, net) = start_on_free_port(|port| Config {
         ping_interval_secs: 1,
         ..Config::for_test(port)
     });
@@ -293,8 +275,7 @@ fn android_auxiliary_sockets_share_a_client_id_without_superseding_the_main_one(
 
 #[test]
 fn a_socket_that_trickles_bytes_without_handshaking_is_still_reaped() {
-    let port = free_port();
-    let net = start(Config {
+    let (port, net) = start_on_free_port(|port| Config {
         ping_interval_secs: 1,
         unhandshaked_timeout_secs: 2,
         ..Config::for_test(port)

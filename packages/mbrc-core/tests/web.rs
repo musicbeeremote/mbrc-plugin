@@ -6,6 +6,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod harness;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -14,49 +16,23 @@ use std::time::Duration;
 use serde_json::Value;
 
 use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
 use mbrc_core::server;
 use mbrc_core::server::permissions::Role;
 use mbrc_core::state::Core;
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-/// How many ports to try before giving up on finding a free one.
-const BIND_ATTEMPTS: u32 = 16;
-
-/// Starts a server on a port nothing else holds, and says which.
-///
-/// The port has to be released before the server can take it, and the tests run
-/// in parallel, so between asking the OS for a free one and binding it another
-/// test can be handed the same number. Rolling a new port and trying again is
-/// what closes that window: the alternative is a suite that fails on a race
-/// nobody introduced, roughly one Windows run in ten.
-fn start_on_free_port(config: impl Fn(u16) -> Config) -> (u16, server::NetHandle) {
-    start_prepared(config, |_| {})
-}
+use harness::{null_core, start_core, start_on_free_port};
 
 /// [`start_on_free_port`], with `prepare` run on the core before it serves.
 fn start_prepared(
     config: impl Fn(u16) -> Config,
     prepare: impl Fn(&Arc<Core>),
 ) -> (u16, server::NetHandle) {
-    for _ in 0..BIND_ATTEMPTS {
-        let port = free_port();
-        let core = Arc::new(Core::new(Arc::new(NullProviders), config(port)));
+    let (port, _, net) = start_core(|port| {
+        let core = null_core(config(port));
         prepare(&core);
-        match server::start(core) {
-            Ok(net) => return (port, net),
-            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
-            Err(e) => panic!("server should bind and start: {e:?}"),
-        }
-    }
-    panic!("no free port after {BIND_ATTEMPTS} attempts");
+        core
+    });
+    (port, net)
 }
 
 /// Sends one HTTP/1.1 request and returns `(status line, body)`.

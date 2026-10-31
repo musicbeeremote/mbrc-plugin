@@ -6,58 +6,23 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
-use std::sync::Arc;
+mod harness;
+
 use std::time::Duration;
 
-use serde_json::Value;
-
-use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
-use mbrc_core::state::Core;
-
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read v6 frame");
-    serde_json::from_str(line.trim()).expect("v6 frame is JSON")
-}
+use harness::{advertised, connect, round_trip};
 
 const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"lib-test","client_type":"cli"}}"#;
 
 #[test]
 fn library_wire_paths() {
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core).expect("server starts");
-
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (port, net) = harness::start();
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
+    let mut ask = |request: &str| round_trip(&mut writer, &mut reader, request);
 
     // Handshake advertises the library ops.
-    writer
-        .write_all(format!("{HANDSHAKE}\n").as_bytes())
-        .unwrap();
-    let hs = read_frame(&mut reader);
-    let ops: Vec<&str> = hs["data"]["capabilities"]["ops"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect();
+    let hs = ask(HANDSHAKE);
+    let ops = advertised(&hs, "ops");
     for op in [
         "library_genres",
         "library_artists",
@@ -68,39 +33,26 @@ fn library_wire_paths() {
     }
 
     // library_genres returns a well-formed Page (empty with NullProviders).
-    writer
-        .write_all(
-            b"{\"id\":1,\"kind\":\"request\",\"op\":\"library_genres\",\"data\":{\"offset\":0}}\n",
-        )
-        .unwrap();
-    let page = read_frame(&mut reader);
+    let page = ask(r#"{"id":1,"kind":"request","op":"library_genres","data":{"offset":0}}"#);
     assert_eq!(page["id"], 1);
     assert_eq!(page["data"]["total"], 0);
     assert_eq!(page["data"]["offset"], 0);
     assert!(page["data"]["items"].as_array().unwrap().is_empty());
 
     // library_tracks likewise pages cleanly with no library.
-    writer
-        .write_all(b"{\"id\":2,\"kind\":\"request\",\"op\":\"library_tracks\",\"data\":{}}\n")
-        .unwrap();
-    let tracks = read_frame(&mut reader);
+    let tracks = ask(r#"{"id":2,"kind":"request","op":"library_tracks","data":{}}"#);
     assert!(tracks["data"]["items"].is_array());
 
     // A bad offset type is a typed error.
-    writer
-        .write_all(b"{\"id\":3,\"kind\":\"request\",\"op\":\"library_albums\",\"data\":{\"offset\":\"x\"}}\n")
-        .unwrap();
-    assert_eq!(read_frame(&mut reader)["error"]["code"], "invalid_field");
+    let bad = ask(r#"{"id":3,"kind":"request","op":"library_albums","data":{"offset":"x"}}"#);
+    assert_eq!(bad["error"]["code"], "invalid_field");
 
     // playlist_list is advertised and pages cleanly (playlist domain shares the harness).
     assert!(
         ops.contains(&"playlist_list"),
         "caps missing playlist_list: {hs}"
     );
-    writer
-        .write_all(b"{\"id\":4,\"kind\":\"request\",\"op\":\"playlist_list\",\"data\":{}}\n")
-        .unwrap();
-    let pl = read_frame(&mut reader);
+    let pl = ask(r#"{"id":4,"kind":"request","op":"playlist_list","data":{}}"#);
     assert_eq!(pl["id"], 4);
     assert!(pl["data"]["items"].is_array());
 

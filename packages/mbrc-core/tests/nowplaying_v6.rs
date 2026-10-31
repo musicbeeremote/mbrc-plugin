@@ -4,59 +4,25 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
-use std::sync::Arc;
+mod harness;
+
 use std::time::Duration;
 
-use serde_json::Value;
-
 use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
-use mbrc_core::state::Core;
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read v6 frame");
-    serde_json::from_str(line.trim()).expect("v6 frame is JSON")
-}
-
-fn send(w: &mut TcpStream, line: &str) {
-    w.write_all(line.as_bytes()).unwrap();
-    w.write_all(b"\n").unwrap();
-}
+use harness::{advertised, connect, null_core, read_frame, send, start_core};
 
 const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"np-test","client_type":"cli"}}"#;
 
 #[test]
 fn now_playing_state_reads_writes_and_events() {
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core.clone()).expect("server starts");
-
-    let mut w = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let rs = w.try_clone().unwrap();
-    rs.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-    let mut r = BufReader::new(rs);
+    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
+    let (mut w, mut r) = connect(port, Duration::from_secs(3));
 
     // Handshake advertises the now-playing ops + the new events.
     send(&mut w, HANDSHAKE);
     let hs = read_frame(&mut r);
-    let ops: Vec<&str> = hs["data"]["capabilities"]["ops"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect();
+    let ops = advertised(&hs, "ops");
     for op in [
         "now_playing_state",
         "now_playing_lyrics",
@@ -64,12 +30,7 @@ fn now_playing_state_reads_writes_and_events() {
     ] {
         assert!(ops.contains(&op), "caps missing {op}: {hs}");
     }
-    let events: Vec<&str> = hs["data"]["capabilities"]["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect();
+    let events = advertised(&hs, "events");
     for ev in [
         "now_playing_changed",
         "cover_cache_changed",

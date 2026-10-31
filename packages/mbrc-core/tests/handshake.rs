@@ -3,39 +3,23 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Write};
+mod harness;
+
+use std::io::{BufRead, Write};
 use std::net::TcpStream;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
 use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
-use mbrc_core::state::Core;
 
-/// Grabs a currently-free port by binding an ephemeral socket and releasing it.
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
+use harness::{connect, null_core, start_core, start_on_free_port, v4_handshake};
 
 #[test]
 fn server_completes_v4_handshake_and_keepalive() {
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     // Handshake + a ping + a health check, in one write.
     writer
@@ -79,16 +63,9 @@ fn server_completes_v4_handshake_and_keepalive() {
 
 #[test]
 fn server_rejects_pre_v4_client() {
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     writer
         .write_all(concat!(r#"{"context":"protocol","data":3}"#, "\r\n").as_bytes())
@@ -111,24 +88,15 @@ fn server_rejects_pre_v4_client() {
 fn reaps_idle_connection_that_never_handshakes() {
     // Not a broadcast subscriber, so it gets no server pings: the reaper is
     // the only thing that can stop it leaking.
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            ping_interval_secs: 1,
-            unhandshaked_timeout_secs: 2,
-            ..Config::for_test(port)
-        },
-    ));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = start_on_free_port(|port| Config {
+        ping_interval_secs: 1,
+        unhandshaked_timeout_secs: 2,
+        ..Config::for_test(port)
+    });
 
-    let stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     // Read timeout comfortably longer than the un-handshaked window so EOF (the
     // reap) arrives before the timeout would.
-    stream
-        .set_read_timeout(Some(Duration::from_secs(6)))
-        .unwrap();
-    let mut reader = BufReader::new(stream);
+    let (_writer, mut reader) = connect(port, Duration::from_secs(6));
 
     // Never handshake, never send anything. An un-handshaked socket is not a
     // broadcast subscriber, so it receives no pings; wait for the reap (EOF).
@@ -160,39 +128,15 @@ fn reaps_idle_connection_that_never_handshakes() {
 fn broadcast_subscriber_is_not_reaped_while_silent() {
     // iOS subscribes for live state and never sends anything back, not even
     // a pong. Reaping subscribers is what made it churn connections.
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            ping_interval_secs: 1,
-            ..Config::for_test(port)
-        },
-    ));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = start_on_free_port(|port| Config {
+        ping_interval_secs: 1,
+        ..Config::for_test(port)
+    });
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_millis(1500)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_millis(1500));
 
     // Handshake with broadcasts enabled, then go completely silent.
-    writer
-        .write_all(
-            concat!(
-                r#"{"context":"player","data":"iOS"}"#,
-                "\r\n",
-                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":false}}"#,
-                "\r\n",
-            )
-            .as_bytes(),
-        )
-        .unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("handshake reply");
-    }
+    v4_handshake(&mut writer, &mut reader, "iOS", false);
 
     // Stay silent well past the idle timeout. We should keep receiving server
     // pings and never hit EOF (which would mean we were reaped).
@@ -225,40 +169,16 @@ fn broadcast_subscriber_is_not_reaped_while_silent() {
 fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
     // Left at the default 300s aux window, far longer than this test runs,
     // so reuse rather than eventual reaping is what is under test.
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            ping_interval_secs: 1,
-            unhandshaked_timeout_secs: 2,
-            ..Config::for_test(port)
-        },
-    ));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = start_on_free_port(|port| Config {
+        ping_interval_secs: 1,
+        unhandshaked_timeout_secs: 2,
+        ..Config::for_test(port)
+    });
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_millis(500)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_millis(500));
 
     // Handshake as an aux socket (no_broadcast), then go silent.
-    writer
-        .write_all(
-            concat!(
-                r#"{"context":"player","data":"Android"}"#,
-                "\r\n",
-                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":true}}"#,
-                "\r\n",
-            )
-            .as_bytes(),
-        )
-        .unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("handshake reply");
-    }
+    v4_handshake(&mut writer, &mut reader, "Android", true);
 
     // Stay silent well past the un-handshaked window (2s): we must receive NO
     // pings and never hit EOF (the socket stays open for reuse).
@@ -294,9 +214,7 @@ fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
 fn new_main_supersedes_old_main_of_same_client() {
     // Two main (broadcast) connections carrying the same client_id: the newer one
     // supersedes the older, which the server closes.
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = harness::start();
 
     let handshake = concat!(
         r#"{"context":"player","data":"Android"}"#,
@@ -306,12 +224,7 @@ fn new_main_supersedes_old_main_of_same_client() {
     );
 
     // Main A registers first.
-    let mut a = TcpStream::connect(("127.0.0.1", port)).expect("connect A");
-    let a_reader_stream = a.try_clone().unwrap();
-    a_reader_stream
-        .set_read_timeout(Some(Duration::from_secs(4)))
-        .unwrap();
-    let mut a_reader = BufReader::new(a_reader_stream);
+    let (mut a, mut a_reader) = connect(port, Duration::from_secs(4));
     a.write_all(handshake.as_bytes()).unwrap();
     for _ in 0..2 {
         let mut line = String::new();
@@ -346,34 +259,13 @@ fn new_main_supersedes_old_main_of_same_client() {
 
 #[test]
 fn broadcast_reaches_a_handshaked_client() {
-    let port = free_port();
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    let net = server::start(core.clone()).expect("server should bind and start");
+    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     // Handshake with broadcasts enabled, and read both replies so we know the
     // server has processed the protocol frame (and thus registered us).
-    writer
-        .write_all(
-            concat!(
-                r#"{"context":"player","data":"Android"}"#,
-                "\r\n",
-                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":false}}"#,
-                "\r\n",
-            )
-            .as_bytes(),
-        )
-        .unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("handshake reply");
-    }
+    v4_handshake(&mut writer, &mut reader, "Android", false);
 
     // Fan out a broadcast; the registered client should receive it.
     core.broadcaster
@@ -395,41 +287,17 @@ fn broadcast_reaches_a_handshaked_client() {
 /// they pile up until the per-IP cap starts refusing new ones.
 #[test]
 fn reaps_idle_auxiliary_connection_after_the_handshake() {
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
-            ping_interval_secs: 1,
-            aux_idle_timeout_secs: 2,
-            ..Config::for_test(port)
-        },
-    ));
-    let net = server::start(core).expect("server should bind and start");
+    let (port, net) = start_on_free_port(|port| Config {
+        ping_interval_secs: 1,
+        aux_idle_timeout_secs: 2,
+        ..Config::for_test(port)
+    });
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(8)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(8));
 
     // Handshake as a command socket (no_broadcast), then fall silent - exactly
     // what the iOS client does after its one command.
-    writer
-        .write_all(
-            concat!(
-                r#"{"context":"player","data":"iOS"}"#,
-                "\r\n",
-                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":true}}"#,
-                "\r\n",
-            )
-            .as_bytes(),
-        )
-        .unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("handshake reply");
-    }
+    v4_handshake(&mut writer, &mut reader, "iOS", true);
 
     let mut line = String::new();
     let n = reader
@@ -449,39 +317,17 @@ fn reaps_idle_auxiliary_connection_after_the_handshake() {
 /// rule exists to prevent.
 #[test]
 fn aux_reaper_leaves_a_broadcast_subscriber_alone() {
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(NullProviders),
-        Config {
+    let (port, core, net) = start_core(|port| {
+        null_core(Config {
             ping_interval_secs: 1,
             aux_idle_timeout_secs: 1,
             ..Config::for_test(port)
-        },
-    ));
-    let net = server::start(core.clone()).expect("server should bind and start");
+        })
+    });
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(8)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(8));
 
-    writer
-        .write_all(
-            concat!(
-                r#"{"context":"player","data":"Android"}"#,
-                "\r\n",
-                r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":false}}"#,
-                "\r\n",
-            )
-            .as_bytes(),
-        )
-        .unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("handshake reply");
-    }
+    v4_handshake(&mut writer, &mut reader, "Android", false);
 
     // Stay silent well past the aux window, then prove the socket still works by
     // pushing to it. Server pings arrive on the way; skip them.

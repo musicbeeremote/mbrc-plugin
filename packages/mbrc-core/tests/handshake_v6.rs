@@ -4,56 +4,25 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Read, Write};
+mod harness;
+
+use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
 
-use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
-use mbrc_core::state::Core;
-
-/// Grab a currently-free port by binding an ephemeral socket and releasing it.
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn start(port: u16) -> server::NetHandle {
-    let core = Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)));
-    server::start(core).expect("server should bind and start")
-}
-
-/// V6 frames are newline-delimited; `read_line` returns one frame at a time.
-fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read v6 frame");
-    serde_json::from_str(line.trim()).expect("v6 frame is JSON")
-}
+use harness::{connect, read_frame, send};
 
 const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"install-42","client_type":"android"}}"#;
 
 #[test]
 fn handshake_advertises_capabilities_and_system_info_round_trips() {
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
-    writer
-        .write_all(format!("{HANDSHAKE}\n").as_bytes())
-        .unwrap();
+    send(&mut writer, HANDSHAKE);
     let hs = read_frame(&mut reader);
     assert_eq!(hs["data"]["server_version"], 6);
     // The handshake advertises the op/event surface.
@@ -86,15 +55,9 @@ fn handshake_advertises_capabilities_and_system_info_round_trips() {
 
 #[test]
 fn server_completes_v6_handshake_and_ping_round_trip() {
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     // Handshake (id 0) + a ping (id 1), newline-framed, in one write.
     writer
@@ -122,15 +85,9 @@ fn server_completes_v6_handshake_and_ping_round_trip() {
 
 #[test]
 fn server_rejects_v6_handshake_missing_client_id() {
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     writer
         .write_all(
@@ -159,15 +116,9 @@ fn server_rejects_v6_handshake_missing_client_id() {
 
 #[test]
 fn v6_op_before_handshake_is_unauthorized_and_closes() {
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut reader = BufReader::new(reader_stream);
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     // First frame is a V6 envelope (routes to V6) but not a handshake.
     writer
@@ -189,17 +140,14 @@ fn v6_op_before_handshake_is_unauthorized_and_closes() {
 /// alone: a stray CR would land inside the next frame it reads.
 #[test]
 fn v6_replies_are_terminated_with_a_bare_lf() {
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
     let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     let mut reader_stream = writer.try_clone().unwrap();
     reader_stream
         .set_read_timeout(Some(Duration::from_secs(3)))
         .unwrap();
-    writer
-        .write_all(format!("{HANDSHAKE}\n").as_bytes())
-        .unwrap();
+    send(&mut writer, HANDSHAKE);
 
     let mut buf = [0u8; 4096];
     let n = reader_stream.read(&mut buf).expect("read handshake reply");
@@ -218,16 +166,10 @@ fn v6_replies_are_terminated_with_a_bare_lf() {
 fn v4_and_v6_clients_coexist_on_the_same_port() {
     // The money shot for #118 §10: a legacy V4 client and a V6 client complete
     // their handshakes against the same listener, routed by first-frame shape.
-    let port = free_port();
-    let net = start(port);
+    let (port, net) = harness::start();
 
     // --- V4 client (CRLF, {context,data}) ---
-    let mut v4 = TcpStream::connect(("127.0.0.1", port)).expect("connect v4");
-    let v4_read = v4.try_clone().unwrap();
-    v4_read
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut v4_reader = BufReader::new(v4_read);
+    let (mut v4, mut v4_reader) = connect(port, Duration::from_secs(3));
     v4.write_all(
         concat!(
             r#"{"context":"player","data":"Android"}"#,
@@ -248,13 +190,8 @@ fn v4_and_v6_clients_coexist_on_the_same_port() {
     assert_eq!(protocol, serde_json::json!({"context":"protocol","data":4}));
 
     // --- V6 client (LF, envelope) on the same port ---
-    let mut v6 = TcpStream::connect(("127.0.0.1", port)).expect("connect v6");
-    let v6_read = v6.try_clone().unwrap();
-    v6_read
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let mut v6_reader = BufReader::new(v6_read);
-    v6.write_all(format!("{HANDSHAKE}\n").as_bytes()).unwrap();
+    let (mut v6, mut v6_reader) = connect(port, Duration::from_secs(3));
+    send(&mut v6, HANDSHAKE);
     let hs = read_frame(&mut v6_reader);
     assert_eq!(hs["kind"], "response");
     assert_eq!(hs["data"]["server_version"], 6);

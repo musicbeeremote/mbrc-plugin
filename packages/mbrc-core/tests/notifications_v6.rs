@@ -6,26 +6,18 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+mod harness;
+
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::json;
 
 use mbrc_core::config::Config;
 use mbrc_core::ffi::types::NotificationType;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
 use mbrc_core::state::{self, Core};
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
+use harness::{connect, null_core, read_frame, send, start_core};
 
 /// A core whose music library holds `/a.mp3`, so an edit to it is the library's.
 fn core(port: u16) -> Arc<Core> {
@@ -36,30 +28,12 @@ fn core(port: u16) -> Arc<Core> {
         storage_path: dir.to_string_lossy().into_owned(),
         ..Config::for_test(port)
     };
-    let core = Arc::new(Core::new(Arc::new(NullProviders), config));
+    let core = null_core(config);
     let library = vec!["/a.mp3".to_string()];
     core.metadata_cache.reconcile(&[], 1);
     core.metadata_cache.replace_track_index(&library);
     core.metadata_cache.record_changes(Some(&library), &[]);
     core
-}
-
-fn connect(port: u16) -> (TcpStream, BufReader<TcpStream>) {
-    let writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let rs = writer.try_clone().unwrap();
-    rs.set_read_timeout(Some(Duration::from_secs(6))).unwrap();
-    (writer, BufReader::new(rs))
-}
-
-fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read v6 frame");
-    serde_json::from_str(line.trim()).expect("v6 frame is JSON")
-}
-
-fn send(writer: &mut TcpStream, line: &str) {
-    writer.write_all(line.as_bytes()).unwrap();
-    writer.write_all(b"\n").unwrap();
 }
 
 fn handshake() -> String {
@@ -75,10 +49,8 @@ fn handshake() -> String {
 /// `notifications_v6` unit tests).
 #[test]
 fn a_reported_edit_emits_library_changed_to_v6_main() {
-    let port = free_port();
-    let core = core(port);
-    let net = server::start(core.clone()).expect("server starts");
-    let (mut w, mut r) = connect(port);
+    let (port, core, net) = start_core(core);
+    let (mut w, mut r) = connect(port, Duration::from_secs(6));
 
     send(&mut w, &handshake());
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);

@@ -4,47 +4,26 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader, Write};
+mod harness;
+
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::json;
 
 use mbrc_core::config::Config;
-use mbrc_core::providers::NullProviders;
-use mbrc_core::server;
+use mbrc_core::server::NetHandle;
 use mbrc_core::state::Core;
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
+use harness::{connect, null_core, read_frame, send, start_core};
 
-fn core(port: u16) -> Arc<Core> {
-    Arc::new(Core::new(Arc::new(NullProviders), Config::for_test(port)))
-}
-
-fn connect(port: u16) -> (TcpStream, BufReader<TcpStream>) {
-    let writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let rs = writer.try_clone().unwrap();
-    rs.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-    (writer, BufReader::new(rs))
-}
-
-fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
-    let mut line = String::new();
-    reader.read_line(&mut line).expect("read v6 frame");
-    serde_json::from_str(line.trim()).expect("v6 frame is JSON")
-}
-
-/// Send a request line (newline-framed).
-fn send(writer: &mut TcpStream, line: &str) {
-    writer.write_all(line.as_bytes()).unwrap();
-    writer.write_all(b"\n").unwrap();
+/// A server and a connection to it that gives up reading after `timeout`.
+fn serve(timeout: Duration) -> (Arc<Core>, NetHandle, TcpStream, BufReader<TcpStream>) {
+    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
+    let (w, r) = connect(port, timeout);
+    (core, net, w, r)
 }
 
 fn handshake(no_broadcast: bool) -> String {
@@ -57,9 +36,7 @@ fn handshake(no_broadcast: bool) -> String {
 
 #[test]
 fn player_command_round_trip() {
-    let port = free_port();
-    let net = server::start(core(port)).expect("server starts");
-    let (mut w, mut r) = connect(port);
+    let (_, net, mut w, mut r) = serve(Duration::from_secs(3));
 
     send(&mut w, &handshake(false));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
@@ -112,10 +89,7 @@ fn player_command_round_trip() {
 /// confirm a subscribed main receives it.
 #[test]
 fn event_reaches_v6_main() {
-    let port = free_port();
-    let core = core(port);
-    let net = server::start(core.clone()).expect("server starts");
-    let (mut w, mut r) = connect(port);
+    let (core, net, mut w, mut r) = serve(Duration::from_secs(3));
 
     send(&mut w, &handshake(false));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
@@ -138,13 +112,7 @@ fn event_reaches_v6_main() {
 
 #[test]
 fn no_broadcast_v6_receives_no_event() {
-    let port = free_port();
-    let core = core(port);
-    let net = server::start(core.clone()).expect("server starts");
-    let (mut w, mut r) = connect(port);
-    r.get_ref()
-        .set_read_timeout(Some(Duration::from_millis(600)))
-        .unwrap();
+    let (core, net, mut w, mut r) = serve(Duration::from_millis(600));
 
     // Handshake as an aux (no_broadcast) socket + ping barrier.
     send(&mut w, &handshake(true));

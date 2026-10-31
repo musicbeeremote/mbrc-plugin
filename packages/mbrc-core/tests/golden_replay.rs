@@ -29,15 +29,8 @@ use mbrc_core::state::Core;
 const EXCLUDED_S2C: &[&str] = &["ping"];
 
 mod common;
+mod harness;
 use common::FixtureProviders;
-
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
 
 /// Client->server command frames from a golden (excluding handshake/keepalive),
 /// plus the client type declared in its `player` frame.
@@ -149,20 +142,21 @@ fn assert_golden_covered(golden_path: &str, client_type_hint: &str) {
     let (client_type, commands) = golden_c2s(&golden);
     assert_eq!(client_type, client_type_hint);
 
-    let port = free_port();
-    let core = Arc::new(Core::new(
-        Arc::new(FixtureProviders),
-        Config::for_test(port),
-    ));
-    // The test Config has no storage path, so the background build is skipped:
-    // pre-warm one album so the page deterministically yields an item.
-    core.cover_store
-        .warm_up(&[mbrc_core::cover::store::AlbumIdentity {
-            key: mbrc_core::cover::cover_identifier("AlbumArtist", "Album"),
-            path: "C:\\Music\\s.mp3".into(),
-            modified: 0,
-        }]);
-    let net = server::start(core.clone()).expect("start");
+    let (port, core, net) = harness::start_core(|port| {
+        let core = Arc::new(Core::new(
+            Arc::new(FixtureProviders),
+            Config::for_test(port),
+        ));
+        // The test Config has no storage path, so the background build is skipped:
+        // pre-warm one album so the page deterministically yields an item.
+        core.cover_store
+            .warm_up(&[mbrc_core::cover::store::AlbumIdentity {
+                key: mbrc_core::cover::cover_identifier("AlbumArtist", "Album"),
+                path: "C:\\Music\\s.mp3".into(),
+                modified: 0,
+            }]);
+        core
+    });
     let replayed = replay(core, port, &client_type, &commands);
     net.stop();
 
