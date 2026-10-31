@@ -60,5 +60,11 @@ namespace MusicBeePlugin.Settings
 
         /// <summary>Release channel: <c>stable</c>, or <c>testing</c> to also be offered pre-releases.</summary>
         public string update_channel { get; set; } = "stable";
+
+        /// <summary>
+        ///     Whether the core downloads artist pictures. Off by default: it sends
+        ///     artist names to MusicBrainz and Wikimedia. Applied live by the core.
+        /// </summary>
+        public bool artist_images_enabled { get; set; }
     }
 }

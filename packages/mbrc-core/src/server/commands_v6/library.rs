@@ -11,7 +11,7 @@
 //! and `sort`/`order`. A filter is a parameter rather than an op of its own so
 //! that searching and sorting compose with browsing instead of duplicating it.
 //!
-//! Plus `library_genres`, `library_radio`, `library_play_all`,
+//! Plus `library_genres`, `library_artist_images`, `library_radio`, `library_play_all`,
 //! `library_changes` (see [`super::library_sync`]), and
 //! `library_queue { genre?, artist?, album?, query?, mode, play?, shuffle? }`,
 //! which queues what those same filters would list. It exists for a client that
@@ -43,6 +43,7 @@ use crate::server::commands::library::{KEY_BROWSE_ALBUMS, KEY_BROWSE_GENRES, key
 pub const OPS: &[&str] = &[
     "library_genres",
     "library_artists",
+    "library_artist_images",
     "library_albums",
     "library_tracks",
     "library_radio",
@@ -61,7 +62,8 @@ pub fn dispatch(
 ) -> Option<OpResult> {
     Some(match op {
         "library_genres" => genres(data, p, metadata_cache),
-        "library_artists" => artists(data, p, metadata_cache),
+        "library_artists" => artists(data, p, cover_store, metadata_cache),
+        "library_artist_images" => artist_images(data, cover_store),
         "library_albums" => albums(data, p, cover_store, metadata_cache),
         "library_tracks" => tracks(data, p, cover_store, metadata_cache),
         "library_radio" => radio(data, p),
@@ -94,7 +96,12 @@ fn genres(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpR
     Ok(page_json(total, offset, items))
 }
 
-fn artists(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
+fn artists(
+    data: &Value,
+    p: &dyn Providers,
+    store: Option<&CoverStore>,
+    cache: Option<&MetadataCache>,
+) -> OpResult {
     let (offset, limit) = page_args(data)?;
     let genre = opt_str(data, "genre")?;
     let album_artists = opt_bool(data, "album_artists")?.unwrap_or(false);
@@ -122,9 +129,54 @@ fn artists(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> Op
     let total = all.len();
     let items = slice(all, offset, limit)
         .into_iter()
-        .map(|a| json!({ "artist": a.artist, "count": a.count }))
+        .map(|a| {
+            let mut item = json!({ "artist": a.artist, "count": a.count });
+            if let Some(hash) = store.and_then(|s| s.artists().hash_for(&a.artist)) {
+                item["image_hash"] = json!(hash);
+            }
+            item
+        })
         .collect();
     Ok(page_json(total, offset, items))
+}
+
+/// The most artists one `library_artist_images` request may name.
+const MAX_ARTIST_IMAGES: usize = 500;
+
+/// The stored pictures for `artists`, queueing the rest for the fetcher (#116).
+///
+/// Answers from the store at once; a picture that lands later is announced
+/// with `library_artist_image_updated`. `enabled` tells a client whether
+/// waiting for one makes sense at all.
+fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
+    let names = super::req_str_array(data, "artists")?;
+    if names.len() > MAX_ARTIST_IMAGES {
+        return Err(V6Error::field(
+            ErrorCode::InvalidField,
+            "artists",
+            format!("at most {MAX_ARTIST_IMAGES} artists per request"),
+        ));
+    }
+    let images = store.map(CoverStore::artists);
+    let items: Vec<Value> = names
+        .iter()
+        .map(|name| {
+            let mut item = json!({ "artist": name });
+            match images.and_then(|i| i.hash_for(name)) {
+                Some(hash) => item["image_hash"] = json!(hash),
+                None => {
+                    if let Some(images) = images {
+                        images.request(name, crate::cover::artists::Priority::Requested);
+                    }
+                }
+            }
+            item
+        })
+        .collect();
+    Ok(json!({
+        "artists": items,
+        "enabled": images.is_some_and(|i| i.is_enabled()),
+    }))
 }
 
 fn albums(
@@ -2152,6 +2204,123 @@ mod tests {
         assert_eq!(out["total"], 1);
         assert_eq!(out["items"][0]["artist"], "Miles Davis");
         assert!(m.recorded().iter().any(|c| c.starts_with("genre_artists")));
+    }
+
+    fn artist_store(name: &str) -> CoverStore {
+        let dir = std::env::temp_dir().join(format!("mbrc-v6-lib-artist-images-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        CoverStore::open_at(&dir)
+    }
+
+    #[test]
+    fn an_artist_with_a_stored_picture_carries_its_image_hash() {
+        let store = artist_store("list");
+        let hash = store
+            .artists()
+            .store(
+                "Miles Davis",
+                &crate::cover::test_jpeg_bytes(64, 64),
+                "",
+                "wikidata",
+            )
+            .unwrap();
+        let artist = |name: &str| ArtistData {
+            artist: name.into(),
+            count: 1,
+        };
+        let m = MockProviders {
+            browse_artists: Page {
+                total: 2,
+                offset: 0,
+                limit: 0,
+                data: vec![artist("Miles Davis"), artist("John Coltrane")],
+            },
+            ..Default::default()
+        };
+        let out = dispatch("library_artists", &json!({}), &m, Some(&store), None)
+            .unwrap()
+            .unwrap();
+        let item = |name: &str| {
+            out["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|i| i["artist"] == name)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(item("Miles Davis")["image_hash"], hash);
+        assert!(item("John Coltrane").get("image_hash").is_none());
+    }
+
+    #[test]
+    fn artist_images_answers_from_the_store_and_queues_the_rest() {
+        let store = artist_store("op");
+        let images = store.artists();
+        images.set_enabled(true);
+        let hash = images
+            .store(
+                "Gadiel",
+                &crate::cover::test_jpeg_bytes(64, 64),
+                "",
+                "wikidata",
+            )
+            .unwrap();
+        let m = MockProviders::default();
+        let out = dispatch(
+            "library_artist_images",
+            &json!({ "artists": ["gadiel", "Tico"] }),
+            &m,
+            Some(&store),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            out,
+            json!({
+                "artists": [
+                    { "artist": "gadiel", "image_hash": hash },
+                    { "artist": "Tico" },
+                ],
+                "enabled": true,
+            })
+        );
+        assert_eq!(
+            images.next(std::time::Duration::ZERO).as_deref(),
+            Some("Tico")
+        );
+        assert!(m.recorded().is_empty(), "MusicBee is never asked");
+    }
+
+    #[test]
+    fn artist_images_says_when_downloading_is_off_and_bounds_a_request() {
+        let store = artist_store("off");
+        let m = MockProviders::default();
+        let out = dispatch(
+            "library_artist_images",
+            &json!({ "artists": ["Tico"] }),
+            &m,
+            Some(&store),
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out["enabled"], false);
+        assert_eq!(store.artists().next(std::time::Duration::ZERO), None);
+
+        let too_many: Vec<String> = (0..=MAX_ARTIST_IMAGES).map(|i| i.to_string()).collect();
+        let err = dispatch(
+            "library_artist_images",
+            &json!({ "artists": too_many }),
+            &m,
+            Some(&store),
+            None,
+        )
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidField);
     }
 
     #[test]

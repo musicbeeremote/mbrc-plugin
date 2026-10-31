@@ -95,6 +95,12 @@ impl Core {
         let db = Db::open(&config.storage_path);
         db.migrate_cover_state(&config.storage_path);
         let cover_store = Arc::new(CoverStore::new(db.clone(), config.storage_path.clone()));
+        cover_store
+            .artists()
+            .set_enabled(config.artist_images_enabled);
+        cover_store
+            .artists()
+            .set_budget(config.artist_images_budget_mb.saturating_mul(1024 * 1024));
         let metadata_cache = Arc::new(MetadataCache::new(db.clone()));
         let registry = Arc::new(ConnectionRegistry::new(
             config.max_conns_per_client,
@@ -240,6 +246,7 @@ pub fn read_settings_bytes() -> Option<Vec<u8>> {
     let core = &guard.as_ref()?.core;
     let config = Config {
         party_mode_enabled: core.party_mode.is_enabled(),
+        artist_images_enabled: core.cover_store.artists().is_enabled(),
         ..core.config.clone()
     };
     // Named maps so the C# contractless resolver reads by property name.
@@ -270,8 +277,8 @@ pub fn write_settings_patch(patch: &serde_json::Value) -> Result<(), String> {
 /// Validates and persists new settings (MessagePack from the host) to
 /// `core_settings.json` in the core's storage dir - Rust owns the write.
 ///
-/// The file stays JSON on disk; only the transport is MessagePack, and the host
-/// re-inits to apply rather than this hot-reloading. The write is a **merge**:
+/// The file stays JSON on disk; only the transport is MessagePack. The host
+/// re-inits to apply; artist picture downloads alone switch here, live. A **merge**:
 /// the panel knows only a subset of [`Config`], so deserializing into a fresh
 /// one would reset every field it omits and wipe the Rust-only settings.
 ///
@@ -286,7 +293,14 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
     config.storage_path = storage.clone();
     let pretty = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     let path = std::path::Path::new(&storage).join("core_settings.json");
-    std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))
+    std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))?;
+    if let Some(core) = core_handle() {
+        core.cover_store
+            .artists()
+            .set_enabled(config.artist_images_enabled);
+        server::request_playing_artist_images(&core);
+    }
+    Ok(())
 }
 
 /// Hands the staged update to the elevated helper.
@@ -877,6 +891,9 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
     let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
     core.broadcaster.broadcast(&v4_frames);
     core.v6_broadcaster.broadcast(&v6_frames);
+    if ntype == NotificationType::TrackChanged {
+        server::request_playing_artist_images(core);
+    }
 }
 
 /// Tells V6 subscribers the server is going away, so a client can tell a
