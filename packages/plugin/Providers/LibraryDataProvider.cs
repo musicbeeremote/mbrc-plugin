@@ -42,7 +42,7 @@ namespace MusicBeePlugin.Providers
         };
 
         // Tag sets read in one bulk Library_GetFileTags call per track (instead of
-        // one MusicBee API round-trip per tag). Index order is consumed below.
+        // one MusicBee API round-trip per tag). Index order is consumed by ReadBrowseTrack.
         private static readonly Plugin.MetaDataType[] BrowseTrackFields =
         {
             Plugin.MetaDataType.Artist, Plugin.MetaDataType.TrackTitle, Plugin.MetaDataType.Album,
@@ -221,19 +221,7 @@ namespace MusicBeePlugin.Providers
                 if (string.IsNullOrEmpty(currentTrack))
                     break;
 
-                _api.Library_GetFileTags(currentTrack, BrowseTrackFields, out var tags);
-
-                yield return new Track
-                {
-                    artist = Tag(tags, 0).Cleanup(),
-                    title = Tag(tags, 1).Cleanup(),
-                    album = Tag(tags, 2).Cleanup(),
-                    album_artist = Tag(tags, 3).Cleanup(),
-                    genre = Tag(tags, 4).Cleanup(),
-                    trackno = ParseTag(tags, 5),
-                    disc = ParseTag(tags, 6),
-                    src = currentTrack
-                };
+                yield return ReadBrowseTrack(currentTrack);
             }
         }
 
@@ -695,19 +683,7 @@ namespace MusicBeePlugin.Providers
                 if (string.IsNullOrEmpty(path))
                     continue;
 
-                _api.Library_GetFileTags(path, BrowseTrackFields, out var tags);
-
-                tracks.Add(new Track
-                {
-                    artist = Tag(tags, 0).Cleanup(),
-                    title = Tag(tags, 1).Cleanup(),
-                    album = Tag(tags, 2).Cleanup(),
-                    album_artist = Tag(tags, 3).Cleanup(),
-                    genre = Tag(tags, 4).Cleanup(),
-                    trackno = ParseTag(tags, 5),
-                    disc = ParseTag(tags, 6),
-                    src = path,
-                });
+                tracks.Add(ReadBrowseTrack(path));
             }
 
             return tracks;
@@ -787,6 +763,24 @@ namespace MusicBeePlugin.Providers
         #endregion
 
         #region Helper Methods
+
+        /// <summary>The browse <see cref="Track"/> for <paramref name="path"/>, read in one bulk tag call.</summary>
+        private Track ReadBrowseTrack(string path)
+        {
+            _api.Library_GetFileTags(path, BrowseTrackFields, out var tags);
+
+            return new Track
+            {
+                artist = Tag(tags, 0).Cleanup(),
+                title = Tag(tags, 1).Cleanup(),
+                album = Tag(tags, 2).Cleanup(),
+                album_artist = Tag(tags, 3).Cleanup(),
+                genre = Tag(tags, 4).Cleanup(),
+                trackno = ParseTag(tags, 5),
+                disc = ParseTag(tags, 6),
+                src = path,
+            };
+        }
 
         /// <summary>Safe indexer into a bulk Library_GetFileTags result (empty when missing).</summary>
         private static string Tag(string[] tags, int index) =>
