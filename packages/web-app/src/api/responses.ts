@@ -101,6 +101,9 @@ export const SystemInfoSchema = z.object({
 })
 export type SystemInfo = z.infer<typeof SystemInfoSchema>
 
+/** One artist's stored picture, absent when the server has none yet. */
+export const ArtistImageSchema = z.object({ artist: z.string(), image_hash: z.string().optional() })
+
 /**
  * The schema that parses each op's answer.
  *
@@ -161,6 +164,8 @@ export const OpResponseSchemas = {
   library_tracks: pageSchema(TrackSchema),
   library_radio: pageSchema(RadioEntrySchema),
   library_play_all: EmptySchema,
+  /** `enabled` is false when nothing more will arrive: downloads are off or the store is full. */
+  library_artist_images: z.object({ artists: z.array(ArtistImageSchema), enabled: z.boolean() }),
   /** How many tracks the scope selected and queued. */
   library_queue: z.object({ count: z.number() }),
 
@@ -228,6 +233,8 @@ export const EventPayloadSchemas = {
   library_changed: EmptySchema,
   /** One category's files changed; the source says which to re-read. */
   media_changed: z.object({ source: z.string() }),
+  /** A picture queued by `library_artist_images` or for the playing track was stored. */
+  library_artist_image_updated: z.object({ artist: z.string(), image_hash: z.string() }),
   server_shutdown: EmptySchema,
   /** Also raised by the client itself with what the handshake reported. */
   permissions_changed: PermissionsSchema,

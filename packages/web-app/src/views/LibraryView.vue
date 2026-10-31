@@ -40,6 +40,7 @@ import {
   parentPosition,
 } from '../composables/libraryLevels'
 import { libraryRoute, positionFromRoute } from '../router/locations'
+import { useArtistImagesStore } from '../stores/artistImages'
 import { useLibraryStore, LibraryLevel } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistPicker } from '../stores/playlistPicker'
@@ -53,6 +54,7 @@ const router = useRouter()
 const library = useLibraryStore()
 const permissions = usePermissionsStore()
 const player = usePlayerStore()
+const artistImages = useArtistImagesStore()
 
 const TABS: LibraryLevel[] = [
   LibraryLevel.Genres,
@@ -272,6 +274,11 @@ const { list, containerProps, wrapperProps, scrollTo } = useLazyRows(flatRows, {
   loadMore: () => library.load(true),
 })
 
+// The pictures of the artists on screen, and only those, are asked for.
+watch(list, (rows) => {
+  artistImages.want(rows.flatMap((row) => (isArtist(row.data) ? [row.data.artist] : [])))
+})
+
 // A new level, a drill-down or a new search is a different list: staying at the
 // old offset would open it halfway down.
 watch(
@@ -451,6 +458,19 @@ const onGridScroll = useGridPaging({
           </template>
 
           <template v-else-if="isArtist(row.data)">
+            <div
+              v-if="artistImages.showsPictures"
+              class="relative ml-3 size-8 shrink-0 overflow-hidden rounded-full bg-surface-2"
+            >
+              <img
+                v-if="coverUrl(artistImages.hashFor(row.data.artist))"
+                :src="coverUrl(artistImages.hashFor(row.data.artist)) ?? undefined"
+                alt=""
+                loading="lazy"
+                class="h-full w-full object-cover"
+              />
+              <CoverPlaceholder v-else :name="row.data.artist" />
+            </div>
             <button
               class="min-w-0 flex-1 px-3 text-left"
               @click="goTo(LibraryLevel.Albums, { artist: row.data.artist })"
