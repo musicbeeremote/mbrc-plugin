@@ -112,7 +112,10 @@ impl ChangeLog {
     /// The log's current epoch and generation, or `None` before its first pass.
     pub fn head(&self) -> Option<Cursor> {
         self.db
-            .read(|txn| Ok(open_head(txn)?.map(|(_, head)| head)))
+            .read(|txn| match open_meta(txn)? {
+                Some(meta) => Ok(head_of(&meta)?),
+                None => Ok(None),
+            })
             .flatten()
     }
 
@@ -162,11 +165,14 @@ impl ChangeLog {
     pub fn read(&self, from: ReadFrom<'_>, limit: usize) -> Option<ChangePage> {
         self.db
             .read(|txn| {
-                let Some((meta, head)) = open_head(txn)? else {
+                let Some(meta) = open_meta(txn)? else {
                     return Ok(None);
                 };
-                let floor = read_u64(meta.get(FLOOR)?.map(|g| g.value().to_vec()));
-                let live = read_u64(meta.get(LIVE)?.map(|g| g.value().to_vec()));
+                let Some(head) = head_of(&meta)? else {
+                    return Ok(None);
+                };
+                let floor = meta_u64(&meta, FLOOR)?;
+                let live = meta_u64(&meta, LIVE)?;
                 let Cursor { epoch, generation } = head.clone();
 
                 let (since, until, after) = match from {
@@ -281,9 +287,9 @@ fn record_in(
     if fresh {
         meta.insert(EPOCH, new_epoch().as_bytes())?;
     }
-    let generation = read_u64(meta.get(GENERATION)?.map(|g| g.value().to_vec()));
-    let mut tombstones = read_u64(meta.get(TOMBSTONES)?.map(|g| g.value().to_vec()));
-    let mut in_library = read_u64(meta.get(LIVE)?.map(|g| g.value().to_vec()));
+    let generation = meta_u64(&meta, GENERATION)?;
+    let mut tombstones = meta_u64(&meta, TOMBSTONES)?;
+    let mut in_library = meta_u64(&meta, LIVE)?;
 
     let mut known = txn.open_table(TRACK_CHANGES)?;
     let (added, removed) = match paths {
@@ -424,28 +430,38 @@ fn forget_oldest_tombstones(
     Ok(oldest.last().map(|(generation, _)| *generation))
 }
 
-type MetaTable = ReadOnlyTable<&'static str, &'static [u8]>;
+/// The [`META`] table, or `None` before anything has written to it.
+fn open_meta(
+    txn: &ReadTransaction,
+) -> Result<Option<ReadOnlyTable<&'static str, &'static [u8]>>, redb::Error> {
+    match txn.open_table(META) {
+        Ok(meta) => Ok(Some(meta)),
+        Err(redb::TableError::TableDoesNotExist(_)) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
 
-/// The log's [`META`] table and head, or `None` before the log's first pass.
-fn open_head(txn: &ReadTransaction) -> Result<Option<(MetaTable, Cursor)>, redb::Error> {
-    let meta = match txn.open_table(META) {
-        Ok(t) => t,
-        Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
-        Err(e) => return Err(e.into()),
-    };
+/// The log's head, or `None` before the log's first pass.
+fn head_of(
+    meta: &impl ReadableTable<&'static str, &'static [u8]>,
+) -> Result<Option<Cursor>, redb::StorageError> {
     let Some(epoch) = meta.get(EPOCH)? else {
         return Ok(None);
     };
     let epoch = String::from_utf8_lossy(epoch.value()).into_owned();
-    let generation = read_u64(meta.get(GENERATION)?.map(|g| g.value().to_vec()));
-    Ok(Some((meta, Cursor { epoch, generation })))
+    let generation = meta_u64(meta, GENERATION)?;
+    Ok(Some(Cursor { epoch, generation }))
 }
 
-/// A little-endian u64 read from `META`, zero when absent or malformed.
-fn read_u64(bytes: Option<Vec<u8>>) -> u64 {
-    bytes
-        .and_then(|b| <[u8; 8]>::try_from(b.as_slice()).ok())
-        .map_or(0, u64::from_le_bytes)
+/// A little-endian u64 from `META`, zero when absent or malformed.
+fn meta_u64(
+    meta: &impl ReadableTable<&'static str, &'static [u8]>,
+    key: &str,
+) -> Result<u64, redb::StorageError> {
+    Ok(meta
+        .get(key)?
+        .and_then(|value| <[u8; 8]>::try_from(value.value()).ok())
+        .map_or(0, u64::from_le_bytes))
 }
 
 /// A fresh epoch: 64 random bits as hex.

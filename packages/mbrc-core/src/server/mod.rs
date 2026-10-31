@@ -557,10 +557,9 @@ pub(crate) fn track_artwork(
 
 /// Fetches the artwork the cover store is missing, logging progress to the session.
 fn fetch_missing_covers(core: &Core) -> crate::cover::store::BuildStats {
-    let providers = core.providers.clone();
     let stats = core.cover_store.build_located(
-        |path| locate_artwork(providers.as_ref(), path),
-        |path| fetch_artwork(providers.as_ref(), path),
+        |path| locate_artwork(core.providers.as_ref(), path),
+        |path| fetch_artwork(core.providers.as_ref(), path),
         core.config.log_level.is_trace(),
         &|| core.is_stopping(),
         &|at| note_cover_progress(core, at),
