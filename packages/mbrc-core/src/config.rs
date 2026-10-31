@@ -131,7 +131,7 @@ fn default_update_check_interval_hours() -> u64 {
 }
 
 fn default_artist_images_budget_mb() -> u64 {
-    100
+    crate::cover::artists::DEFAULT_BUDGET_MB
 }
 
 /// The core's runtime configuration. Every field has a default so a missing or

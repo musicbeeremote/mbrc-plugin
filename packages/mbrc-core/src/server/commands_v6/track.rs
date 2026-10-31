@@ -21,9 +21,10 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, req_str};
+use crate::cover::artists::ArtistImages;
 use crate::cover::cover_identifier;
 use crate::cover::store::{Artwork, CoverStore, PLAYING_KEY_PREFIX, track_cover_key};
-use crate::credits::{self, Credit, Role};
+use crate::credits::{self, Role};
 use crate::metadata_cache::{CachedTags, MetadataCache, parse_year};
 use crate::multi_value;
 use crate::protocol::messages::TrackTags;
@@ -55,9 +56,12 @@ fn track_get(data: &Value, p: &dyn Providers, cover_store: Option<&CoverStore>) 
         .next()
         .ok_or_else(|| V6Error::new(ErrorCode::NotFound, format!("no track for src: {src}")))?;
     let cover_hash = Covers::new(cover_store, p).track(&tags);
-    let mut track = track_json(&tags, cover_hash.as_deref(), Credits::All);
-    add_artist_images(&mut track, cover_store);
-    Ok(track)
+    let images = cover_store.map(CoverStore::artists);
+    Ok(track_json(
+        &tags,
+        cover_hash.as_deref(),
+        Credits::All(images),
+    ))
 }
 
 /// Content-addressed cover fetch (#136). Returns the image bytes (base64), a
@@ -240,48 +244,36 @@ pub(crate) fn album_cover_hash(
 }
 
 /// Which credits a track object lists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Credits {
+#[derive(Clone, Copy)]
+pub(crate) enum Credits<'a> {
     /// Everyone but performers. A list page carries it for every row, and an
     /// album's performer credits can run to dozens per track.
     Lead,
-    /// Every credit, for a view of one track.
-    All,
+    /// Every credit, for a view of one track, each with its artist's
+    /// `image_hash` when the store has a picture (#116). A lookup, never a fetch.
+    All(Option<&'a ArtistImages>),
 }
 
 /// `artist` and `artist_credits` from a `MultiArtist` value and the display
 /// artist: the names a track is browsed under, and each credit with its role.
-pub(crate) fn artist_json(raw: &str, display: &str, shown: Credits) -> (Value, Value) {
+pub(crate) fn artist_json(raw: &str, display: &str, shown: Credits<'_>) -> (Value, Value) {
     let all = credits::or_display(raw, display);
+    let (every, images) = match shown {
+        Credits::Lead => (false, None),
+        Credits::All(images) => (true, images),
+    };
     let listed: Vec<Value> = all
         .iter()
-        .filter(|c| shown == Credits::All || c.role != Role::Performer)
-        .map(Credit::to_json)
+        .filter(|c| every || c.role != Role::Performer)
+        .map(|c| {
+            let mut credit = c.to_json();
+            if let Some(hash) = images.and_then(|i| i.hash_for(&c.name)) {
+                credit["image_hash"] = json!(hash);
+            }
+            credit
+        })
         .collect();
     (json!(credits::lead_names(&all)), json!(listed))
-}
-
-/// Adds `image_hash` to each `artist_credits` entry the store has a picture
-/// for (#116). A map lookup per credit: it never fetches.
-pub(crate) fn add_artist_images(track: &mut Value, store: Option<&CoverStore>) {
-    let Some(images) = store.map(CoverStore::artists) else {
-        return;
-    };
-    let Some(credits) = track
-        .get_mut("artist_credits")
-        .and_then(Value::as_array_mut)
-    else {
-        return;
-    };
-    for credit in credits {
-        let hash = credit
-            .get("name")
-            .and_then(Value::as_str)
-            .and_then(|name| images.hash_for(name));
-        if let (Some(hash), Some(obj)) = (hash, credit.as_object_mut()) {
-            obj.insert("image_hash".to_owned(), json!(hash));
-        }
-    }
 }
 
 /// The composers in a `MultiComposer` value, split the way the `composer` tag
@@ -295,7 +287,7 @@ fn composer_names(raw: &str) -> Vec<&str> {
 
 /// Build the canonical V6 `track` from raw tags: base fields always present, the
 /// five typed fields `null` when unknown, `cover_hash` omitted when absent.
-pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>, shown: Credits) -> Value {
+pub(crate) fn track_json(tags: &TrackTags, cover_hash: Option<&str>, shown: Credits<'_>) -> Value {
     let (artist, artist_credits) = artist_json(&tags.multi_artist, &tags.artist, shown);
     let mut obj = json!({
         "src": tags.src,
@@ -586,7 +578,7 @@ mod tests {
             lead["artist_credits"],
             json!([{ "name": "Eluveitie", "role": "artist" }])
         );
-        let all = track_json(&t, None, Credits::All);
+        let all = track_json(&t, None, Credits::All(None));
         assert_eq!(
             all["artist_credits"][1],
             json!({ "name": "Tommy Vetterli", "role": "performer", "detail": "engineer" })
@@ -670,10 +662,7 @@ mod tests {
 
     #[test]
     fn a_credit_carries_its_artists_picture_only_when_one_is_stored() {
-        let dir = std::env::temp_dir().join("mbrc-v6-track-artist-image");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let store = CoverStore::open_at(&dir);
+        let store = crate::cover::test_cover_store("v6-track-artist-image");
         let hash = store
             .artists()
             .store("Gadiel", &test_jpeg_bytes(64, 64), "", "wikidata")

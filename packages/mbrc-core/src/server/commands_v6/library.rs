@@ -128,11 +128,12 @@ fn artists(
         rank_by_relevance(&mut all, n, |a| &a.artist);
     }
     let total = all.len();
+    let images = store.map(CoverStore::artists);
     let items = slice(all, offset, limit)
         .into_iter()
         .map(|a| {
             let mut item = json!({ "artist": a.artist, "count": a.count });
-            if let Some(hash) = store.and_then(|s| s.artists().hash_for(&a.artist)) {
+            if let Some(hash) = images.and_then(|i| i.hash_for(&a.artist)) {
                 item["image_hash"] = json!(hash);
             }
             item
@@ -164,10 +165,10 @@ fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
         .iter()
         .map(|name| {
             let mut item = json!({ "artist": name });
-            match images.and_then(|i| i.hash_for(name)) {
-                Some(hash) => item["image_hash"] = json!(hash),
-                None => {
-                    if let Some(images) = images {
+            if let Some(images) = images {
+                match images.hash_for(name) {
+                    Some(hash) => item["image_hash"] = json!(hash),
+                    None => {
                         images.request(name, crate::cover::artists::Priority::Requested);
                     }
                 }
@@ -2209,10 +2210,7 @@ mod tests {
     }
 
     fn artist_store(name: &str) -> CoverStore {
-        let dir = std::env::temp_dir().join(format!("mbrc-v6-lib-artist-images-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        CoverStore::open_at(&dir)
+        crate::cover::test_cover_store(&format!("v6-lib-artist-images-{name}"))
     }
 
     #[test]

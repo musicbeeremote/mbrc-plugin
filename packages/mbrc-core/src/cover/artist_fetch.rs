@@ -20,6 +20,7 @@ use serde_json::Value;
 use super::artists::{ArtistImages, FetchQueue, Status};
 use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
+use crate::credits;
 
 /// The source name recorded for a picture from Wikimedia Commons via Wikidata.
 pub const SOURCE_WIKIDATA: &str = "wikidata";
@@ -27,13 +28,15 @@ pub const SOURCE_WIKIDATA: &str = "wikidata";
 /// The width Commons is asked to render, matching the stored box.
 const COMMONS_WIDTH: u32 = super::artists::ARTIST_IMAGE_SIZE;
 
-/// How long an idle worker waits for work before checking whether to stop.
-const IDLE_WAIT: Duration = Duration::from_secs(1);
+/// How long an idle worker waits for work before looking again; retiring it
+/// wakes it at once.
+const IDLE_WAIT: Duration = Duration::from_secs(60);
 
 const MUSICBRAINZ: &str = "musicbrainz.org";
 
 /// The least time between two requests to one host, and how long a busy
 /// service is left alone.
+#[derive(Default)]
 pub struct Pace {
     musicbrainz: Duration,
     other: Duration,
@@ -51,17 +54,6 @@ impl Pace {
             other: Duration::from_millis(500),
             busy_min: Duration::from_secs(30),
             busy_max: Duration::from_secs(600),
-            last: HashMap::new(),
-        }
-    }
-
-    #[cfg(test)]
-    fn none() -> Self {
-        Self {
-            musicbrainz: Duration::ZERO,
-            other: Duration::ZERO,
-            busy_min: Duration::ZERO,
-            busy_max: Duration::ZERO,
             last: HashMap::new(),
         }
     }
@@ -120,6 +112,19 @@ pub enum Failure {
 /// One HTTP answer: the body, `None` for a 404, or why there is none.
 type Fetched = Result<Option<Vec<u8>>, Failure>;
 
+/// Where a lookup chain stopped short of a picture.
+enum Stop {
+    Missing(Status),
+    Failed(Failure),
+}
+
+/// A step's answer, with a 404 as `not_found`.
+fn found<T>(answer: Result<Option<T>, Failure>) -> Result<T, Stop> {
+    answer
+        .map_err(Stop::Failed)?
+        .ok_or(Stop::Missing(Status::NotFound))
+}
+
 /// Resolves names and downloads pictures over one client.
 pub struct Fetcher<'a> {
     client: &'a dyn HttpClient,
@@ -134,47 +139,33 @@ impl<'a> Fetcher<'a> {
     /// Looks `name` up and, when every step finds exactly one answer, downloads
     /// its picture. `proceed` is asked before each request.
     pub fn fetch(&mut self, name: &str, proceed: &dyn Fn() -> bool) -> Outcome {
-        let missing = |status, mbid: &str| Outcome::Missing {
-            status,
-            mbid: mbid.to_owned(),
-        };
-        let failed = |failure, mbid: &str| Outcome::Failed {
-            failure,
-            mbid: mbid.to_owned(),
-        };
-        let mbid = match self.json(&musicbrainz_search_url(name), proceed) {
-            Ok(Some(body)) => match pick_artist(name, &body) {
-                Ok(mbid) => mbid,
-                Err(status) => return missing(status, ""),
-            },
-            Ok(None) => return missing(Status::NotFound, ""),
-            Err(e) => return failed(e, ""),
-        };
-        let item = match self.json(&musicbrainz_lookup_url(&mbid), proceed) {
-            Ok(Some(body)) => match wikidata_item(&body) {
-                Some(item) => item,
-                None => return missing(Status::NotFound, &mbid),
-            },
-            Ok(None) => return missing(Status::NotFound, &mbid),
-            Err(e) => return failed(e, &mbid),
-        };
-        let file = match self.json(&wikidata_image_url(&item), proceed) {
-            Ok(Some(body)) => match image_file(&body) {
-                Some(file) => file,
-                None => return missing(Status::NotFound, &mbid),
-            },
-            Ok(None) => return missing(Status::NotFound, &mbid),
-            Err(e) => return failed(e, &mbid),
-        };
-        match self.get(&commons_url(&file), proceed) {
-            Ok(Some(image)) => Outcome::Found {
+        let mut mbid = String::new();
+        match self.chain(name, proceed, &mut mbid) {
+            Ok(image) => Outcome::Found {
                 image,
                 mbid,
                 source: SOURCE_WIKIDATA,
             },
-            Ok(None) => missing(Status::NotFound, &mbid),
-            Err(e) => failed(e, &mbid),
+            Err(Stop::Missing(status)) => Outcome::Missing { status, mbid },
+            Err(Stop::Failed(failure)) => Outcome::Failed { failure, mbid },
         }
+    }
+
+    /// MusicBrainz search, its Wikidata link, P18, then the Commons file,
+    /// leaving the resolved id in `mbid` for whatever the chain ends in.
+    fn chain(
+        &mut self,
+        name: &str,
+        proceed: &dyn Fn() -> bool,
+        mbid: &mut String,
+    ) -> Result<Vec<u8>, Stop> {
+        let search = found(self.json(&musicbrainz_search_url(name), proceed))?;
+        *mbid = pick_artist(name, &search).map_err(Stop::Missing)?;
+        let artist = found(self.json(&musicbrainz_lookup_url(mbid), proceed))?;
+        let item = wikidata_item(&artist).ok_or(Stop::Missing(Status::NotFound))?;
+        let claims = found(self.json(&wikidata_image_url(&item), proceed))?;
+        let file = image_file(&claims).ok_or(Stop::Missing(Status::NotFound))?;
+        found(self.get(&commons_url(&file), proceed))
     }
 
     fn get(&mut self, url: &str, proceed: &dyn Fn() -> bool) -> Fetched {
@@ -346,10 +337,14 @@ fn pick_artist(name: &str, body: &Value) -> Result<String, Status> {
     if results.is_empty() {
         return Err(Status::NotFound);
     }
-    let wanted = name.trim().to_lowercase();
+    let wanted = credits::key(name);
     let exact: Vec<&Value> = results
         .iter()
-        .filter(|a| a["name"].as_str().map(|n| n.trim().to_lowercase()) == Some(wanted.clone()))
+        .filter(|a| {
+            a["name"]
+                .as_str()
+                .is_some_and(|n| credits::key(n) == wanted)
+        })
         .collect();
     match exact.as_slice() {
         [only] if only["score"].as_u64() == Some(100) => only["id"]
@@ -471,7 +466,7 @@ mod tests {
     }
 
     fn fetch(client: &Recorded, name: &str) -> Outcome {
-        Fetcher::new(client, Pace::none()).fetch(name, &|| true)
+        Fetcher::new(client, Pace::default()).fetch(name, &|| true)
     }
 
     #[test]
@@ -589,7 +584,7 @@ mod tests {
     #[test]
     fn nothing_is_sent_once_told_to_stop() {
         let client = Recorded::eluveitie();
-        let outcome = Fetcher::new(&client, Pace::none()).fetch("Eluveitie", &|| false);
+        let outcome = Fetcher::new(&client, Pace::default()).fetch("Eluveitie", &|| false);
         assert!(matches!(
             outcome,
             Outcome::Failed {
@@ -645,7 +640,7 @@ mod tests {
             let queue = queue.clone();
             std::thread::spawn(move || {
                 let landed = Mutex::new(Vec::new());
-                let mut fetcher = Fetcher::new(&client, Pace::none());
+                let mut fetcher = Fetcher::new(&client, Pace::default());
                 run(&queue, &weak, &mut fetcher, generation, &|name, hash| {
                     landed
                         .lock()
@@ -665,10 +660,9 @@ mod tests {
     }
 
     fn worker_store(name: &str) -> Arc<CoverStore> {
-        let dir = std::env::temp_dir().join(format!("mbrc-artist-fetch-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let store = Arc::new(CoverStore::open_at(&dir));
+        let store = Arc::new(crate::cover::test_cover_store(&format!(
+            "artist-fetch-{name}"
+        )));
         store.artists().set_enabled(true);
         store
     }

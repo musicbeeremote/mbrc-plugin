@@ -19,7 +19,7 @@
 //! provider does the conversion.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Condvar, Mutex, RwLock};
@@ -29,7 +29,7 @@ use redb::{Durability, ReadableTable};
 
 use super::artists::ArtistImages;
 use super::source::Source;
-use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
+use super::{CACHE_SIZE, Resized, decode_cost, resize_cover, sha1_hex};
 use crate::store::{
     COVER_COVERS, COVER_ITEMS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK,
 };
@@ -214,7 +214,7 @@ impl CoverStore {
     pub fn new(db: Db, storage_path: impl Into<PathBuf>) -> Self {
         let items = load_items(&db);
         let storage_path = storage_path.into();
-        let artists = ArtistImages::new(db.clone(), storage_path.join("cache").join("covers"));
+        let artists = ArtistImages::new(db.clone(), covers_dir_under(&storage_path));
         Self {
             storage_path,
             artists,
@@ -238,11 +238,8 @@ impl CoverStore {
         )
     }
 
-    fn cache_dir(&self) -> PathBuf {
-        self.storage_path.join("cache")
-    }
     fn covers_dir(&self) -> PathBuf {
-        self.cache_dir().join("covers")
+        covers_dir_under(&self.storage_path)
     }
     fn cover_file(&self, content_hash: &str) -> PathBuf {
         self.covers_dir().join(content_hash)
@@ -369,19 +366,8 @@ impl CoverStore {
     /// and returns the content hash with the source's size. The file name IS the
     /// hash (content-addressed).
     fn store_cover(&self, raw: &[u8]) -> Result<(String, (u32, u32)), String> {
-        let resized = resize_cover(raw, CACHE_SIZE, CACHE_SIZE)?;
-        let hash = sha1_hex(&resized.jpeg);
-        let dir = self.covers_dir();
-        std::fs::create_dir_all(&dir).map_err(|e| format!("create covers dir: {e}"))?;
-        std::fs::write(self.cover_file(&hash), &resized.jpeg)
-            .map_err(|e| format!("write cover: {e}"))?;
-        tracing::debug!(
-            source = %format_args!("{}x{}", resized.source.0, resized.source.1),
-            reduced = resized.reduced,
-            bytes = raw.len(),
-            "cover stored"
-        );
-        Ok((hash, resized.source))
+        write_cover(&self.covers_dir(), raw, CACHE_SIZE)
+            .map(|(hash, resized)| (hash, resized.source))
     }
 
     /// Warms the cache from the host's album list: record the key->path map,
@@ -1051,6 +1037,30 @@ impl CoverStore {
     }
 }
 
+/// Where the content-addressed cover files live under a storage directory.
+pub(super) fn covers_dir_under(storage_path: &Path) -> PathBuf {
+    storage_path.join("cache").join("covers")
+}
+
+/// Fits `raw` within `size` x `size`, writes it to `dir` named by its content
+/// hash, and returns the hash with the resize.
+///
+/// # Errors
+/// The artwork does not resize, or the file cannot be written.
+pub(super) fn write_cover(dir: &Path, raw: &[u8], size: u32) -> Result<(String, Resized), String> {
+    let resized = resize_cover(raw, size, size)?;
+    let hash = sha1_hex(&resized.jpeg);
+    std::fs::create_dir_all(dir).map_err(|e| format!("create covers dir: {e}"))?;
+    std::fs::write(dir.join(&hash), &resized.jpeg).map_err(|e| format!("write cover: {e}"))?;
+    tracing::debug!(
+        source = %format_args!("{}x{}", resized.source.0, resized.source.1),
+        reduced = resized.reduced,
+        bytes = raw.len(),
+        "cover stored"
+    );
+    Ok((hash, resized))
+}
+
 /// One album handed from the producer to a worker: key, path, what to do, and
 /// how long the producer took over it in milliseconds.
 type Fetched = (String, String, Job, u128);
@@ -1312,11 +1322,7 @@ mod tests {
     /// that opens a second store at the same dir must reuse this handle (Arc
     /// clone) - which also mirrors production, where one `Db` is shared.
     fn temp_storage(name: &str) -> (Db, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("mbrc-cover-store-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = Db::open(dir.to_str().unwrap());
-        (db, dir)
+        crate::cover::test_storage(&format!("cover-store-{name}"))
     }
 
     #[test]

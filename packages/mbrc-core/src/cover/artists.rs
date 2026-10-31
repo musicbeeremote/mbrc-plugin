@@ -21,24 +21,21 @@ use std::time::{Duration, Instant};
 
 use redb::{Durability, ReadableTable};
 
-use super::store::{CoverStore, now_unix_secs};
-use super::{resize_to_jpeg, sha1_hex};
+use super::store::{CoverStore, now_unix_secs, write_cover};
 use crate::credits;
 use crate::store::{ARTIST_IMAGE, ARTIST_LOOKUP, Db};
 
 /// The box an artist picture is fitted within, aspect kept, never upscaled.
 pub const ARTIST_IMAGE_SIZE: u32 = 500;
 
-/// The disk budget when the settings name none.
-pub const DEFAULT_BUDGET_BYTES: u64 = 100 * 1024 * 1024;
+/// The disk budget when the settings name none, in MiB.
+pub const DEFAULT_BUDGET_MB: u64 = 100;
 
 const DAY_SECS: i64 = 24 * 60 * 60;
 
-/// How long a `not_found` or `ambiguous` answer is believed.
+/// How long a `not_found` or `ambiguous` answer is believed, and the longest
+/// a run of errors pushes the next try out.
 const MISS_RETRY_SECS: i64 = 30 * DAY_SECS;
-
-/// The longest a run of errors pushes the next try out.
-const ERROR_RETRY_CAP_SECS: i64 = MISS_RETRY_SECS;
 
 /// How many client-requested artists may wait at once.
 ///
@@ -302,7 +299,7 @@ impl ArtistImages {
         Self {
             covers_dir,
             db,
-            budget: AtomicU64::new(DEFAULT_BUDGET_BYTES),
+            budget: AtomicU64::new(DEFAULT_BUDGET_MB * 1024 * 1024),
             used: AtomicU64::new(used),
             images: RwLock::new(images),
             lookups: RwLock::new(lookups),
@@ -360,6 +357,7 @@ impl ArtistImages {
             .collect()
     }
 
+    #[cfg(test)]
     pub fn lookup(&self, name: &str) -> Option<Lookup> {
         self.lookups
             .read()
@@ -413,11 +411,7 @@ impl ArtistImages {
         mbid: &str,
         source: &str,
     ) -> Result<String, String> {
-        let jpeg = resize_to_jpeg(raw, ARTIST_IMAGE_SIZE, ARTIST_IMAGE_SIZE)?;
-        let hash = sha1_hex(&jpeg);
-        std::fs::create_dir_all(&self.covers_dir).map_err(|e| format!("create covers dir: {e}"))?;
-        std::fs::write(self.covers_dir.join(&hash), &jpeg)
-            .map_err(|e| format!("write artist image: {e}"))?;
+        let (hash, resized) = write_cover(&self.covers_dir, raw, ARTIST_IMAGE_SIZE)?;
         let key = credits::key(name);
         let lookup = Lookup {
             mbid: mbid.to_owned(),
@@ -431,7 +425,7 @@ impl ArtistImages {
                 .insert(key.as_str(), hash.as_str())?;
             insert_lookup(txn, &key, &lookup)
         });
-        let bytes = jpeg.len() as u64;
+        let bytes = resized.jpeg.len() as u64;
         let replaced = self.write_images().insert(
             key.clone(),
             Stored {
@@ -492,7 +486,7 @@ impl ArtistImages {
 /// How long the `errors`th error in a row holds off the next try.
 fn error_backoff_secs(errors: u32) -> i64 {
     let doublings = errors.saturating_sub(1).min(5);
-    (DAY_SECS << doublings).min(ERROR_RETRY_CAP_SECS)
+    (DAY_SECS << doublings).min(MISS_RETRY_SECS)
 }
 
 fn insert_lookup(txn: &redb::WriteTransaction, key: &str, l: &Lookup) -> Result<(), redb::Error> {
@@ -562,10 +556,7 @@ mod tests {
     use crate::cover::test_jpeg_bytes;
 
     fn temp_store(name: &str) -> (ArtistImages, Db, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("mbrc-artist-images-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = Db::open(dir.to_str().unwrap());
+        let (db, dir) = crate::cover::test_storage(&format!("artist-images-{name}"));
         let covers = dir.join("cache").join("covers");
         let store = ArtistImages::new(db.clone(), covers.clone());
         store.set_enabled(true);
@@ -691,10 +682,7 @@ mod tests {
 
     #[test]
     fn a_retired_or_orphaned_worker_never_reaches_the_store() {
-        let dir = std::env::temp_dir().join("mbrc-artist-images-weak");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let store = Arc::new(CoverStore::open_at(&dir));
+        let store = Arc::new(crate::cover::test_cover_store("artist-images-weak"));
         let weak = Arc::downgrade(&store);
         let queue = store.artists().queue();
         let generation = queue.begin_worker();
