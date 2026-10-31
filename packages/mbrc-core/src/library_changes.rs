@@ -18,7 +18,9 @@
 
 use std::ops::Bound;
 
-use redb::{Durability, ReadableTable, TableDefinition, WriteTransaction};
+use redb::{
+    Durability, ReadOnlyTable, ReadTransaction, ReadableTable, TableDefinition, WriteTransaction,
+};
 
 use crate::store::{Db, META};
 
@@ -110,19 +112,7 @@ impl ChangeLog {
     /// The log's current epoch and generation, or `None` before its first pass.
     pub fn head(&self) -> Option<Cursor> {
         self.db
-            .read(|txn| {
-                let meta = match txn.open_table(META) {
-                    Ok(t) => t,
-                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
-                    Err(e) => return Err(e.into()),
-                };
-                let Some(epoch) = meta.get(EPOCH)? else {
-                    return Ok(None);
-                };
-                let epoch = String::from_utf8_lossy(epoch.value()).into_owned();
-                let generation = read_u64(meta.get(GENERATION)?.map(|g| g.value().to_vec()));
-                Ok(Some(Cursor { epoch, generation }))
-            })
+            .read(|txn| Ok(open_head(txn)?.map(|(_, head)| head)))
             .flatten()
     }
 
@@ -172,22 +162,12 @@ impl ChangeLog {
     pub fn read(&self, from: ReadFrom<'_>, limit: usize) -> Option<ChangePage> {
         self.db
             .read(|txn| {
-                let meta = match txn.open_table(META) {
-                    Ok(t) => t,
-                    Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
-                    Err(e) => return Err(e.into()),
-                };
-                let Some(epoch) = meta.get(EPOCH)? else {
+                let Some((meta, head)) = open_head(txn)? else {
                     return Ok(None);
                 };
-                let epoch = String::from_utf8_lossy(epoch.value()).into_owned();
-                let generation = read_u64(meta.get(GENERATION)?.map(|g| g.value().to_vec()));
                 let floor = read_u64(meta.get(FLOOR)?.map(|g| g.value().to_vec()));
                 let live = read_u64(meta.get(LIVE)?.map(|g| g.value().to_vec()));
-                let head = Cursor {
-                    epoch: epoch.clone(),
-                    generation,
-                };
+                let Cursor { epoch, generation } = head.clone();
 
                 let (since, until, after) = match from {
                     ReadFrom::Start => (None, generation, None),
@@ -442,6 +422,23 @@ fn forget_oldest_tombstones(
         known.remove(src.as_str())?;
     }
     Ok(oldest.last().map(|(generation, _)| *generation))
+}
+
+type MetaTable = ReadOnlyTable<&'static str, &'static [u8]>;
+
+/// The log's [`META`] table and head, or `None` before the log's first pass.
+fn open_head(txn: &ReadTransaction) -> Result<Option<(MetaTable, Cursor)>, redb::Error> {
+    let meta = match txn.open_table(META) {
+        Ok(t) => t,
+        Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let Some(epoch) = meta.get(EPOCH)? else {
+        return Ok(None);
+    };
+    let epoch = String::from_utf8_lossy(epoch.value()).into_owned();
+    let generation = read_u64(meta.get(GENERATION)?.map(|g| g.value().to_vec()));
+    Ok(Some((meta, Cursor { epoch, generation })))
 }
 
 /// A little-endian u64 read from `META`, zero when absent or malformed.

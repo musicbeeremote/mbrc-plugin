@@ -481,15 +481,7 @@ fn build_cover_cache(
     );
 
     let build_started = std::time::Instant::now();
-    let providers = core.providers.clone();
-    let stats = core.cover_store.build_located(
-        |path| locate_artwork(providers.as_ref(), path),
-        |path| fetch_artwork(providers.as_ref(), path),
-        core.config.log_level.is_trace(),
-        &|| core.is_stopping(),
-        &|at| note_cover_progress(core, at),
-    );
-    core.session.note("running");
+    let stats = fetch_missing_covers(core);
 
     tracing::info!(
         albums = album_count,
@@ -563,6 +555,32 @@ pub(crate) fn track_artwork(
     }
 }
 
+/// Fetches the artwork the cover store is missing, logging progress to the session.
+fn fetch_missing_covers(core: &Core) -> crate::cover::store::BuildStats {
+    let providers = core.providers.clone();
+    let stats = core.cover_store.build_located(
+        |path| locate_artwork(providers.as_ref(), path),
+        |path| fetch_artwork(providers.as_ref(), path),
+        core.config.log_level.is_trace(),
+        &|| core.is_stopping(),
+        &|at| note_cover_progress(core, at),
+    );
+    core.session.note("running");
+    stats
+}
+
+/// Tells V4 and V6 clients whether a cover build is running.
+fn broadcast_cover_building(core: &Core, building: bool) {
+    core.broadcaster.broadcast(&[notifications::frame(
+        "librarycovercachebuildstatus",
+        serde_json::json!(building),
+    )]);
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "cover_cache_changed",
+        serde_json::json!({ "building": building }),
+    )]);
+}
+
 /// Records where a cover build has got to, for the next start to report if
 /// this session dies before it finishes.
 fn note_cover_progress(core: &Core, at: &crate::cover::store::BuildProgress<'_>) {
@@ -582,14 +600,7 @@ fn notify_reconcile(core: &Core, scope: RebuildScope, building: bool) {
     core.providers
         .emit_event(crate::ffi::types::HostEventType::CacheStatusChanged, &[]);
     if scope.does_covers() {
-        core.broadcaster.broadcast(&[notifications::frame(
-            "librarycovercachebuildstatus",
-            serde_json::json!(building),
-        )]);
-        core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
-            "cover_cache_changed",
-            serde_json::json!({ "building": building }),
-        )]);
+        broadcast_cover_building(core, building);
     }
 }
 
@@ -624,15 +635,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>, changed: &[String]) {
     let kept = core.cover_store.cached_count();
     let dropped = before.saturating_sub(kept) + core.cover_store.forget_tracks(changed);
 
-    let providers = core.providers.clone();
-    let stats = core.cover_store.build_located(
-        |path| locate_artwork(providers.as_ref(), path),
-        |path| fetch_artwork(providers.as_ref(), path),
-        core.config.log_level.is_trace(),
-        &|| core.is_stopping(),
-        &|at| note_cover_progress(core, at),
-    );
-    core.session.note("running");
+    let stats = fetch_missing_covers(core);
 
     let changed = cover_set_changed(dropped, stats.stored);
     tracing::debug!(
@@ -646,14 +649,7 @@ pub(crate) fn refresh_covers_delta(core: &Arc<Core>, changed: &[String]) {
     if changed {
         // A single `false` frame means "cover cache updated, refetch the grid" -
         // the same signal the init/switch build sends on completion.
-        core.broadcaster.broadcast(&[notifications::frame(
-            "librarycovercachebuildstatus",
-            serde_json::json!(false),
-        )]);
-        core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
-            "cover_cache_changed",
-            serde_json::json!({ "building": false }),
-        )]);
+        broadcast_cover_building(core, false);
     }
 }
 

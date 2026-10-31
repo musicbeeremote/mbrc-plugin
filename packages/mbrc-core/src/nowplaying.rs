@@ -81,24 +81,7 @@ impl NowPlayingCache {
     /// Full refresh: every cached field. Startup seed and a belt-and-braces
     /// resync. Marks the cache seeded.
     pub fn refresh_all(&self) {
-        let p = &*self.providers;
-        let track_info = p.track_info().ok();
-        let track_details = p.track_details().ok();
-        let rating = p.rating().ok();
-        let lfm = p.lfm_rating().ok();
-        let cover = p.cover().ok();
-        let lyrics = p.lyrics().ok();
-        let player = p.player_state().ok();
-        {
-            let mut s = self.write();
-            set(&mut s.track_info, track_info);
-            set(&mut s.track_details, track_details);
-            set(&mut s.rating, rating);
-            set(&mut s.lfm, lfm);
-            set(&mut s.cover, cover);
-            set(&mut s.lyrics, lyrics);
-            set(&mut s.player, player);
-        }
+        self.refresh_track_fields(true);
         self.seeded.store(true, Ordering::Release);
     }
 
@@ -106,6 +89,12 @@ impl NowPlayingCache {
     /// with the track. Cover/lyrics may still be empty here if MusicBee hasn't
     /// finished fetching them - the `*Ready` notifications refresh them later.
     pub fn refresh_track_bundle(&self) {
+        self.refresh_track_fields(false);
+    }
+
+    /// Refreshes every track-scoped field, and the player state when
+    /// `with_player`, under one write so a reader never sees half of it.
+    fn refresh_track_fields(&self, with_player: bool) {
         let p = &*self.providers;
         let track_info = p.track_info().ok();
         let track_details = p.track_details().ok();
@@ -113,6 +102,11 @@ impl NowPlayingCache {
         let lfm = p.lfm_rating().ok();
         let cover = p.cover().ok();
         let lyrics = p.lyrics().ok();
+        let player = if with_player {
+            p.player_state().ok()
+        } else {
+            None
+        };
         let mut s = self.write();
         set(&mut s.track_info, track_info);
         set(&mut s.track_details, track_details);
@@ -120,6 +114,7 @@ impl NowPlayingCache {
         set(&mut s.lfm, lfm);
         set(&mut s.cover, cover);
         set(&mut s.lyrics, lyrics);
+        set(&mut s.player, player);
     }
 
     /// Refreshes the cover slice (MusicBee `NowPlayingArtworkReady`).
