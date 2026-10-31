@@ -116,6 +116,12 @@ fn clean(s: &str) -> String {
     s.replace('\u{feff}', "").trim().to_owned()
 }
 
+/// The key one credited name is known by across spellings: cleaned the way a
+/// parsed credit is, then case-folded.
+pub fn key(name: &str) -> String {
+    clean(name).to_lowercase()
+}
+
 /// `Name (instrument)` as its two parts; a bare entry is all name.
 fn split_detail(entry: &str) -> (String, Option<String>) {
     match entry.strip_suffix(')').and_then(|s| s.rsplit_once(" (")) {

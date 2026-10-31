@@ -55,7 +55,9 @@ fn track_get(data: &Value, p: &dyn Providers, cover_store: Option<&CoverStore>) 
         .next()
         .ok_or_else(|| V6Error::new(ErrorCode::NotFound, format!("no track for src: {src}")))?;
     let cover_hash = Covers::new(cover_store, p).track(&tags);
-    Ok(track_json(&tags, cover_hash.as_deref(), Credits::All))
+    let mut track = track_json(&tags, cover_hash.as_deref(), Credits::All);
+    add_artist_images(&mut track, cover_store);
+    Ok(track)
 }
 
 /// Content-addressed cover fetch (#136). Returns the image bytes (base64), a
@@ -257,6 +259,29 @@ pub(crate) fn artist_json(raw: &str, display: &str, shown: Credits) -> (Value, V
         .map(Credit::to_json)
         .collect();
     (json!(credits::lead_names(&all)), json!(listed))
+}
+
+/// Adds `image_hash` to each `artist_credits` entry the store has a picture
+/// for (#116). A map lookup per credit: it never fetches.
+pub(crate) fn add_artist_images(track: &mut Value, store: Option<&CoverStore>) {
+    let Some(images) = store.map(CoverStore::artists) else {
+        return;
+    };
+    let Some(credits) = track
+        .get_mut("artist_credits")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for credit in credits {
+        let hash = credit
+            .get("name")
+            .and_then(Value::as_str)
+            .and_then(|name| images.hash_for(name));
+        if let (Some(hash), Some(obj)) = (hash, credit.as_object_mut()) {
+            obj.insert("image_hash".to_owned(), json!(hash));
+        }
+    }
 }
 
 /// The composers in a `MultiComposer` value, split the way the `composer` tag
@@ -641,6 +666,35 @@ mod tests {
         .unwrap();
         assert_eq!(out["title"], "Title");
         assert_eq!(out["cover_hash"], hash);
+    }
+
+    #[test]
+    fn a_credit_carries_its_artists_picture_only_when_one_is_stored() {
+        let dir = std::env::temp_dir().join("mbrc-v6-track-artist-image");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = CoverStore::open_at(&dir);
+        let hash = store
+            .artists()
+            .store("Gadiel", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .unwrap();
+        let mut t = tags();
+        t.multi_artist = "Tico\0\u{1}Gadiel\0".into();
+        let m = MockProviders {
+            tracks_detailed: vec![t],
+            ..Default::default()
+        };
+        let out = dispatch(
+            "track_get",
+            &json!({ "src": r"C:\Music\song.mp3" }),
+            &m,
+            Some(&store),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(out["artist_credits"][0].get("image_hash").is_none());
+        assert_eq!(out["artist_credits"][1]["name"], "Gadiel");
+        assert_eq!(out["artist_credits"][1]["image_hash"], hash);
     }
 
     /// The album cache answers for a record, not for what is playing: a podcast

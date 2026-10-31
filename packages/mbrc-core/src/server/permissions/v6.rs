@@ -55,6 +55,7 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "cover_get"
         | "library_genres"
         | "library_artists"
+        | "library_artist_images"
         | "library_albums"
         | "library_tracks"
         | "library_radio"

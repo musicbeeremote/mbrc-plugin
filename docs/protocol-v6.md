@@ -451,6 +451,10 @@ performers out, since an album can credit dozens per track; `track_get` and
 `now_playing_state` carry every credit. A track nobody split, a stream, or a queued file outside
 the library has its display artist as its one credit, role `artist`.
 
+On `track_get` and `now_playing_state` a credit also carries `"image_hash":..` when the server
+has a picture of that artist (see [Artist pictures](#artist-pictures)). It is never there on a
+list page.
+
 A list may add index fields beside these - `order` and `position` on a playlist, plus
 `play_position` on the queue - but never changes the track's own shape.
 
@@ -747,7 +751,8 @@ podcasts are never listed, counted or queued here, and an edit to one of them do
 | Op | Request `data` | Response |
 |----|----------------|----------|
 | `library_genres` | `{offset?, limit?, query?, sort?}` | page of `{"genre":..,"count":..}`; a file tagged with several genres (`Rock; Jazz`) counts under each, and a `genre` filter on the other ops finds it through any of them |
-| `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}`; each artist and guest a track credits is a row, the track counted under each |
+| `library_artists` | `{offset?, limit?, query?, sort?, genre?, album_artists?}` | page of `{"artist":..,"count":..}` (+ `image_hash` when the server has the [artist's picture](#artist-pictures)); each artist and guest a track credits is a row, the track counted under each |
+| `library_artist_images` | `{"artists":["<name>",..]}` (at most 500) | `{"artists":[{"artist":..,"image_hash"?:..}],"enabled":bool}` - see [Artist pictures](#artist-pictures) |
 | `library_albums` | `{offset?, limit?, query?, sort?, order?, artist?}` | page of `{"album":..,"artist":..,"count":..}` (+ `cover_hash` when cached, never for the no-album group, + `year` and `original_year`, each the earliest its tracks carry, when known) |
 | `library_tracks` | `{offset?, limit?, query?, sort?, order?, genre?, artist?, album?}` | page of [canonical tracks](#canonical-track) |
 | `library_radio` | `{offset?, limit?}` | page of `{"name":..,"url":..}` |
@@ -802,6 +807,30 @@ the selection rather than turning the player's shuffle mode on.
 counted by every op above, but `library_queue` and `library_play_all` leave it out, as
 MusicBee's own lists do. Tracks queued by path (`now_playing_queue`) are queued as given,
 and a playlist scope ([`<tracks>`](#playlist)) keeps banned tracks: a playlist outlasts a ban.
+
+### Artist pictures
+
+The server can download artist pictures itself, from open sources, and keep them in the same
+content-addressed store as album art: an `image_hash` is fetched with `cover_get` or
+`GET /api/cover/{hash}` exactly like a `cover_hash`. Pictures fit within 500x500, aspect kept.
+
+Downloading is **off by default**; the user turns it on in the plugin's settings, since it sends
+artist names to MusicBrainz and Wikimedia. Stored pictures are served either way.
+
+An artist is named as a [credit](#canonical-track) names them, matched case-insensitively. The
+server only takes a picture it is sure of: a MusicBrainz search must find exactly one artist
+with that exact name, at full score, and that artist's Wikidata entry must have an image.
+Anything less is recorded as no picture and not asked again for 30 days (a failed request,
+from one day, doubling).
+
+`image_hash` on `library_artists`, `track_get` and `now_playing_state` is a lookup and never
+starts a download. To get pictures for the artists on screen, send `library_artist_images`
+with their names. It answers at once with the hashes already stored and queues the rest;
+`enabled: false` means downloading is off, so nothing will arrive. Each queued picture that
+lands is announced with [`library_artist_image_updated`](#events). The playing track's
+artists are queued by the server itself, ahead of any request. A client should not send the
+whole library: the queue is bounded, and an artist dropped from it is queued again the next
+time it is asked for.
 
 ### Library sync
 
@@ -1077,6 +1106,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
+| `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) or for the playing track was stored. `artist` is the name as it was queued |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 

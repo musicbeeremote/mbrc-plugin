@@ -130,6 +130,10 @@ fn default_update_check_interval_hours() -> u64 {
     24
 }
 
+fn default_artist_images_budget_mb() -> u64 {
+    100
+}
+
 /// The core's runtime configuration. Every field has a default so a missing or
 /// partial `core_settings.json` still yields a usable config.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -235,6 +239,14 @@ pub struct Config {
     /// [`crate::setup::CURRENT_SETUP_VERSION`], the host opens the wizard.
     #[serde(default)]
     pub setup_version: u32,
+    /// Whether the core downloads artist pictures (#116). Off by default: it
+    /// sends artist names to MusicBrainz and Wikimedia.
+    #[serde(default)]
+    pub artist_images_enabled: bool,
+    /// The disk the stored artist pictures may use before the fetcher stops,
+    /// in MiB.
+    #[serde(default = "default_artist_images_budget_mb")]
+    pub artist_images_budget_mb: u64,
     /// The storage directory handed to `mbrc_initialize` (not read from JSON;
     /// set by [`Config::load`]). Roots the on-disk cover cache. Empty in unit
     /// tests that build a `Config` literal - the cover build is skipped then.
@@ -284,6 +296,8 @@ impl Default for Config {
             update_check_interval_hours: default_update_check_interval_hours(),
             proxy_override: String::new(),
             setup_version: 0,
+            artist_images_enabled: false,
+            artist_images_budget_mb: default_artist_images_budget_mb(),
             storage_path: String::new(),
         }
     }

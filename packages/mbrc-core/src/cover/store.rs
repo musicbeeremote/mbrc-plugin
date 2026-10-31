@@ -27,6 +27,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
+use super::artists::ArtistImages;
 use super::source::Source;
 use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
 use crate::store::{
@@ -204,14 +205,19 @@ pub struct CoverStore {
     no_art: RwLock<HashMap<String, i64>>,
     /// item key -> its cover, loaded once and written through to redb.
     items: RwLock<HashMap<String, ItemCover>>,
+    /// Artist pictures (#116), kept in the same files and pruned with them.
+    artists: ArtistImages,
     building: AtomicBool,
 }
 
 impl CoverStore {
     pub fn new(db: Db, storage_path: impl Into<PathBuf>) -> Self {
         let items = load_items(&db);
+        let storage_path = storage_path.into();
+        let artists = ArtistImages::new(db.clone(), storage_path.join("cache").join("covers"));
         Self {
-            storage_path: storage_path.into(),
+            storage_path,
+            artists,
             db,
             covers: RwLock::new(HashMap::new()),
             paths: RwLock::new(HashMap::new()),
@@ -240,6 +246,11 @@ impl CoverStore {
     }
     fn cover_file(&self, content_hash: &str) -> PathBuf {
         self.covers_dir().join(content_hash)
+    }
+
+    /// The artist pictures sharing this store's files.
+    pub fn artists(&self) -> &ArtistImages {
+        &self.artists
     }
 
     /// Whether a cache build is in progress (serves `librarycovercachebuildstatus`).
@@ -877,6 +888,7 @@ impl CoverStore {
                 .values()
                 .filter_map(|cover| cover.hash.clone()),
         );
+        referenced.extend(self.artists.hashes());
         let Ok(entries) = std::fs::read_dir(self.covers_dir()) else {
             return; // no covers dir yet
         };
@@ -1267,7 +1279,7 @@ fn report_progress(
 
 /// Lowers the calling thread below MusicBee's own, so a cold build does not
 /// compete with playback or the UI for the CPU.
-fn below_normal_priority() {
+pub(super) fn below_normal_priority() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Threading::{
@@ -1906,6 +1918,23 @@ mod tests {
         store.build(|_| Some(jpeg_bytes(150, 150)), false);
 
         assert!(!orphan.exists(), "orphaned cover file should be pruned");
+    }
+
+    #[test]
+    fn a_cover_build_keeps_the_artist_pictures_it_shares_files_with() {
+        let (db, dir) = temp_storage("prune-artists");
+        let store = CoverStore::new(db, &dir);
+        let hash = store
+            .artists()
+            .store("Gadiel", &jpeg_bytes(300, 300), "", "wikidata")
+            .unwrap();
+        store.warm_up(&[AlbumIdentity {
+            key: "alb1".into(),
+            path: "/a.mp3".into(),
+            modified: 0,
+        }]);
+        store.build(|_| Some(jpeg_bytes(150, 150)), false);
+        assert!(store.read_cover_bytes(&hash).is_some());
     }
 
     #[test]

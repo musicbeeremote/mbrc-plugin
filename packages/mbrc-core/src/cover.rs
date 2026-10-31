@@ -12,6 +12,8 @@ use std::io::Cursor;
 use base64::Engine;
 use sha1::{Digest, Sha1};
 
+pub mod artist_fetch;
+pub mod artists;
 pub mod source;
 pub mod store;
 
