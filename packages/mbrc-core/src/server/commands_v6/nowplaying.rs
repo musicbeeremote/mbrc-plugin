@@ -82,9 +82,8 @@ fn state(
                 let artwork = now_playing.map(|c| c.cover().cover).unwrap_or_default();
                 let hash =
                     track::playing_cover_hash(&track::Covers::new(store, p), &tags, &artwork);
-                let mut json = track::track_json(&tags, hash.as_deref(), track::Credits::All);
-                track::add_artist_images(&mut json, store);
-                json
+                let images = store.map(CoverStore::artists);
+                track::track_json(&tags, hash.as_deref(), track::Credits::All(images))
             }
             None => Value::Null,
         }

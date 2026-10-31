@@ -175,6 +175,7 @@ fn run_thread(
         scanner.abort();
         list_changes.abort();
         media.abort();
+        core.cover_store.artists().queue().retire();
     });
 }
 
@@ -292,18 +293,11 @@ fn spawn_startup_update_check(core: &Arc<Core>) {
 /// A plain thread rather than a blocking task: it idles for the whole session,
 /// and a Tokio runtime waits for its blocking tasks when it is dropped. It holds
 /// neither the core nor the cover store, only the fetch queue, and ends when
-/// [`Core::begin_stopping`] retires it or a networking restart starts its
-/// successor.
+/// networking stops, which retires it and waits until it lets go of the store.
 fn spawn_artist_images(core: &Arc<Core>) {
     #[cfg(windows)]
     {
-        let client = match crate::updates::http_client(&core.config) {
-            Ok(client) => client,
-            Err(e) => {
-                tracing::warn!(error = %e, "artist pictures: no HTTP client");
-                return;
-            }
-        };
+        let config = core.config.clone();
         let queue = core.cover_store.artists().queue();
         let store = Arc::downgrade(&core.cover_store);
         let weak = Arc::downgrade(core);
@@ -311,6 +305,13 @@ fn spawn_artist_images(core: &Arc<Core>) {
         let spawned = std::thread::Builder::new()
             .name("mbrc-artist-images".into())
             .spawn(move || {
+                let client = match crate::updates::http_client(&config) {
+                    Ok(client) => client,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "artist pictures: no HTTP client");
+                        return;
+                    }
+                };
                 let mut fetcher = crate::cover::artist_fetch::Fetcher::new(
                     &client,
                     crate::cover::artist_fetch::Pace::polite(),
@@ -336,6 +337,7 @@ fn spawn_artist_images(core: &Arc<Core>) {
 }
 
 /// Tells V6 clients a queued artist picture has landed.
+#[cfg(windows)]
 fn broadcast_artist_image(core: &Core, artist: &str, hash: &str) {
     core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
         "library_artist_image_updated",

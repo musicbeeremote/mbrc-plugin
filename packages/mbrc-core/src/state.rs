@@ -148,12 +148,8 @@ impl Core {
     /// Set by both teardown paths, because the host uses both: `PluginHost` calls
     /// `mbrc_stop_networking` and only then `mbrc_shutdown`, so setting this in
     /// the latter alone means it is set after the wait it exists to prevent.
-    ///
-    /// Also retires the artist picture fetcher, waiting until it lets go of the
-    /// cover store, so a reload can open `mbrc.redb` again at once.
     pub fn begin_stopping(&self) {
         self.stopping.store(true, Ordering::Release);
-        self.cover_store.artists().queue().retire();
     }
 
     /// Clears it again, because stopping networking is not always leaving.
@@ -306,10 +302,12 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
 
 /// Applies the saved settings that take effect without a re-init.
 fn apply_live_settings(core: &Core, config: &Config) {
-    core.cover_store
-        .artists()
-        .set_enabled(config.artist_images_enabled);
-    server::request_playing_artist_images(core);
+    let artists = core.cover_store.artists();
+    let turned_on = config.artist_images_enabled && !artists.is_enabled();
+    artists.set_enabled(config.artist_images_enabled);
+    if turned_on {
+        server::request_playing_artist_images(core);
+    }
 }
 
 /// Hands the staged update to the elevated helper.
