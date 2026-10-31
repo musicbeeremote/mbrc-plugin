@@ -291,8 +291,9 @@ fn spawn_startup_update_check(core: &Arc<Core>) {
 ///
 /// A plain thread rather than a blocking task: it idles for the whole session,
 /// and a Tokio runtime waits for its blocking tasks when it is dropped. It holds
-/// the core weakly and ends on teardown, when the core is dropped, or when a
-/// networking restart starts its successor.
+/// neither the core nor the cover store, only the fetch queue, and ends when
+/// [`Core::begin_stopping`] retires it or a networking restart starts its
+/// successor.
 fn spawn_artist_images(core: &Arc<Core>) {
     #[cfg(windows)]
     {
@@ -303,9 +304,10 @@ fn spawn_artist_images(core: &Arc<Core>) {
                 return;
             }
         };
-        let store = core.cover_store.clone();
+        let queue = core.cover_store.artists().queue();
+        let store = Arc::downgrade(&core.cover_store);
         let weak = Arc::downgrade(core);
-        let generation = store.artists().begin_worker();
+        let generation = queue.begin_worker();
         let spawned = std::thread::Builder::new()
             .name("mbrc-artist-images".into())
             .spawn(move || {
@@ -314,10 +316,10 @@ fn spawn_artist_images(core: &Arc<Core>) {
                     crate::cover::artist_fetch::Pace::polite(),
                 );
                 crate::cover::artist_fetch::run(
-                    store.artists(),
+                    &queue,
+                    &store,
                     &mut fetcher,
                     generation,
-                    &|| weak.upgrade().is_some_and(|core| !core.is_stopping()),
                     &|artist, hash| {
                         if let Some(core) = weak.upgrade() {
                             broadcast_artist_image(&core, artist, hash);

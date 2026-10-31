@@ -821,12 +821,14 @@ An artist is named as a [credit](#canonical-track) names them, matched case-inse
 server only takes a picture it is sure of: a MusicBrainz search must find exactly one artist
 with that exact name, at full score, and that artist's Wikidata entry must have an image.
 Anything less is recorded as no picture and not asked again for 30 days (a failed request,
-from one day, doubling).
+from one day, doubling). A source that answers busy is left alone for a while and the artist
+stays queued.
 
 `image_hash` on `library_artists`, `track_get` and `now_playing_state` is a lookup and never
 starts a download. To get pictures for the artists on screen, send `library_artist_images`
 with their names. It answers at once with the hashes already stored and queues the rest;
-`enabled: false` means downloading is off, so nothing will arrive. Each queued picture that
+`enabled: false` means downloading is off or the server's space for pictures is full, so
+nothing will arrive. Each queued picture that
 lands is announced with [`library_artist_image_updated`](#events). The playing track's
 artists are queued by the server itself, ahead of any request. A client should not send the
 whole library: the queue is bounded, and an artist dropped from it is queued again the next
