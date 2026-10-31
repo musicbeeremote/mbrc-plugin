@@ -29,6 +29,7 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::ErrorCode;
 
 use super::{OpResult, V6Error, internal, opt_bool, opt_str, page_args, page_json, track};
+use crate::cover::artists::ArtistImages;
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
     AlbumYears, CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
@@ -147,7 +148,8 @@ const MAX_ARTIST_IMAGES: usize = 500;
 ///
 /// Answers from the store at once; a picture that lands later is announced
 /// with `library_artist_image_updated`. `enabled` tells a client whether
-/// waiting for one makes sense at all.
+/// waiting for one makes sense at all: downloading is on and the disk budget
+/// has room.
 fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
     let names = super::req_str_array(data, "artists")?;
     if names.len() > MAX_ARTIST_IMAGES {
@@ -175,7 +177,7 @@ fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
         .collect();
     Ok(json!({
         "artists": items,
-        "enabled": images.is_some_and(|i| i.is_enabled()),
+        "enabled": images.is_some_and(ArtistImages::is_accepting),
     }))
 }
 
@@ -2287,10 +2289,7 @@ mod tests {
                 "enabled": true,
             })
         );
-        assert_eq!(
-            images.next(std::time::Duration::ZERO).as_deref(),
-            Some("Tico")
-        );
+        assert_eq!(images.next_queued().as_deref(), Some("Tico"));
         assert!(m.recorded().is_empty(), "MusicBee is never asked");
     }
 
@@ -2308,7 +2307,7 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(out["enabled"], false);
-        assert_eq!(store.artists().next(std::time::Duration::ZERO), None);
+        assert_eq!(store.artists().next_queued(), None);
 
         let too_many: Vec<String> = (0..=MAX_ARTIST_IMAGES).map(|i| i.to_string()).collect();
         let err = dispatch(

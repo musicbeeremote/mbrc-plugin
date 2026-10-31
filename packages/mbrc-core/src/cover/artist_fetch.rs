@@ -11,12 +11,14 @@
 //! host is paced ([`Pace`]): MusicBrainz allows one request a second per IP.
 
 use std::collections::HashMap;
+use std::sync::Weak;
 use std::time::{Duration, Instant};
 
 use mbrc_release::HttpClient;
 use serde_json::Value;
 
-use super::artists::{ArtistImages, Status};
+use super::artists::{ArtistImages, FetchQueue, Status};
+use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
 
 /// The source name recorded for a picture from Wikimedia Commons via Wikidata.
@@ -30,19 +32,25 @@ const IDLE_WAIT: Duration = Duration::from_secs(1);
 
 const MUSICBRAINZ: &str = "musicbrainz.org";
 
-/// The least time between two requests to one host.
+/// The least time between two requests to one host, and how long a busy
+/// service is left alone.
 pub struct Pace {
     musicbrainz: Duration,
     other: Duration,
+    busy_min: Duration,
+    busy_max: Duration,
     last: HashMap<String, Instant>,
 }
 
 impl Pace {
-    /// A little over a second for MusicBrainz, half a second for Wikimedia.
+    /// A little over a second for MusicBrainz, half a second for Wikimedia; a
+    /// busy service is paused for 30 seconds, doubling up to 10 minutes.
     pub fn polite() -> Self {
         Self {
             musicbrainz: Duration::from_millis(1100),
             other: Duration::from_millis(500),
+            busy_min: Duration::from_secs(30),
+            busy_max: Duration::from_secs(600),
             last: HashMap::new(),
         }
     }
@@ -52,6 +60,8 @@ impl Pace {
         Self {
             musicbrainz: Duration::ZERO,
             other: Duration::ZERO,
+            busy_min: Duration::ZERO,
+            busy_max: Duration::ZERO,
             last: HashMap::new(),
         }
     }
@@ -91,13 +101,24 @@ pub enum Outcome {
         mbid: String,
     },
     Failed {
-        error: String,
+        failure: Failure,
         mbid: String,
     },
 }
 
-/// One HTTP answer: the body, `None` for a 404, or why it failed.
-type Fetched = Result<Option<Vec<u8>>, String>;
+/// Why a lookup stopped short of an answer.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Failure {
+    /// Downloading was turned off, or the worker retired, before a request.
+    Cancelled,
+    /// The service is shedding load (HTTP 429 or 503): a fact about the
+    /// moment, not the artist.
+    Busy(String),
+    Error(String),
+}
+
+/// One HTTP answer: the body, `None` for a 404, or why there is none.
+type Fetched = Result<Option<Vec<u8>>, Failure>;
 
 /// Resolves names and downloads pictures over one client.
 pub struct Fetcher<'a> {
@@ -111,17 +132,17 @@ impl<'a> Fetcher<'a> {
     }
 
     /// Looks `name` up and, when every step finds exactly one answer, downloads
-    /// its picture.
-    pub fn fetch(&mut self, name: &str) -> Outcome {
+    /// its picture. `proceed` is asked before each request.
+    pub fn fetch(&mut self, name: &str, proceed: &dyn Fn() -> bool) -> Outcome {
         let missing = |status, mbid: &str| Outcome::Missing {
             status,
             mbid: mbid.to_owned(),
         };
-        let failed = |error, mbid: &str| Outcome::Failed {
-            error,
+        let failed = |failure, mbid: &str| Outcome::Failed {
+            failure,
             mbid: mbid.to_owned(),
         };
-        let mbid = match self.json(&musicbrainz_search_url(name)) {
+        let mbid = match self.json(&musicbrainz_search_url(name), proceed) {
             Ok(Some(body)) => match pick_artist(name, &body) {
                 Ok(mbid) => mbid,
                 Err(status) => return missing(status, ""),
@@ -129,7 +150,7 @@ impl<'a> Fetcher<'a> {
             Ok(None) => return missing(Status::NotFound, ""),
             Err(e) => return failed(e, ""),
         };
-        let item = match self.json(&musicbrainz_lookup_url(&mbid)) {
+        let item = match self.json(&musicbrainz_lookup_url(&mbid), proceed) {
             Ok(Some(body)) => match wikidata_item(&body) {
                 Some(item) => item,
                 None => return missing(Status::NotFound, &mbid),
@@ -137,7 +158,7 @@ impl<'a> Fetcher<'a> {
             Ok(None) => return missing(Status::NotFound, &mbid),
             Err(e) => return failed(e, &mbid),
         };
-        let file = match self.json(&wikidata_image_url(&item)) {
+        let file = match self.json(&wikidata_image_url(&item), proceed) {
             Ok(Some(body)) => match image_file(&body) {
                 Some(file) => file,
                 None => return missing(Status::NotFound, &mbid),
@@ -145,7 +166,7 @@ impl<'a> Fetcher<'a> {
             Ok(None) => return missing(Status::NotFound, &mbid),
             Err(e) => return failed(e, &mbid),
         };
-        match self.get(&commons_url(&file)) {
+        match self.get(&commons_url(&file), proceed) {
             Ok(Some(image)) => Outcome::Found {
                 image,
                 mbid,
@@ -156,64 +177,115 @@ impl<'a> Fetcher<'a> {
         }
     }
 
-    fn get(&mut self, url: &str) -> Fetched {
+    fn get(&mut self, url: &str, proceed: &dyn Fn() -> bool) -> Fetched {
         self.pace.wait_for(url);
-        let response = self.client.get(url, None).map_err(|e| e.to_string())?;
+        if !proceed() {
+            return Err(Failure::Cancelled);
+        }
+        let response = self
+            .client
+            .get(url, None)
+            .map_err(|e| Failure::Error(e.to_string()))?;
         match response.status {
             404 => Ok(None),
             _ if response.is_success() => Ok(Some(response.body)),
-            status => Err(format!("HTTP {status} from {}", host(url))),
+            status @ (429 | 503) => Err(Failure::Busy(format!("HTTP {status} from {}", host(url)))),
+            status => Err(Failure::Error(format!("HTTP {status} from {}", host(url)))),
         }
     }
 
-    fn json(&mut self, url: &str) -> Result<Option<Value>, String> {
-        self.get(url)?
+    fn json(&mut self, url: &str, proceed: &dyn Fn() -> bool) -> Result<Option<Value>, Failure> {
+        self.get(url, proceed)?
             .map(|body| {
-                serde_json::from_slice(&body).map_err(|e| format!("{} JSON: {e}", host(url)))
+                serde_json::from_slice(&body)
+                    .map_err(|e| Failure::Error(format!("{} JSON: {e}", host(url))))
             })
             .transpose()
     }
 }
 
-/// Fetches queued artists until `keep_going` says stop or a newer worker
-/// replaces this one, calling `landed` with each picture stored.
+/// Fetches queued artists until this worker is retired or the store is gone,
+/// calling `landed` with each picture stored.
+///
+/// The store is reached only through [`FetchQueue::with_store`] and never held
+/// across a request, so a retired worker never keeps `mbrc.redb` open. A busy
+/// service puts the artist back and pauses the worker, doubling up to
+/// [`Pace`]'s longest pause, instead of charging the artist an error.
 pub fn run(
-    images: &ArtistImages,
+    queue: &FetchQueue,
+    store: &Weak<CoverStore>,
     fetcher: &mut Fetcher<'_>,
     generation: u64,
-    keep_going: &dyn Fn() -> bool,
     landed: &dyn Fn(&str, &str),
 ) {
     super::store::below_normal_priority();
     let mut budget_noted = false;
-    while images.is_current_worker(generation) && keep_going() {
-        let Some(name) = images.next(IDLE_WAIT) else {
+    let mut busy_pause = fetcher.pace.busy_min;
+    while queue.is_current(generation) {
+        let Some(item) = queue.next(IDLE_WAIT) else {
             continue;
         };
-        if !images.needs_fetch(&name, now_unix_secs()) {
+        let Some(ready) = queue.with_store(generation, store, |images| {
+            is_ready(images, &item.name, &mut budget_noted)
+        }) else {
+            return;
+        };
+        if !ready {
             continue;
         }
-        if images.over_budget() {
-            if !budget_noted {
-                tracing::info!(
-                    used = images.used_bytes(),
-                    "artist pictures reached their disk budget; not fetching more"
-                );
-                budget_noted = true;
+        let proceed = || queue.is_current(generation) && queue.is_enabled();
+        match fetcher.fetch(&item.name, &proceed) {
+            Outcome::Failed {
+                failure: Failure::Cancelled,
+                ..
+            } => {}
+            Outcome::Failed {
+                failure: Failure::Busy(error),
+                ..
+            } => {
+                tracing::debug!(artist = item.name, %error, pause = ?busy_pause, "artist picture source busy");
+                queue.push(item);
+                queue.pause(generation, busy_pause);
+                busy_pause = (busy_pause * 2).min(fetcher.pace.busy_max);
             }
-            continue;
+            outcome => {
+                busy_pause = fetcher.pace.busy_min;
+                let settled = queue.with_store(generation, store, |images| {
+                    settle(images, &item.name, outcome, landed);
+                });
+                if settled.is_none() {
+                    return;
+                }
+            }
         }
-        fetch_one(images, fetcher, &name, landed);
     }
 }
 
-fn fetch_one(
-    images: &ArtistImages,
-    fetcher: &mut Fetcher<'_>,
-    name: &str,
-    landed: &dyn Fn(&str, &str),
-) {
-    match fetcher.fetch(name) {
+/// Whether `name` is still worth a lookup: no picture, due, and room for one.
+fn is_ready(images: &ArtistImages, name: &str, budget_noted: &mut bool) -> bool {
+    if !images.needs_fetch(name, now_unix_secs()) {
+        return false;
+    }
+    if images.over_budget() {
+        if !*budget_noted {
+            tracing::info!(
+                used = images.used_bytes(),
+                "artist pictures reached their disk budget; not fetching more"
+            );
+            *budget_noted = true;
+        }
+        return false;
+    }
+    true
+}
+
+/// Records what one lookup came to; nothing when downloading was turned off
+/// while it ran.
+fn settle(images: &ArtistImages, name: &str, outcome: Outcome, landed: &dyn Fn(&str, &str)) {
+    if !images.is_enabled() {
+        return;
+    }
+    match outcome {
         Outcome::Found {
             image,
             mbid,
@@ -232,8 +304,8 @@ fn fetch_one(
             tracing::debug!(artist = name, status = status.as_str(), "no artist picture");
             images.record_miss(name, status, &mbid);
         }
-        Outcome::Failed { error, mbid } => {
-            tracing::debug!(artist = name, %error, "artist picture fetch failed");
+        Outcome::Failed { failure, mbid } => {
+            tracing::debug!(artist = name, ?failure, "artist picture fetch failed");
             images.record_miss(name, Status::Error, &mbid);
         }
     }
@@ -317,23 +389,16 @@ fn image_file(body: &Value) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn now_unix_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::sync::{Arc, Mutex};
 
     use mbrc_release::{HttpResponse, UpdateError};
     use serde_json::json;
 
     use super::*;
+    use crate::cover::artists::Priority;
     use crate::cover::test_jpeg_bytes;
-    use crate::store::Db;
 
     const ELUVEITIE_MBID: &str = "8000598a-5edb-401c-8e6d-36b167feaf38";
 
@@ -348,7 +413,7 @@ mod tests {
     #[derive(Default)]
     struct Recorded {
         answers: HashMap<String, (u16, Vec<u8>)>,
-        asked: RefCell<Vec<String>>,
+        asked: Mutex<Vec<String>>,
         offline: bool,
     }
 
@@ -386,7 +451,7 @@ mod tests {
 
     impl HttpClient for Recorded {
         fn get(&self, url: &str, _etag: Option<&str>) -> mbrc_release::Result<HttpResponse> {
-            self.asked.borrow_mut().push(url.to_owned());
+            self.asked.lock().unwrap().push(url.to_owned());
             if self.offline {
                 return Err(UpdateError::Network("offline".into()));
             }
@@ -399,8 +464,14 @@ mod tests {
         }
     }
 
+    impl Recorded {
+        fn asked(&self) -> Vec<String> {
+            self.asked.lock().unwrap().clone()
+        }
+    }
+
     fn fetch(client: &Recorded, name: &str) -> Outcome {
-        Fetcher::new(client, Pace::none()).fetch(name)
+        Fetcher::new(client, Pace::none()).fetch(name, &|| true)
     }
 
     #[test]
@@ -418,7 +489,7 @@ mod tests {
         assert_eq!(source, SOURCE_WIKIDATA);
         assert_eq!(image, test_jpeg_bytes(500, 333));
         assert!(
-            client.asked.borrow()[3].ends_with(
+            client.asked()[3].ends_with(
                 "Special:FilePath/Eluveitie%2C_3-Maj%C3%B3wka_2023%2C_056.jpg?width=500"
             ),
             "Commons is asked for the file pre-sized"
@@ -440,7 +511,7 @@ mod tests {
                 mbid: String::new()
             }
         );
-        assert_eq!(client.asked.borrow().len(), 1);
+        assert_eq!(client.asked().len(), 1);
     }
 
     #[test]
@@ -485,23 +556,48 @@ mod tests {
     }
 
     /// Recorded: MusicBrainz's answer while over its rate limit.
-    #[test]
-    fn a_busy_server_or_no_network_is_an_error_to_retry() {
-        let busy = Recorded::default().with(
+    fn busy() -> Recorded {
+        Recorded::default().with(
             musicbrainz_search_url("Eluveitie"),
             503,
             fixture("mb_busy.json"),
-        );
+        )
+    }
+
+    #[test]
+    fn a_busy_server_is_told_apart_from_a_failure() {
+        assert!(matches!(
+            fetch(&busy(), "Eluveitie"),
+            Outcome::Failed {
+                failure: Failure::Busy(_),
+                ..
+            }
+        ));
         let offline = Recorded {
             offline: true,
             ..Recorded::default()
         };
-        for client in [busy, offline] {
-            assert!(matches!(
-                fetch(&client, "Eluveitie"),
-                Outcome::Failed { .. }
-            ));
-        }
+        assert!(matches!(
+            fetch(&offline, "Eluveitie"),
+            Outcome::Failed {
+                failure: Failure::Error(_),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn nothing_is_sent_once_told_to_stop() {
+        let client = Recorded::eluveitie();
+        let outcome = Fetcher::new(&client, Pace::none()).fetch("Eluveitie", &|| false);
+        assert!(matches!(
+            outcome,
+            Outcome::Failed {
+                failure: Failure::Cancelled,
+                ..
+            }
+        ));
+        assert!(client.asked().is_empty());
     }
 
     #[test]
@@ -536,40 +632,88 @@ mod tests {
         assert!(started.elapsed() >= Duration::from_millis(1100));
     }
 
+    /// Runs a worker on its own thread until `done` holds, then retires it.
+    fn run_until(
+        store: &Arc<CoverStore>,
+        client: Recorded,
+        done: impl Fn(&ArtistImages) -> bool,
+    ) -> (Recorded, Vec<(String, String)>) {
+        let queue = store.artists().queue();
+        let generation = queue.begin_worker();
+        let weak = Arc::downgrade(store);
+        let worker = {
+            let queue = queue.clone();
+            std::thread::spawn(move || {
+                let landed = Mutex::new(Vec::new());
+                let mut fetcher = Fetcher::new(&client, Pace::none());
+                run(&queue, &weak, &mut fetcher, generation, &|name, hash| {
+                    landed
+                        .lock()
+                        .unwrap()
+                        .push((name.to_owned(), hash.to_owned()));
+                });
+                drop(fetcher);
+                (client, landed.into_inner().unwrap())
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(store.artists()) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        queue.retire();
+        worker.join().unwrap()
+    }
+
+    fn worker_store(name: &str) -> Arc<CoverStore> {
+        let dir = std::env::temp_dir().join(format!("mbrc-artist-fetch-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(CoverStore::open_at(&dir));
+        store.artists().set_enabled(true);
+        store
+    }
+
     #[test]
     fn the_worker_stores_what_it_finds_records_what_it_does_not_and_announces_pictures() {
-        let dir = std::env::temp_dir().join("mbrc-artist-fetch-worker");
-        let _ = std::fs::remove_dir_all(&dir);
-        let images = ArtistImages::new(Db::disabled(), dir.join("covers"));
-        images.set_enabled(true);
-        images.request("Kaleidoscope", super::super::artists::Priority::Requested);
-        images.request("Eluveitie", super::super::artists::Priority::NowPlaying);
-
+        let store = worker_store("worker");
+        let images = store.artists();
+        images.request("Kaleidoscope", Priority::Requested);
+        images.request("Eluveitie", Priority::NowPlaying);
         let client = Recorded::eluveitie().with(
             musicbrainz_search_url("Kaleidoscope"),
             200,
             fixture("mb_search_kaleidoscope.json"),
         );
-        let mut fetcher = Fetcher::new(&client, Pace::none());
-        let generation = images.begin_worker();
-        let landed = RefCell::new(Vec::new());
-        let rounds = std::cell::Cell::new(0);
-        run(
-            &images,
-            &mut fetcher,
-            generation,
-            &|| {
-                rounds.set(rounds.get() + 1);
-                rounds.get() <= 2
-            },
-            &|name, hash| landed.borrow_mut().push((name.to_owned(), hash.to_owned())),
-        );
+        let (_, landed) = run_until(&store, client, |images| {
+            images.lookup("Kaleidoscope").is_some()
+        });
 
         let hash = images.hash_for("Eluveitie").expect("stored");
-        assert_eq!(*landed.borrow(), [("Eluveitie".to_owned(), hash)]);
+        assert_eq!(landed, [("Eluveitie".to_owned(), hash)]);
         assert_eq!(
             images.lookup("Kaleidoscope").map(|l| l.status),
             Some(Status::Ambiguous)
         );
+    }
+
+    #[test]
+    fn a_busy_service_puts_the_artist_back_instead_of_charging_it_an_error() {
+        let store = worker_store("busy");
+        store.artists().request("Eluveitie", Priority::Requested);
+        let polls = std::cell::Cell::new(0);
+        let (client, _) = run_until(&store, busy(), |_| {
+            polls.set(polls.get() + 1);
+            polls.get() > 20
+        });
+        assert!(client.asked().len() > 1, "asked again after the pause");
+        assert_eq!(store.artists().lookup("Eluveitie"), None);
+    }
+
+    #[test]
+    fn a_retired_worker_lets_go_of_the_store() {
+        let store = worker_store("retired");
+        let (_, landed) = run_until(&store, Recorded::default(), |_| true);
+        assert!(landed.is_empty());
+        assert_eq!(Arc::strong_count(&store), 1);
     }
 }
