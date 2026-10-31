@@ -440,6 +440,12 @@ namespace MusicBeePlugin.Ffi
         public ListeningInfo ReadListeningAddresses() =>
             Query<ListeningInfo>(HostQueryType.ListeningAddresses);
 
+        /// <summary>
+        ///     The QR code that points the Android app at this server, built from
+        ///     the current addresses. Null if the core is not initialized.
+        /// </summary>
+        public ConnectQr ReadConnectQr() => Query<ConnectQr>(HostQueryType.ConnectQr);
+
         /// <summary>Trigger a background rebuild of the metadata (browse) cache.</summary>
         public bool RebuildMetadata() => Command(HostCommandType.RebuildMetadata);
 

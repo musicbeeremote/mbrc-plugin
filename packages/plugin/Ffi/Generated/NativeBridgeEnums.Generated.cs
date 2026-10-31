@@ -167,6 +167,7 @@ namespace MusicBeePlugin.Ffi.Generated
         SetupStatus = 8,
         FirewallStatus = 9,
         FixFirewall = 10,
+        ConnectQr = 11,
     }
 
     public enum HostCommandType

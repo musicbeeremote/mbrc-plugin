@@ -443,11 +443,28 @@ namespace MusicBeePlugin.Settings
             };
             _clientStatus = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
 
-            _rows.Add(rows, "Address", addressList, endsBlock: true);
+            _rows.Add(rows, "Address", addressList);
+            _rows.Add(rows, string.Empty, ActionRow(QrButton(), QrHint()), endsBlock: true);
             _rows.Add(rows, "Android app", Link(AndroidAppUrl, "MusicBee Remote on Google Play"), endsBlock: true);
             _rows.Add(rows, "Status", _clientStatus);
             return body;
         }
+
+        private Button QrButton()
+        {
+            var button = new Button { Text = "Show a QR code", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            button.Click += (s, e) => ConnectQrDialog.ShowFor(_host, this);
+            return button;
+        }
+
+        private static Label QrHint() =>
+            new Label
+            {
+                Text = "Can't type it? Scan it with your phone's camera.",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                ForeColor = SystemColors.GrayText,
+            };
 
         private void Advance()
         {

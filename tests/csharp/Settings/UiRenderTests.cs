@@ -84,6 +84,54 @@ namespace MusicBeeRemote.Core.Tests.Settings
             });
         }
 
+        [Fact(Explicit = true)]
+        public void ConnectQrDialog_RendersEachState()
+        {
+            OnStaThread(host =>
+            {
+                var cases = new[]
+                {
+                    ("connect-qr", new ConnectQr
+                    {
+                        link = "https://mbrc.kelsos.net/connect#v=1&h=192.168.1.5,172.20.48.1&p=3000",
+                        png = FakeQrPng(WorstCaseQrPixels),
+                        addresses = new List<string> { "192.168.1.5", "172.20.48.1" },
+                        port = 3000,
+                    }),
+                    ("connect-qr-no-address", new ConnectQr { link = string.Empty, png = new List<byte>(), addresses = new List<string>(), port = 3000 }),
+                    ("connect-qr-no-core", null),
+                };
+                foreach (var (name, qr) in cases)
+                {
+                    using (var dialog = Shown(new ConnectQrDialog(qr)))
+                    {
+                        Save(dialog, name);
+                        var note = qr == null || qr.png.Count == 0 ? null : ConnectQrDialog.AppVersionNote;
+                        if (note != null)
+                            Find<Label>(dialog, l => l.Text == note).Visible.Should().BeTrue();
+                        dialog.Height.Should().BeLessThan(Screen.PrimaryScreen.WorkingArea.Height);
+                    }
+                }
+            });
+        }
+
+        /// <summary>The side of a version 12 code at 6 px a module with its quiet zone, the largest the core draws.</summary>
+        private const int WorstCaseQrPixels = (65 + 8) * 6;
+
+        /// <summary>A checkerboard PNG standing in for the core's code, which needs the native core to draw.</summary>
+        private static List<byte> FakeQrPng(int side)
+        {
+            using (var bitmap = new Bitmap(side, side))
+            using (var stream = new MemoryStream())
+            {
+                for (var y = 0; y < side; y++)
+                    for (var x = 0; x < side; x++)
+                        bitmap.SetPixel(x, y, (x / 6 + y / 6) % 2 == 0 ? Color.Black : Color.White);
+                bitmap.Save(stream, ImageFormat.Png);
+                return stream.ToArray().ToList();
+            }
+        }
+
         private static string OutputDir
         {
             get

@@ -5,6 +5,7 @@
 //! [`ffi::types`]. This file holds the `#[no_mangle]` exports C# calls.
 
 pub mod config;
+pub mod connect_link;
 pub mod cover;
 pub mod credits;
 pub mod diagnostics;

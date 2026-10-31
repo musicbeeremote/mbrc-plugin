@@ -401,6 +401,7 @@ pub fn host_query(kind: HostQueryType, params: &[u8]) -> Option<Vec<u8>> {
         HostQueryType::FixFirewall => firewall_port(params)
             .map(crate::firewall::fix)
             .and_then(|outcome| rmp_serde::to_vec_named(&outcome).ok()),
+        HostQueryType::ConnectQr => connect_qr_bytes(),
     }
 }
 
@@ -737,6 +738,22 @@ fn listening_info_bytes() -> Option<Vec<u8>> {
         .collect();
     let info = crate::ffi::dtos::ListeningInfo { port, addresses };
     rmp_serde::to_vec_named(&info).ok()
+}
+
+/// Serializes the connect QR for the current addresses. `None` if the core is
+/// not initialized.
+fn connect_qr_bytes() -> Option<Vec<u8>> {
+    let core = core_handle()?;
+    let candidates = crate::discovery::usable_ipv4_ifaces()
+        .into_iter()
+        .map(|(ip, _mask)| ip);
+    let qr = crate::connect_link::connect_qr(
+        candidates,
+        core.config.port,
+        core.server.id.as_deref(),
+        &core.server.name,
+    );
+    rmp_serde::to_vec_named(&qr).ok()
 }
 
 /// Serializes where the update flow stands as MessagePack for the settings panel.

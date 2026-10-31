@@ -22,11 +22,14 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>The <c>address:port</c> pairs a client can reach; empty when there are none.</summary>
-        public static IList<string> Addresses(ListeningInfo info)
+        public static IList<string> Addresses(ListeningInfo info) => Addresses(info?.addresses, info?.port ?? 0);
+
+        /// <inheritdoc cref="Addresses(ListeningInfo)" />
+        public static IList<string> Addresses(IList<string> addresses, ushort port)
         {
-            if (info?.addresses == null) return new List<string>();
-            var port = info.port.ToString(CultureInfo.InvariantCulture);
-            return info.addresses.Select(a => a + ":" + port).ToList();
+            if (addresses == null) return new List<string>();
+            var text = port.ToString(CultureInfo.InvariantCulture);
+            return addresses.Select(a => a + ":" + text).ToList();
         }
 
         /// <summary>Seconds left on a pairing code, as m:ss or Ns.</summary>

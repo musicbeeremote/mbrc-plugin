@@ -352,10 +352,14 @@ namespace MusicBeePlugin.Settings
             };
             _firewall = new CheckBox { Text = "Add a Windows firewall rule on save", AutoSize = true, Anchor = AnchorStyles.Left };
 
+            var showQr = new Button { Text = "Show a QR code", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            showQr.Click += (s, e) => ConnectQrDialog.ShowFor(_host, this);
+
             var layout = Table();
             _rows.Add(layout, "Status", _connStatus);
             _rows.Add(layout, string.Empty, ActionRow(_testConn), endsBlock: true);
-            _rows.Add(layout, "Reachable at", _addresses, endsBlock: true);
+            _rows.Add(layout, "Reachable at", _addresses);
+            _rows.Add(layout, string.Empty, ActionRow(showQr), endsBlock: true);
             _rows.Add(layout, "Listening port", _port);
             _rows.Add(layout, "Discovery", _mdns);
             _rows.Add(layout, "Firewall", _firewall);

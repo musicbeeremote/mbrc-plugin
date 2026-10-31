@@ -135,6 +135,9 @@ namespace MusicBeePlugin.Host
         /// </summary>
         public Ffi.ListeningInfo ReadListeningAddresses() => _bridge.ReadListeningAddresses();
 
+        /// <inheritdoc cref="NativeBridge.ReadConnectQr" />
+        public Ffi.ConnectQr ReadConnectQr() => _bridge.ReadConnectQr();
+
         /// <inheritdoc cref="NativeBridge.RebuildMetadata" />
         public bool RebuildMetadata() => _bridge.RebuildMetadata();
 

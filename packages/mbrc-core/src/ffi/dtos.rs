@@ -310,6 +310,23 @@ pub struct ListeningInfo {
     pub addresses: Vec<String>,
 }
 
+/// The QR code that points the Android app at this server (`ConnectQr`).
+///
+/// Built on each query, so it always carries the current addresses. A Rust -> C#
+/// *result*.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectQr {
+    /// The `https://mbrc.kelsos.net/connect#...` link the code encodes; empty
+    /// when the host has no address a phone could reach.
+    pub link: String,
+    /// The code as a PNG; empty with `link`.
+    pub png: Vec<u8>,
+    /// The addresses in the link, in the order the app tries them.
+    pub addresses: Vec<String>,
+    /// The TCP port in the link.
+    pub port: u16,
+}
+
 /// Where the diagnostics capture stands, surfaced to the settings panel's
 /// Diagnostics group (result of the `CaptureStatus` host query).
 ///

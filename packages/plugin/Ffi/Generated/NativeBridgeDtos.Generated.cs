@@ -440,6 +440,14 @@ namespace MusicBeePlugin.Ffi
         public List<string> addresses { get; set; }
     }
 
+    public class ConnectQr
+    {
+        public string link { get; set; }
+        public List<byte> png { get; set; }
+        public List<string> addresses { get; set; }
+        public ushort port { get; set; }
+    }
+
     public class CaptureStatus
     {
         public string state { get; set; }

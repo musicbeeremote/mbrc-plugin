@@ -365,6 +365,10 @@ pub enum HostQueryType {
     /// `FirewallFixResult`. Blocks while the permission prompt is up; call it off
     /// the UI thread.
     FixFirewall = 10,
+    /// The QR code that points the Android app at this server, for the wizard's
+    /// and the settings window's "Show a QR code" buttons. Built on each call.
+    /// Returns a MessagePack `ConnectQr`.
+    ConnectQr = 11,
 }
 
 impl HostQueryType {
@@ -380,6 +384,7 @@ impl HostQueryType {
             8 => Some(Self::SetupStatus),
             9 => Some(Self::FirewallStatus),
             10 => Some(Self::FixFirewall),
+            11 => Some(Self::ConnectQr),
             _ => None,
         }
     }
@@ -597,6 +602,7 @@ mod tests {
             (8, HostQueryType::SetupStatus),
             (9, HostQueryType::FirewallStatus),
             (10, HostQueryType::FixFirewall),
+            (11, HostQueryType::ConnectQr),
         ];
         for (value, expected) in queries {
             assert_eq!(
