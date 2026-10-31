@@ -710,4 +710,20 @@ mod tests {
         assert!(landed.is_empty());
         assert_eq!(Arc::strong_count(&store), 1);
     }
+
+    /// The whole chain against the live services through WinHTTP, Commons'
+    /// redirects included. Run by hand: `cargo test ... -- --ignored live_`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "live network"]
+    fn live_eluveitie_resolves_to_a_picture_through_winhttp() {
+        let client = crate::updates::http_client(&crate::config::Config::default()).unwrap();
+        let outcome = Fetcher::new(&client, Pace::polite()).fetch("Eluveitie", &|| true);
+        let Outcome::Found { image, mbid, .. } = outcome else {
+            panic!("expected a picture, got {outcome:?}");
+        };
+        assert_eq!(mbid, ELUVEITIE_MBID);
+        let picture = image::load_from_memory(&image).expect("an image");
+        assert!(picture.width() <= 500 && picture.height() <= 500);
+    }
 }
