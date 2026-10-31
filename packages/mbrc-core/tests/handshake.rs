@@ -13,7 +13,10 @@ use serde_json::Value;
 
 use mbrc_core::config::Config;
 
-use harness::{connect, null_core, start_core, start_on_free_port, v4_handshake};
+use harness::{
+    closed_within_timeout, connect, listen_silently, null_core, start_core, start_on_free_port,
+    v4_handshake, v4_handshake_frames,
+};
 
 #[test]
 fn server_completes_v4_handshake_and_keepalive() {
@@ -136,28 +139,11 @@ fn broadcast_subscriber_is_not_reaped_while_silent() {
     let (mut writer, mut reader) = connect(port, Duration::from_millis(1500));
 
     // Handshake with broadcasts enabled, then go completely silent.
-    v4_handshake(&mut writer, &mut reader, "iOS", false);
+    v4_handshake(&mut writer, &mut reader, &v4_handshake_frames("iOS", false));
 
     // Stay silent well past the idle timeout. We should keep receiving server
     // pings and never hit EOF (which would mean we were reaped).
-    let start = Instant::now();
-    let mut got_ping = false;
-    let mut eof = false;
-    while start.elapsed() < Duration::from_secs(4) {
-        let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(0) => {
-                eof = true;
-                break;
-            }
-            Ok(_) => {
-                if line.contains("\"ping\"") {
-                    got_ping = true;
-                }
-            }
-            Err(_) => {} // read timeout for this window; keep waiting
-        }
-    }
+    let (got_ping, eof) = listen_silently(&mut reader, Duration::from_secs(4));
 
     net.stop();
 
@@ -178,28 +164,15 @@ fn aux_socket_gets_no_ping_and_is_not_reaped_while_idle() {
     let (mut writer, mut reader) = connect(port, Duration::from_millis(500));
 
     // Handshake as an aux socket (no_broadcast), then go silent.
-    v4_handshake(&mut writer, &mut reader, "Android", true);
+    v4_handshake(
+        &mut writer,
+        &mut reader,
+        &v4_handshake_frames("Android", true),
+    );
 
     // Stay silent well past the un-handshaked window (2s): we must receive NO
     // pings and never hit EOF (the socket stays open for reuse).
-    let start = Instant::now();
-    let mut saw_ping = false;
-    let mut eof = false;
-    while start.elapsed() < Duration::from_secs(4) {
-        let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(0) => {
-                eof = true;
-                break;
-            }
-            Ok(_) => {
-                if line.contains("\"ping\"") {
-                    saw_ping = true;
-                }
-            }
-            Err(_) => {} // read timeout for this window; keep waiting
-        }
-    }
+    let (saw_ping, eof) = listen_silently(&mut reader, Duration::from_secs(4));
 
     net.stop();
 
@@ -225,29 +198,14 @@ fn new_main_supersedes_old_main_of_same_client() {
 
     // Main A registers first.
     let (mut a, mut a_reader) = connect(port, Duration::from_secs(4));
-    a.write_all(handshake.as_bytes()).unwrap();
-    for _ in 0..2 {
-        let mut line = String::new();
-        a_reader.read_line(&mut line).expect("A handshake reply");
-    }
+    v4_handshake(&mut a, &mut a_reader, handshake);
 
     // Main B (same client_id) registers -> supersedes A.
     let mut b = TcpStream::connect(("127.0.0.1", port)).expect("connect B");
     b.write_all(handshake.as_bytes()).unwrap();
 
     // A should be closed by supersession: skip any queued frames until EOF.
-    let mut closed = false;
-    loop {
-        let mut line = String::new();
-        match a_reader.read_line(&mut line) {
-            Ok(0) => {
-                closed = true;
-                break;
-            }
-            Ok(_) => continue,
-            Err(_) => break, // read timeout: not closed
-        }
-    }
+    let closed = closed_within_timeout(&mut a_reader);
 
     net.stop();
 
@@ -259,13 +217,17 @@ fn new_main_supersedes_old_main_of_same_client() {
 
 #[test]
 fn broadcast_reaches_a_handshaked_client() {
-    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
+    let (port, core, net) = harness::start_with_core();
 
     let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
 
     // Handshake with broadcasts enabled, and read both replies so we know the
     // server has processed the protocol frame (and thus registered us).
-    v4_handshake(&mut writer, &mut reader, "Android", false);
+    v4_handshake(
+        &mut writer,
+        &mut reader,
+        &v4_handshake_frames("Android", false),
+    );
 
     // Fan out a broadcast; the registered client should receive it.
     core.broadcaster
@@ -297,7 +259,7 @@ fn reaps_idle_auxiliary_connection_after_the_handshake() {
 
     // Handshake as a command socket (no_broadcast), then fall silent - exactly
     // what the iOS client does after its one command.
-    v4_handshake(&mut writer, &mut reader, "iOS", true);
+    v4_handshake(&mut writer, &mut reader, &v4_handshake_frames("iOS", true));
 
     let mut line = String::new();
     let n = reader
@@ -327,7 +289,11 @@ fn aux_reaper_leaves_a_broadcast_subscriber_alone() {
 
     let (mut writer, mut reader) = connect(port, Duration::from_secs(8));
 
-    v4_handshake(&mut writer, &mut reader, "Android", false);
+    v4_handshake(
+        &mut writer,
+        &mut reader,
+        &v4_handshake_frames("Android", false),
+    );
 
     // Stay silent well past the aux window, then prove the socket still works by
     // pushing to it. Server pings arrive on the way; skip them.

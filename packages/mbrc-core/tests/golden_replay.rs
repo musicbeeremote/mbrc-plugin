@@ -63,24 +63,11 @@ fn golden_c2s(contents: &str) -> (String, Vec<String>) {
 /// Replays a golden's c2s + all notifications at the core, returning the collected
 /// s2c frames as an `mbrc-capture/2` JSONL string for schema extraction.
 fn replay(core: Arc<Core>, port: u16, client_type: &str, commands: &[String]) -> String {
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).unwrap();
-    let mut reader = BufReader::new(writer.try_clone().unwrap());
-    writer
-        .try_clone()
-        .unwrap()
-        .set_read_timeout(Some(Duration::from_millis(400)))
-        .unwrap();
-    reader
-        .get_ref()
-        .set_read_timeout(Some(Duration::from_millis(400)))
-        .unwrap();
+    let (mut writer, mut reader) = harness::connect(port, Duration::from_millis(400));
 
     // Handshake, then read the two replies so we know we're registered.
     writer
-        .write_all(format!("{{\"context\":\"player\",\"data\":\"{client_type}\"}}\r\n").as_bytes())
-        .unwrap();
-    writer
-        .write_all(b"{\"context\":\"protocol\",\"data\":{\"protocol_version\":4,\"no_broadcast\":false}}\r\n")
+        .write_all(harness::v4_handshake_frames(client_type, false).as_bytes())
         .unwrap();
 
     let mut s2c: Vec<String> = Vec::new();

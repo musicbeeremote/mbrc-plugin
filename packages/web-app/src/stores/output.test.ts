@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { call } from '../api/fake-client'
 
-
 import { useOutputStore } from './output'
 
 vi.mock(import('../api/client'), () => import('../api/fake-client'))

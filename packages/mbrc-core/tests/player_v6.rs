@@ -11,34 +11,23 @@ use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::json;
-
-use mbrc_core::config::Config;
 use mbrc_core::server::NetHandle;
 use mbrc_core::state::Core;
 
-use harness::{connect, null_core, read_frame, send, start_core};
+use harness::{connect, read_frame, send, v6_handshake};
 
-/// A server and a connection to it that gives up reading after `timeout`.
-fn serve(timeout: Duration) -> (Arc<Core>, NetHandle, TcpStream, BufReader<TcpStream>) {
-    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
-    let (w, r) = connect(port, timeout);
+/// A server and a connection to it.
+fn serve() -> (Arc<Core>, NetHandle, TcpStream, BufReader<TcpStream>) {
+    let (port, core, net) = harness::start_with_core();
+    let (w, r) = connect(port, Duration::from_secs(3));
     (core, net, w, r)
-}
-
-fn handshake(no_broadcast: bool) -> String {
-    json!({
-        "id": 0, "kind": "request", "op": "handshake",
-        "data": { "protocol_version": 6, "client_id": "player-test", "client_type": "cli", "no_broadcast": no_broadcast }
-    })
-    .to_string()
 }
 
 #[test]
 fn player_command_round_trip() {
-    let (_, net, mut w, mut r) = serve(Duration::from_secs(3));
+    let (_, net, mut w, mut r) = serve();
 
-    send(&mut w, &handshake(false));
+    send(&mut w, &v6_handshake("player-test", false));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
 
     // A setter returns its (read-back) value.
@@ -89,9 +78,9 @@ fn player_command_round_trip() {
 /// confirm a subscribed main receives it.
 #[test]
 fn event_reaches_v6_main() {
-    let (core, net, mut w, mut r) = serve(Duration::from_secs(3));
+    let (core, net, mut w, mut r) = serve();
 
-    send(&mut w, &handshake(false));
+    send(&mut w, &v6_handshake("player-test", false));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
     // Ping barrier: once its response returns, the server has finished registering
     // this connection with the V6 broadcaster.
@@ -112,10 +101,10 @@ fn event_reaches_v6_main() {
 
 #[test]
 fn no_broadcast_v6_receives_no_event() {
-    let (core, net, mut w, mut r) = serve(Duration::from_millis(600));
+    let (core, net, mut w, mut r) = serve();
 
     // Handshake as an aux (no_broadcast) socket + ping barrier.
-    send(&mut w, &handshake(true));
+    send(&mut w, &v6_handshake("player-test", true));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
     send(&mut w, r#"{"id":1,"kind":"request","op":"ping","data":{}}"#);
     assert_eq!(read_frame(&mut r)["id"], 1);
@@ -125,6 +114,9 @@ fn no_broadcast_v6_receives_no_event() {
     ]);
 
     // The aux socket must NOT be subscribed: the next read times out (no frame).
+    r.get_ref()
+        .set_read_timeout(Some(Duration::from_millis(600)))
+        .unwrap();
     let mut line = String::new();
     let n = r.read_line(&mut line).unwrap_or(0);
     assert_eq!(

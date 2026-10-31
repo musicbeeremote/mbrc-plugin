@@ -6,7 +6,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -14,12 +14,14 @@ use mbrc_core::config::Config;
 use mbrc_core::providers::NullProviders;
 use mbrc_core::server;
 use mbrc_core::state::Core;
+use mbrc_wire::v6::{self, ClientType};
+use mbrc_wire::{frame_line, player_frame, protocol_frame};
 
 /// How many ports to try before giving up on finding a free one.
 const BIND_ATTEMPTS: u32 = 16;
 
 /// Grabs a currently-free port by binding an ephemeral socket and releasing it.
-pub fn free_port() -> u16 {
+fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()
@@ -58,6 +60,11 @@ pub fn start() -> (u16, server::NetHandle) {
     start_on_free_port(Config::for_test)
 }
 
+/// [`start`], also handing back the core for a test that drives it directly.
+pub fn start_with_core() -> (u16, Arc<Core>, server::NetHandle) {
+    start_core(|port| null_core(Config::for_test(port)))
+}
+
 pub fn null_core(config: Config) -> Arc<Core> {
     Arc::new(Core::new(Arc::new(NullProviders), config))
 }
@@ -80,8 +87,7 @@ pub fn read_frame(reader: &mut BufReader<TcpStream>) -> Value {
 
 /// Sends `line` with the V6 `\n` terminator.
 pub fn send(writer: &mut TcpStream, line: &str) {
-    writer.write_all(line.as_bytes()).unwrap();
-    writer.write_all(b"\n").unwrap();
+    writer.write_all(v6::frame_line(line).as_bytes()).unwrap();
 }
 
 /// Sends `request` and reads the frame that answers it.
@@ -92,6 +98,11 @@ pub fn round_trip(
 ) -> Value {
     send(writer, request);
     read_frame(reader)
+}
+
+/// A V6 handshake request from a `cli` client.
+pub fn v6_handshake(client_id: &str, no_broadcast: bool) -> String {
+    v6::handshake_request(client_id, ClientType::Cli, no_broadcast)
 }
 
 /// The `ops` or `events` a V6 handshake reply advertises.
@@ -106,24 +117,44 @@ pub fn advertised<'a>(reply: &'a Value, kind: &str) -> Vec<&'a str> {
 
 /// The V4 `player` + `protocol` handshake frames, CRLF-terminated.
 pub fn v4_handshake_frames(player: &str, no_broadcast: bool) -> String {
-    format!(
-        "{{\"context\":\"player\",\"data\":\"{player}\"}}\r\n\
-         {{\"context\":\"protocol\",\"data\":{{\"protocol_version\":4,\"no_broadcast\":{no_broadcast}}}}}\r\n"
-    )
+    frame_line(&player_frame(player)) + &frame_line(&protocol_frame(4, no_broadcast))
 }
 
-/// Completes a V4 handshake and reads past its two replies.
-pub fn v4_handshake(
-    writer: &mut TcpStream,
-    reader: &mut BufReader<TcpStream>,
-    player: &str,
-    no_broadcast: bool,
-) {
-    writer
-        .write_all(v4_handshake_frames(player, no_broadcast).as_bytes())
-        .unwrap();
+/// Sends V4 handshake `frames` and reads past their two replies.
+pub fn v4_handshake(writer: &mut TcpStream, reader: &mut BufReader<TcpStream>, frames: &str) {
+    writer.write_all(frames.as_bytes()).unwrap();
     for _ in 0..2 {
         let mut line = String::new();
         reader.read_line(&mut line).expect("handshake reply");
     }
+}
+
+/// Reads until EOF or the read timeout; true when the server closed.
+pub fn closed_within_timeout(reader: &mut BufReader<TcpStream>) -> bool {
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => return true,
+            Ok(_) => {}
+            Err(_) => return false,
+        }
+    }
+}
+
+/// Listens for `window` without sending, returning `(saw_ping, closed)`.
+///
+/// Read timeouts inside the window are waited out, so the reader's own timeout
+/// only sets how often the window is checked.
+pub fn listen_silently(reader: &mut BufReader<TcpStream>, window: Duration) -> (bool, bool) {
+    let started = Instant::now();
+    let mut saw_ping = false;
+    while started.elapsed() < window {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => return (saw_ping, true),
+            Ok(_) => saw_ping |= line.contains("\"ping\""),
+            Err(_) => {}
+        }
+    }
+    (saw_ping, false)
 }

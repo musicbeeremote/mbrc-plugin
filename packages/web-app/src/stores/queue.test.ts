@@ -7,33 +7,9 @@ import { OpError } from '../api/parse'
 import { ErrorCode } from '../api/types'
 
 import { useQueueStore } from './queue'
+import { page } from './queue.fixtures'
 
 vi.mock(import('../api/client'), () => import('../api/fake-client'))
-
-function page(count: number, total: number, version = 1) {
-  return {
-    total,
-    offset: 0,
-    version,
-    items: Array.from({ length: count }, (_, i) => ({
-      src: `/${i}.mp3`,
-      artist: 'A',
-      title: `T${i}`,
-      album: '',
-      album_artist: '',
-      track_no: 0,
-      disc_no: 0,
-      genre: '',
-      year: null,
-      duration_ms: null,
-      rating: null,
-      date_added: null,
-      order: i,
-      position: i,
-      play_position: i,
-    })),
-  }
-}
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -68,10 +44,10 @@ describe('reading a long queue', () => {
   // a page from a moved list cannot be stitched onto the rows already shown.
   it('starts over when the list moved between pages', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(200, 500, 1))
+    call.mockResolvedValue(page(200, 500, { version: 1 }))
     await queue.load()
 
-    call.mockResolvedValue(page(3, 3, 2))
+    call.mockResolvedValue(page(3, 3, { version: 2 }))
     await queue.load(true)
 
     expect(queue.items).toHaveLength(3)
@@ -86,11 +62,11 @@ describe('a mutation the server refuses', () => {
   // anything.
   it('leaves the notice up after the re-read', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 1))
+    call.mockResolvedValue(page(3, 3, { version: 1 }))
     await queue.load()
 
     call.mockRejectedValueOnce(new OpError({ code: ErrorCode.StaleList, message: 'stale' }))
-    call.mockResolvedValue(page(4, 4, 2))
+    call.mockResolvedValue(page(4, 4, { version: 2 }))
     await queue.remove([0])
 
     expect(queue.stale).toBe(true)
@@ -100,11 +76,11 @@ describe('a mutation the server refuses', () => {
   // user was never told that the rest are still there.
   it('says why and re-reads when the refusal is not a stale list', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 1))
+    call.mockResolvedValue(page(3, 3, { version: 1 }))
     await queue.load()
 
     call.mockRejectedValueOnce(new OpError({ code: ErrorCode.Internal, message: 'host refused' }))
-    call.mockResolvedValue(page(2, 2, 2))
+    call.mockResolvedValue(page(2, 2, { version: 2 }))
     await queue.remove([0, 2])
 
     expect(queue.failure).toBe('host refused')
@@ -114,10 +90,10 @@ describe('a mutation the server refuses', () => {
 
   it('drops the failure once the queue reads cleanly again', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 1))
+    call.mockResolvedValue(page(3, 3, { version: 1 }))
     await queue.load()
     call.mockRejectedValueOnce(new OpError({ code: ErrorCode.Internal, message: 'host refused' }))
-    call.mockResolvedValue(page(2, 2, 2))
+    call.mockResolvedValue(page(2, 2, { version: 2 }))
     await queue.remove([0])
 
     await queue.load()
@@ -129,7 +105,7 @@ describe('a mutation the server refuses', () => {
 describe('removing tracks', () => {
   it('sends every picked order in one request with the version it was read at', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 4))
+    call.mockResolvedValue(page(3, 3, { version: 4 }))
     await queue.load()
 
     call.mockResolvedValue({})
@@ -141,7 +117,7 @@ describe('removing tracks', () => {
   // The server refuses an empty batch, so asking would only turn a no-op into an error.
   it('sends nothing for an empty selection', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 4))
+    call.mockResolvedValue(page(3, 3, { version: 4 }))
     await queue.load()
     call.mockClear()
 
@@ -154,7 +130,7 @@ describe('removing tracks', () => {
 describe('clearing the queue', () => {
   it('sends the version the page was read at', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 7))
+    call.mockResolvedValue(page(3, 3, { version: 7 }))
     await queue.load()
 
     call.mockResolvedValue({})
@@ -167,11 +143,11 @@ describe('clearing the queue', () => {
   // the refusal has to reach the view rather than be retried over the new one.
   it('reports a queue that moved rather than clearing the new one', async () => {
     const queue = useQueueStore()
-    call.mockResolvedValue(page(3, 3, 1))
+    call.mockResolvedValue(page(3, 3, { version: 1 }))
     await queue.load()
 
     call.mockRejectedValueOnce(new OpError({ code: ErrorCode.StaleList, message: 'stale' }))
-    call.mockResolvedValue(page(5, 5, 2))
+    call.mockResolvedValue(page(5, 5, { version: 2 }))
     await queue.clear()
 
     expect(queue.stale).toBe(true)

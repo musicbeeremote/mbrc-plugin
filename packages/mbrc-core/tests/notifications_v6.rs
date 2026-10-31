@@ -11,13 +11,11 @@ mod harness;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::json;
-
 use mbrc_core::config::Config;
 use mbrc_core::ffi::types::NotificationType;
 use mbrc_core::state::{self, Core};
 
-use harness::{connect, null_core, read_frame, send, start_core};
+use harness::{connect, null_core, read_frame, send, start_core, v6_handshake};
 
 /// A core whose music library holds `/a.mp3`, so an edit to it is the library's.
 fn core(port: u16) -> Arc<Core> {
@@ -36,14 +34,6 @@ fn core(port: u16) -> Arc<Core> {
     core
 }
 
-fn handshake() -> String {
-    json!({
-        "id": 0, "kind": "request", "op": "handshake",
-        "data": { "protocol_version": 6, "client_id": "notif-test", "client_type": "cli", "no_broadcast": false }
-    })
-    .to_string()
-}
-
 /// A subscribed V6 main receives `library_changed` once the Scanner has applied
 /// a reported change (the pure builder is silent for these notifications; see
 /// `notifications_v6` unit tests).
@@ -52,7 +42,7 @@ fn a_reported_edit_emits_library_changed_to_v6_main() {
     let (port, core, net) = start_core(core);
     let (mut w, mut r) = connect(port, Duration::from_secs(6));
 
-    send(&mut w, &handshake());
+    send(&mut w, &v6_handshake("notif-test", false));
     assert_eq!(read_frame(&mut r)["data"]["server_version"], 6);
     // Ping barrier: once its response returns, the connection is registered with
     // the V6 broadcaster, so the event can't race ahead of the subscription.

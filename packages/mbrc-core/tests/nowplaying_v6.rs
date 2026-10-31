@@ -8,19 +8,15 @@ mod harness;
 
 use std::time::Duration;
 
-use mbrc_core::config::Config;
-
-use harness::{advertised, connect, null_core, read_frame, send, start_core};
-
-const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"np-test","client_type":"cli"}}"#;
+use harness::{advertised, connect, read_frame, send, v6_handshake};
 
 #[test]
 fn now_playing_state_reads_writes_and_events() {
-    let (port, core, net) = start_core(|port| null_core(Config::for_test(port)));
+    let (port, core, net) = harness::start_with_core();
     let (mut w, mut r) = connect(port, Duration::from_secs(3));
 
     // Handshake advertises the now-playing ops + the new events.
-    send(&mut w, HANDSHAKE);
+    send(&mut w, &v6_handshake("np-test", false));
     let hs = read_frame(&mut r);
     let ops = advertised(&hs, "ops");
     for op in [

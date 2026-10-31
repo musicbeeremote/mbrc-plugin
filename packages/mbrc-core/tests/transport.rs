@@ -10,7 +10,7 @@
 
 mod harness;
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -18,15 +18,9 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use mbrc_core::config::Config;
+use mbrc_wire::v6::{self, ClientType};
 
-use harness::start_on_free_port;
-
-const V4_HANDSHAKE: &str = concat!(
-    r#"{"context":"player","data":"Android"}"#,
-    "\r\n",
-    r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":true}}"#,
-    "\r\n",
-);
+use harness::{start_on_free_port, v4_handshake_frames};
 
 /// xorshift64*, enough to vary chunk sizes reproducibly.
 struct Rng(u64);
@@ -47,14 +41,9 @@ struct Client {
 
 impl Client {
     fn connect(port: u16) -> Self {
-        let writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        let (writer, reader) = harness::connect(port, Duration::from_secs(5));
         writer.set_nodelay(true).unwrap();
-        let read = writer.try_clone().unwrap();
-        read.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        Self {
-            writer,
-            reader: BufReader::new(read),
-        }
+        Self { writer, reader }
     }
 
     /// Writes `bytes` in chunks of at most `max_chunk`, pausing `gap` between.
@@ -71,32 +60,24 @@ impl Client {
     }
 
     fn read_frame(&mut self) -> Value {
-        let mut line = String::new();
-        self.reader.read_line(&mut line).expect("read frame");
-        serde_json::from_str(line.trim()).unwrap_or_else(|e| panic!("not JSON ({e}): {line:?}"))
+        harness::read_frame(&mut self.reader)
     }
 
-    /// Reads until EOF or the read timeout; true when the server closed.
     fn closed_within_timeout(&mut self) -> bool {
-        loop {
-            let mut line = String::new();
-            match self.reader.read_line(&mut line) {
-                Ok(0) => return true,
-                Ok(_) => {}
-                Err(_) => return false,
-            }
-        }
+        harness::closed_within_timeout(&mut self.reader)
     }
 }
 
 fn v6_handshake(client_id: &str) -> String {
-    format!(
-        r#"{{"id":0,"kind":"request","op":"handshake","data":{{"protocol_version":6,"client_id":"{client_id}","client_type":"android"}}}}"#
-    ) + "\n"
+    v6::frame_line(&v6::handshake_request(
+        client_id,
+        ClientType::Android,
+        false,
+    ))
 }
 
 fn v6_ping(id: u64, data: &str) -> String {
-    format!(r#"{{"id":{id},"kind":"request","op":"ping","data":"{data}"}}"#) + "\n"
+    v6::frame_line(&v6::request(id, "ping", Value::from(data)))
 }
 
 /// A V6 script whose ping payloads straddle UTF-8 boundaries when split.
@@ -140,7 +121,7 @@ const V4_REQUESTS: &str = concat!(
 #[test]
 fn v4_frames_sent_a_byte_at_a_time_get_the_same_replies_as_one_write() {
     let (port, net) = harness::start();
-    let script = format!("{V4_HANDSHAKE}{V4_REQUESTS}");
+    let script = v4_handshake_frames("Android", true) + V4_REQUESTS;
 
     let mut whole = Client::connect(port);
     whole.writer.write_all(script.as_bytes()).unwrap();
@@ -191,7 +172,7 @@ fn v6_frames_split_at_any_point_including_inside_a_utf8_character_round_trip() {
 #[test]
 fn concurrent_v4_and_v6_connections_interleaving_partial_frames_get_their_own_replies() {
     let (port, net) = harness::start();
-    let script = format!("{V4_HANDSHAKE}{V4_REQUESTS}");
+    let script = v4_handshake_frames("Android", true) + V4_REQUESTS;
     let mut baseline = Client::connect(port);
     baseline.writer.write_all(script.as_bytes()).unwrap();
     let v4_expected = v4_reply_contexts(&mut baseline, 2);

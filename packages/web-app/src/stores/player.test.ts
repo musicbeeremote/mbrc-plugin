@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { call, on } from '../api/fake-client'
+import { call, handler } from '../api/fake-client'
 
 import { OpError } from '../api/parse'
 import { ErrorCode, LyricsType, PlayState, ShuffleMode } from '../api/types'
@@ -86,9 +86,9 @@ describe('the cover', () => {
   it('is read again once the artwork has loaded', () => {
     const player = usePlayerStore()
     player.bind()
-    const listener = on.mock.calls.find(([event]) => event === 'now_playing_cover_changed')?.[1]
+    const listener = handler('now_playing_cover_changed')
 
-    listener?.()
+    listener()
 
     expect(ops()).toContain('now_playing_state')
   })
@@ -99,9 +99,9 @@ describe('a tag edit', () => {
   it('reads the track again', () => {
     const player = usePlayerStore()
     player.bind()
-    const listener = on.mock.calls.find(([event]) => event === 'now_playing_tags_changed')?.[1]
+    const listener = handler('now_playing_tags_changed')
 
-    listener?.()
+    listener()
 
     expect(ops()).toContain('now_playing_state')
   })

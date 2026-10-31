@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { call, on } from '../api/fake-client'
+import { call, handler, on } from '../api/fake-client'
 
 import { OpError } from '../api/parse'
 import { ErrorCode } from '../api/types'
@@ -102,15 +102,15 @@ describe('the tag editor store', () => {
     serve({})
     const tags = useTagsStore()
     tags.bind()
-    const changed = on.mock.calls.find(([event]) => event === 'now_playing_tags_changed')?.[1]
+    const changed = handler('now_playing_tags_changed')
 
-    changed?.()
+    changed()
     expect(ops()).not.toContain('now_playing_tags')
 
     tags.show()
     await vi.waitFor(() => expect(ops()).toContain('now_playing_tags'))
     call.mockClear()
-    changed?.()
+    changed()
     await vi.waitFor(() => expect(ops()).toContain('now_playing_tags'))
   })
 

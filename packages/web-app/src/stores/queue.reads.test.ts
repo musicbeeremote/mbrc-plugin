@@ -1,38 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { call, on } from '../api/fake-client'
-
+import { call, handler, on } from '../api/fake-client'
 
 import { useQueueStore } from './queue'
+import { page } from './queue.fixtures'
 
 vi.mock(import('../api/client'), () => import('../api/fake-client'))
-
-/** A page of `count` rows from a queue of `total`, rows ordered from `offset`. */
-function page(count: number, total: number, { version = 1, offset = 0 } = {}) {
-  return {
-    total,
-    offset,
-    version,
-    items: Array.from({ length: count }, (_, i) => ({
-      src: `/${offset + i}.mp3`,
-      artist: 'A',
-      title: `T${offset + i}`,
-      album: '',
-      album_artist: '',
-      track_no: 0,
-      disc_no: 0,
-      genre: '',
-      year: null,
-      duration_ms: null,
-      rating: null,
-      date_added: null,
-      order: offset + i,
-      position: offset + i,
-      play_position: offset + i,
-    })),
-  }
-}
 
 /** A promise the test settles by hand, standing in for a read still on the wire. */
 function held() {
@@ -47,13 +21,6 @@ function held() {
   return { promise, ...hands }
 }
 
-/** The handler `bind()` registered for the queue's change event. */
-function changedHandler(): () => void {
-  const handler = on.mock.calls.find(([event]) => event === 'now_playing_list_changed')?.[1]
-  if (!handler) throw new Error('bind() registered no change handler')
-  return handler
-}
-
 beforeEach(() => {
   setActivePinia(createPinia())
   call.mockReset()
@@ -66,7 +33,7 @@ describe('a burst of change events', () => {
   it('collapses into the running read plus one trailing read', async () => {
     const queue = useQueueStore()
     queue.bind()
-    const changed = changedHandler()
+    const changed = handler('now_playing_list_changed')
 
     const first = held()
     call.mockReturnValueOnce(first.promise)
@@ -84,7 +51,7 @@ describe('a burst of change events', () => {
   it('still makes the trailing read when the running one fails', async () => {
     const queue = useQueueStore()
     queue.bind()
-    const changed = changedHandler()
+    const changed = handler('now_playing_list_changed')
 
     const first = held()
     call.mockReturnValueOnce(first.promise)
@@ -103,7 +70,7 @@ describe('a burst of change events', () => {
     queue.bind()
     call.mockRejectedValue(new Error('timed out'))
 
-    changedHandler()()
+    handler('now_playing_list_changed')()
 
     await vi.waitFor(() => expect(queue.failure).toBe('Error: timed out'))
   })

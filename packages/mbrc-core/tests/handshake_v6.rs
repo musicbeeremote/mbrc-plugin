@@ -7,12 +7,11 @@
 mod harness;
 
 use std::io::{BufRead, Read, Write};
-use std::net::TcpStream;
 use std::time::Duration;
 
 use serde_json::Value;
 
-use harness::{connect, read_frame, send};
+use harness::{connect, read_frame, send, v4_handshake_frames};
 
 const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"install-42","client_type":"android"}}"#;
 
@@ -142,15 +141,14 @@ fn v6_op_before_handshake_is_unauthorized_and_closes() {
 fn v6_replies_are_terminated_with_a_bare_lf() {
     let (port, net) = harness::start();
 
-    let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let mut reader_stream = writer.try_clone().unwrap();
-    reader_stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
+    let (mut writer, mut reader) = connect(port, Duration::from_secs(3));
     send(&mut writer, HANDSHAKE);
 
     let mut buf = [0u8; 4096];
-    let n = reader_stream.read(&mut buf).expect("read handshake reply");
+    let n = reader
+        .get_mut()
+        .read(&mut buf)
+        .expect("read handshake reply");
     let raw = &buf[..n];
     assert_eq!(raw.last(), Some(&b'\n'), "V6 frame must end with LF");
     assert_ne!(
@@ -170,16 +168,8 @@ fn v4_and_v6_clients_coexist_on_the_same_port() {
 
     // --- V4 client (CRLF, {context,data}) ---
     let (mut v4, mut v4_reader) = connect(port, Duration::from_secs(3));
-    v4.write_all(
-        concat!(
-            r#"{"context":"player","data":"Android"}"#,
-            "\r\n",
-            r#"{"context":"protocol","data":{"protocol_version":4,"no_broadcast":false}}"#,
-            "\r\n",
-        )
-        .as_bytes(),
-    )
-    .unwrap();
+    v4.write_all(v4_handshake_frames("Android", false).as_bytes())
+        .unwrap();
     let mut player = String::new();
     v4_reader.read_line(&mut player).unwrap();
     let mut protocol = String::new();

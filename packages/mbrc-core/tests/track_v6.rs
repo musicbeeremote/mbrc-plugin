@@ -10,9 +10,7 @@ mod harness;
 
 use std::time::Duration;
 
-use harness::{advertised, connect, round_trip};
-
-const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"track-test","client_type":"cli"}}"#;
+use harness::{advertised, connect, round_trip, v6_handshake};
 
 #[test]
 fn track_domain_wire_paths() {
@@ -21,7 +19,7 @@ fn track_domain_wire_paths() {
     let mut ask = |request: &str| round_trip(&mut writer, &mut reader, request);
 
     // Handshake; the capabilities advertise the new track ops.
-    let hs = ask(HANDSHAKE);
+    let hs = ask(&v6_handshake("track-test", false));
     let ops = advertised(&hs, "ops");
     assert!(ops.contains(&"track_get"), "caps: {hs}");
     assert!(ops.contains(&"cover_get"), "caps: {hs}");

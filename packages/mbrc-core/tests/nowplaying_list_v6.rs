@@ -7,16 +7,14 @@ mod harness;
 
 use std::time::Duration;
 
-use harness::{advertised, connect, read_frame, send};
-
-const HANDSHAKE: &str = r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"npl-test","client_type":"cli"}}"#;
+use harness::{advertised, connect, read_frame, send, v6_handshake};
 
 #[test]
 fn now_playing_list_wire_paths() {
     let (port, net) = harness::start();
     let (mut w, mut r) = connect(port, Duration::from_secs(3));
 
-    send(&mut w, HANDSHAKE);
+    send(&mut w, &v6_handshake("npl-test", false));
     let hs = read_frame(&mut r);
     let ops = advertised(&hs, "ops");
     for op in [

@@ -71,7 +71,7 @@ fn request(port: u16, request: &str) -> (String, String) {
 
 #[test]
 fn capabilities_are_served_over_http_on_the_command_port() {
-    let (port, net) = start_on_free_port(Config::for_test);
+    let (port, net) = harness::start();
 
     let (status, body) = request(
         port,
@@ -99,7 +99,7 @@ fn capabilities_are_served_over_http_on_the_command_port() {
 /// 400 that looks nothing like the cause.
 #[test]
 fn the_now_playing_cover_route_is_not_read_as_a_hash() {
-    let (port, net) = start_on_free_port(Config::for_test);
+    let (port, net) = harness::start();
 
     let (status, body) = request(
         port,
@@ -122,7 +122,7 @@ Connection: close
 
 #[test]
 fn a_rebinding_host_is_refused() {
-    let (port, net) = start_on_free_port(Config::for_test);
+    let (port, net) = harness::start();
 
     let (status, _) = request(
         port,
@@ -135,7 +135,7 @@ fn a_rebinding_host_is_refused() {
 
 #[test]
 fn an_unknown_op_is_a_404_carrying_the_v6_error_code() {
-    let (port, net) = start_on_free_port(Config::for_test);
+    let (port, net) = harness::start();
 
     let (status, body) = request(
         port,
@@ -214,7 +214,7 @@ fn party_mode_lets_a_paired_browser_act_on_the_role_the_host_gave_it() {
 
 #[test]
 fn the_handshake_op_is_not_offered_over_http() {
-    let (port, net) = start_on_free_port(Config::for_test);
+    let (port, net) = harness::start();
 
     let (status, _) = request(
         port,
@@ -271,22 +271,18 @@ fn http_can_be_turned_off_without_disturbing_the_json_protocols() {
     let mut response = String::new();
     let _ = stream.read_to_string(&mut response);
 
-    let mut json = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    json.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-    json.write_all(
-        b"{\"id\":0,\"kind\":\"request\",\"op\":\"handshake\",\
-          \"data\":{\"protocol_version\":6,\"client_id\":\"web-test\",\"client_type\":\"cli\"}}\n",
-    )
-    .unwrap();
-    let mut line = String::new();
-    BufReader::new(json).read_line(&mut line).unwrap();
+    let (mut json, mut reader) = harness::connect(port, Duration::from_secs(3));
+    let value = harness::round_trip(
+        &mut json,
+        &mut reader,
+        &harness::v6_handshake("web-test", false),
+    );
     net.stop();
 
     assert!(
         !response.starts_with("HTTP/1.1 200"),
         "web_enabled=false must not serve HTTP, got: {response}"
     );
-    let value: Value = serde_json::from_str(&line).expect("V6 still answers");
     assert_eq!(value["kind"], "response");
 }
 
@@ -295,7 +291,7 @@ fn http_can_be_turned_off_without_disturbing_the_json_protocols() {
 /// no handshake: it is one-way, and opening it is the whole subscription.
 #[test]
 fn the_event_stream_opens_without_a_handshake() {
-    let (port, handle) = start_on_free_port(Config::for_test);
+    let (port, handle) = harness::start();
 
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
     stream
