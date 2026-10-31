@@ -12,6 +12,8 @@ import { QueueMode } from '../api/types'
 import type { AlbumEntry, ArtistEntry, GenreEntry } from '../api/browse'
 import type { PlaylistEntry, Track } from '../api/types'
 
+import { useArtistImagesStore } from './artistImages'
+
 export { LibraryLevel } from '../composables/libraryLevels'
 
 /** What a level is showing beyond its scope: a search, and an order. */
@@ -59,6 +61,7 @@ type ListOp =
  * scope is what lets it queue one anyway.
  */
 export const useLibraryStore = defineStore('library', () => {
+  const artistImages = useArtistImagesStore()
   const here = ref<Position>({ level: LibraryLevel.Artists, scope: {} })
   const level = computed(() => here.value.level)
   const scope = computed(() => here.value.scope)
@@ -148,6 +151,7 @@ export const useLibraryStore = defineStore('library', () => {
             { ...narrow, genre, album_artists: albumArtists.value },
             offset,
           )
+          for (const item of items) artistImages.remember(item.artist, item.image_hash)
           artists.value = append ? [...artists.value, ...items] : items
           break
         }

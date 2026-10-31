@@ -4,6 +4,7 @@
  * Kept apart from the component so the rule can be tested without mounting it.
  */
 
+import { artistKey } from '../api/display'
 import type { Track } from '../api/types'
 
 /** One name in the line, and what joins it to the name before. */
@@ -43,4 +44,17 @@ export function artistParts(track: Track | null | undefined): ArtistPart[] {
     parts.push({ name: credit.name, label: credit.name, joiner })
   }
   return parts
+}
+
+/**
+ * The picture hash to lead `name` with: what the picture store has, since an
+ * announced picture lands there, else the track's own credit.
+ */
+export function artistPicture(
+  track: Track | null | undefined,
+  name: string,
+  stored: (name: string) => string | undefined,
+): string | undefined {
+  const key = artistKey(name)
+  return stored(name) ?? track?.artist_credits.find((c) => artistKey(c.name) === key)?.image_hash
 }

@@ -22,6 +22,7 @@ import ThemeToggle from './components/ThemeToggle.vue'
 import { usePreferences } from './composables/usePreferences'
 import { useShortcuts } from './composables/useShortcuts'
 import { useUpdateWatch } from './composables/useUpdateWatch'
+import { useArtistImagesStore } from './stores/artistImages'
 import { useLibraryStore } from './stores/library'
 import { useMediaStore } from './stores/media'
 import { usePermissionsStore } from './stores/permissions'
@@ -58,6 +59,7 @@ const library = useLibraryStore()
 const media = useMediaStore()
 const permissions = usePermissionsStore()
 const tags = useTagsStore()
+const artistImages = useArtistImagesStore()
 const preferences = usePreferences()
 
 interface Tab {
@@ -186,6 +188,7 @@ function start() {
   update.bind()
   permissions.bind()
   tags.bind()
+  artistImages.bind()
   client.on(WireEvent.AuthRequired, async () => {
     // A refusal is only the user's to fix while pairing is enforced. With it off
     // there is no code to enter, so reconnect rather than show a screen that
