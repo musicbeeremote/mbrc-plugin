@@ -100,6 +100,22 @@ impl Stats {
             Err(prev) => prev != sig, // baseline already set; is this a drift?
         }
     }
+
+    /// The counters as one `event` line for the sink.
+    fn line(&self, event: &str) -> serde_json::Value {
+        json!({
+            "ts": now_millis(),
+            "event": event,
+            "sweeps": self.sweeps.load(Ordering::Relaxed),
+            "invariant_fail": self.invariant_fail.load(Ordering::Relaxed),
+            "req_ok": self.req_ok.load(Ordering::Relaxed),
+            "req_err": self.req_err.load(Ordering::Relaxed),
+            "reconnects": self.reconnects.load(Ordering::Relaxed),
+            "idle_events": self.idle_events.load(Ordering::Relaxed),
+            "sig_drift": self.sig_drift.load(Ordering::Relaxed),
+            "sig": format!("{:016x}", self.first_sig.load(Ordering::Relaxed)),
+        })
+    }
 }
 
 /// Append-or-stdout JSONL sink shared across workers (locked per line).
@@ -668,18 +684,7 @@ async fn summary_loop(cfg: Arc<Cfg>, stats: Arc<Stats>, sink: Arc<Sink>, until: 
         if until.map(|t| Instant::now() >= t).unwrap_or(false) {
             break;
         }
-        sink.line(&json!({
-            "ts": now_millis(),
-            "event": "summary",
-            "sweeps": stats.sweeps.load(Ordering::Relaxed),
-            "invariant_fail": stats.invariant_fail.load(Ordering::Relaxed),
-            "req_ok": stats.req_ok.load(Ordering::Relaxed),
-            "req_err": stats.req_err.load(Ordering::Relaxed),
-            "reconnects": stats.reconnects.load(Ordering::Relaxed),
-            "idle_events": stats.idle_events.load(Ordering::Relaxed),
-            "sig_drift": stats.sig_drift.load(Ordering::Relaxed),
-            "sig": format!("{:016x}", stats.first_sig.load(Ordering::Relaxed)),
-        }));
+        sink.line(&stats.line("summary"));
     }
 }
 
@@ -848,18 +853,7 @@ async fn run_async(cfg: Arc<Cfg>, stats: Arc<Stats>, sink: Arc<Sink>) -> ExitCod
 
     // Final summary.
     let fails = stats.invariant_fail.load(Ordering::Relaxed);
-    sink.line(&json!({
-        "ts": now_millis(),
-        "event": "end",
-        "sweeps": stats.sweeps.load(Ordering::Relaxed),
-        "invariant_fail": fails,
-        "req_ok": stats.req_ok.load(Ordering::Relaxed),
-        "req_err": stats.req_err.load(Ordering::Relaxed),
-        "reconnects": stats.reconnects.load(Ordering::Relaxed),
-        "idle_events": stats.idle_events.load(Ordering::Relaxed),
-        "sig_drift": stats.sig_drift.load(Ordering::Relaxed),
-        "sig": format!("{:016x}", stats.first_sig.load(Ordering::Relaxed)),
-    }));
+    sink.line(&stats.line("end"));
 
     if fails > 0 {
         ExitCode::FAILURE

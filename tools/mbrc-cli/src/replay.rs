@@ -28,7 +28,7 @@ use mbrc_wire::{CTX_PLAYER, ClientHandshake, FrameAccumulator, frame_line, parse
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use crate::args::{flag_value, has_flag};
+use crate::args::{endpoint, flag_value, has_flag};
 use crate::compare::{diff_report, parse_ignore};
 use crate::library_bind::{Binder, LiveLibrary, PROBE_COMMANDS};
 use crate::trim::read_all;
@@ -49,17 +49,8 @@ pub fn run(args: &[String]) -> ExitCode {
         );
         return ExitCode::from(2);
     };
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let port: u16 = match flag_value(args, "--port")
-        .as_deref()
-        .unwrap_or("3000")
-        .parse()
-    {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("--port must be a number");
-            return ExitCode::from(2);
-        }
+    let Some((host, port)) = endpoint(args) else {
+        return ExitCode::from(2);
     };
     let wait = Duration::from_millis(
         flag_value(args, "--wait-ms")

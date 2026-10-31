@@ -28,7 +28,7 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::{self, ClientType};
 use mbrc_wire::{ClientHandshake, frame_line, parse_context, pong_frame};
 
-use crate::args::{flag_value, has_flag, run_client_id};
+use crate::args::{endpoint, flag_value, has_flag, run_client_id};
 
 /// Whether the capability sweep may send `op` with no data.
 ///
@@ -56,17 +56,8 @@ const PAGE_OPS: &[&str] = &[
 ];
 
 pub fn run(args: &[String]) -> ExitCode {
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let port: u16 = match flag_value(args, "--port")
-        .as_deref()
-        .unwrap_or("3000")
-        .parse()
-    {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("--port must be a number");
-            return ExitCode::from(2);
-        }
+    let Some((host, port)) = endpoint(args) else {
+        return ExitCode::from(2);
     };
     let allow_writes = has_flag(args, "--allow-writes");
     let timeout_ms: u64 = flag_value(args, "--wait-ms")

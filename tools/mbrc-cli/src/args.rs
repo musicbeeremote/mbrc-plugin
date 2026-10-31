@@ -12,6 +12,24 @@ pub fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|a| a == flag)
 }
 
+/// The `--host` and `--port` the plugin listens on, defaulting to the local one.
+///
+/// `None` once it has told the user `--port` is not a number.
+pub fn endpoint(args: &[String]) -> Option<(String, u16)> {
+    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
+    match flag_value(args, "--port")
+        .as_deref()
+        .unwrap_or("3000")
+        .parse()
+    {
+        Ok(port) => Some((host, port)),
+        Err(_) => {
+            eprintln!("--port must be a number");
+            None
+        }
+    }
+}
+
 /// A per-run V6 `client_id` for a dev client that does not persist its token.
 ///
 /// The server issues a token to the first handshake for an id and refuses every
@@ -45,6 +63,14 @@ mod tests {
     fn flag_without_value_is_none() {
         let a = v(&["--host"]);
         assert_eq!(flag_value(&a, "--host"), None);
+    }
+
+    #[test]
+    fn endpoint_defaults_to_the_local_plugin() {
+        assert_eq!(endpoint(&[]), Some(("127.0.0.1".to_string(), 3000)));
+        let a = v(&["--host", "10.0.0.1", "--port", "3001"]);
+        assert_eq!(endpoint(&a), Some(("10.0.0.1".to_string(), 3001)));
+        assert_eq!(endpoint(&v(&["--port", "x"])), None);
     }
 
     #[test]

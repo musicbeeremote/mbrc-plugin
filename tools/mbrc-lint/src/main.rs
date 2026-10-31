@@ -194,6 +194,32 @@ fn skipped(path: &Path) -> bool {
 
 /// Every `.rs` and `.cs` path under `root`, for resolving comment references.
 fn repo_files(root: &Path) -> Vec<String> {
+    let enter = |name: &str| !SKIP_DIRS.contains(&name) || name == "Generated";
+    let rust_or_csharp =
+        |path: &Path| matches!(path.extension().and_then(|e| e.to_str()), Some("rs" | "cs"));
+    files_under(root, enter, rust_or_csharp)
+        .into_iter()
+        .map(|path| path.to_string_lossy().replace('\\', "/").replace("./", ""))
+        .collect()
+}
+
+/// Every source file under `root`, minus the directories we do not own.
+fn walk(root: &Path) -> Vec<PathBuf> {
+    let found: BTreeMap<String, PathBuf> =
+        files_under(root, |name| !SKIP_DIRS.contains(&name), is_source)
+            .into_iter()
+            .map(|path| (path.to_string_lossy().replace('\\', "/"), path))
+            .collect();
+    found.into_values().collect()
+}
+
+/// The files under `root` that `keep` accepts, descending only into entries
+/// whose name `enter` accepts.
+fn files_under(
+    root: &Path,
+    enter: impl Fn(&str) -> bool,
+    keep: impl Fn(&Path) -> bool,
+) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -202,44 +228,17 @@ fn repo_files(root: &Path) -> Vec<String> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if SKIP_DIRS.contains(&name.as_ref()) && name != "Generated" {
+            if !enter(&entry.file_name().to_string_lossy()) {
                 continue;
             }
             if path.is_dir() {
                 stack.push(path);
-            } else if matches!(path.extension().and_then(|e| e.to_str()), Some("rs" | "cs")) {
-                out.push(path.to_string_lossy().replace('\\', "/").replace("./", ""));
+            } else if keep(&path) {
+                out.push(path);
             }
         }
     }
     out
-}
-
-/// Every source file under `root`, minus the directories we do not own.
-fn walk(root: &Path) -> Vec<PathBuf> {
-    let mut found = BTreeMap::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if SKIP_DIRS.contains(&name.as_ref()) {
-                continue;
-            }
-            if path.is_dir() {
-                stack.push(path);
-            } else if is_source(&path) {
-                found.insert(path.to_string_lossy().replace('\\', "/"), path);
-            }
-        }
-    }
-    found.into_values().collect()
 }
 
 #[cfg(test)]

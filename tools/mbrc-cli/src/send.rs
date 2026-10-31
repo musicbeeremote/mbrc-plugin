@@ -22,21 +22,13 @@ use std::time::{Duration, Instant};
 use mbrc_wire::{ClientHandshake, FrameAccumulator, frame_line, parse_context};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
-use crate::args::{flag_value, has_flag};
+use crate::args::{endpoint, flag_value, has_flag};
 
 pub fn run(args: &[String]) -> ExitCode {
-    let host = flag_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_string());
-    let port: u16 = match flag_value(args, "--port")
-        .as_deref()
-        .unwrap_or("3000")
-        .parse()
-    {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("--port must be a number");
-            return ExitCode::from(2);
-        }
+    let Some((host, port)) = endpoint(args) else {
+        return ExitCode::from(2);
     };
     let client_type = flag_value(args, "--client-type").unwrap_or_else(|| "Android".to_string());
     let protocol: u8 = match flag_value(args, "--protocol")
@@ -119,15 +111,9 @@ async fn run_async(
     mut command: Option<String>,
     window: Duration,
 ) -> ExitCode {
-    let stream = match TcpStream::connect((host.as_str(), port)).await {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("connect {host}:{port} failed: {e}");
-            return ExitCode::FAILURE;
-        }
+    let Some((mut rd, mut wr)) = open(&host, port).await else {
+        return ExitCode::FAILURE;
     };
-    stream.set_nodelay(true).ok();
-    let (mut rd, mut wr) = stream.into_split();
 
     let mut hs = ClientHandshake::new(client_type, protocol, no_broadcast);
     let initial = hs.initial();
@@ -142,20 +128,7 @@ async fn run_async(
     let mut buf = vec![0u8; 8192];
     let deadline = Instant::now() + window;
 
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        let n = match tokio::time::timeout(remaining, rd.read(&mut buf)).await {
-            Err(_) => break,    // window elapsed
-            Ok(Ok(0)) => break, // peer closed
-            Ok(Ok(n)) => n,
-            Ok(Err(e)) => {
-                eprintln!("read failed: {e}");
-                break;
-            }
-        };
+    while let Some(n) = read_before(&mut rd, &mut buf, deadline).await {
         acc.push_bytes(&buf[..n]);
         while let Some(line) = acc.next_frame() {
             if line.trim().is_empty() {
@@ -197,15 +170,9 @@ async fn run_async_v6(
 ) -> ExitCode {
     use mbrc_wire::v6;
 
-    let stream = match TcpStream::connect((host.as_str(), port)).await {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("connect {host}:{port} failed: {e}");
-            return ExitCode::FAILURE;
-        }
+    let Some((mut rd, mut wr)) = open(&host, port).await else {
+        return ExitCode::FAILURE;
     };
-    stream.set_nodelay(true).ok();
-    let (mut rd, mut wr) = stream.into_split();
 
     // client_type maps to the V6 enum (snake_case); default to `cli` for anything
     // unrecognized (the legacy default is "Android").
@@ -227,20 +194,7 @@ async fn run_async_v6(
     let mut op_sent = false;
     let deadline = Instant::now() + window;
 
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        let n = match tokio::time::timeout(remaining, rd.read(&mut buf)).await {
-            Err(_) => break,    // window elapsed
-            Ok(Ok(0)) => break, // peer closed
-            Ok(Ok(n)) => n,
-            Ok(Err(e)) => {
-                eprintln!("read failed: {e}");
-                break;
-            }
-        };
+    while let Some(n) = read_before(&mut rd, &mut buf, deadline).await {
         acc.push_bytes(&buf[..n]);
         while let Some(line) = acc.next_frame() {
             if line.trim().is_empty() {
@@ -270,4 +224,36 @@ async fn run_async_v6(
         }
     }
     ExitCode::SUCCESS
+}
+
+/// Connects to the plugin, or says why it could not.
+async fn open(host: &str, port: u16) -> Option<(OwnedReadHalf, OwnedWriteHalf)> {
+    match TcpStream::connect((host, port)).await {
+        Ok(stream) => {
+            stream.set_nodelay(true).ok();
+            Some(stream.into_split())
+        }
+        Err(e) => {
+            eprintln!("connect {host}:{port} failed: {e}");
+            None
+        }
+    }
+}
+
+/// Reads what arrives before `deadline`.
+///
+/// `None` once the window has elapsed, the peer has closed, or the read failed.
+async fn read_before(rd: &mut OwnedReadHalf, buf: &mut [u8], deadline: Instant) -> Option<usize> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return None;
+    }
+    match tokio::time::timeout(remaining, rd.read(buf)).await {
+        Err(_) | Ok(Ok(0)) => None,
+        Ok(Ok(n)) => Some(n),
+        Ok(Err(e)) => {
+            eprintln!("read failed: {e}");
+            None
+        }
+    }
 }
