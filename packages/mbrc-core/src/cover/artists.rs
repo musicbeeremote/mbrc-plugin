@@ -10,8 +10,9 @@
 //! `cover_get` and `GET /api/cover/{hash}` serve them with no path of their
 //! own, and the cover build's orphan prune keeps every hash listed here.
 //!
-//! Nothing here calls MusicBee: asking it for a picture downloads one inline,
-//! which is the cost this design exists to avoid.
+//! MusicBee is asked only for its thumbnail, and only on the fetcher's thread:
+//! about a second and 70 KB when it has to download one. Its full picture call
+//! downloads a backdrop of up to 2 MB and is never used.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
@@ -399,10 +400,14 @@ impl ArtistImages {
     }
 
     /// Queues `name` for the fetcher unless no picture can arrive (see
-    /// [`Self::is_accepting`]), it already has one, or its last miss is not due
-    /// again. Returns whether it is waiting now.
+    /// [`Self::is_accepting`]) or it already has one. Returns whether it is
+    /// waiting now.
+    ///
+    /// A recent miss does not keep it out: MusicBee is asked again each time,
+    /// which costs nothing once MusicBee has answered, and only the web lookup
+    /// waits out the miss ([`Self::web_due`]).
     pub fn request(&self, name: &str, priority: Priority) -> bool {
-        if !self.is_accepting() || !self.needs_fetch(name, now_unix_secs()) {
+        if !self.is_accepting() || !self.lacks_picture(name) {
             return false;
         }
         self.queue.push(Queued {
@@ -412,12 +417,18 @@ impl ArtistImages {
         })
     }
 
-    /// Whether `name` has no picture and is due to be looked for at `now`.
-    pub fn needs_fetch(&self, name: &str, now: i64) -> bool {
+    /// Whether `name` names an artist with no stored picture.
+    pub fn lacks_picture(&self, name: &str) -> bool {
         let key = credits::key(name);
-        if key.is_empty() || self.read_images().contains_key(&key) {
+        !key.is_empty() && !self.read_images().contains_key(&key)
+    }
+
+    /// Whether `name` has no picture and its web lookup is due at `now`.
+    pub fn web_due(&self, name: &str, now: i64) -> bool {
+        if !self.lacks_picture(name) {
             return false;
         }
+        let key = credits::key(name);
         self.lookups
             .read()
             .unwrap_or_else(|e| e.into_inner())
@@ -628,7 +639,7 @@ mod tests {
         std::fs::remove_file(covers.join(hash)).unwrap();
         let reopened = ArtistImages::new(db, covers);
         assert_eq!(reopened.hash_for("A"), None);
-        assert!(reopened.needs_fetch("A", now_unix_secs()));
+        assert!(reopened.web_due("A", now_unix_secs()));
     }
 
     #[test]
@@ -637,15 +648,15 @@ mod tests {
         let now = now_unix_secs();
         store.record_miss("Unknown", Status::NotFound, "");
         store.record_miss("Twins", Status::Ambiguous, "");
-        assert!(!store.needs_fetch("Unknown", now + 29 * DAY_SECS));
-        assert!(store.needs_fetch("Unknown", now + 31 * DAY_SECS));
-        assert!(store.needs_fetch("Twins", now + 31 * DAY_SECS));
+        assert!(!store.web_due("Unknown", now + 29 * DAY_SECS));
+        assert!(store.web_due("Unknown", now + 31 * DAY_SECS));
+        assert!(store.web_due("Twins", now + 31 * DAY_SECS));
 
         store.record_miss("Flaky", Status::Error, "");
-        assert!(store.needs_fetch("Flaky", now + DAY_SECS + 5));
+        assert!(store.web_due("Flaky", now + DAY_SECS + 5));
         store.record_miss("Flaky", Status::Error, "");
-        assert!(!store.needs_fetch("Flaky", now + DAY_SECS + 5));
-        assert!(store.needs_fetch("Flaky", now + 2 * DAY_SECS + 5));
+        assert!(!store.web_due("Flaky", now + DAY_SECS + 5));
+        assert!(store.web_due("Flaky", now + 2 * DAY_SECS + 5));
         assert_eq!(store.lookup("Flaky").unwrap().errors, 2);
         assert_eq!(error_backoff_secs(30), MISS_RETRY_SECS);
     }
@@ -671,15 +682,19 @@ mod tests {
     }
 
     #[test]
-    fn an_artist_with_a_picture_or_a_recent_miss_is_not_queued() {
+    fn an_artist_with_a_picture_is_not_queued_but_one_that_missed_is() {
         let (store, _db, _) = temp_store("skip");
         store
             .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
             .unwrap();
         store.record_miss("B", Status::NotFound, "");
         assert!(!store.request("A", Priority::NowPlaying));
-        assert!(!store.request("B", Priority::NowPlaying));
         assert!(!store.request("  ", Priority::NowPlaying));
+        assert!(
+            store.request("B", Priority::NowPlaying),
+            "MusicBee may have one since"
+        );
+        assert!(!store.web_due("B", now_unix_secs()), "the web waits");
     }
 
     #[test]

@@ -181,5 +181,12 @@ namespace MusicBeePlugin.Providers
         /// <param name="updatedSince">Watermark in unix seconds.</param>
         /// <returns>(Added, Updated, Deleted) track paths.</returns>
         (List<string> Added, List<string> Updated, List<string> Deleted) GetSyncDelta(long updatedSince);
+
+        /// <summary>
+        ///     The file MusicBee keeps its thumbnail of <paramref name="artist" /> in,
+        ///     downloaded first when not cached: about a second and 70 KB, so only
+        ///     the core's background picture fetcher asks. Empty when there is none.
+        /// </summary>
+        string GetArtistPictureThumb(string artist);
     }
 }

@@ -467,7 +467,7 @@ namespace MusicBeePlugin.Settings
             };
             var artistImagesHint = new Label
             {
-                Text = "Sends the names of the artists you browse and play to MusicBrainz and Wikimedia.",
+                Text = "Uses MusicBee's artist pictures; for artists it has none of, sends the name to MusicBrainz and Wikimedia.",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 ForeColor = SystemColors.GrayText,

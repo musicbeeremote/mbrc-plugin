@@ -63,7 +63,7 @@ namespace MusicBeePlugin.Settings
 
         /// <summary>
         ///     Whether the core downloads artist pictures. Off by default: it sends
-        ///     artist names to MusicBrainz and Wikimedia. Applied live by the core.
+        ///     the names MusicBee has no picture for to MusicBrainz and Wikimedia. Applied live.
         /// </summary>
         public bool artist_images_enabled { get; set; }
     }
