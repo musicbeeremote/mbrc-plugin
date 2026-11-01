@@ -132,7 +132,7 @@ fn run_thread(
         }
     };
 
-    runtime.block_on(async move {
+    let artist_images = runtime.block_on(async move {
         let bind_ip = resolve_bind_address(&core.config.bind_address);
 
         let listener = match TcpListener::bind((bind_ip, core.config.port)).await {
@@ -142,7 +142,7 @@ fn run_thread(
             }
             Err(e) => {
                 let _ = ready.send(Err(e));
-                return;
+                return None;
             }
         };
         tracing::info!(
@@ -161,12 +161,14 @@ fn run_thread(
         spawn_library_reconcile(&core);
         spawn_staging_sweep(&core);
         spawn_startup_update_check(&core);
-        spawn_artist_images(&core);
+        let artist_images = spawn_artist_images(&core);
 
         tokio::select! {
             _ = accept_loop(listener, core.clone()) => {}
             _ = shutdown.notified() => tracing::info!("networking shutdown requested"),
         }
+        // First, so a MusicBee call in flight finishes while mDNS withdraws.
+        core.cover_store.artists().queue().retire();
         if let Some(discovery) = discovery {
             discovery.abort();
         }
@@ -175,8 +177,15 @@ fn run_thread(
         scanner.abort();
         list_changes.abort();
         media.abort();
-        core.cover_store.artists().queue().retire();
+        artist_images
     });
+    // The host unloads mbrc_core.dll once networking stops, so no thread of
+    // ours may still be running in it.
+    if let Some(worker) = artist_images
+        && worker.join().is_err()
+    {
+        tracing::warn!("artist picture fetcher panicked");
+    }
 }
 
 /// The address to bind, falling back to every interface on an unusable setting.
@@ -293,8 +302,8 @@ fn spawn_startup_update_check(core: &Arc<Core>) {
 /// A plain thread rather than a blocking task: it idles for the whole session,
 /// and a Tokio runtime waits for its blocking tasks when it is dropped. It holds
 /// neither the core nor the cover store, only the fetch queue, and ends when
-/// networking stops, which retires it and waits until it lets go of the store.
-fn spawn_artist_images(core: &Arc<Core>) {
+/// networking stops, which retires it and joins the thread.
+fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> {
     #[cfg(windows)]
     {
         let config = core.config.clone();
@@ -330,12 +339,15 @@ fn spawn_artist_images(core: &Arc<Core>) {
                     },
                 );
             });
-        if let Err(e) = spawned {
-            tracing::warn!(error = %e, "artist pictures: fetcher not started");
-        }
+        spawned
+            .inspect_err(|e| tracing::warn!(error = %e, "artist pictures: fetcher not started"))
+            .ok()
     }
     #[cfg(not(windows))]
-    let _ = core;
+    {
+        let _ = core;
+        None
+    }
 }
 
 /// Tells V6 clients a queued artist picture has landed.
