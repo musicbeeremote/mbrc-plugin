@@ -19,5 +19,29 @@
 
         /// <summary>The metadata (browse) cache is validated and serving.</summary>
         public bool metadata_ready { get; set; }
+
+        /// <summary>Whether artist pictures are being downloaded.</summary>
+        public bool artist_images_enabled { get; set; }
+
+        /// <summary>Artists with a stored picture.</summary>
+        public int artist_images { get; set; }
+
+        /// <summary>The disk the stored pictures use, in bytes.</summary>
+        public long artist_image_bytes { get; set; }
+
+        /// <summary>The disk they may use before downloads stop, in bytes.</summary>
+        public long artist_image_budget { get; set; }
+
+        /// <summary>Artists looked up and found to have no picture.</summary>
+        public int artist_images_not_found { get; set; }
+
+        /// <summary>Artists with no sure match, left without a picture.</summary>
+        public int artist_images_ambiguous { get; set; }
+
+        /// <summary>Artists whose last lookup failed, tried again later.</summary>
+        public int artist_images_failed { get; set; }
+
+        /// <summary>Artists waiting to be looked up.</summary>
+        public int artist_images_waiting { get; set; }
     }
 }

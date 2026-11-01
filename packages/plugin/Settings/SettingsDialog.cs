@@ -113,6 +113,7 @@ namespace MusicBeePlugin.Settings
         private bool _loading;
         private Label _cacheStatus;
         private CheckBox _artistImages;
+        private Label _artistStatus;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
         private Button _rebuildCovers;
@@ -218,6 +219,10 @@ namespace MusicBeePlugin.Settings
                 case SettingsPage.WebRemote:
                     // A code made in the Party Mode window shows here too, counting down.
                     LoadWebStatus();
+                    break;
+                case SettingsPage.Library:
+                    // Pictures land one at a time with no event of their own.
+                    LoadCacheStatus();
                     break;
                 case SettingsPage.Diagnostics:
                     LoadCaptureStatus();
@@ -468,8 +473,17 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
             };
 
+            _artistStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 6, 0, 0),
+                ForeColor = SystemColors.GrayText,
+            };
+
             var layout = Table();
             _rows.Add(layout, "Cache", _cacheStatus);
+            _rows.Add(layout, string.Empty, _artistStatus);
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
             _rows.Add(layout, "Artist pictures", _artistImages);
             _rows.Add(layout, string.Empty, artistImagesHint);
@@ -1262,6 +1276,9 @@ namespace MusicBeePlugin.Settings
         private void LoadCacheStatus()
         {
             var status = _host.ReadCacheStatus();
+            var pictures = PanelText.ArtistPictures(status);
+            _rows.SetVisible(_artistStatus, pictures != null);
+            _artistStatus.Text = pictures ?? string.Empty;
             if (status == null)
             {
                 _cacheStatus.Text = "Unavailable (core not running).";

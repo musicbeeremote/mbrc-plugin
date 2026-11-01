@@ -511,6 +511,7 @@ namespace MusicBeePlugin.Ffi
         public bool web_auth_required { get; set; }
         public bool update_check_enabled { get; set; }
         public string update_channel { get; set; }
+        public bool artist_images_enabled { get; set; }
     }
 
     public class FirewallRequest
