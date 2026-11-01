@@ -467,7 +467,7 @@ namespace MusicBeePlugin.Settings
             };
             var artistImagesHint = new Label
             {
-                Text = "Uses MusicBee's artist pictures; for artists it has none of, sends the name to MusicBrainz and Wikimedia.",
+                Text = PanelText.ArtistPicturesHint,
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 ForeColor = SystemColors.GrayText,
@@ -484,6 +484,7 @@ namespace MusicBeePlugin.Settings
             var layout = Table();
             _rows.Add(layout, "Cache", _cacheStatus);
             _rows.Add(layout, string.Empty, _artistStatus);
+            _rows.SetVisible(_artistStatus, false);
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
             _rows.Add(layout, "Artist pictures", _artistImages);
             _rows.Add(layout, string.Empty, artistImagesHint);
@@ -1293,9 +1294,13 @@ namespace MusicBeePlugin.Settings
         private void LoadCacheStatus()
         {
             var status = _host.ReadCacheStatus();
-            var pictures = PanelText.ArtistPictures(status);
-            _rows.SetVisible(_artistStatus, pictures != null);
-            _artistStatus.Text = pictures ?? string.Empty;
+            // Re-read every few seconds: an unchanged line is left alone, not relaid out.
+            var pictures = PanelText.ArtistPictures(status) ?? string.Empty;
+            if (_artistStatus.Text != pictures)
+            {
+                _rows.SetVisible(_artistStatus, pictures.Length > 0);
+                _artistStatus.Text = pictures;
+            }
             if (status == null)
             {
                 _cacheStatus.Text = "Unavailable (core not running).";

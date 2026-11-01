@@ -9,6 +9,10 @@ namespace MusicBeePlugin.Settings
     /// <summary>Short phrases the settings windows share.</summary>
     internal static class PanelText
     {
+        /// <summary>What the artist picture setting sends where, shown beside it in both windows.</summary>
+        public const string ArtistPicturesHint =
+            "Uses MusicBee's artist pictures; for artists it has none of, sends the name to MusicBrainz and Wikimedia.";
+
         /// <summary>How long ago a moment was, for a column that has to be short.</summary>
         public static string Ago(long unixSeconds)
         {
