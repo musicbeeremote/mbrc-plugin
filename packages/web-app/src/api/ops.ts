@@ -127,6 +127,9 @@ export interface OpRequests {
   library_tracks: PageArgs & LibraryOrder & Pick<LibraryScope, 'album' | 'artist' | 'query'>
   library_radio: PageArgs
   library_play_all: { shuffle?: boolean }
+  // Answers from what the server has stored and queues the rest; each picture
+  // that lands later arrives as `library_artist_image_updated`.
+  library_artist_images: { artists: string[] }
   library_queue: LibraryScope & { mode?: QueueMode; play?: string; shuffle?: boolean }
 
   podcast_subscriptions: PageArgs
@@ -224,6 +227,7 @@ export const Op = {
   LibraryRadio: 'library_radio',
   LibraryQueue: 'library_queue',
   LibraryPlayAll: 'library_play_all',
+  LibraryArtistImages: 'library_artist_images',
 
   MediaSources: 'media_sources',
   MediaAlbums: 'media_albums',
@@ -267,6 +271,7 @@ export const WireEvent = {
   CoverCacheChanged: 'cover_cache_changed',
   LibraryChanged: 'library_changed',
   MediaChanged: 'media_changed',
+  LibraryArtistImageUpdated: 'library_artist_image_updated',
   ServerShutdown: 'server_shutdown',
   PermissionsChanged: 'permissions_changed',
 } as const

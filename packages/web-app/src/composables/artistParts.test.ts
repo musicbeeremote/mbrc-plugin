@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Credit } from '../api/credits'
 import type { Track } from '../api/types'
 
-import { artistParts } from './artistParts'
+import { artistParts, artistPicture } from './artistParts'
 
 function track(display: string, credits: Credit[]): Track {
   return {
@@ -64,5 +64,24 @@ describe('the parts of an artist line', () => {
   it('has nothing to link with no track or no artist', () => {
     expect(artistParts(null)).toStrictEqual([])
     expect(artistParts(track('', []))).toStrictEqual([])
+  })
+})
+
+describe('the picture beside a name', () => {
+  const split = track('Tico feat. Gadiel', [
+    { name: 'Tico', role: 'artist' },
+    { name: 'Gadiel', role: 'guest', image_hash: 'g1' },
+  ])
+  const none = () => undefined
+
+  it('comes from the track until the store has heard of the name', () => {
+    expect(artistPicture(split, 'gadiel', none)).toBe('g1')
+    expect(artistPicture(split, 'Tico', none)).toBeUndefined()
+  })
+
+  it('comes from the store once a picture has landed there', () => {
+    const stored: Record<string, string> = { Tico: 't1' }
+    expect(artistPicture(split, 'Tico', (name) => stored[name])).toBe('t1')
+    expect(artistPicture(split, 'Gadiel', () => 'g2')).toBe('g2')
   })
 })

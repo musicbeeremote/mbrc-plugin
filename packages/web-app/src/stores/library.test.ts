@@ -70,7 +70,8 @@ describe('browsing', () => {
   // the first page to itself.
   it('resumes paging from what is already shown', async () => {
     const library = useLibraryStore()
-    call.mockResolvedValue({ total: 300, offset: 0, items: Array.from({ length: 100 }) })
+    const items = Array.from({ length: 100 }, (_, i) => ({ artist: `Artist ${i}`, count: 1 }))
+    call.mockResolvedValue({ total: 300, offset: 0, items })
     await openTab(library, LibraryLevel.Artists)
     expect(library.hasMore).toBe(true)
 

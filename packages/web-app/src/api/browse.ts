@@ -16,6 +16,8 @@ export type GenreEntry = z.infer<typeof GenreEntrySchema>
 export const ArtistEntrySchema = z.object({
   artist: z.string(),
   count: z.number(),
+  /** The artist's picture, present only when the server has one stored. */
+  image_hash: z.string().optional(),
 })
 export type ArtistEntry = z.infer<typeof ArtistEntrySchema>
 
