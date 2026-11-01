@@ -122,6 +122,35 @@ pub fn key(name: &str) -> String {
     clean(name).to_lowercase()
 }
 
+/// What marks a guest or a second artist in a name nobody split, matched
+/// case-insensitively. Spaces are part of each, so "AC/DC" stays whole.
+const CREDIT_MARKERS: &[&str] = &[
+    " feat. ",
+    " feat ",
+    " ft. ",
+    " ft ",
+    " featuring ",
+    "; ",
+    " / ",
+];
+
+/// The main artist of a name nobody split: what comes before its first credit
+/// marker, so "A feat. B" is "A". Anything else is the name as given.
+///
+/// The marker list is the conservative one music servers default to. `&`, `,`,
+/// `x` and `vs` are left alone: they are as often inside one artist's name
+/// ("Simon & Garfunkel", "Earth, Wind & Fire") as between two.
+pub fn lead_artist(name: &str) -> &str {
+    let folded = name.to_ascii_lowercase();
+    CREDIT_MARKERS
+        .iter()
+        .filter_map(|marker| folded.find(marker))
+        .min()
+        .map(|at| name[..at].trim())
+        .filter(|lead| !lead.is_empty())
+        .unwrap_or(name)
+}
+
 /// `Name (instrument)` as its two parts; a bare entry is all name.
 fn split_detail(entry: &str) -> (String, Option<String>) {
     match entry.strip_suffix(')').and_then(|s| s.rsplit_once(" (")) {
@@ -297,6 +326,35 @@ mod tests {
             vec!["A", "B"],
             "two artists and no guest is split too"
         );
+    }
+
+    #[test]
+    fn a_featured_artist_leaves_the_main_one_as_the_lead() {
+        for (joined, lead) in [
+            ("Adelitas Way feat. Tyler Connolly", "Adelitas Way"),
+            ("Carlos Vives FT. Trebol Clan", "Carlos Vives"),
+            ("Bullaka Family feat Liam", "Bullaka Family"),
+            ("Tico featuring Gadiel & Yandel", "Tico"),
+            ("Coverdale / Page", "Coverdale"),
+            ("A; B", "A"),
+        ] {
+            assert_eq!(lead_artist(joined), lead, "{joined}");
+        }
+    }
+
+    #[test]
+    fn a_name_that_may_be_one_artist_is_left_whole() {
+        for name in [
+            "Simon & Garfunkel",
+            "Earth, Wind & Fire",
+            "AC/DC",
+            "Bing Crosby vs. Jojo Effect",
+            "Arcángel, De La Ghetto & Ken-Y",
+            "Feat. Someone",
+            "Ftera",
+        ] {
+            assert_eq!(lead_artist(name), name);
+        }
     }
 
     #[test]
