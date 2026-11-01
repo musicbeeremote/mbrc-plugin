@@ -436,7 +436,7 @@ namespace MusicBeePlugin.Settings
             _rows.Add(rows, string.Empty, Note("The settings window has Check now either way."), endsBlock: true);
             _rows.Add(rows, "Artist pictures", _artistImages);
             _rows.Add(rows, string.Empty,
-                Note("Sends the names of the artists you browse and play to MusicBrainz and Wikimedia."));
+                Note("Uses MusicBee's artist pictures; for artists it has none of, sends the name to MusicBrainz and Wikimedia."));
             return body;
         }
 

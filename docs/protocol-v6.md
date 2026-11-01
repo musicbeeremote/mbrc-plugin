@@ -814,19 +814,22 @@ and a playlist scope ([`<tracks>`](#playlist)) keeps banned tracks: a playlist o
 
 ### Artist pictures
 
-The server can download artist pictures itself, from open sources, and keep them in the same
-content-addressed store as album art: an `image_hash` is fetched with `cover_get` or
-`GET /api/cover/{hash}` exactly like a `cover_hash`. Pictures fit within 500x500, aspect kept.
+The server can fetch artist pictures and keep them in the same content-addressed store as
+album art: an `image_hash` is fetched with `cover_get` or `GET /api/cover/{hash}` exactly like a
+`cover_hash`. Pictures fit within 500x500, aspect kept.
 
-Downloading is **off by default**; the user turns it on in the plugin's settings, since it sends
-artist names to MusicBrainz and Wikimedia. Stored pictures are served either way.
+Fetching is **off by default**; the user turns it on in the plugin's settings, since it has
+MusicBee download artist thumbnails and sends the names MusicBee has none for to MusicBrainz and
+Wikimedia. Stored pictures are served either way.
 
-An artist is named as a [credit](#canonical-track) names them, matched case-insensitively. The
-server only takes a picture it is sure of: a MusicBrainz search must find exactly one artist
-with that exact name, at full score, and that artist's Wikidata entry must have an image.
-Anything less is recorded as no picture and not asked again for 30 days (a failed request,
-from one day, doubling). A source that answers busy is left alone for a while and the artist
-stays queued.
+An artist is named as a [credit](#canonical-track) names them, matched case-insensitively.
+MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows; it is asked
+again each time the artist is requested, which costs nothing once MusicBee has answered. For an
+artist MusicBee has none of, the server looks on the web, and only takes a picture it is sure
+of: a MusicBrainz search must find exactly one artist with that exact name, at full score, and
+that artist's Wikidata entry must have an image. Anything less is recorded as no picture and the
+web is not asked again for 30 days (a failed request, from one day, doubling). A web source that
+answers busy is left alone for a while and the artist stays queued.
 
 `image_hash` on `library_artists`, `track_get` and `now_playing_state` is a lookup and never
 starts a download. To get pictures for the artists on screen, send `library_artist_images`

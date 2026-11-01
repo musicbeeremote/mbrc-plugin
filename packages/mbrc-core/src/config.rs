@@ -240,7 +240,8 @@ pub struct Config {
     #[serde(default)]
     pub setup_version: u32,
     /// Whether the core downloads artist pictures (#116). Off by default: it
-    /// sends artist names to MusicBrainz and Wikimedia.
+    /// has MusicBee download its thumbnails, and sends the names it has none of
+    /// to MusicBrainz and Wikimedia.
     #[serde(default)]
     pub artist_images_enabled: bool,
     /// The disk the stored artist pictures may use before the fetcher stops,
