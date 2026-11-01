@@ -1,6 +1,7 @@
 {
   "title": "Pair this browser",
-  "help": "In MusicBee, open Tools, MusicBee Remote, Party Mode and press {button}.",
+  "help": "In MusicBee, open Tools, MusicBee Remote, Settings, go to Web remote and press {button}.",
+  "helpPartyMode": "In MusicBee, open Tools, MusicBee Remote, Party Mode and press {button}.",
   "button": "Show pairing code",
   "submit": "Pair",
   "failed": "Pairing failed",

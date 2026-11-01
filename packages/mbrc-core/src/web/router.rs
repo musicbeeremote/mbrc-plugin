@@ -180,6 +180,7 @@ async fn pair_status(State(state): State<WebState>, headers: axum::http::HeaderM
     Json(json!({
         "auth_required": state.core.config.web_auth_required,
         "paired": state.admits_request(&headers, None),
+        "party_mode": state.core.party_mode.is_enabled(),
     }))
 }
 

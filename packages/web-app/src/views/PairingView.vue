@@ -40,13 +40,30 @@ const name = ref(thisBrowser())
 /** As long a label as the core keeps, so nothing typed here is silently cut. */
 const MAX_NAME = 64
 
+/**
+ * Whether Party Mode is on, which decides where MusicBee hands out the code.
+ *
+ * Optional pairing only exists to gain a Party Mode role, so it starts on.
+ */
+const partyMode = ref(props.optional === true)
+
 let recheck: number | undefined = undefined
 
-onMounted(() => {
+async function readStatus() {
+  const response = await fetch('/api/pair/status').catch(() => null)
+  const status = (await response?.json().catch(() => null)) as {
+    auth_required?: boolean
+    party_mode?: boolean
+  } | null
+  if (typeof status?.party_mode === 'boolean') partyMode.value = status.party_mode
+  return status
+}
+
+onMounted(async () => {
+  await readStatus()
   if (props.optional) return
   recheck = window.setInterval(async () => {
-    const response = await fetch('/api/pair/status').catch(() => null)
-    const status = (await response?.json().catch(() => null)) as { auth_required?: boolean } | null
+    const status = await readStatus()
     if (status && status.auth_required === false) emit('paired')
   }, RECHECK_MS)
 })
@@ -83,7 +100,12 @@ async function submit() {
 <template>
   <div class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
     <h1 class="text-xl font-semibold">{{ $t('pairing.title') }}</h1>
-    <i18n-t keypath="pairing.help" tag="p" class="max-w-xs text-sm text-outline" scope="global">
+    <i18n-t
+      :keypath="partyMode ? 'pairing.helpPartyMode' : 'pairing.help'"
+      tag="p"
+      class="max-w-xs text-sm text-outline"
+      scope="global"
+    >
       <template #button>
         <strong>{{ $t('pairing.button') }}</strong>
       </template>
