@@ -124,31 +124,24 @@ pub fn key(name: &str) -> String {
 
 /// What marks a guest or a second artist in a name nobody split, matched
 /// case-insensitively. Spaces are part of each, so "AC/DC" stays whole.
-const CREDIT_MARKERS: &[&str] = &[
-    " feat. ",
-    " feat ",
-    " ft. ",
-    " ft ",
-    " featuring ",
-    "; ",
-    " / ",
-];
+const CREDIT_MARKERS: &[&str] = &[" feat. ", " feat ", " ft. ", " ft ", " featuring ", " / "];
 
-/// The main artist of a name nobody split: what comes before its first credit
-/// marker, so "A feat. B" is "A". Anything else is the name as given.
+/// The main artist of a name nobody split: "A feat. B" and "A; B" are "A".
 ///
-/// The marker list is the conservative one music servers default to. `&`, `,`,
+/// The first value, as [`crate::multi_value::values`] splits one, up to its
+/// first credit marker; anything else is the name as given. The markers are the conservative ones music servers default to. `&`, `,`,
 /// `x` and `vs` are left alone: they are as often inside one artist's name
 /// ("Simon & Garfunkel", "Earth, Wind & Fire") as between two.
 pub fn lead_artist(name: &str) -> &str {
-    let folded = name.to_ascii_lowercase();
+    let first = crate::multi_value::values(name).next().unwrap_or(name);
+    let folded = first.to_ascii_lowercase();
     CREDIT_MARKERS
         .iter()
         .filter_map(|marker| folded.find(marker))
         .min()
-        .map(|at| name[..at].trim())
-        .filter(|lead| !lead.is_empty())
-        .unwrap_or(name)
+        .map_or(first, |at| &first[..at])
+        .trim_end_matches(|c: char| c.is_whitespace() || matches!(c, ',' | '-' | '('))
+        .trim()
 }
 
 /// `Name (instrument)` as its two parts; a bare entry is all name.
@@ -337,6 +330,10 @@ mod tests {
             ("Tico featuring Gadiel & Yandel", "Tico"),
             ("Coverdale / Page", "Coverdale"),
             ("A; B", "A"),
+            ("A;B", "A"),
+            ("A\0B", "A"),
+            ("Alexis & Fido, feat. Flex", "Alexis & Fido"),
+            ("A - ft. B", "A"),
         ] {
             assert_eq!(lead_artist(joined), lead, "{joined}");
         }
