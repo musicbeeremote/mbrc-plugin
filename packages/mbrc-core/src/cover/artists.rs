@@ -38,6 +38,12 @@ const DAY_SECS: i64 = 24 * 60 * 60;
 /// a run of errors pushes the next try out.
 const MISS_RETRY_SECS: i64 = 30 * DAY_SECS;
 
+/// How long MusicBee's "no thumbnail" is believed before it is asked again.
+///
+/// Asking costs nothing once MusicBee has answered, but a client re-asks for
+/// every artist it shows, and each answer is a call into MusicBee.
+const MUSICBEE_RECHECK: Duration = Duration::from_secs(60 * 60);
+
 /// How many client-requested artists may wait at once.
 ///
 /// A client asks for the artists on screen, so a deeper queue only means one
@@ -268,7 +274,7 @@ impl FetchQueue {
     }
 
     /// How many artists are waiting for the fetcher.
-    pub fn waiting(&self) -> usize {
+    pub(crate) fn waiting(&self) -> usize {
         let queue = self.lock_queue();
         queue.now_playing.len() + queue.requested.len()
     }
@@ -280,7 +286,7 @@ impl FetchQueue {
 
 /// What the artist picture store holds and is waiting on, for the settings panel.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Summary {
+pub(crate) struct Summary {
     pub stored: usize,
     pub used_bytes: u64,
     pub budget_bytes: u64,
@@ -300,6 +306,9 @@ pub struct ArtistImages {
     used: AtomicU64,
     images: RwLock<HashMap<String, Stored>>,
     lookups: RwLock<HashMap<String, Lookup>>,
+    /// When MusicBee last said it has no thumbnail, by key: asked again only
+    /// after [`MUSICBEE_RECHECK`], since a client re-asks for what it shows.
+    musicbee_none: Mutex<HashMap<String, Instant>>,
     queue: Arc<FetchQueue>,
 }
 
@@ -328,6 +337,7 @@ impl ArtistImages {
             used: AtomicU64::new(used),
             images: RwLock::new(images),
             lookups: RwLock::new(lookups),
+            musicbee_none: Mutex::new(HashMap::new()),
             queue: Arc::new(FetchQueue::default()),
         }
     }
@@ -367,24 +377,34 @@ impl ArtistImages {
         self.used.load(Ordering::Acquire)
     }
 
-    pub fn summary(&self) -> Summary {
-        let lookups = self.lookups.read().unwrap_or_else(|e| e.into_inner());
-        let count = |status| lookups.values().filter(|l| l.status == status).count();
-        Summary {
+    pub(crate) fn summary(&self) -> Summary {
+        let mut summary = Summary {
             stored: self.read_images().len(),
             used_bytes: self.used_bytes(),
             budget_bytes: self.budget.load(Ordering::Acquire),
-            not_found: count(Status::NotFound),
-            ambiguous: count(Status::Ambiguous),
-            errors: count(Status::Error),
             waiting: self.queue.waiting(),
+            ..Summary::default()
+        };
+        for lookup in self
+            .lookups
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+        {
+            match lookup.status {
+                Status::NotFound => summary.not_found += 1,
+                Status::Ambiguous => summary.ambiguous += 1,
+                Status::Error => summary.errors += 1,
+                Status::Found => {}
+            }
         }
+        summary
     }
 
     /// The stored picture's content hash for `name`, if there is one.
     pub fn hash_for(&self, name: &str) -> Option<String> {
         self.read_images()
-            .get(&credits::key(name))
+            .get(&picture_key(name))
             .map(|s| s.hash.clone())
     }
 
@@ -401,23 +421,19 @@ impl ArtistImages {
         self.lookups
             .read()
             .unwrap_or_else(|e| e.into_inner())
-            .get(&credits::key(name))
+            .get(&picture_key(name))
             .cloned()
     }
 
     /// Queues `name` for the fetcher unless no picture can arrive (see
-    /// [`Self::is_accepting`]) or it already has one. Returns whether it is
-    /// waiting now.
-    ///
-    /// A recent miss does not keep it out: MusicBee is asked again each time,
-    /// which costs nothing once MusicBee has answered, and only the web lookup
-    /// waits out the miss ([`Self::web_due`]).
+    /// [`Self::is_accepting`]), it has one, or no source is due (see
+    /// [`Self::is_due`]). Returns whether it is waiting now.
     pub fn request(&self, name: &str, priority: Priority) -> bool {
-        if !self.is_accepting() || !self.lacks_picture(name) {
+        if !self.is_accepting() || !self.is_due(name, now_unix_secs()) {
             return false;
         }
         self.queue.push(Queued {
-            key: credits::key(name),
+            key: picture_key(name),
             name: name.trim().to_owned(),
             priority,
         })
@@ -425,21 +441,40 @@ impl ArtistImages {
 
     /// Whether `name` names an artist with no stored picture.
     pub fn lacks_picture(&self, name: &str) -> bool {
-        let key = credits::key(name);
+        let key = picture_key(name);
         !key.is_empty() && !self.read_images().contains_key(&key)
+    }
+
+    /// Whether `name` has no picture and either source is due to be asked:
+    /// MusicBee an hour after it last said none, the web once a miss expires.
+    pub fn is_due(&self, name: &str, now: i64) -> bool {
+        self.lacks_picture(name) && (self.musicbee_due(name) || self.web_due(name, now))
+    }
+
+    /// Whether MusicBee has not said it has no thumbnail of `name` lately.
+    pub fn musicbee_due(&self, name: &str) -> bool {
+        self.lock_musicbee_none()
+            .get(&picture_key(name))
+            .is_none_or(|at| at.elapsed() >= MUSICBEE_RECHECK)
+    }
+
+    /// Records that MusicBee has no thumbnail of `name`.
+    pub fn musicbee_has_none(&self, name: &str) {
+        self.lock_musicbee_none()
+            .insert(picture_key(name), Instant::now());
     }
 
     /// Whether `name` has no picture and its web lookup is due at `now`.
     pub fn web_due(&self, name: &str, now: i64) -> bool {
-        if !self.lacks_picture(name) {
-            return false;
-        }
-        let key = credits::key(name);
-        self.lookups
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&key)
-            .is_none_or(|l| l.status == Status::Found || l.retry_after <= now)
+        let key = picture_key(name);
+        !key.is_empty()
+            && !self.read_images().contains_key(&key)
+            && self
+                .lookups
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&key)
+                .is_none_or(|l| l.status == Status::Found || l.retry_after <= now)
     }
 
     /// The next queued name, without waiting.
@@ -461,7 +496,7 @@ impl ArtistImages {
         source: &str,
     ) -> Result<String, String> {
         let (hash, resized) = write_cover(&self.covers_dir, raw, ARTIST_IMAGE_SIZE)?;
-        let key = credits::key(name);
+        let key = picture_key(name);
         let lookup = Lookup {
             mbid: mbid.to_owned(),
             source: source.to_owned(),
@@ -494,30 +529,10 @@ impl ArtistImages {
         Ok(hash)
     }
 
-    /// Gives `name` the picture already stored as `hash`, the joined name of a
-    /// track nobody split sharing its lead artist's. The file is counted once.
-    pub fn link(&self, name: &str, hash: &str) {
-        let key = credits::key(name);
-        self.db.write(Durability::Immediate, |txn| {
-            txn.open_table(ARTIST_IMAGE)?.insert(key.as_str(), hash)?;
-            Ok(())
-        });
-        let replaced = self.write_images().insert(
-            key,
-            Stored {
-                hash: hash.to_owned(),
-                bytes: 0,
-            },
-        );
-        if let Some(old) = replaced {
-            self.used.fetch_sub(old.bytes, Ordering::AcqRel);
-        }
-    }
-
     /// Records that no picture was found for `name` this time, and when to look
     /// again: 30 days for a miss, a doubling backoff from one day for an error.
     pub fn record_miss(&self, name: &str, status: Status, mbid: &str) {
-        let key = credits::key(name);
+        let key = picture_key(name);
         let now = now_unix_secs();
         let previous_errors = self
             .lookups
@@ -545,6 +560,9 @@ impl ArtistImages {
         self.write_lookups().insert(key, lookup);
     }
 
+    fn lock_musicbee_none(&self) -> std::sync::MutexGuard<'_, HashMap<String, Instant>> {
+        self.musicbee_none.lock().unwrap_or_else(|e| e.into_inner())
+    }
     fn read_images(&self) -> std::sync::RwLockReadGuard<'_, HashMap<String, Stored>> {
         self.images.read().unwrap_or_else(|e| e.into_inner())
     }
@@ -554,6 +572,12 @@ impl ArtistImages {
     fn write_lookups(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<String, Lookup>> {
         self.lookups.write().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// The key an artist's picture is kept under: its lead artist's, so a name
+/// nobody split ("A feat. B") is served A's picture and looked up as A.
+fn picture_key(name: &str) -> String {
+    credits::key(credits::lead_artist(name))
 }
 
 /// How long the `errors`th error in a row holds off the next try.
@@ -755,23 +779,59 @@ mod tests {
     }
 
     #[test]
-    fn a_linked_name_shares_the_picture_and_its_file_is_counted_once() {
-        let (store, db, covers) = temp_store("link");
+    fn a_featured_name_is_served_and_counted_as_its_lead_artist() {
+        let (store, _db, _) = temp_store("lead");
         let hash = store
             .store("Adelitas Way", &test_jpeg_bytes(64, 64), "", "musicbee")
             .unwrap();
-        let used = store.used_bytes();
-        store.link("Adelitas Way feat. Tyler Connolly", &hash);
+        store.set_budget(1);
+
+        let joined = "adelitas way FEAT. Tyler Connolly";
+        assert_eq!(
+            store.hash_for(joined),
+            Some(hash),
+            "even with the budget full"
+        );
+        assert!(!store.request(joined, Priority::Requested));
+        assert_eq!(store.summary().stored, 1);
+    }
+
+    #[test]
+    fn two_artists_with_the_same_picture_count_its_file_once() {
+        let (store, db, covers) = temp_store("same-file");
         store
-            .store("Same Picture", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .store("Adam Skorupa", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .unwrap();
+        let used = store.used_bytes();
+        store
+            .store(
+                "Adam Skorupa & Krzysztof Wierzynkiewicz",
+                &test_jpeg_bytes(64, 64),
+                "",
+                "musicbee",
+            )
             .unwrap();
 
-        assert_eq!(
-            store.hash_for("adelitas way FEAT. tyler connolly"),
-            Some(hash)
-        );
         assert_eq!(store.used_bytes(), used);
         assert_eq!(ArtistImages::new(db, covers).used_bytes(), used);
+    }
+
+    #[test]
+    fn musicbee_is_asked_again_only_after_an_hour_once_it_said_none() {
+        let (store, _db, _) = temp_store("musicbee-none");
+        store.record_miss("Jormundgard", Status::NotFound, "");
+        assert!(store.request("Jormundgard", Priority::Requested));
+        let _ = store.next_queued();
+
+        store.musicbee_has_none("Jormundgard");
+        assert!(
+            !store.request("Jormundgard", Priority::Requested),
+            "nothing is due"
+        );
+        assert!(
+            store.request("Tico", Priority::Requested),
+            "the web is still due for Tico"
+        );
     }
 
     #[test]

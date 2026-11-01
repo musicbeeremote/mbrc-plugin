@@ -1103,8 +1103,8 @@ pub struct MockProviders {
     pub podcast_artwork: String,
     /// Artist name -> the thumbnail path `artist_picture_thumb` answers.
     pub artist_thumbs: std::collections::HashMap<String, String>,
-    /// How long `artist_picture_thumb` takes, as MusicBee does when it downloads.
-    pub artist_thumb_delay: std::time::Duration,
+    /// Makes `artist_picture_thumb` take this long, as MusicBee does when it downloads.
+    pub artist_thumb_stall: Option<std::time::Duration>,
     pub browse_genres: Page<GenreData>,
     pub browse_artists: Page<ArtistData>,
     pub browse_albums: Page<AlbumData>,
@@ -1346,7 +1346,9 @@ impl Providers for MockProviders {
     }
     fn artist_picture_thumb(&self, artist: &str) -> Result<String, String> {
         self.record(format!("artist_picture_thumb({artist})"));
-        std::thread::sleep(self.artist_thumb_delay);
+        if let Some(stall) = self.artist_thumb_stall {
+            std::thread::sleep(stall);
+        }
         Ok(self.artist_thumbs.get(artist).cloned().unwrap_or_default())
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {

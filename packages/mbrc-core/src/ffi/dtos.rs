@@ -450,7 +450,9 @@ pub struct SetupChoices {
     pub update_check_enabled: bool,
     /// `stable` or `testing`.
     pub update_channel: String,
-    /// Whether to download artist pictures (#116).
+    /// Whether to download artist pictures (#116). Defaulted, so a host that
+    /// predates it still completes setup.
+    #[serde(default)]
     pub artist_images_enabled: bool,
 }
 
