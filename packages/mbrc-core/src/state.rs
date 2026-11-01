@@ -396,6 +396,20 @@ struct CacheStatus {
     building: bool,
     /// The metadata (browse) cache is validated and serving from redb.
     metadata_ready: bool,
+    /// Whether artist pictures are being downloaded (#116).
+    artist_images_enabled: bool,
+    /// Artists with a stored picture.
+    artist_images: u32,
+    /// The disk those pictures use, and may use, in bytes.
+    artist_image_bytes: u64,
+    artist_image_budget: u64,
+    /// Artists looked up and found to have no picture, or no sure match.
+    artist_images_not_found: u32,
+    artist_images_ambiguous: u32,
+    /// Artists whose last lookup failed, to be tried again later.
+    artist_images_failed: u32,
+    /// Artists waiting for the fetcher.
+    artist_images_waiting: u32,
 }
 
 /// Dispatches a host -> core query (request/response).
@@ -550,12 +564,23 @@ fn cache_status_bytes() -> Option<Vec<u8>> {
         let guard = lock();
         guard.as_ref()?.core.clone()
     };
+    let artists = core.cover_store.artists();
+    let images = artists.summary();
+    let saturate = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     let status = CacheStatus {
         tracks_cached: crate::server::commands::library::cached_tracks_count(&core.metadata_cache)
             as u32,
         covers_cached: core.cover_store.cached_count() as u32,
         building: core.is_reconciling(),
         metadata_ready: core.metadata_cache.is_validated(),
+        artist_images_enabled: artists.is_enabled(),
+        artist_images: saturate(images.stored),
+        artist_image_bytes: images.used_bytes,
+        artist_image_budget: images.budget_bytes,
+        artist_images_not_found: saturate(images.not_found),
+        artist_images_ambiguous: saturate(images.ambiguous),
+        artist_images_failed: saturate(images.errors),
+        artist_images_waiting: saturate(images.waiting),
     };
     rmp_serde::to_vec_named(&status).ok()
 }

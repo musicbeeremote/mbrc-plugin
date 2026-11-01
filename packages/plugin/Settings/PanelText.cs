@@ -32,6 +32,38 @@ namespace MusicBeePlugin.Settings
             return addresses.Select(a => a + ":" + text).ToList();
         }
 
+        /// <summary>
+        ///     The artist pictures line under the cache line, or null when downloads
+        ///     are off and nothing is stored.
+        /// </summary>
+        public static string ArtistPictures(CoreCacheStatus status)
+        {
+            if (status == null || (!status.artist_images_enabled && status.artist_images == 0)) return null;
+            var parts = new List<string>
+            {
+                string.Format(CultureInfo.CurrentCulture, "{0:N0} artist pictures ({1} of {2})",
+                    status.artist_images, Megabytes(status.artist_image_bytes),
+                    Megabytes(status.artist_image_budget)),
+            };
+            AddCount(parts, status.artist_images_not_found, "without a picture");
+            AddCount(parts, status.artist_images_ambiguous, "with no sure match");
+            AddCount(parts, status.artist_images_failed, "to retry");
+            AddCount(parts, status.artist_images_waiting, "waiting");
+            if (!status.artist_images_enabled)
+                parts.Add("downloads off");
+            else if (status.artist_image_bytes >= status.artist_image_budget)
+                parts.Add("disk budget full");
+            return string.Join(" · ", parts) + ".";
+        }
+
+        private static void AddCount(List<string> parts, int count, string what)
+        {
+            if (count > 0) parts.Add(string.Format(CultureInfo.CurrentCulture, "{0:N0} {1}", count, what));
+        }
+
+        private static string Megabytes(long bytes) =>
+            string.Format(CultureInfo.CurrentCulture, "{0:N0} MB", Math.Ceiling(bytes / (1024.0 * 1024.0)));
+
         /// <summary>Seconds left on a pairing code, as m:ss or Ns.</summary>
         public static string Countdown(int seconds)
         {

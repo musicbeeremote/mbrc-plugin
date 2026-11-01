@@ -60,6 +60,7 @@ namespace MusicBeePlugin.Settings
         private CheckBox _webAuth;
         private CheckBox _autoCheck;
         private RadioButton _testing;
+        private CheckBox _artistImages;
         private Label _clientStatus;
 
         public SetupWizard(PluginHost host, SetupStatus status)
@@ -422,9 +423,20 @@ namespace MusicBeePlugin.Settings
             channel.Controls.Add(stable);
             channel.Controls.Add(_testing);
 
+            _artistImages = new CheckBox
+            {
+                Text = "Download artist pictures",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Checked = _saved.artist_images_enabled,
+            };
+
             _rows.Add(rows, "Automatic", _autoCheck, endsBlock: true);
             _rows.Add(rows, "Channel", channel);
-            _rows.Add(rows, string.Empty, Note("The settings window has Check now either way."));
+            _rows.Add(rows, string.Empty, Note("The settings window has Check now either way."), endsBlock: true);
+            _rows.Add(rows, "Artist pictures", _artistImages);
+            _rows.Add(rows, string.Empty,
+                Note("Sends the names of the artists you browse and play to MusicBrainz and Wikimedia."));
             return body;
         }
 
@@ -633,6 +645,7 @@ namespace MusicBeePlugin.Settings
                 web_auth_required = _webAuth.Checked,
                 update_check_enabled = _autoCheck.Checked,
                 update_channel = _testing.Checked ? "testing" : "stable",
+                artist_images_enabled = _artistImages.Checked,
             };
             if (!_host.CompleteSetup(choices))
             {
