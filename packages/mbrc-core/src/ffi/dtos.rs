@@ -450,6 +450,8 @@ pub struct SetupChoices {
     pub update_check_enabled: bool,
     /// `stable` or `testing`.
     pub update_channel: String,
+    /// Whether to download artist pictures (#116).
+    pub artist_images_enabled: bool,
 }
 
 /// The port a firewall query is about.

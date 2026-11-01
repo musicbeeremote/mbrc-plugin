@@ -266,9 +266,27 @@ impl FetchQueue {
         Some(f(store.artists()))
     }
 
+    /// How many artists are waiting for the fetcher.
+    pub fn waiting(&self) -> usize {
+        let queue = self.lock_queue();
+        queue.now_playing.len() + queue.requested.len()
+    }
+
     fn lock_queue(&self) -> std::sync::MutexGuard<'_, Queue> {
         self.queue.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// What the artist picture store holds and is waiting on, for the settings panel.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Summary {
+    pub stored: usize,
+    pub used_bytes: u64,
+    pub budget_bytes: u64,
+    pub not_found: usize,
+    pub ambiguous: usize,
+    pub errors: usize,
+    pub waiting: usize,
 }
 
 /// The artist picture store, and the queue its fetcher works through.
@@ -340,6 +358,20 @@ impl ArtistImages {
 
     pub fn used_bytes(&self) -> u64 {
         self.used.load(Ordering::Acquire)
+    }
+
+    pub fn summary(&self) -> Summary {
+        let lookups = self.lookups.read().unwrap_or_else(|e| e.into_inner());
+        let count = |status| lookups.values().filter(|l| l.status == status).count();
+        Summary {
+            stored: self.read_images().len(),
+            used_bytes: self.used_bytes(),
+            budget_bytes: self.budget.load(Ordering::Acquire),
+            not_found: count(Status::NotFound),
+            ambiguous: count(Status::Ambiguous),
+            errors: count(Status::Error),
+            waiting: self.queue.waiting(),
+        }
     }
 
     /// The stored picture's content hash for `name`, if there is one.
@@ -648,6 +680,33 @@ mod tests {
         assert!(!store.request("A", Priority::NowPlaying));
         assert!(!store.request("B", Priority::NowPlaying));
         assert!(!store.request("  ", Priority::NowPlaying));
+    }
+
+    #[test]
+    fn the_summary_counts_pictures_misses_and_what_waits() {
+        let (store, _db, _) = temp_store("summary");
+        store.set_budget(1 << 20);
+        store
+            .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .unwrap();
+        store.record_miss("B", Status::NotFound, "");
+        store.record_miss("C", Status::Ambiguous, "");
+        store.record_miss("D", Status::Error, "");
+        store.request("E", Priority::Requested);
+
+        let summary = store.summary();
+        assert_eq!(
+            summary,
+            Summary {
+                stored: 1,
+                used_bytes: store.used_bytes(),
+                budget_bytes: 1 << 20,
+                not_found: 1,
+                ambiguous: 1,
+                errors: 1,
+                waiting: 1,
+            }
+        );
     }
 
     #[test]
