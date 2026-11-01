@@ -29,8 +29,9 @@ function answer(stored: Record<string, string>, enabled = true) {
   }))
 }
 
+/** Lets the gathered names go out, and their answers come back. */
 async function settle() {
-  await vi.runAllTimersAsync()
+  await vi.advanceTimersByTimeAsync(200)
 }
 
 describe('asking for pictures', () => {
@@ -80,7 +81,7 @@ describe('asking for pictures', () => {
     ])
   })
 
-  it('stops asking once the server says nothing will arrive', async () => {
+  it('holds names back while the server sends none, and asks again a minute later', async () => {
     answer({}, false)
     const images = useArtistImagesStore()
     images.want(['Tico'])
@@ -90,6 +91,12 @@ describe('asking for pictures', () => {
     await settle()
     expect(call).toHaveBeenCalledTimes(1)
     expect(images.showsPictures).toBe(false)
+
+    answer({ Tico: 't1' })
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(lastCall()[1]).toStrictEqual({ artists: ['Tico', 'Gadiel'] })
+    expect(images.hashFor('Tico')).toBe('t1')
+    expect(images.showsPictures).toBe(true)
   })
 
   it('takes a server without the op as one that sends no pictures', async () => {
@@ -122,7 +129,6 @@ describe('events and connections', () => {
 
     answer({ Tico: 't1' })
     handler('connection_changed')({ connected: true, retrying: false })
-    images.want(['Tico'])
     await settle()
 
     expect(call).toHaveBeenCalledTimes(2)
