@@ -818,7 +818,10 @@ Fetching is **off by default**; the user turns it on in the plugin's settings, s
 MusicBee download artist thumbnails and sends the names MusicBee has none for to MusicBrainz and
 Wikimedia. Stored pictures are served either way.
 
-An artist is named as a [credit](#canonical-track) names them, matched case-insensitively.
+An artist is named as a [credit](#canonical-track) names them, matched case-insensitively. A
+name nobody split shares its lead artist's picture: "A feat. B", "A ft. B", "A featuring B",
+"A; B" and "A / B" show A's. Names joined with `&`, `,`, `x` or `vs` are left whole, since they
+are as often one artist ("Simon & Garfunkel") as two.
 MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows; it is asked
 again each time the artist is requested, which costs nothing once MusicBee has answered. For an
 artist MusicBee has none of, the server looks on the web, and only takes a picture it is sure
