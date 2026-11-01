@@ -670,10 +670,8 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
             };
 
-            // Codes are made in the Party Mode window, which picks the role a code
-            // grants; Host is preselected there, which is what web pairing needs.
             _webPairBtn = new Button { Text = "Show pairing code", AutoSize = true };
-            _webPairBtn.Click += (s, e) => PartyModeWindow.Open(_host);
+            _webPairBtn.Click += (s, e) => ShowPairingCode();
             _webCopyCodeBtn = new Button { Text = "Copy code", AutoSize = true, Visible = false };
             _webCopyCodeBtn.Click += (s, e) => CopyPairingCode();
             _webRevokeBtn = new Button { Text = "Unpair all browsers", AutoSize = true };
@@ -770,6 +768,25 @@ namespace MusicBeePlugin.Settings
 
             _pairedBefore = pairedNow;
             ShowPairedBrowsers(status.paired);
+        }
+
+        /// <summary>
+        ///     Mints a host code on this page while Party Mode is off.
+        ///
+        ///     With Party Mode on, the code's role matters, so the Party Mode
+        ///     window makes it instead: that is where the role is picked.
+        /// </summary>
+        private void ShowPairingCode()
+        {
+            var party = _host.ReadPartyModeStatus();
+            if (party != null && party.enabled)
+            {
+                PartyModeWindow.Open(_host);
+                return;
+            }
+
+            _host.GenerateWebPairingCode();
+            LoadWebStatus();
         }
 
         /// <summary>

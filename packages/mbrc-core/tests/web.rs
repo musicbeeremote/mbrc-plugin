@@ -255,6 +255,32 @@ fn pairing_is_required_only_when_the_setting_says_so() {
 }
 
 #[test]
+fn pair_status_says_whether_party_mode_is_on_so_the_pairing_screen_can_point_the_right_way() {
+    let pair_status = |party: bool| {
+        let (port, net) = start_prepared(
+            |port| Config {
+                web_auth_required: true,
+                ..Config::for_test(port)
+            },
+            |core| core.party_mode.set_enabled(party),
+        );
+        let (_, body) = request(
+            port,
+            "GET /api/pair/status HTTP/1.1
+Host: 127.0.0.1
+Connection: close
+
+",
+        );
+        net.stop();
+        serde_json::from_str::<Value>(&body).unwrap()["party_mode"].clone()
+    };
+
+    assert_eq!(pair_status(false), false);
+    assert_eq!(pair_status(true), true);
+}
+
+#[test]
 fn http_can_be_turned_off_without_disturbing_the_json_protocols() {
     let (port, net) = start_on_free_port(|port| Config {
         web_enabled: false,

@@ -134,10 +134,14 @@ a URL and nothing else.
 Pairing is off by default (`web_auth_required`), and the admission check is the same
 function whether it is on or off, so the guarded path is never an untested branch.
 
-**Ask first.** `GET /api/pair/status` answers `{"auth_required":bool,"paired":bool}`.
+**Ask first.** `GET /api/pair/status` answers
+`{"auth_required":bool,"paired":bool,"party_mode":bool}`.
 `paired` is about *this* caller, not the server: the token lives in a cookie the page
 cannot read, so asking is the only way a browser can know whether it already has one.
 A client should skip its pairing screen entirely when `auth_required` is false.
+`party_mode` tells the pairing screen where the user gets a code: with Party Mode off,
+the Web remote page of MusicBee Remote's settings mints a host code; with it on, the
+Party Mode window does, because that is where the code's role is picked.
 
 **Redeem a code.** The user reads a six-digit code out of MusicBee's Configure panel;
 it lasts two minutes, and grants the [Party Mode role](#party-mode) it was made for.
