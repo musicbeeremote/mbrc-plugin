@@ -112,6 +112,8 @@ namespace MusicBeePlugin.Settings
         /// <summary>True while the controls are being filled from the core.</summary>
         private bool _loading;
         private Label _cacheStatus;
+        private CheckBox _artistImages;
+        private Label _artistStatus;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
         private Button _rebuildCovers;
@@ -217,6 +219,10 @@ namespace MusicBeePlugin.Settings
                 case SettingsPage.WebRemote:
                     // A code made in the Party Mode window shows here too, counting down.
                     LoadWebStatus();
+                    break;
+                case SettingsPage.Library:
+                    // Pictures land one at a time with no event of their own.
+                    LoadCacheStatus();
                     break;
                 case SettingsPage.Diagnostics:
                     LoadCaptureStatus();
@@ -453,9 +459,35 @@ namespace MusicBeePlugin.Settings
             };
             _rebuildCovers.Click += (s, e) => RebuildCovers();
 
+            _artistImages = new CheckBox
+            {
+                Text = "Download artist pictures",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+            var artistImagesHint = new Label
+            {
+                Text = PanelText.ArtistPicturesHint,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                ForeColor = SystemColors.GrayText,
+            };
+
+            _artistStatus = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Padding = new Padding(0, 6, 0, 0),
+                ForeColor = SystemColors.GrayText,
+            };
+
             var layout = Table();
             _rows.Add(layout, "Cache", _cacheStatus);
+            _rows.Add(layout, string.Empty, _artistStatus);
+            _rows.SetVisible(_artistStatus, false);
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
+            _rows.Add(layout, "Artist pictures", _artistImages);
+            _rows.Add(layout, string.Empty, artistImagesHint);
             return layout;
         }
 
@@ -1207,6 +1239,7 @@ namespace MusicBeePlugin.Settings
             _webEnabled.Checked = s.web_enabled;
             _webAuth.Checked = s.web_auth_required;
             _autoCheck.Checked = s.update_check_enabled;
+            _artistImages.Checked = s.artist_images_enabled;
             ShowFilterRows();
             UpdateWebEnabled();
             LoadWebStatus();
@@ -1244,6 +1277,13 @@ namespace MusicBeePlugin.Settings
         private void LoadCacheStatus()
         {
             var status = _host.ReadCacheStatus();
+            // Re-read every few seconds: an unchanged line is left alone, not relaid out.
+            var pictures = PanelText.ArtistPictures(status) ?? string.Empty;
+            if (_artistStatus.Text != pictures)
+            {
+                _rows.SetVisible(_artistStatus, pictures.Length > 0);
+                _artistStatus.Text = pictures;
+            }
             if (status == null)
             {
                 _cacheStatus.Text = "Unavailable (core not running).";
@@ -1713,6 +1753,7 @@ namespace MusicBeePlugin.Settings
                 web_auth_required = _webAuth.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
+                artist_images_enabled = _artistImages.Checked,
             };
         }
 

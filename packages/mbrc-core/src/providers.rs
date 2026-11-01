@@ -121,6 +121,9 @@ pub trait Providers: Send + Sync {
     fn podcast_episode(&self, id: &str, index: i32) -> Result<Vec<PodcastEpisode>, String>;
     /// A subscription's artwork as raw bytes (base64), empty when it has none.
     fn podcast_artwork(&self, id: &str) -> Result<String, String>;
+    /// The file MusicBee keeps its thumbnail of `artist` in, fetching it first
+    /// when it has none cached. Empty, or an empty file, when MusicBee found none.
+    fn artist_picture_thumb(&self, artist: &str) -> Result<String, String>;
 
     // Library - flat browse (paginated).
     fn browse_genres(&self, offset: i32, limit: i32) -> Result<Page<GenreData>, String>;
@@ -454,6 +457,14 @@ impl Providers for FfiProviders {
             QueryType::PodcastArtwork,
             &QueryParams {
                 query: id.to_string(),
+            },
+        )
+    }
+    fn artist_picture_thumb(&self, artist: &str) -> Result<String, String> {
+        self.callbacks.query(
+            QueryType::ArtistPictureThumb,
+            &QueryParams {
+                query: artist.to_string(),
             },
         )
     }
@@ -903,6 +914,9 @@ impl Providers for NullProviders {
     fn podcast_artwork(&self, _id: &str) -> Result<String, String> {
         Ok(String::new())
     }
+    fn artist_picture_thumb(&self, _artist: &str) -> Result<String, String> {
+        Ok(String::new())
+    }
     fn play_list_item(&self, _index: i32) -> Result<(), String> {
         Ok(())
     }
@@ -1087,6 +1101,10 @@ pub struct MockProviders {
     pub podcast_subscriptions: Page<PodcastSubscription>,
     pub podcast_episodes: Page<PodcastEpisode>,
     pub podcast_artwork: String,
+    /// Artist name -> the thumbnail path `artist_picture_thumb` answers.
+    pub artist_thumbs: std::collections::HashMap<String, String>,
+    /// Makes `artist_picture_thumb` take this long, as MusicBee does when it downloads.
+    pub artist_thumb_stall: Option<std::time::Duration>,
     pub browse_genres: Page<GenreData>,
     pub browse_artists: Page<ArtistData>,
     pub browse_albums: Page<AlbumData>,
@@ -1325,6 +1343,13 @@ impl Providers for MockProviders {
     fn podcast_artwork(&self, id: &str) -> Result<String, String> {
         self.record(format!("podcast_artwork({id})"));
         Ok(self.podcast_artwork.clone())
+    }
+    fn artist_picture_thumb(&self, artist: &str) -> Result<String, String> {
+        self.record(format!("artist_picture_thumb({artist})"));
+        if let Some(stall) = self.artist_thumb_stall {
+            std::thread::sleep(stall);
+        }
+        Ok(self.artist_thumbs.get(artist).cloned().unwrap_or_default())
     }
     fn play_list_item(&self, index: i32) -> Result<(), String> {
         self.record(format!("play_list_item({index})"));

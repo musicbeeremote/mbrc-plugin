@@ -116,6 +116,34 @@ fn clean(s: &str) -> String {
     s.replace('\u{feff}', "").trim().to_owned()
 }
 
+/// The key one credited name is known by across spellings: cleaned the way a
+/// parsed credit is, then case-folded.
+pub fn key(name: &str) -> String {
+    clean(name).to_lowercase()
+}
+
+/// What marks a guest or a second artist in a name nobody split, matched
+/// case-insensitively. Spaces are part of each, so "AC/DC" stays whole.
+const CREDIT_MARKERS: &[&str] = &[" feat. ", " feat ", " ft. ", " ft ", " featuring ", " / "];
+
+/// The main artist of a name nobody split: "A feat. B" and "A; B" are "A".
+///
+/// The first value, as [`crate::multi_value::values`] splits one, up to its
+/// first credit marker; anything else is the name as given. The markers are the conservative ones music servers default to. `&`, `,`,
+/// `x` and `vs` are left alone: they are as often inside one artist's name
+/// ("Simon & Garfunkel", "Earth, Wind & Fire") as between two.
+pub fn lead_artist(name: &str) -> &str {
+    let first = crate::multi_value::values(name).next().unwrap_or(name);
+    let folded = first.to_ascii_lowercase();
+    CREDIT_MARKERS
+        .iter()
+        .filter_map(|marker| folded.find(marker))
+        .min()
+        .map_or(first, |at| &first[..at])
+        .trim_end_matches(|c: char| c.is_whitespace() || matches!(c, ',' | '-' | '('))
+        .trim()
+}
+
 /// `Name (instrument)` as its two parts; a bare entry is all name.
 fn split_detail(entry: &str) -> (String, Option<String>) {
     match entry.strip_suffix(')').and_then(|s| s.rsplit_once(" (")) {
@@ -291,6 +319,39 @@ mod tests {
             vec!["A", "B"],
             "two artists and no guest is split too"
         );
+    }
+
+    #[test]
+    fn a_featured_artist_leaves_the_main_one_as_the_lead() {
+        for (joined, lead) in [
+            ("Adelitas Way feat. Tyler Connolly", "Adelitas Way"),
+            ("Carlos Vives FT. Trebol Clan", "Carlos Vives"),
+            ("Bullaka Family feat Liam", "Bullaka Family"),
+            ("Tico featuring Gadiel & Yandel", "Tico"),
+            ("Coverdale / Page", "Coverdale"),
+            ("A; B", "A"),
+            ("A;B", "A"),
+            ("A\0B", "A"),
+            ("Alexis & Fido, feat. Flex", "Alexis & Fido"),
+            ("A - ft. B", "A"),
+        ] {
+            assert_eq!(lead_artist(joined), lead, "{joined}");
+        }
+    }
+
+    #[test]
+    fn a_name_that_may_be_one_artist_is_left_whole() {
+        for name in [
+            "Simon & Garfunkel",
+            "Earth, Wind & Fire",
+            "AC/DC",
+            "Bing Crosby vs. Jojo Effect",
+            "Arcángel, De La Ghetto & Ken-Y",
+            "Feat. Someone",
+            "Ftera",
+        ] {
+            assert_eq!(lead_artist(name), name);
+        }
     }
 
     #[test]

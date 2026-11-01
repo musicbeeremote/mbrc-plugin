@@ -49,6 +49,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "cover_cache_changed",
     "library_changed",
     "media_changed",
+    "library_artist_image_updated",
     "server_shutdown",
     crate::server::permissions::gate::PERMISSIONS_CHANGED,
 ];

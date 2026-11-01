@@ -92,6 +92,10 @@ fn completion_patch(params: &[u8]) -> Result<serde_json::Value, String> {
         choices.update_check_enabled.into(),
     );
     object.insert("update_channel".into(), choices.update_channel.into());
+    object.insert(
+        "artist_images_enabled".into(),
+        choices.artist_images_enabled.into(),
+    );
     Ok(patch)
 }
 
@@ -178,6 +182,7 @@ mod tests {
             web_auth_required: true,
             update_check_enabled: true,
             update_channel: "testing".into(),
+            artist_images_enabled: true,
         };
 
         let patch = completion_patch(&rmp_serde::to_vec_named(&choices).unwrap()).unwrap();
@@ -187,6 +192,7 @@ mod tests {
         assert_eq!(patch["web_auth_required"], true);
         assert_eq!(patch["update_check_enabled"], true);
         assert_eq!(patch["update_channel"], "testing");
+        assert_eq!(patch["artist_images_enabled"], true);
     }
 
     #[test]

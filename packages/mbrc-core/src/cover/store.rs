@@ -19,7 +19,7 @@
 //! provider does the conversion.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Condvar, Mutex, RwLock};
@@ -27,8 +27,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use redb::{Durability, ReadableTable};
 
+use super::artists::ArtistImages;
 use super::source::Source;
-use super::{CACHE_SIZE, decode_cost, resize_cover, sha1_hex};
+use super::{CACHE_SIZE, Resized, decode_cost, resize_cover, sha1_hex};
 use crate::store::{
     COVER_COVERS, COVER_ITEMS, COVER_META, COVER_NO_ART, COVER_SIZE, Db, LAST_CHECK,
 };
@@ -204,14 +205,19 @@ pub struct CoverStore {
     no_art: RwLock<HashMap<String, i64>>,
     /// item key -> its cover, loaded once and written through to redb.
     items: RwLock<HashMap<String, ItemCover>>,
+    /// Artist pictures (#116), kept in the same files and pruned with them.
+    artists: ArtistImages,
     building: AtomicBool,
 }
 
 impl CoverStore {
     pub fn new(db: Db, storage_path: impl Into<PathBuf>) -> Self {
         let items = load_items(&db);
+        let storage_path = storage_path.into();
+        let artists = ArtistImages::new(db.clone(), covers_dir_under(&storage_path));
         Self {
-            storage_path: storage_path.into(),
+            storage_path,
+            artists,
             db,
             covers: RwLock::new(HashMap::new()),
             paths: RwLock::new(HashMap::new()),
@@ -232,14 +238,16 @@ impl CoverStore {
         )
     }
 
-    fn cache_dir(&self) -> PathBuf {
-        self.storage_path.join("cache")
-    }
     fn covers_dir(&self) -> PathBuf {
-        self.cache_dir().join("covers")
+        covers_dir_under(&self.storage_path)
     }
     fn cover_file(&self, content_hash: &str) -> PathBuf {
         self.covers_dir().join(content_hash)
+    }
+
+    /// The artist pictures sharing this store's files.
+    pub fn artists(&self) -> &ArtistImages {
+        &self.artists
     }
 
     /// Whether a cache build is in progress (serves `librarycovercachebuildstatus`).
@@ -358,19 +366,8 @@ impl CoverStore {
     /// and returns the content hash with the source's size. The file name IS the
     /// hash (content-addressed).
     fn store_cover(&self, raw: &[u8]) -> Result<(String, (u32, u32)), String> {
-        let resized = resize_cover(raw, CACHE_SIZE, CACHE_SIZE)?;
-        let hash = sha1_hex(&resized.jpeg);
-        let dir = self.covers_dir();
-        std::fs::create_dir_all(&dir).map_err(|e| format!("create covers dir: {e}"))?;
-        std::fs::write(self.cover_file(&hash), &resized.jpeg)
-            .map_err(|e| format!("write cover: {e}"))?;
-        tracing::debug!(
-            source = %format_args!("{}x{}", resized.source.0, resized.source.1),
-            reduced = resized.reduced,
-            bytes = raw.len(),
-            "cover stored"
-        );
-        Ok((hash, resized.source))
+        write_cover(&self.covers_dir(), raw, CACHE_SIZE)
+            .map(|(hash, resized)| (hash, resized.source))
     }
 
     /// Warms the cache from the host's album list: record the key->path map,
@@ -877,6 +874,7 @@ impl CoverStore {
                 .values()
                 .filter_map(|cover| cover.hash.clone()),
         );
+        referenced.extend(self.artists.hashes());
         let Ok(entries) = std::fs::read_dir(self.covers_dir()) else {
             return; // no covers dir yet
         };
@@ -1037,6 +1035,30 @@ impl CoverStore {
     fn state_last_check(&self) -> i64 {
         self.load_state().1
     }
+}
+
+/// Where the content-addressed cover files live under a storage directory.
+pub(super) fn covers_dir_under(storage_path: &Path) -> PathBuf {
+    storage_path.join("cache").join("covers")
+}
+
+/// Fits `raw` within `size` x `size`, writes it to `dir` named by its content
+/// hash, and returns the hash with the resize.
+///
+/// # Errors
+/// The artwork does not resize, or the file cannot be written.
+pub(super) fn write_cover(dir: &Path, raw: &[u8], size: u32) -> Result<(String, Resized), String> {
+    let resized = resize_cover(raw, size, size)?;
+    let hash = sha1_hex(&resized.jpeg);
+    std::fs::create_dir_all(dir).map_err(|e| format!("create covers dir: {e}"))?;
+    std::fs::write(dir.join(&hash), &resized.jpeg).map_err(|e| format!("write cover: {e}"))?;
+    tracing::debug!(
+        source = %format_args!("{}x{}", resized.source.0, resized.source.1),
+        reduced = resized.reduced,
+        bytes = raw.len(),
+        "cover stored"
+    );
+    Ok((hash, resized))
 }
 
 /// One album handed from the producer to a worker: key, path, what to do, and
@@ -1267,7 +1289,7 @@ fn report_progress(
 
 /// Lowers the calling thread below MusicBee's own, so a cold build does not
 /// compete with playback or the UI for the CPU.
-fn below_normal_priority() {
+pub(super) fn below_normal_priority() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Threading::{
@@ -1281,7 +1303,7 @@ fn below_normal_priority() {
     }
 }
 
-fn now_unix_secs() -> i64 {
+pub(super) fn now_unix_secs() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -1300,11 +1322,7 @@ mod tests {
     /// that opens a second store at the same dir must reuse this handle (Arc
     /// clone) - which also mirrors production, where one `Db` is shared.
     fn temp_storage(name: &str) -> (Db, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("mbrc-cover-store-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = Db::open(dir.to_str().unwrap());
-        (db, dir)
+        crate::cover::test_storage(&format!("cover-store-{name}"))
     }
 
     #[test]
@@ -1906,6 +1924,23 @@ mod tests {
         store.build(|_| Some(jpeg_bytes(150, 150)), false);
 
         assert!(!orphan.exists(), "orphaned cover file should be pruned");
+    }
+
+    #[test]
+    fn a_cover_build_keeps_the_artist_pictures_it_shares_files_with() {
+        let (db, dir) = temp_storage("prune-artists");
+        let store = CoverStore::new(db, &dir);
+        let hash = store
+            .artists()
+            .store("Gadiel", &jpeg_bytes(300, 300), "", "wikidata")
+            .unwrap();
+        store.warm_up(&[AlbumIdentity {
+            key: "alb1".into(),
+            path: "/a.mp3".into(),
+            modified: 0,
+        }]);
+        store.build(|_| Some(jpeg_bytes(150, 150)), false);
+        assert!(store.read_cover_bytes(&hash).is_some());
     }
 
     #[test]

@@ -132,7 +132,7 @@ fn run_thread(
         }
     };
 
-    runtime.block_on(async move {
+    let artist_images = runtime.block_on(async move {
         let bind_ip = resolve_bind_address(&core.config.bind_address);
 
         let listener = match TcpListener::bind((bind_ip, core.config.port)).await {
@@ -142,7 +142,7 @@ fn run_thread(
             }
             Err(e) => {
                 let _ = ready.send(Err(e));
-                return;
+                return None;
             }
         };
         tracing::info!(
@@ -161,11 +161,14 @@ fn run_thread(
         spawn_library_reconcile(&core);
         spawn_staging_sweep(&core);
         spawn_startup_update_check(&core);
+        let artist_images = spawn_artist_images(&core);
 
         tokio::select! {
             _ = accept_loop(listener, core.clone()) => {}
             _ = shutdown.notified() => tracing::info!("networking shutdown requested"),
         }
+        // First, so a MusicBee call in flight finishes while mDNS withdraws.
+        core.cover_store.artists().queue().retire();
         if let Some(discovery) = discovery {
             discovery.abort();
         }
@@ -174,7 +177,15 @@ fn run_thread(
         scanner.abort();
         list_changes.abort();
         media.abort();
+        artist_images
     });
+    // The host unloads mbrc_core.dll once networking stops, so no thread of
+    // ours may still be running in it.
+    if let Some(worker) = artist_images
+        && worker.join().is_err()
+    {
+        tracing::warn!("artist picture fetcher panicked");
+    }
 }
 
 /// The address to bind, falling back to every interface on an unusable setting.
@@ -243,7 +254,10 @@ fn spawn_mdns(
 /// paying it here keeps the first client's `init` off that path.
 fn seed_now_playing(core: &Arc<Core>) {
     let core = core.clone();
-    tokio::task::spawn_blocking(move || core.now_playing.refresh_all());
+    tokio::task::spawn_blocking(move || {
+        core.now_playing.refresh_all();
+        request_playing_artist_images(&core);
+    });
 }
 
 /// Reconciles the library in the background: one scan, then the metadata cache,
@@ -281,6 +295,82 @@ fn spawn_startup_update_check(core: &Arc<Core>) {
         tokio::time::sleep(STARTUP_UPDATE_CHECK_DELAY).await;
         crate::updates::service::start_check(core, false);
     });
+}
+
+/// Starts the artist picture fetcher (#116) on a thread of its own.
+///
+/// A plain thread rather than a blocking task: it idles for the whole session,
+/// and a Tokio runtime waits for its blocking tasks when it is dropped. It holds
+/// neither the core nor the cover store, only the fetch queue, and ends when
+/// networking stops, which retires it and joins the thread.
+fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> {
+    #[cfg(windows)]
+    {
+        let config = core.config.clone();
+        let musicbee = core.providers.clone();
+        let queue = core.cover_store.artists().queue();
+        let store = Arc::downgrade(&core.cover_store);
+        let weak = Arc::downgrade(core);
+        let generation = queue.begin_worker();
+        let spawned = std::thread::Builder::new()
+            .name("mbrc-artist-images".into())
+            .spawn(move || {
+                let client = match crate::updates::http_client(&config) {
+                    Ok(client) => client,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "artist pictures: no HTTP client");
+                        return;
+                    }
+                };
+                let mut fetcher = crate::cover::artist_fetch::Fetcher::new(
+                    &client,
+                    crate::cover::artist_fetch::Pace::polite(),
+                );
+                crate::cover::artist_fetch::run(
+                    &queue,
+                    &store,
+                    musicbee.as_ref(),
+                    &mut fetcher,
+                    generation,
+                    &|artist, hash| {
+                        if let Some(core) = weak.upgrade() {
+                            broadcast_artist_image(&core, artist, hash);
+                        }
+                    },
+                );
+            });
+        spawned
+            .inspect_err(|e| tracing::warn!(error = %e, "artist pictures: fetcher not started"))
+            .ok()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = core;
+        None
+    }
+}
+
+/// Tells V6 clients a queued artist picture has landed.
+#[cfg(windows)]
+fn broadcast_artist_image(core: &Core, artist: &str, hash: &str) {
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        "library_artist_image_updated",
+        serde_json::json!({ "artist": artist, "image_hash": hash }),
+    )]);
+}
+
+/// Queues the playing track's artists and guests for a picture, ahead of
+/// anything a client asked for.
+pub(crate) fn request_playing_artist_images(core: &Core) {
+    let artists = core.cover_store.artists();
+    if !artists.is_enabled() {
+        return;
+    }
+    let playing = core.now_playing.track_info();
+    let credits = crate::credits::or_display(&playing.multi_artist, &playing.artist);
+    for name in crate::credits::lead_names(&credits) {
+        artists.request(name, crate::cover::artists::Priority::NowPlaying);
+    }
 }
 
 /// Waits for the mDNS advertisement to withdraw, rather than aborting it.

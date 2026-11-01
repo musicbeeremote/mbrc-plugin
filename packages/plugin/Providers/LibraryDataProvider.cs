@@ -85,6 +85,9 @@ namespace MusicBeePlugin.Providers
             _api = api;
         }
 
+        public string GetArtistPictureThumb(string artist) =>
+            string.IsNullOrEmpty(artist) ? string.Empty : _api.Library_GetArtistPictureThumb(artist) ?? string.Empty;
+
         #region Radio Stations
 
         public List<RadioStation> GetRadioStations(int offset = 0, int limit = 4000)
