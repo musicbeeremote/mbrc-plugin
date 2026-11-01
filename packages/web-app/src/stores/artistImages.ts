@@ -21,6 +21,14 @@ const MAX_PER_REQUEST = 500
 const ASK_AGAIN_MS = 10 * 60 * 1000
 
 /**
+ * How long names are held back once the server said no picture will arrive.
+ *
+ * Downloads can be turned on in MusicBee while this page is open, so the names
+ * on screen are asked again after this, without waiting for a scroll.
+ */
+const OFF_RECHECK_MS = 60 * 1000
+
+/**
  * Artist pictures (#116), by artist name.
  *
  * One map for every place a picture shows, so a picture announced while it
@@ -41,7 +49,12 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
 
   const asked = new Map<string, number>()
   const waiting = new Map<string, string>()
+  /** Names wanted while the server sends no pictures, asked again at the recheck. */
+  const held = new Map<string, string>()
   let timer: ReturnType<typeof setTimeout> | null = null
+  let recheck: ReturnType<typeof setTimeout> | null = null
+  /** A server without the op, which no recheck will change. */
+  let unsupported = false
 
   function hashFor(name: string): string | undefined {
     return hashes.value.get(artistKey(name))
@@ -65,13 +78,28 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
       })
       enabled.value = result.enabled
       for (const item of result.artists) remember(item.artist, item.image_hash)
+      if (!result.enabled) {
+        for (const [key, name] of batch) {
+          asked.delete(key)
+          held.set(key, name)
+        }
+      }
     } catch {
       // A server without the op, or one that refused it, sends no pictures
       // this connection; reconnecting asks again.
       enabled.value = false
+      unsupported = true
       waiting.clear()
     }
-    if (waiting.size > 0) await askAll()
+    if (held.size > 0 && !unsupported && recheck === null) {
+      recheck = setTimeout(() => {
+        recheck = null
+        for (const [key, name] of held) waiting.set(key, name)
+        held.clear()
+        void askAll()
+      }, OFF_RECHECK_MS)
+    }
+    if (waiting.size > 0 && recheck === null) await askAll()
   }
 
   function isDue(key: string, now: number): boolean {
@@ -81,11 +109,12 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
 
   /** Asks the server for the pictures of the `names` on screen that have none here. */
   function want(names: Iterable<string>): void {
-    if (enabled.value === false) return
+    if (unsupported) return
     const now = Date.now()
+    const into = recheck === null ? waiting : held
     for (const name of names) {
       const key = artistKey(name)
-      if (!waiting.has(key) && isDue(key, now)) waiting.set(key, name)
+      if (!waiting.has(key) && !held.has(key) && isDue(key, now)) into.set(key, name)
     }
     if (waiting.size === 0 || timer !== null) return
     timer = setTimeout(() => {
@@ -102,7 +131,13 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
     client.on(WireEvent.ConnectionChanged, (data) => {
       if (!data.connected) return
       enabled.value = null
+      unsupported = false
       asked.clear()
+      if (recheck !== null) clearTimeout(recheck)
+      recheck = null
+      for (const [key, name] of held) waiting.set(key, name)
+      held.clear()
+      want([])
     })
   }
 
