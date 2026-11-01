@@ -306,10 +306,16 @@ pub struct ArtistImages {
 impl ArtistImages {
     /// Opens the store over `db`, keeping only pictures whose file still exists.
     pub fn new(db: Db, covers_dir: PathBuf) -> Self {
+        let mut counted = HashSet::new();
         let images: HashMap<String, Stored> = load_images(&db)
             .into_iter()
             .filter_map(|(key, hash)| {
-                let bytes = std::fs::metadata(covers_dir.join(&hash)).ok()?.len();
+                let size = std::fs::metadata(covers_dir.join(&hash)).ok()?.len();
+                let bytes = if counted.insert(hash.clone()) {
+                    size
+                } else {
+                    0
+                };
                 Some((key, Stored { hash, bytes }))
             })
             .collect();
@@ -468,7 +474,11 @@ impl ArtistImages {
                 .insert(key.as_str(), hash.as_str())?;
             insert_lookup(txn, &key, &lookup)
         });
-        let bytes = resized.jpeg.len() as u64;
+        let shared = self
+            .read_images()
+            .iter()
+            .any(|(k, s)| *k != key && s.hash == hash);
+        let bytes = if shared { 0 } else { resized.jpeg.len() as u64 };
         let replaced = self.write_images().insert(
             key.clone(),
             Stored {
@@ -482,6 +492,26 @@ impl ArtistImages {
         }
         self.write_lookups().insert(key, lookup);
         Ok(hash)
+    }
+
+    /// Gives `name` the picture already stored as `hash`, the joined name of a
+    /// track nobody split sharing its lead artist's. The file is counted once.
+    pub fn link(&self, name: &str, hash: &str) {
+        let key = credits::key(name);
+        self.db.write(Durability::Immediate, |txn| {
+            txn.open_table(ARTIST_IMAGE)?.insert(key.as_str(), hash)?;
+            Ok(())
+        });
+        let replaced = self.write_images().insert(
+            key,
+            Stored {
+                hash: hash.to_owned(),
+                bytes: 0,
+            },
+        );
+        if let Some(old) = replaced {
+            self.used.fetch_sub(old.bytes, Ordering::AcqRel);
+        }
     }
 
     /// Records that no picture was found for `name` this time, and when to look
@@ -722,6 +752,26 @@ mod tests {
                 waiting: 1,
             }
         );
+    }
+
+    #[test]
+    fn a_linked_name_shares_the_picture_and_its_file_is_counted_once() {
+        let (store, db, covers) = temp_store("link");
+        let hash = store
+            .store("Adelitas Way", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .unwrap();
+        let used = store.used_bytes();
+        store.link("Adelitas Way feat. Tyler Connolly", &hash);
+        store
+            .store("Same Picture", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .unwrap();
+
+        assert_eq!(
+            store.hash_for("adelitas way FEAT. tyler connolly"),
+            Some(hash)
+        );
+        assert_eq!(store.used_bytes(), used);
+        assert_eq!(ArtistImages::new(db, covers).used_bytes(), used);
     }
 
     #[test]

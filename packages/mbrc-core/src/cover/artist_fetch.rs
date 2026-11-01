@@ -223,8 +223,10 @@ pub fn run(
         let Some(item) = queue.next(IDLE_WAIT) else {
             continue;
         };
+        let name = item.name.as_str();
+        let lead = credits::lead_artist(name);
         let Some(ready) = queue.with_store(generation, store, |images| {
-            is_ready(images, &item.name, &mut budget_noted)
+            is_ready(images, name, &mut budget_noted) && !share_lead(images, name, lead, landed)
         }) else {
             return;
         };
@@ -232,11 +234,12 @@ pub fn run(
             continue;
         }
         // Outside the store: retiring never waits on MusicBee, joining the thread does.
-        let thumb = musicbee_thumb(musicbee, &item.name);
+        let thumb = musicbee_thumb(musicbee, lead);
         let Some(next) = queue.with_store(generation, store, |images| {
-            if thumb.is_some_and(|raw| store_thumb(images, &item.name, &raw, landed)) {
+            if thumb.is_some_and(|raw| store_thumb(images, lead, &raw, landed)) {
+                share_lead(images, name, lead, landed);
                 Next::Skip
-            } else if images.web_due(&item.name, now_unix_secs()) {
+            } else if images.web_due(lead, now_unix_secs()) {
                 Next::Web
             } else {
                 Next::Skip
@@ -248,7 +251,7 @@ pub fn run(
             continue;
         }
         let proceed = || queue.is_current(generation) && queue.is_enabled();
-        match fetcher.fetch(&item.name, &proceed) {
+        match fetcher.fetch(lead, &proceed) {
             Outcome::Failed {
                 failure: Failure::Cancelled,
                 ..
@@ -265,7 +268,8 @@ pub fn run(
             outcome => {
                 busy_pause = fetcher.pace.busy_min;
                 let settled = queue.with_store(generation, store, |images| {
-                    settle(images, &item.name, outcome, landed);
+                    settle(images, lead, outcome, landed);
+                    share_lead(images, &item.name, lead, landed);
                 });
                 if settled.is_none() {
                     return;
@@ -273,6 +277,19 @@ pub fn run(
             }
         }
     }
+}
+
+/// Gives a name nobody split its lead artist's picture, when that is stored.
+fn share_lead(images: &ArtistImages, name: &str, lead: &str, landed: &dyn Fn(&str, &str)) -> bool {
+    if lead == name {
+        return false;
+    }
+    let Some(hash) = images.hash_for(lead) else {
+        return false;
+    };
+    images.link(name, &hash);
+    landed(name, &hash);
+    true
 }
 
 /// What one queued artist needs after MusicBee was asked.
@@ -930,5 +947,67 @@ mod tests {
         );
         assert!(asked.is_empty(), "no web lookup after retiring");
         assert_eq!(store.artists().lookup("Slow"), None);
+    }
+
+    #[test]
+    fn a_featured_name_takes_its_lead_artists_picture_from_musicbee() {
+        let store = worker_store("feat-musicbee");
+        let joined = "Adelitas Way feat. Tyler Connolly";
+        store.artists().request(joined, Priority::Requested);
+        let thumbs = std::env::temp_dir().join("mbrc-test-feat-musicbee-thumbs");
+        let musicbee = musicbee(&thumbs, &["Adelitas Way"], &[]);
+        let (client, landed) = run_until(&store, musicbee, Recorded::default(), |images| {
+            images.hash_for(joined).is_some()
+        });
+
+        let lead = store
+            .artists()
+            .hash_for("Adelitas Way")
+            .expect("lead stored");
+        assert_eq!(store.artists().hash_for(joined), Some(lead.clone()));
+        assert_eq!(
+            landed,
+            [
+                ("Adelitas Way".to_owned(), lead.clone()),
+                (joined.to_owned(), lead)
+            ]
+        );
+        assert!(client.asked().is_empty());
+    }
+
+    #[test]
+    fn a_featured_name_looks_its_lead_artist_up_on_the_web() {
+        let store = worker_store("feat-web");
+        store
+            .artists()
+            .request("Eluveitie feat. Anna Murphy", Priority::Requested);
+        let (client, _) = run_until(
+            &store,
+            MockProviders::default(),
+            Recorded::eluveitie(),
+            |images| images.hash_for("Eluveitie feat. Anna Murphy").is_some(),
+        );
+
+        assert_eq!(client.asked()[0], musicbrainz_search_url("Eluveitie"));
+        assert!(store.artists().hash_for("Eluveitie").is_some());
+    }
+
+    #[test]
+    fn a_featured_name_whose_lead_has_a_picture_asks_nobody() {
+        let store = worker_store("feat-stored");
+        let hash = store
+            .artists()
+            .store("Tico", &test_jpeg_bytes(64, 64), "", SOURCE_MUSICBEE)
+            .unwrap();
+        store
+            .artists()
+            .request("Tico feat. Gadiel", Priority::Requested);
+        let musicbee = MockProviders::default();
+        let (client, landed) = run_until(&store, musicbee, Recorded::default(), |images| {
+            images.hash_for("Tico feat. Gadiel").is_some()
+        });
+
+        assert_eq!(landed, [("Tico feat. Gadiel".to_owned(), hash)]);
+        assert!(client.asked().is_empty());
     }
 }
