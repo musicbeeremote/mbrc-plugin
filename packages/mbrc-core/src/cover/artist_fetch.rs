@@ -223,14 +223,20 @@ pub fn run(
         let Some(item) = queue.next(IDLE_WAIT) else {
             continue;
         };
+        let Some(ready) = queue.with_store(generation, store, |images| {
+            is_ready(images, &item.name, &mut budget_noted)
+        }) else {
+            return;
+        };
+        if !ready || !queue.is_current(generation) || !queue.is_enabled() {
+            continue;
+        }
+        // Outside the store: retiring never waits on MusicBee, joining the thread does.
+        let thumb = musicbee_thumb(musicbee, &item.name);
         let Some(next) = queue.with_store(generation, store, |images| {
-            if !is_ready(images, &item.name, &mut budget_noted) || !queue.is_enabled() {
-                return Next::Skip;
-            }
-            if from_musicbee(images, musicbee, &item.name, landed) {
-                return Next::Skip;
-            }
-            if images.web_due(&item.name, now_unix_secs()) {
+            if thumb.is_some_and(|raw| store_thumb(images, &item.name, &raw, landed)) {
+                Next::Skip
+            } else if images.web_due(&item.name, now_unix_secs()) {
                 Next::Web
             } else {
                 Next::Skip
@@ -276,26 +282,23 @@ enum Next {
     Web,
 }
 
-/// Stores MusicBee's thumbnail of `name`, when it has or can get one.
-fn from_musicbee(
-    images: &ArtistImages,
-    musicbee: &dyn Providers,
-    name: &str,
-    landed: &dyn Fn(&str, &str),
-) -> bool {
+/// MusicBee's thumbnail of `name`, when it has or can get one: about a second
+/// when it downloads, instant once it has answered.
+fn musicbee_thumb(musicbee: &dyn Providers, name: &str) -> Option<Vec<u8>> {
     let path = match musicbee.artist_picture_thumb(name) {
         Ok(path) if !path.is_empty() => path,
-        Ok(_) => return false,
+        Ok(_) => return None,
         Err(e) => {
             tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail failed");
-            return false;
+            return None;
         }
     };
-    let raw = match std::fs::read(&path) {
-        Ok(raw) if !raw.is_empty() => raw,
-        _ => return false,
-    };
-    match images.store(name, &raw, "", SOURCE_MUSICBEE) {
+    std::fs::read(&path).ok().filter(|raw| !raw.is_empty())
+}
+
+/// Stores MusicBee's thumbnail of `name`, announcing it; false when it does not decode.
+fn store_thumb(images: &ArtistImages, name: &str, raw: &[u8], landed: &dyn Fn(&str, &str)) -> bool {
+    match images.store(name, raw, "", SOURCE_MUSICBEE) {
         Ok(hash) => {
             tracing::debug!(artist = name, %hash, source = SOURCE_MUSICBEE, "artist picture stored");
             landed(name, &hash);
@@ -878,5 +881,54 @@ mod tests {
             "the web waits out its miss for both"
         );
         assert_eq!(store.artists().hash_for("Jormundgard"), None);
+    }
+
+    /// Retiring stops the worker without waiting on MusicBee; the host waits by
+    /// joining the thread, and nothing the late answer brings is stored.
+    #[test]
+    fn retiring_does_not_wait_on_musicbee_but_joining_the_thread_does() {
+        let store = worker_store("retire-mid-call");
+        store.artists().request("Slow", Priority::Requested);
+        let musicbee = Arc::new(MockProviders {
+            artist_thumb_delay: Duration::from_millis(400),
+            ..MockProviders::default()
+        });
+        let queue = store.artists().queue();
+        let generation = queue.begin_worker();
+        let weak = Arc::downgrade(&store);
+        let worker = {
+            let (queue, musicbee) = (queue.clone(), musicbee.clone());
+            std::thread::spawn(move || {
+                let client = Recorded::default();
+                let mut fetcher = Fetcher::new(&client, Pace::default());
+                run(
+                    &queue,
+                    &weak,
+                    musicbee.as_ref(),
+                    &mut fetcher,
+                    generation,
+                    &|_, _| {},
+                );
+                client.asked()
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while musicbee.recorded().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        let started = Instant::now();
+        queue.retire();
+        assert!(
+            started.elapsed() < Duration::from_millis(200),
+            "retire waited on MusicBee"
+        );
+        let asked = worker.join().unwrap();
+        assert!(
+            started.elapsed() >= Duration::from_millis(200),
+            "the join waits for the call"
+        );
+        assert!(asked.is_empty(), "no web lookup after retiring");
+        assert_eq!(store.artists().lookup("Slow"), None);
     }
 }
