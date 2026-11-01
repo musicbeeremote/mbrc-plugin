@@ -256,6 +256,9 @@ impl Providers for FixtureProviders {
     fn podcast_artwork(&self, _id: &str) -> Result<String, String> {
         Ok(String::new())
     }
+    fn artist_picture_thumb(&self, _artist: &str) -> Result<String, String> {
+        Ok(String::new())
+    }
     fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
         let data = self.now_playing_list(0, 0)?.data;
         Ok(NowPlayingOrder {

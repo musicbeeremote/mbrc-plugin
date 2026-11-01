@@ -114,6 +114,7 @@ namespace MusicBeePlugin.Ffi.Generated
         NowPlayingTagWrite = 53,
         LibraryExcludedPaths = 54,
         MediaPaths = 55,
+        ArtistPictureThumb = 56,
     }
 
     public enum CommandType

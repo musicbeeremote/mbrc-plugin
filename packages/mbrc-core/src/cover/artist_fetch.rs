@@ -1,7 +1,9 @@
 //! The artist picture fetcher (#116): one background worker that turns a
 //! queued name into a stored picture, or a recorded miss.
 //!
-//! MusicBrainz resolves the name to an artist id. A wrong picture is worse than
+//! MusicBee's own thumbnail comes first, so a client shows what MusicBee shows.
+//! The web is the fallback for artists MusicBee has none of. There MusicBrainz
+//! resolves the name to an artist id. A wrong picture is worse than
 //! none, so the id is taken only when exactly one result carries the name
 //! itself (case-insensitive) and that result scores 100; anything else is
 //! `ambiguous`. The artist's Wikidata link gives its P18 image, a Commons file
@@ -21,9 +23,13 @@ use super::artists::{ArtistImages, FetchQueue, Status};
 use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
 use crate::credits;
+use crate::providers::Providers;
 
 /// The source name recorded for a picture from Wikimedia Commons via Wikidata.
 pub const SOURCE_WIKIDATA: &str = "wikidata";
+
+/// The source name recorded for MusicBee's own thumbnail.
+pub const SOURCE_MUSICBEE: &str = "musicbee";
 
 /// The width Commons is asked to render, matching the stored box.
 const COMMONS_WIDTH: u32 = super::artists::ARTIST_IMAGE_SIZE;
@@ -198,13 +204,14 @@ impl<'a> Fetcher<'a> {
 /// Fetches queued artists until this worker is retired or the store is gone,
 /// calling `landed` with each picture stored.
 ///
-/// The store is reached only through [`FetchQueue::with_store`] and never held
-/// across a request, so a retired worker never keeps `mbrc.redb` open. A busy
-/// service puts the artist back and pauses the worker, doubling up to
-/// [`Pace`]'s longest pause, instead of charging the artist an error.
+/// MusicBee's thumbnail first; the web only for what MusicBee has none of, once
+/// that artist's last web miss is due. The store is reached only through
+/// [`FetchQueue::with_store`], so a retired worker never keeps `mbrc.redb` open.
+/// A busy web source puts the artist back and pauses the worker.
 pub fn run(
     queue: &FetchQueue,
     store: &Weak<CoverStore>,
+    musicbee: &dyn Providers,
     fetcher: &mut Fetcher<'_>,
     generation: u64,
     landed: &dyn Fn(&str, &str),
@@ -216,12 +223,22 @@ pub fn run(
         let Some(item) = queue.next(IDLE_WAIT) else {
             continue;
         };
-        let Some(ready) = queue.with_store(generation, store, |images| {
-            is_ready(images, &item.name, &mut budget_noted)
+        let Some(next) = queue.with_store(generation, store, |images| {
+            if !is_ready(images, &item.name, &mut budget_noted) || !queue.is_enabled() {
+                return Next::Skip;
+            }
+            if from_musicbee(images, musicbee, &item.name, landed) {
+                return Next::Skip;
+            }
+            if images.web_due(&item.name, now_unix_secs()) {
+                Next::Web
+            } else {
+                Next::Skip
+            }
         }) else {
             return;
         };
-        if !ready {
+        if next == Next::Skip {
             continue;
         }
         let proceed = || queue.is_current(generation) && queue.is_enabled();
@@ -252,9 +269,48 @@ pub fn run(
     }
 }
 
-/// Whether `name` is still worth a lookup: no picture, due, and room for one.
+/// What one queued artist needs after MusicBee was asked.
+#[derive(PartialEq, Eq)]
+enum Next {
+    Skip,
+    Web,
+}
+
+/// Stores MusicBee's thumbnail of `name`, when it has or can get one.
+fn from_musicbee(
+    images: &ArtistImages,
+    musicbee: &dyn Providers,
+    name: &str,
+    landed: &dyn Fn(&str, &str),
+) -> bool {
+    let path = match musicbee.artist_picture_thumb(name) {
+        Ok(path) if !path.is_empty() => path,
+        Ok(_) => return false,
+        Err(e) => {
+            tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail failed");
+            return false;
+        }
+    };
+    let raw = match std::fs::read(&path) {
+        Ok(raw) if !raw.is_empty() => raw,
+        _ => return false,
+    };
+    match images.store(name, &raw, "", SOURCE_MUSICBEE) {
+        Ok(hash) => {
+            tracing::debug!(artist = name, %hash, source = SOURCE_MUSICBEE, "artist picture stored");
+            landed(name, &hash);
+            true
+        }
+        Err(e) => {
+            tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail unusable");
+            false
+        }
+    }
+}
+
+/// Whether `name` is still worth a lookup: no picture, and room for one.
 fn is_ready(images: &ArtistImages, name: &str, budget_noted: &mut bool) -> bool {
-    if !images.needs_fetch(name, now_unix_secs()) {
+    if !images.lacks_picture(name) {
         return false;
     }
     if images.over_budget() {
@@ -394,6 +450,7 @@ mod tests {
     use super::*;
     use crate::cover::artists::Priority;
     use crate::cover::test_jpeg_bytes;
+    use crate::providers::MockProviders;
 
     const ELUVEITIE_MBID: &str = "8000598a-5edb-401c-8e6d-36b167feaf38";
 
@@ -630,6 +687,7 @@ mod tests {
     /// Runs a worker on its own thread until `done` holds, then retires it.
     fn run_until(
         store: &Arc<CoverStore>,
+        musicbee: MockProviders,
         client: Recorded,
         done: impl Fn(&ArtistImages) -> bool,
     ) -> (Recorded, Vec<(String, String)>) {
@@ -641,12 +699,19 @@ mod tests {
             std::thread::spawn(move || {
                 let landed = Mutex::new(Vec::new());
                 let mut fetcher = Fetcher::new(&client, Pace::default());
-                run(&queue, &weak, &mut fetcher, generation, &|name, hash| {
-                    landed
-                        .lock()
-                        .unwrap()
-                        .push((name.to_owned(), hash.to_owned()));
-                });
+                run(
+                    &queue,
+                    &weak,
+                    &musicbee,
+                    &mut fetcher,
+                    generation,
+                    &|name, hash| {
+                        landed
+                            .lock()
+                            .unwrap()
+                            .push((name.to_owned(), hash.to_owned()));
+                    },
+                );
                 drop(fetcher);
                 (client, landed.into_inner().unwrap())
             })
@@ -678,7 +743,7 @@ mod tests {
             200,
             fixture("mb_search_kaleidoscope.json"),
         );
-        let (_, landed) = run_until(&store, client, |images| {
+        let (_, landed) = run_until(&store, MockProviders::default(), client, |images| {
             images.lookup("Kaleidoscope").is_some()
         });
 
@@ -695,7 +760,7 @@ mod tests {
         let store = worker_store("busy");
         store.artists().request("Eluveitie", Priority::Requested);
         let polls = std::cell::Cell::new(0);
-        let (client, _) = run_until(&store, busy(), |_| {
+        let (client, _) = run_until(&store, MockProviders::default(), busy(), |_| {
             polls.set(polls.get() + 1);
             polls.get() > 20
         });
@@ -706,7 +771,12 @@ mod tests {
     #[test]
     fn a_retired_worker_lets_go_of_the_store() {
         let store = worker_store("retired");
-        let (_, landed) = run_until(&store, Recorded::default(), |_| true);
+        let (_, landed) = run_until(
+            &store,
+            MockProviders::default(),
+            Recorded::default(),
+            |_| true,
+        );
         assert!(landed.is_empty());
         assert_eq!(Arc::strong_count(&store), 1);
     }
@@ -725,5 +795,88 @@ mod tests {
         assert_eq!(mbid, ELUVEITIE_MBID);
         let picture = image::load_from_memory(&image).expect("an image");
         assert!(picture.width() <= 500 && picture.height() <= 500);
+    }
+
+    /// A stand-in MusicBee whose thumbnails are files in `dir`: a picture for
+    /// `with`, an empty file (MusicBee found none) for `without`.
+    fn musicbee(dir: &std::path::Path, with: &[&str], without: &[&str]) -> MockProviders {
+        std::fs::create_dir_all(dir).unwrap();
+        let mut thumbs = HashMap::new();
+        for (name, bytes) in with
+            .iter()
+            .map(|n| (n, test_jpeg_bytes(188, 188)))
+            .chain(without.iter().map(|n| (n, Vec::new())))
+        {
+            let path = dir.join(format!("{name}.png"));
+            std::fs::write(&path, bytes).unwrap();
+            thumbs.insert((*name).to_owned(), path.to_string_lossy().into_owned());
+        }
+        MockProviders {
+            artist_thumbs: thumbs,
+            ..MockProviders::default()
+        }
+    }
+
+    #[test]
+    fn musicbee_answers_first_and_the_web_is_not_asked() {
+        let store = worker_store("musicbee-first");
+        store.artists().request("Eluveitie", Priority::Requested);
+        let thumbs = std::env::temp_dir().join("mbrc-test-musicbee-first-thumbs");
+        let (client, landed) = run_until(
+            &store,
+            musicbee(&thumbs, &["Eluveitie"], &[]),
+            Recorded::eluveitie(),
+            |images| images.hash_for("Eluveitie").is_some(),
+        );
+
+        assert!(client.asked().is_empty());
+        assert_eq!(landed.len(), 1);
+        assert_eq!(
+            store.artists().lookup("Eluveitie").map(|l| l.source),
+            Some(SOURCE_MUSICBEE.to_owned())
+        );
+    }
+
+    #[test]
+    fn the_web_is_the_fallback_when_musicbee_found_none() {
+        let store = worker_store("musicbee-none");
+        store.artists().request("Eluveitie", Priority::Requested);
+        let thumbs = std::env::temp_dir().join("mbrc-test-musicbee-none-thumbs");
+        let (client, _) = run_until(
+            &store,
+            musicbee(&thumbs, &[], &["Eluveitie"]),
+            Recorded::eluveitie(),
+            |images| images.hash_for("Eluveitie").is_some(),
+        );
+
+        assert_eq!(client.asked().len(), 4);
+        assert_eq!(
+            store.artists().lookup("Eluveitie").map(|l| l.source),
+            Some(SOURCE_WIKIDATA.to_owned())
+        );
+    }
+
+    #[test]
+    fn a_recent_web_miss_still_takes_a_picture_musicbee_has_since() {
+        let store = worker_store("musicbee-later");
+        store.artists().record_miss("Jazzbit", Status::NotFound, "");
+        store
+            .artists()
+            .record_miss("Jormundgard", Status::NotFound, "");
+        store.artists().request("Jazzbit", Priority::Requested);
+        store.artists().request("Jormundgard", Priority::Requested);
+        let thumbs = std::env::temp_dir().join("mbrc-test-musicbee-later-thumbs");
+        let (client, _) = run_until(
+            &store,
+            musicbee(&thumbs, &["Jazzbit"], &["Jormundgard"]),
+            Recorded::default(),
+            |images| images.hash_for("Jazzbit").is_some() && images.summary().waiting == 0,
+        );
+
+        assert!(
+            client.asked().is_empty(),
+            "the web waits out its miss for both"
+        );
+        assert_eq!(store.artists().hash_for("Jormundgard"), None);
     }
 }

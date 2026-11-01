@@ -298,6 +298,7 @@ fn spawn_artist_images(core: &Arc<Core>) {
     #[cfg(windows)]
     {
         let config = core.config.clone();
+        let musicbee = core.providers.clone();
         let queue = core.cover_store.artists().queue();
         let store = Arc::downgrade(&core.cover_store);
         let weak = Arc::downgrade(core);
@@ -319,6 +320,7 @@ fn spawn_artist_images(core: &Arc<Core>) {
                 crate::cover::artist_fetch::run(
                     &queue,
                     &store,
+                    musicbee.as_ref(),
                     &mut fetcher,
                     generation,
                     &|artist, hash| {

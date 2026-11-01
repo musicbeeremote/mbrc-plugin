@@ -250,6 +250,9 @@ pub enum QueryType {
     // Every file of one non-music category (audiobooks, videos, inbox), as
     // MusicBee lists it.
     MediaPaths = 55,
+    // The path of MusicBee's artist thumbnail, which MusicBee downloads when
+    // it has none cached (#116). Only the artist picture fetcher asks.
+    ArtistPictureThumb = 56,
 }
 
 /// Command types for the fat `execute_command` callback (C# mutates state).

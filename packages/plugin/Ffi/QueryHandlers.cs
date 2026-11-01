@@ -90,6 +90,7 @@ namespace MusicBeePlugin.Ffi
                 case QueryType.LibraryTrackPaths: return Reply(_library.GetAllTrackPaths());
                 case QueryType.LibraryExcludedPaths: return Reply(_library.GetExcludedPaths());
                 case QueryType.MediaPaths: return Reply(_library.GetSourcePaths((LibrarySource)Msgpack.Deserialize<SourceParams>(p).source));
+                case QueryType.ArtistPictureThumb: return Reply(_library.GetArtistPictureThumb(Q(p).query));
                 case QueryType.LibraryTracksForPaths: return Reply(_library.GetTracksForPaths(Msgpack.Deserialize<PathsParams>(p).paths));
                 case QueryType.LibraryTrackTags: return Reply(_library.GetTrackTags(Msgpack.Deserialize<PathsParams>(p).paths));
                 case QueryType.TagFieldNames: return Reply(_library.GetFieldNames(Msgpack.Deserialize<FieldsParams>(p).fields));
