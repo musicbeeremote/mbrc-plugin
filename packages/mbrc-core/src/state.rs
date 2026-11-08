@@ -302,12 +302,9 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
 
 /// Applies the saved settings that take effect without a re-init.
 fn apply_live_settings(core: &Core, config: &Config) {
-    let artists = core.cover_store.artists();
-    let turned_on = config.artist_images_enabled && !artists.is_enabled();
-    artists.set_enabled(config.artist_images_enabled);
-    if turned_on {
-        server::request_playing_artist_images(core);
-    }
+    core.cover_store
+        .artists()
+        .set_enabled(config.artist_images_enabled);
 }
 
 /// Hands the staged update to the elevated helper.
@@ -923,9 +920,6 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
     let (v4_frames, v6_frames) = notifications::on_notification(core, ntype);
     core.broadcaster.broadcast(&v4_frames);
     core.v6_broadcaster.broadcast(&v6_frames);
-    if ntype == NotificationType::TrackChanged {
-        server::request_playing_artist_images(core);
-    }
 }
 
 /// Tells V6 subscribers the server is going away, so a client can tell a
@@ -1145,11 +1139,10 @@ mod tests {
         assert_eq!(frames(&mut rx).len(), 1);
     }
 
-    fn playing_tico_and_gadiel() -> Arc<Core> {
+    fn playing_tico() -> Arc<Core> {
         let providers = crate::providers::MockProviders {
             track_info: crate::protocol::messages::TrackInfo {
-                artist: "Tico feat. Gadiel".into(),
-                multi_artist: "Tico\0\u{1}Gadiel\0".into(),
+                artist: "Tico".into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -1157,45 +1150,40 @@ mod tests {
         Arc::new(Core::new(Arc::new(providers), Config::for_test(0)))
     }
 
-    fn queued(core: &Core) -> Vec<String> {
-        std::iter::from_fn(|| core.cover_store.artists().next_queued()).collect()
-    }
-
     #[test]
-    fn a_track_change_queues_the_playing_artists_ahead_of_requests() {
-        use crate::cover::artists::Priority;
-        let core = playing_tico_and_gadiel();
-        let images = core.cover_store.artists();
-        images.set_enabled(true);
-        images.request("Someone", Priority::Requested);
+    fn playing_a_track_fetches_no_artist_picture() {
+        let core = playing_tico();
+        core.cover_store.artists().set_enabled(true);
 
         dispatch_notification(&core, NotificationType::TrackChanged, None);
 
-        assert_eq!(queued(&core), ["Tico", "Gadiel", "Someone"]);
+        assert_eq!(core.cover_store.artists().next_queued(), None);
     }
 
     #[test]
     fn saving_settings_switches_artist_pictures_without_a_reload() {
-        let core = playing_tico_and_gadiel();
-        core.now_playing.refresh_all();
+        let core = playing_tico();
+        let images = core.cover_store.artists();
         let on = Config {
             artist_images_enabled: true,
             ..Config::for_test(0)
         };
         apply_live_settings(&core, &on);
-        assert!(core.cover_store.artists().is_enabled());
+        assert!(images.is_enabled());
         assert_eq!(
-            queued(&core),
-            ["Tico", "Gadiel"],
-            "the playing artists go first"
+            images.next_queued(),
+            None,
+            "the playing artist is not asked for"
         );
 
-        core.cover_store
-            .artists()
-            .request("Someone", crate::cover::artists::Priority::Requested);
+        images.request("Someone");
         apply_live_settings(&core, &Config::for_test(0));
-        assert!(!core.cover_store.artists().is_enabled());
-        assert!(queued(&core).is_empty(), "turning it off drops what waits");
+        assert!(!images.is_enabled());
+        assert_eq!(
+            images.next_queued(),
+            None,
+            "turning it off drops what waits"
+        );
     }
 
     #[test]

@@ -532,7 +532,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::cover::artists::Priority;
     use crate::cover::test_jpeg_bytes;
     use crate::providers::MockProviders;
 
@@ -862,8 +861,8 @@ mod tests {
     fn the_worker_stores_what_it_finds_records_what_it_does_not_and_announces_pictures() {
         let store = worker_store("worker");
         let images = store.artists();
-        images.request("Kaleidoscope", Priority::Requested);
-        images.request("Eluveitie", Priority::NowPlaying);
+        images.request("Eluveitie");
+        images.request("Kaleidoscope");
         let client = Recorded::eluveitie().with(
             musicbrainz_search_url("Kaleidoscope"),
             200,
@@ -884,7 +883,7 @@ mod tests {
     #[test]
     fn a_busy_service_puts_the_artist_back_instead_of_charging_it_an_error() {
         let store = worker_store("busy");
-        store.artists().request("Eluveitie", Priority::Requested);
+        store.artists().request("Eluveitie");
         let polls = std::cell::Cell::new(0);
         let (client, _) = run_until(&store, MockProviders::default(), busy(), |_| {
             polls.set(polls.get() + 1);
@@ -946,7 +945,7 @@ mod tests {
     #[test]
     fn musicbee_answers_first_and_the_web_is_not_asked() {
         let store = worker_store("musicbee-first");
-        store.artists().request("Eluveitie", Priority::Requested);
+        store.artists().request("Eluveitie");
         let (client, landed) = run_until(
             &store,
             musicbee("first", &["Eluveitie"], &[]),
@@ -965,7 +964,7 @@ mod tests {
     #[test]
     fn the_web_is_the_fallback_when_musicbee_found_none() {
         let store = worker_store("musicbee-none");
-        store.artists().request("Eluveitie", Priority::Requested);
+        store.artists().request("Eluveitie");
         let (client, _) = run_until(
             &store,
             musicbee("none", &[], &["Eluveitie"]),
@@ -987,8 +986,8 @@ mod tests {
         store
             .artists()
             .record_miss("Jormundgard", Status::NotFound, "");
-        store.artists().request("Jazzbit", Priority::Requested);
-        store.artists().request("Jormundgard", Priority::Requested);
+        store.artists().request("Jazzbit");
+        store.artists().request("Jormundgard");
         let (client, _) = run_until(
             &store,
             musicbee("later", &["Jazzbit"], &["Jormundgard"]),
@@ -1008,7 +1007,7 @@ mod tests {
     #[test]
     fn retiring_does_not_wait_on_musicbee_but_joining_the_thread_does() {
         let store = worker_store("retire-mid-call");
-        store.artists().request("Slow", Priority::Requested);
+        store.artists().request("Slow");
         let musicbee = Arc::new(MockProviders {
             artist_thumb_stall: Some(Duration::from_millis(400)),
             ..MockProviders::default()
@@ -1034,7 +1033,7 @@ mod tests {
     fn a_featured_name_takes_its_lead_artists_picture_from_musicbee() {
         let store = worker_store("feat-musicbee");
         let joined = "Adelitas Way feat. Tyler Connolly";
-        store.artists().request(joined, Priority::Requested);
+        store.artists().request(joined);
         let musicbee = musicbee("feat", &["Adelitas Way"], &[]);
         let (client, landed) = run_until(&store, musicbee, Recorded::default(), |images| {
             images.hash_for(joined).is_some()
@@ -1051,9 +1050,7 @@ mod tests {
     #[test]
     fn a_featured_name_looks_its_lead_artist_up_on_the_web() {
         let store = worker_store("feat-web");
-        store
-            .artists()
-            .request("Eluveitie feat. Anna Murphy", Priority::Requested);
+        store.artists().request("Eluveitie feat. Anna Murphy");
         let (client, _) = run_until(
             &store,
             MockProviders::default(),
@@ -1074,20 +1071,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(store.artists().hash_for("Tico feat. Gadiel"), Some(hash));
-        assert!(
-            !store
-                .artists()
-                .request("Tico feat. Gadiel", Priority::Requested)
-        );
+        assert!(!store.artists().request("Tico feat. Gadiel"));
     }
 
     #[test]
     fn a_picture_is_announced_under_every_spelling_asked_for() {
         let store = worker_store("spellings");
-        store.artists().request("Tico", Priority::Requested);
-        store
-            .artists()
-            .request("Tico feat. Gadiel", Priority::Requested);
+        store.artists().request("Tico");
+        store.artists().request("Tico feat. Gadiel");
         let (_, landed) = run_until(
             &store,
             musicbee("spellings", &["Tico"], &[]),
@@ -1112,7 +1103,6 @@ mod tests {
         queue.push(crate::cover::artists::Queued {
             key: "tico".into(),
             names: vec!["Tico feat. Gadiel".into()],
-            priority: Priority::Requested,
         });
         let polls = std::cell::Cell::new(0);
         let (_, landed) = run_until(
@@ -1131,8 +1121,8 @@ mod tests {
     #[test]
     fn a_busy_web_source_does_not_hold_up_musicbees_thumbnails() {
         let store = worker_store("busy-musicbee");
-        store.artists().request("Eluveitie", Priority::Requested);
-        store.artists().request("Tico", Priority::Requested);
+        store.artists().request("Eluveitie");
+        store.artists().request("Tico");
         let pace = Pace {
             busy_min: Duration::from_secs(3600),
             busy_max: Duration::from_secs(3600),
@@ -1153,8 +1143,8 @@ mod tests {
     #[test]
     fn with_no_http_client_musicbee_still_answers_and_the_rest_show_as_failed() {
         let store = worker_store("no-client");
-        store.artists().request("Tico", Priority::Requested);
-        store.artists().request("Nobody", Priority::Requested);
+        store.artists().request("Tico");
+        store.artists().request("Nobody");
         run_paced(
             &store,
             musicbee("no-client", &["Tico"], &[]),
@@ -1170,7 +1160,7 @@ mod tests {
     #[test]
     fn a_thumbnail_arriving_after_downloads_were_turned_off_is_not_kept() {
         let store = worker_store("off-mid-call");
-        store.artists().request("Slow", Priority::Requested);
+        store.artists().request("Slow");
         let musicbee = Arc::new(MockProviders {
             artist_thumb_stall: Some(Duration::from_millis(200)),
             ..musicbee("off-mid-call", &["Slow"], &[])

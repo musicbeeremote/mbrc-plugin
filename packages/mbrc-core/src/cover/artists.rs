@@ -99,15 +99,6 @@ pub struct Lookup {
     pub errors: u32,
 }
 
-/// Why an artist is wanted, which decides how soon it is fetched.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Priority {
-    /// On the playing track: ahead of everything a client asked for.
-    NowPlaying,
-    /// A client asked, for the artists it is showing.
-    Requested,
-}
-
 #[derive(Debug, Clone)]
 struct Stored {
     hash: String,
@@ -120,7 +111,6 @@ pub struct Queued {
     pub key: String,
     /// Every spelling asked for, the first one as it was first queued.
     pub names: Vec<String>,
-    pub priority: Priority,
 }
 
 impl Queued {
@@ -135,9 +125,8 @@ impl Queued {
 
 #[derive(Default)]
 struct Queue {
-    now_playing: VecDeque<Queued>,
-    requested: VecDeque<Queued>,
-    /// Keys waiting in either deque.
+    waiting: VecDeque<Queued>,
+    /// Keys in `waiting`.
     queued: HashSet<String>,
     /// Artists set aside until the web answers again; apart from `queued`, so a
     /// new request still gets its MusicBee turn.
@@ -147,38 +136,21 @@ struct Queue {
 impl Queue {
     fn push(&mut self, item: Queued) -> bool {
         if self.queued.contains(&item.key) {
-            if item.priority == Priority::NowPlaying
-                && let Some(at) = self.requested.iter().position(|q| q.key == item.key)
-                && let Some(mut moved) = self.requested.remove(at)
-            {
-                moved.priority = Priority::NowPlaying;
-                self.now_playing.push_back(moved);
-            }
-            if let Some(waiting) = self
-                .now_playing
-                .iter_mut()
-                .chain(self.requested.iter_mut())
-                .find(|q| q.key == item.key)
-            {
+            if let Some(waiting) = self.waiting.iter_mut().find(|q| q.key == item.key) {
                 waiting.merge(item.names);
             }
             return true;
         }
-        let key = item.key.clone();
-        match item.priority {
-            Priority::NowPlaying => self.now_playing.push_back(item),
-            Priority::Requested if self.requested.len() >= MAX_REQUESTED => return false,
-            Priority::Requested => self.requested.push_back(item),
+        if self.waiting.len() >= MAX_REQUESTED {
+            return false;
         }
-        self.queued.insert(key);
+        self.queued.insert(item.key.clone());
+        self.waiting.push_back(item);
         true
     }
 
     fn pop(&mut self) -> Option<Queued> {
-        let item = self
-            .now_playing
-            .pop_front()
-            .or_else(|| self.requested.pop_front())?;
+        let item = self.waiting.pop_front()?;
         self.queued.remove(&item.key);
         Some(item)
     }
@@ -326,7 +298,7 @@ impl FetchQueue {
     /// How many artists are waiting for the fetcher.
     pub(crate) fn waiting(&self) -> usize {
         let queue = self.lock_queue();
-        queue.now_playing.len() + queue.requested.len() + queue.parked.len()
+        queue.waiting.len() + queue.parked.len()
     }
 
     fn lock_retire_hook(&self) -> std::sync::MutexGuard<'_, Option<RetireHook>> {
@@ -493,14 +465,13 @@ impl ArtistImages {
     /// Queues `name` for the fetcher unless no picture can arrive (see
     /// [`Self::is_accepting`]), it has one, or no source is due (see
     /// [`Self::is_due`]). Returns whether it is waiting now.
-    pub fn request(&self, name: &str, priority: Priority) -> bool {
+    pub fn request(&self, name: &str) -> bool {
         if !self.is_accepting() || !self.is_due(name, now_unix_secs()) {
             return false;
         }
         self.queue.push(Queued {
             key: picture_key(name),
             names: vec![name.trim().to_owned()],
-            priority,
         })
     }
 
@@ -806,36 +777,34 @@ mod tests {
     fn nothing_is_queued_while_downloading_is_off() {
         let (store, _db, _) = temp_store("off");
         store.set_enabled(false);
-        assert!(!store.request("A", Priority::Requested));
+        assert!(!store.request("A"));
         assert_eq!(store.next_queued(), None);
     }
 
     #[test]
-    fn the_playing_artists_jump_the_queue_and_duplicates_are_dropped() {
+    fn artists_are_fetched_in_the_order_asked_and_duplicates_are_dropped() {
         let (store, _db, _) = temp_store("queue");
-        assert!(store.request("A", Priority::Requested));
-        assert!(store.request("B", Priority::Requested));
-        assert!(store.request("a", Priority::Requested));
-        assert!(store.request("b", Priority::NowPlaying));
-        assert!(store.request("C", Priority::NowPlaying));
+        assert!(store.request("A"));
+        assert!(store.request("B"));
+        assert!(store.request("a"));
+        assert!(store.request("C"));
         let order: Vec<String> = std::iter::from_fn(|| store.next_queued()).collect();
-        assert_eq!(order, ["B", "C", "A"]);
+        assert_eq!(order, ["A", "B", "C"]);
     }
 
     #[test]
     fn a_queued_artist_keeps_every_spelling_it_was_asked_for_under() {
         let (store, _db, _) = temp_store("spellings");
         let queue = store.queue();
-        store.request("Tico", Priority::Requested);
-        store.request("Tico feat. Gadiel", Priority::Requested);
-        store.request("Tico", Priority::Requested);
-        store.request("Tico ft. Yandel", Priority::NowPlaying);
+        store.request("Tico");
+        store.request("Tico feat. Gadiel");
+        store.request("Tico");
+        store.request("Tico ft. Yandel");
         let item = queue.next(queue.begin_worker(), Duration::ZERO).unwrap();
         assert_eq!(item.names, ["Tico", "Tico feat. Gadiel", "Tico ft. Yandel"]);
-        assert_eq!(item.priority, Priority::NowPlaying);
 
         for i in 0..2 * MAX_SPELLINGS {
-            store.request(&format!("Gadiel feat. {i}"), Priority::Requested);
+            store.request(&format!("Gadiel feat. {i}"));
         }
         let item = queue.next(queue.begin_worker(), Duration::ZERO).unwrap();
         assert_eq!(item.names.len(), MAX_SPELLINGS);
@@ -846,7 +815,7 @@ mod tests {
         let (store, _db, _) = temp_store("parked");
         let queue = store.queue();
         let generation = queue.begin_worker();
-        store.request("A", Priority::NowPlaying);
+        store.request("A");
         let item = queue.next(generation, Duration::ZERO).unwrap();
 
         queue.park(item);
@@ -855,7 +824,6 @@ mod tests {
 
         queue.unpark();
         let item = queue.next(generation, Duration::ZERO).unwrap();
-        assert_eq!(item.priority, Priority::NowPlaying);
 
         store.set_enabled(false);
         queue.park(item);
@@ -884,12 +852,9 @@ mod tests {
             .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
             .unwrap();
         store.record_miss("B", Status::NotFound, "");
-        assert!(!store.request("A", Priority::NowPlaying));
-        assert!(!store.request("  ", Priority::NowPlaying));
-        assert!(
-            store.request("B", Priority::NowPlaying),
-            "MusicBee may have one since"
-        );
+        assert!(!store.request("A"));
+        assert!(!store.request("  "));
+        assert!(store.request("B"), "MusicBee may have one since");
         assert!(!store.web_due("B", now_unix_secs()), "the web waits");
     }
 
@@ -903,7 +868,7 @@ mod tests {
         store.record_miss("B", Status::NotFound, "");
         store.record_miss("C", Status::Ambiguous, "");
         store.record_miss("D", Status::Error, "");
-        store.request("E", Priority::Requested);
+        store.request("E");
 
         let summary = store.summary();
         assert_eq!(
@@ -934,7 +899,7 @@ mod tests {
             Some(hash),
             "even with the budget full"
         );
-        assert!(!store.request(joined, Priority::Requested));
+        assert!(!store.request(joined));
         assert_eq!(store.summary().stored, 1);
     }
 
@@ -962,18 +927,12 @@ mod tests {
     fn musicbee_is_asked_again_only_after_an_hour_once_it_said_none() {
         let (store, _db, _) = temp_store("musicbee-none");
         store.record_miss("Jormundgard", Status::NotFound, "");
-        assert!(store.request("Jormundgard", Priority::Requested));
+        assert!(store.request("Jormundgard"));
         let _ = store.next_queued();
 
         store.musicbee_has_none("Jormundgard");
-        assert!(
-            !store.request("Jormundgard", Priority::Requested),
-            "nothing is due"
-        );
-        assert!(
-            store.request("Tico", Priority::Requested),
-            "the web is still due for Tico"
-        );
+        assert!(!store.request("Jormundgard"), "nothing is due");
+        assert!(store.request("Tico"), "the web is still due for Tico");
     }
 
     #[test]
@@ -990,7 +949,7 @@ mod tests {
         let bytes = std::fs::metadata(covers.join(hash)).unwrap().len();
         assert_eq!(store.used_bytes(), bytes, "a replaced picture counts once");
         assert!(!store.is_accepting());
-        assert!(!store.request("B", Priority::NowPlaying));
+        assert!(!store.request("B"));
         assert_eq!(ArtistImages::new(db, covers).used_bytes(), bytes);
     }
 

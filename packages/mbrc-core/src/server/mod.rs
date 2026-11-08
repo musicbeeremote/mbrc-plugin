@@ -254,10 +254,7 @@ fn spawn_mdns(
 /// paying it here keeps the first client's `init` off that path.
 fn seed_now_playing(core: &Arc<Core>) {
     let core = core.clone();
-    tokio::task::spawn_blocking(move || {
-        core.now_playing.refresh_all();
-        request_playing_artist_images(&core);
-    });
+    tokio::task::spawn_blocking(move || core.now_playing.refresh_all());
 }
 
 /// Reconciles the library in the background: one scan, then the metadata cache,
@@ -362,20 +359,6 @@ fn broadcast_artist_image(core: &Core, artist: &str, hash: &str) {
         "library_artist_image_updated",
         serde_json::json!({ "artist": artist, "image_hash": hash }),
     )]);
-}
-
-/// Queues the playing track's artists and guests for a picture, ahead of
-/// anything a client asked for.
-pub(crate) fn request_playing_artist_images(core: &Core) {
-    let artists = core.cover_store.artists();
-    if !artists.is_enabled() {
-        return;
-    }
-    let playing = core.now_playing.track_info();
-    let credits = crate::credits::or_display(&playing.multi_artist, &playing.artist);
-    for name in crate::credits::lead_names(&credits) {
-        artists.request(name, crate::cover::artists::Priority::NowPlaying);
-    }
 }
 
 /// Waits for the mDNS advertisement to withdraw, rather than aborting it.

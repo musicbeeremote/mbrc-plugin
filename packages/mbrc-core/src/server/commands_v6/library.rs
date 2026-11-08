@@ -169,7 +169,7 @@ fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
                 match images.hash_for(name) {
                     Some(hash) => item["image_hash"] = json!(hash),
                     None => {
-                        images.request(name, crate::cover::artists::Priority::Requested);
+                        images.request(name);
                     }
                 }
             }

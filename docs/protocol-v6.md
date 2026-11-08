@@ -841,8 +841,8 @@ starts a download. To get pictures for the artists on screen, send `library_arti
 with their names. It answers at once with the hashes already stored and queues the rest;
 `enabled: false` means downloading is off or the server's space for pictures is full, so
 nothing will arrive. Each queued picture that
-lands is announced with [`library_artist_image_updated`](#events). The playing track's
-artists are queued by the server itself, ahead of any request. A client should not send the
+lands is announced with [`library_artist_image_updated`](#events). Only this request starts a
+download, so playing a track fetches nothing. A client should not send the
 whole library: the queue is bounded, and an artist dropped from it is queued again the next
 time it is asked for.
 
@@ -1120,7 +1120,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
-| `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) or for the playing track was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
+| `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 
