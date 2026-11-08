@@ -38,7 +38,7 @@ fast_image_resize = "=6.1.0"
 jpeg-decoder = { version = "=0.3.2", default-features = false }
 # Reads embedded artwork from a track's tags, so the cover build fetches it
 # off MusicBee's thread instead of through its API lock (#232).
-lofty = "=0.25.4"
+lofty = "=0.25.5"
 base64 = "=0.23.1"
 # Embedded key-value store backing the durable caches (album-cover index +
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
@@ -61,7 +61,7 @@ flate2 = { version = "=1.1.10", default-features = false, features = ["rust_back
 # takes mbrc-release with `client`, which already compiles zip in. `deflate-flate2`
 # rides on the pure-Rust miniz_oxide above, so i686-msvc stays free of a C
 # toolchain.
-zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.2.1", default-features = false, features = ["deflate-flate2"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),

@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
-    "@tauri-apps/plugin-dialog": "2.8.3",
+    "@tauri-apps/plugin-dialog": "2.8.4",
     "@tauri-apps/plugin-opener": "2.7.2",
     "@vueuse/core": "15.0.0",
     "pinia": "4.1.0",
@@ -28,6 +28,6 @@
     "typescript": "6.0.3",
     "vite": "8.3.5",
     "vitest": "5.0.5",
-    "vue-tsc": "3.3.13"
+    "vue-tsc": "3.3.14"
   }
 }
