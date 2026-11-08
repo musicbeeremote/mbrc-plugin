@@ -3,13 +3,14 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-import { coverUrl } from '../api/display'
 import type { Track } from '../api/types'
 import type { ArtistPart } from '../composables/artistParts'
 import { artistParts, artistPicture } from '../composables/artistParts'
 import { LibraryLevel } from '../composables/libraryLevels'
 import { libraryRoute } from '../router/locations'
 import { useArtistImagesStore } from '../stores/artistImages'
+
+import ArtistPicture from './ArtistPicture.vue'
 
 /**
  * A track's artists, each a link to that artist's albums.
@@ -24,9 +25,8 @@ const props = defineProps<{ track: Track | null | undefined; pictures?: boolean 
 const { t } = useI18n()
 const artistImages = useArtistImagesStore()
 
-function pictureOf(name: string): string | null {
-  if (!props.pictures) return null
-  return coverUrl(artistPicture(props.track, name, artistImages.hashFor))
+function pictureOf(name: string): string | undefined {
+  return props.pictures ? artistPicture(props.track, name, artistImages.hashFor) : undefined
 }
 
 const parts = computed(() => artistParts(props.track))
@@ -51,11 +51,9 @@ function albumsOf(name: string) {
       {{ joinerText(part.joiner) }}<RouterLink
         :to="albumsOf(part.name)"
         class="hover:text-ink hover:underline focus-visible:underline"
-        ><img
-          v-if="pictureOf(part.name)"
-          :src="pictureOf(part.name) ?? undefined"
-          alt=""
-          class="mr-1 inline-block size-5 rounded-full object-cover align-[-0.3em]"
+        ><ArtistPicture
+          :hash="pictureOf(part.name)"
+          image-class="mr-1 inline-block size-5 rounded-full object-cover align-[-0.3em]"
         />{{ part.label }}</RouterLink
       >
     </template>

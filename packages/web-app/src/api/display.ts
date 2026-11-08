@@ -28,8 +28,10 @@ export function coverUrl(hash: string | undefined): string | null {
 const BYTE_ORDER_MARK = String.fromCodePoint(0xFEFF)
 
 /**
- * The key one artist name is known by across spellings, as the server keys
- * its pictures: without a byte order mark or surrounding space, case-folded.
+ * The key one artist name is known by across spellings: without a byte order
+ * mark or surrounding space, case-folded. The server keeps one picture per lead
+ * artist and announces it under each name it was asked for, so "A" and
+ * "A feat. B" are two keys here.
  */
 export function artistKey(name: string): string {
   return name.replaceAll(BYTE_ORDER_MARK, '').trim().toLowerCase()

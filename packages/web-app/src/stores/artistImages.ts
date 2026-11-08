@@ -4,8 +4,10 @@ import { computed, ref } from 'vue'
 import { client } from '../api/client'
 import { artistKey } from '../api/display'
 import { Op, WireEvent } from '../api/ops'
+import { OpError } from '../api/parse'
+import { ErrorCode } from '../api/types'
 
-/** How long the names wanted for pictures gather before one request asks for them all. */
+/** How long the names on screen must hold still before they are asked for. */
 const ASK_DELAY_MS = 150
 
 /** The most names the server takes in one `library_artist_images`. */
@@ -21,105 +23,157 @@ const MAX_PER_REQUEST = 500
 const ASK_AGAIN_MS = 10 * 60 * 1000
 
 /**
- * How long names are held back once the server said no picture will arrive.
+ * How long until one name is asked again after no answer, or a "no pictures".
  *
- * Downloads can be turned on in MusicBee while this page is open, so the names
- * on screen are asked again after this, without waiting for a scroll.
+ * Downloads can be turned on in MusicBee while this page is open, and one name
+ * is enough to learn that, however many are on screen.
  */
-const OFF_RECHECK_MS = 60 * 1000
+const RECHECK_MS = 60 * 1000
+
+/** Whether this browser last heard that the server sends pictures, for the first paint. */
+const ENABLED_KEY = 'mbrc.artist-pictures'
+
+function readRememberedEnabled(): boolean {
+  try {
+    return localStorage.getItem(ENABLED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeRememberedEnabled(on: boolean): void {
+  try {
+    localStorage.setItem(ENABLED_KEY, on ? '1' : '0')
+  } catch {
+    // A browser that keeps nothing draws the column once the server has answered.
+  }
+}
+
+/** A refusal no retry on this connection will change. */
+function isFinalRefusal(error: unknown): boolean {
+  return (
+    error instanceof OpError &&
+    (error.code === ErrorCode.UnknownOp || error.code === ErrorCode.Forbidden)
+  )
+}
 
 /**
  * Artist pictures (#116), by artist name.
  *
  * One map for every place a picture shows, so a picture announced while it
  * plays reaches the library row and the now-playing line alike. A page fills it
- * from what the server already sent; `want` asks for the names on screen that
- * have none, batched into one request, never the whole library.
+ * from what the server already sent; `want` names what is on screen now, and
+ * only what is still there once scrolling pauses is asked for, never the whole
+ * library.
  */
 export const useArtistImagesStore = defineStore('artistImages', () => {
   const hashes = ref(new Map<string, string>())
+  /** Hashes whose file failed to load, which no answer brings back until reconnecting. */
+  const broken = ref(new Set<string>())
   /** Whether the server will download pictures; unknown until it has answered once. */
   const enabled = ref<boolean | null>(null)
+  const rememberedEnabled = ref(readRememberedEnabled())
 
   /**
    * Whether artist rows carry a picture column: once the server downloads
    * pictures, or has some stored, so a library without any keeps its plain list.
+   * Until it answers, what it said last time, so the rows do not shift under the
+   * first paint.
    */
-  const showsPictures = computed(() => enabled.value === true || hashes.value.size > 0)
+  const showsPictures = computed(
+    () => (enabled.value ?? rememberedEnabled.value) || hashes.value.size > 0,
+  )
 
   const asked = new Map<string, number>()
-  const waiting = new Map<string, string>()
-  /** Names wanted while the server sends no pictures, asked again at the recheck. */
-  const held = new Map<string, string>()
+  let shown: string[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
   let recheck: ReturnType<typeof setTimeout> | null = null
-  /** A server without the op, which no recheck will change. */
-  let unsupported = false
+  /** A server that refuses the op, which no recheck will change. */
+  let refused = false
+
+  function setEnabled(on: boolean): void {
+    enabled.value = on
+    rememberedEnabled.value = on
+    writeRememberedEnabled(on)
+  }
 
   function hashFor(name: string): string | undefined {
     return hashes.value.get(artistKey(name))
   }
 
+  /** Records what the server said of `name`; no hash means it has none now. */
   function remember(name: string, hash: string | undefined): void {
-    if (hash) hashes.value.set(artistKey(name), hash)
+    const key = artistKey(name)
+    if (hash === undefined) hashes.value.delete(key)
+    else if (!broken.value.has(hash)) hashes.value.set(key, hash)
   }
 
-  /** Sends what is waiting, one request at a time, until nothing is. */
-  async function askAll(): Promise<void> {
-    const batch = [...waiting].slice(0, MAX_PER_REQUEST)
+  function isBroken(hash: string): boolean {
+    return broken.value.has(hash)
+  }
+
+  /** Stops showing a picture whose file failed to load, under every name using it. */
+  function markBroken(hash: string): void {
+    broken.value.add(hash)
+    for (const [key, held] of hashes.value) {
+      if (held === hash) hashes.value.delete(key)
+    }
+  }
+
+  /** The names on screen that have no picture here and are due, by key. */
+  function dueNames(): Map<string, string> {
     const now = Date.now()
-    for (const [key] of batch) {
-      waiting.delete(key)
-      asked.set(key, now)
-    }
-    try {
-      const result = await client.call(Op.LibraryArtistImages, {
-        artists: batch.map(([, name]) => name),
-      })
-      enabled.value = result.enabled
-      for (const item of result.artists) remember(item.artist, item.image_hash)
-      if (!result.enabled) {
-        for (const [key, name] of batch) {
-          asked.delete(key)
-          held.set(key, name)
-        }
-      }
-    } catch {
-      // A server without the op, or one that refused it, sends no pictures
-      // this connection; reconnecting asks again.
-      enabled.value = false
-      unsupported = true
-      waiting.clear()
-    }
-    if (held.size > 0 && !unsupported && recheck === null) {
-      recheck = setTimeout(() => {
-        recheck = null
-        for (const [key, name] of held) waiting.set(key, name)
-        held.clear()
-        void askAll()
-      }, OFF_RECHECK_MS)
-    }
-    if (waiting.size > 0 && recheck === null) await askAll()
-  }
-
-  function isDue(key: string, now: number): boolean {
-    const last = asked.get(key)
-    return key !== '' && !hashes.value.has(key) && (last === undefined || now - last >= ASK_AGAIN_MS)
-  }
-
-  /** Asks the server for the pictures of the `names` on screen that have none here. */
-  function want(names: Iterable<string>): void {
-    if (unsupported) return
-    const now = Date.now()
-    const into = recheck === null ? waiting : held
-    for (const name of names) {
+    const due = new Map<string, string>()
+    for (const name of shown) {
       const key = artistKey(name)
-      if (!waiting.has(key) && !held.has(key) && isDue(key, now)) into.set(key, name)
+      const last = asked.get(key)
+      const isDue = last === undefined || now - last >= ASK_AGAIN_MS
+      if (key !== '' && !hashes.value.has(key) && isDue && !due.has(key)) due.set(key, name)
     }
-    if (waiting.size === 0 || timer !== null) return
+    return due
+  }
+
+  /** Sends `artists`; true when the server will send pictures for them. */
+  async function send(artists: string[]): Promise<boolean> {
+    try {
+      const result = await client.call(Op.LibraryArtistImages, { artists })
+      setEnabled(result.enabled)
+      for (const item of result.artists) remember(item.artist, item.image_hash)
+      return result.enabled
+    } catch (error) {
+      refused = isFinalRefusal(error)
+      if (refused) setEnabled(false)
+      return false
+    }
+  }
+
+  /** Asks for up to `limit` due names, then the rest while the server says yes. */
+  async function ask(limit = MAX_PER_REQUEST): Promise<void> {
+    const batch = [...dueNames()].slice(0, limit)
+    if (batch.length === 0) return
+    const now = Date.now()
+    for (const [key] of batch) asked.set(key, now)
+    if (await send(batch.map(([, name]) => name))) {
+      await ask()
+      return
+    }
+    for (const [key] of batch) asked.delete(key)
+    if (refused || recheck !== null) return
+    recheck = setTimeout(() => {
+      recheck = null
+      void ask(1)
+    }, RECHECK_MS)
+  }
+
+  /** Names what is on screen now, replacing what was named before. */
+  function want(names: Iterable<string>): void {
+    shown = [...names]
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+    if (refused || recheck !== null) return
     timer = setTimeout(() => {
       timer = null
-      void askAll()
+      void ask()
     }, ASK_DELAY_MS)
   }
 
@@ -127,19 +181,19 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
     client.on(WireEvent.LibraryArtistImageUpdated, (data) => {
       remember(data.artist, data.image_hash)
     })
-    // The setting may have changed while the socket was down.
+    // What landed while the socket was down was never announced, and the
+    // setting or the server's queue may have changed.
     client.on(WireEvent.ConnectionChanged, (data) => {
       if (!data.connected) return
       enabled.value = null
-      unsupported = false
+      refused = false
       asked.clear()
+      broken.value.clear()
       if (recheck !== null) clearTimeout(recheck)
       recheck = null
-      for (const [key, name] of held) waiting.set(key, name)
-      held.clear()
-      want([])
+      want(shown)
     })
   }
 
-  return { hashes, enabled, showsPictures, hashFor, remember, want, bind }
+  return { enabled, showsPictures, hashFor, remember, isBroken, markBroken, want, bind }
 })

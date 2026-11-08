@@ -19,6 +19,7 @@ import { coverUrl, formatDuration, trackLabel } from '../api/display'
 import { Capability } from '../api/permissions'
 import { QueueMode } from '../api/types'
 import AlbumTile from '../components/AlbumTile.vue'
+import ArtistPicture from '../components/ArtistPicture.vue'
 import CoverPlaceholder from '../components/CoverPlaceholder.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PlayingIndicator from '../components/PlayingIndicator.vue'
@@ -274,7 +275,8 @@ const { list, containerProps, wrapperProps, scrollTo } = useLazyRows(flatRows, {
   loadMore: () => library.load(true),
 })
 
-// The pictures of the artists on screen, and only those, are asked for.
+// The artists on screen are named each time they change; the store asks once
+// they hold still.
 watch(list, (rows) => {
   artistImages.want(rows.flatMap((row) => (isArtist(row.data) ? [row.data.artist] : [])))
 })
@@ -462,14 +464,12 @@ const onGridScroll = useGridPaging({
               v-if="artistImages.showsPictures"
               class="relative ml-3 size-8 shrink-0 overflow-hidden rounded-full bg-surface-2"
             >
-              <img
-                v-if="coverUrl(artistImages.hashFor(row.data.artist))"
-                :src="coverUrl(artistImages.hashFor(row.data.artist)) ?? undefined"
-                alt=""
-                loading="lazy"
-                class="h-full w-full object-cover"
-              />
-              <CoverPlaceholder v-else :name="row.data.artist" />
+              <ArtistPicture
+                :hash="artistImages.hashFor(row.data.artist)"
+                image-class="h-full w-full object-cover"
+              >
+                <CoverPlaceholder :name="row.data.artist" />
+              </ArtistPicture>
             </div>
             <button
               class="min-w-0 flex-1 px-3 text-left"
