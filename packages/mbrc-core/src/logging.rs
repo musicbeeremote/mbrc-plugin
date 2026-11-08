@@ -537,6 +537,9 @@ pub mod test_support {
     /// off under a capture running on another, which comes back holding nothing.
     static CAPTURING: Mutex<()> = Mutex::new(());
 
+    /// How long another thread gets to finish registering a log line.
+    const REGISTRATION_SETTLES: std::time::Duration = std::time::Duration::from_millis(20);
+
     /// Runs `f` under `subscriber`, never alongside a capture.
     pub fn with_subscriber<S>(subscriber: S, f: impl FnOnce())
     where
@@ -546,9 +549,15 @@ pub mod test_support {
         tracing::subscriber::with_default(subscriber, f);
     }
 
-    /// Runs `f` with a subscriber that captures every `mbrc::wire` event at DEBUG
-    /// and above, and return what it captured.
-    pub fn capture_wire_lines(f: impl FnOnce()) -> Vec<WireLine> {
+    /// Captures every `mbrc::wire` event at DEBUG and above while `f` runs.
+    ///
+    /// `f` runs twice and only the second pass counts. A log line registers only
+    /// while a capture has raised the global level, so another thread can be
+    /// registering one of `f`'s lines right now, and a line that misses the
+    /// interest rebuild is stored as uninteresting. The first pass registers
+    /// them, [`REGISTRATION_SETTLES`] lets that other thread finish, and a second
+    /// rebuild then finds them all.
+    pub fn capture_wire_lines(f: impl Fn()) -> Vec<WireLine> {
         // A panic in one capture must not stop the rest from running.
         let _serialised = CAPTURING.lock().unwrap_or_else(|held| held.into_inner());
         let lines = Arc::new(Mutex::new(Vec::new()));
@@ -558,10 +567,12 @@ pub mod test_support {
         let subscriber = Registry::default().with(layer.with_filter(
             tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::DEBUG),
         ));
-        // A callsite first hit on another thread, with no subscriber, is cached
-        // as uninteresting process-wide; asking again lets this capture see it.
         tracing::subscriber::with_default(subscriber, || {
             tracing::callsite::rebuild_interest_cache();
+            f();
+            std::thread::sleep(REGISTRATION_SETTLES);
+            tracing::callsite::rebuild_interest_cache();
+            lines.lock().unwrap().clear();
             f();
         });
         let captured = lines.lock().unwrap();
@@ -572,6 +583,18 @@ pub mod test_support {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only the second pass counts, or a test would see its lines twice.
+    #[test]
+    fn a_capture_runs_its_action_beforehand_and_keeps_only_the_second_pass() {
+        let calls = std::cell::Cell::new(0);
+        let lines = test_support::capture_wire_lines(|| {
+            calls.set(calls.get() + 1);
+            tracing::debug!(target: "mbrc::wire", kind = "rehearsed", "line");
+        });
+        assert_eq!(calls.get(), 2);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+    }
 
     #[test]
     fn a_panic_payload_reads_as_its_message() {

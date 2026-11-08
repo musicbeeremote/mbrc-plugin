@@ -9,7 +9,7 @@
 mod harness;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mbrc_core::config::Config;
 use mbrc_core::ffi::types::NotificationType;
@@ -17,21 +17,24 @@ use mbrc_core::state::{self, Core};
 
 use harness::{connect, null_core, read_frame, send, start_core, v6_handshake};
 
-/// A core whose music library holds `/a.mp3`, so an edit to it is the library's.
 fn core(port: u16) -> Arc<Core> {
     let dir = std::env::temp_dir().join(format!("mbrc-notifications-v6-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let config = Config {
+    null_core(Config {
         storage_path: dir.to_string_lossy().into_owned(),
         ..Config::for_test(port)
-    };
-    let core = null_core(config);
-    let library = vec!["/a.mp3".to_string()];
-    core.metadata_cache.reconcile(&[], 1);
-    core.metadata_cache.replace_track_index(&library);
-    core.metadata_cache.record_changes(Some(&library), &[]);
-    core
+    })
+}
+
+/// Waits out the reconcile `start` began, which files what it finds changed and
+/// says so, and so would answer for an edit it knows nothing about.
+fn wait_for_startup_reconcile(core: &Core) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !core.metadata_cache.is_validated() || core.is_reconciling() {
+        assert!(Instant::now() < deadline, "the reconcile did not finish");
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// A subscribed V6 main receives `library_changed` once the Scanner has applied
@@ -40,6 +43,10 @@ fn core(port: u16) -> Arc<Core> {
 #[test]
 fn a_reported_edit_emits_library_changed_to_v6_main() {
     let (port, core, net) = start_core(core);
+    wait_for_startup_reconcile(&core);
+    let library = vec!["/a.mp3".to_string()];
+    core.metadata_cache.replace_track_index(&library);
+    core.metadata_cache.record_changes(Some(&library), &[]);
     let (mut w, mut r) = connect(port, Duration::from_secs(6));
 
     send(&mut w, &v6_handshake("notif-test", false));
@@ -51,7 +58,10 @@ fn a_reported_edit_emits_library_changed_to_v6_main() {
 
     state::dispatch_notification(&core, NotificationType::TagsChanged, Some("/a.mp3"));
 
-    let ev = read_frame(&mut r);
+    // The cover build's last word can still be on its way.
+    let ev = std::iter::repeat_with(|| read_frame(&mut r))
+        .find(|frame| frame["event"] != "cover_cache_changed")
+        .unwrap();
     assert_eq!(ev["kind"], "event", "{ev}");
     assert_eq!(ev["event"], "library_changed", "{ev}");
 
