@@ -643,9 +643,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-v4-multi-genre");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v4-multi-genre");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/saga.mp3".into()]);
@@ -676,9 +674,7 @@ mod tests {
         use crate::protocol::messages::AlbumData;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-meta-browse-slice");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("meta-browse-slice");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1); // validate so the cache is live
 
@@ -724,9 +720,7 @@ mod tests {
         use crate::protocol::messages::TrackTags;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-browse-tracks-store");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("browse-tracks-store");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1); // validate so the store is live
 
@@ -784,9 +778,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-build-track-index");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("build-track-index");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
 
@@ -812,10 +804,10 @@ mod tests {
         assert!(browse_lists_cached(&cache));
     }
 
-    fn validated_cache(name: &str) -> crate::metadata_cache::MetadataCache {
-        let dir = std::env::temp_dir().join(format!("mbrc-library-pass-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn validated_cache(
+        name: &str,
+    ) -> crate::test_dir::InTestDir<crate::metadata_cache::MetadataCache> {
+        let dir = crate::test_dir::TestDir::new(&format!("library-pass-{name}"));
         let cache = crate::metadata_cache::MetadataCache::new(crate::store::Db::open(
             dir.to_str().unwrap(),
         ));
@@ -833,7 +825,7 @@ mod tests {
                 ..Default::default()
             },
         ]);
-        cache
+        dir.holding(cache)
     }
 
     #[test]
@@ -1033,19 +1025,17 @@ mod tests {
     // ── Store-backed cover serving (the production path) ──
 
     use crate::cover::test_jpeg_bytes;
-    use std::path::PathBuf;
 
-    fn temp_store(name: &str) -> (CoverStore, PathBuf) {
-        let dir = std::env::temp_dir().join(format!("mbrc-cover-handler-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        (CoverStore::open_at(&dir), dir)
+    fn temp_store(name: &str) -> (crate::test_dir::TestDir, CoverStore) {
+        let dir = crate::test_dir::TestDir::new(&format!("cover-handler-{name}"));
+        let store = CoverStore::open_at(&dir);
+        (dir, store)
     }
 
     #[test]
     fn single_cover_lazily_caches_then_304s_on_matching_hash() {
         use crate::cover::store::AlbumIdentity;
-        let (store, _dir) = temp_store("single");
+        let (_dir, store) = temp_store("single");
         let key = cover_identifier("Artist", "Album");
         store.warm_up(&[AlbumIdentity {
             key: key.clone(),
@@ -1073,7 +1063,7 @@ mod tests {
 
     #[test]
     fn single_cover_status_codes() {
-        let (store, _dir) = temp_store("codes");
+        let (_dir, store) = temp_store("codes");
         let m = MockProviders::default();
         // Empty album -> 400.
         assert_eq!(store_single_cover(&store, &m, "A", "", "").status, 400);
@@ -1085,7 +1075,7 @@ mod tests {
     fn cover_page_resolves_metadata_and_paginates() {
         use crate::cover::store::AlbumIdentity;
         use crate::protocol::messages::TrackMetadata;
-        let (store, _dir) = temp_store("page");
+        let (_dir, store) = temp_store("page");
         let key = cover_identifier("Artist", "Album");
         store.warm_up(&[AlbumIdentity {
             key: key.clone(),
@@ -1114,7 +1104,7 @@ mod tests {
     #[test]
     fn a_cover_page_without_a_positive_limit_is_one_default_page_not_every_cover() {
         use crate::cover::store::AlbumIdentity;
-        let (store, _dir) = temp_store("default-page");
+        let (_dir, store) = temp_store("default-page");
         let albums: Vec<AlbumIdentity> = (0..150)
             .map(|i| AlbumIdentity {
                 key: cover_identifier("Artist", &format!("Album {i}")),
@@ -1146,7 +1136,7 @@ mod tests {
 
     #[test]
     fn cover_cache_status_reads_store_building_flag() {
-        let (store, _dir) = temp_store("status");
+        let (_dir, store) = temp_store("status");
         let m = MockProviders::default();
         let ctx = Ctx::new(&m, ProtocolVersion::V4).with_cover_store(&store);
         // A freshly created store is not building.

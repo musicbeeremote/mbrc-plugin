@@ -117,7 +117,7 @@ mod tests {
 
     const SHORT: Duration = Duration::from_millis(20);
 
-    fn core_with(m: Arc<MockProviders>, name: &str) -> Arc<Core> {
+    fn core_with(m: Arc<MockProviders>, name: &str) -> crate::test_dir::InTestDir<Arc<Core>> {
         crate::state::test_core(m, &format!("media-{name}"))
     }
 

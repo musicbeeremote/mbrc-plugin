@@ -563,14 +563,12 @@ mod tests {
         }
     }
 
-    fn cache_at(name: &str) -> MetadataCache {
+    fn cache_at(name: &str) -> crate::test_dir::InTestDir<MetadataCache> {
         use crate::store::Db;
-        let dir = std::env::temp_dir().join(name);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new(name);
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
-        cache
+        dir.holding(cache)
     }
 
     fn tracks_of(m: &MockProviders, data: Value, cache: Option<&MetadataCache>) -> Value {
@@ -1286,9 +1284,7 @@ mod tests {
         use crate::metadata_cache::CachedTags;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-v6-playlist-banned-scope");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-playlist-banned-scope");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         let paths = ["/x/1.mp3".to_string(), "/x/2.mp3".to_string()];

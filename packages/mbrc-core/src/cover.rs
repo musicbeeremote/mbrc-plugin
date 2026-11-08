@@ -422,21 +422,21 @@ pub(crate) fn test_jpeg_bytes(w: u32, h: u32) -> Vec<u8> {
 
 /// A fresh temp directory for one test, named by `name`, with a `Db` on it.
 ///
+/// Bind them in the order returned, so the `Db` closes before the folder goes.
 /// redb locks its file, so a test that reopens a store there reuses this `Db`.
 #[cfg(test)]
-pub(crate) fn test_storage(name: &str) -> (crate::store::Db, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("mbrc-test-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+pub(crate) fn test_storage(name: &str) -> (crate::test_dir::TestDir, crate::store::Db) {
+    let dir = crate::test_dir::TestDir::new(&format!("test-{name}"));
     let db = crate::store::Db::open(dir.to_str().unwrap());
-    (db, dir)
+    (dir, db)
 }
 
 /// A [`store::CoverStore`] over [`test_storage`].
 #[cfg(test)]
-pub(crate) fn test_cover_store(name: &str) -> store::CoverStore {
-    let (db, dir) = test_storage(name);
-    store::CoverStore::new(db, dir)
+pub(crate) fn test_cover_store(name: &str) -> crate::test_dir::InTestDir<store::CoverStore> {
+    let (dir, db) = test_storage(name);
+    let store = store::CoverStore::new(db, dir.to_path_buf());
+    dir.holding(store)
 }
 
 #[cfg(test)]

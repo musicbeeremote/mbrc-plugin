@@ -1,0 +1,8 @@
+# Clippy reads the nearest clippy.toml only, so this restates the workspace file
+# and adds the rule for this crate's tests.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+disallowed-methods = [
+    { path = "std::env::temp_dir", reason = "use crate::test_dir::TestDir, which removes its folder" },
+]

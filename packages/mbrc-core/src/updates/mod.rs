@@ -207,9 +207,8 @@ mod tests {
 
     /// A storage dir with a staged bundle in it, optionally with the pending
     /// marker that says it is still waiting to be applied.
-    fn staged_fixture(case: &str, pending: bool) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-sweep-{case}"));
-        let _ = std::fs::remove_dir_all(&dir);
+    fn staged_fixture(case: &str, pending: bool) -> crate::test_dir::TestDir {
+        let dir = crate::test_dir::TestDir::new(&format!("sweep-{case}"));
         let version_dir = dir.join("updates").join("1.5.0-beta.2");
         std::fs::create_dir_all(&version_dir).expect("create staging dir");
         // The file the helper cannot delete, because it is running from it.
@@ -235,7 +234,6 @@ mod tests {
             !dir.join("updates").exists(),
             "the applied bundle should have been removed"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -248,18 +246,14 @@ mod tests {
             dir.join("updates").join("1.5.0-beta.2").exists(),
             "a pending update must survive the sweep"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn sweeping_nothing_is_not_an_error() {
         // A fresh install that has never staged anything, and the no-storage case.
-        let dir = std::env::temp_dir().join("mbrc-sweep-empty");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("sweep-empty");
         sweep_applied_staging(dir.to_str().expect("utf8 dir"));
         sweep_applied_staging("");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

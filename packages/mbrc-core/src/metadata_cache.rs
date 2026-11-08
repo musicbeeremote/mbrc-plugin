@@ -1593,19 +1593,16 @@ fn fnv1a_64(bytes: &[u8]) -> u64 {
 mod tests {
     use super::*;
 
-    fn temp_db(name: &str) -> Db {
-        let dir = std::env::temp_dir().join(format!("mbrc-meta-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        Db::open(dir.to_str().unwrap())
+    fn temp_cache(name: &str) -> crate::test_dir::InTestDir<MetadataCache> {
+        let dir = crate::test_dir::TestDir::new(&format!("meta-{name}"));
+        let db = Db::open(dir.to_str().unwrap());
+        dir.holding(MetadataCache::new(db))
     }
 
     /// The genre list is kept between reads, and a tag edit must still show.
     #[test]
     fn a_genre_edit_reaches_the_kept_genre_list() {
-        let dir = std::env::temp_dir().join("mbrc-meta-genre-memo");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("meta-genre-memo");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/a.mp3".into()]);
@@ -1626,7 +1623,7 @@ mod tests {
 
     #[test]
     fn no_ops_until_validated_then_round_trips() {
-        let cache = MetadataCache::new(temp_db("gate"));
+        let cache = temp_cache("gate");
         // Not validated: put is a no-op, get misses.
         cache.put("k", &vec![1u32, 2, 3]);
         assert_eq!(cache.get::<Vec<u32>>("k"), None);
@@ -1644,7 +1641,7 @@ mod tests {
 
     #[test]
     fn contains_tracks_presence_without_decode() {
-        let cache = MetadataCache::new(temp_db("contains"));
+        let cache = temp_cache("contains");
         // Not validated yet: everything reads absent.
         assert!(!cache.contains("k"));
         cache.reconcile(&[], 1);
@@ -1694,7 +1691,7 @@ mod tests {
 
     #[test]
     fn reconcile_clears_only_on_fingerprint_change() {
-        let cache = MetadataCache::new(temp_db("recon"));
+        let cache = temp_cache("recon");
         assert!(
             cache.reconcile(&[], 1),
             "first fingerprint counts as a change"
@@ -1730,8 +1727,8 @@ mod tests {
     }
 
     /// A cache holding five tracks and the tags for two of them.
-    fn indexed_cache(name: &str) -> MetadataCache {
-        let cache = MetadataCache::new(temp_db(name));
+    fn indexed_cache(name: &str) -> crate::test_dir::InTestDir<MetadataCache> {
+        let cache = temp_cache(name);
         cache.reconcile(&[], 1);
         let paths: Vec<String> = (0..5).map(|i| format!("/m/{i}.mp3")).collect();
         cache.replace_track_index(&paths);
@@ -1748,7 +1745,7 @@ mod tests {
 
     #[test]
     fn the_track_index_is_gated_until_the_cache_is_validated() {
-        let cache = MetadataCache::new(temp_db("tracks"));
+        let cache = temp_cache("tracks");
         cache.replace_track_index(&["a".into(), "b".into()]);
         assert_eq!(cache.track_count(), 0);
         assert!(cache.track_page_paths(0, 10).is_empty());
@@ -1804,7 +1801,7 @@ mod tests {
     /// paged readers through it and never matched the index's count again.
     #[test]
     fn a_shorter_index_drops_the_tags_and_order_rows_of_what_left() {
-        let cache = MetadataCache::new(temp_db("orphans"));
+        let cache = temp_cache("orphans");
         cache.reconcile(&[], 1);
         let tagged = |src: &str| CachedTags {
             src: src.into(),
@@ -1835,7 +1832,7 @@ mod tests {
 
     #[test]
     fn synced_at_round_trips_and_clear_keeps_it() {
-        let cache = MetadataCache::new(temp_db("synced"));
+        let cache = temp_cache("synced");
         cache.reconcile(&[], 1);
         assert_eq!(cache.tracks_synced_at(), 0);
         cache.set_tracks_synced_at(12345);
@@ -1861,7 +1858,7 @@ mod tests {
 
     #[test]
     fn forgetting_the_library_resets_the_watermark_and_the_change_log() {
-        let cache = MetadataCache::new(temp_db("forget"));
+        let cache = temp_cache("forget");
         cache.reconcile(&[], 1);
         cache.set_tracks_synced_at(12345);
         cache.record_changes(Some(&["/x.mp3".into()]), &[]);
@@ -1879,7 +1876,7 @@ mod tests {
     /// same library listed again files nothing.
     #[test]
     fn a_rebuild_of_the_same_library_files_no_changes() {
-        let cache = MetadataCache::new(temp_db("rebuild-quiet"));
+        let cache = temp_cache("rebuild-quiet");
         cache.reconcile(&[], 1);
         let library: Vec<String> = vec!["/a.mp3".into(), "/b.mp3".into()];
         cache.replace_track_index(&library);
@@ -1893,7 +1890,7 @@ mod tests {
 
     #[test]
     fn an_unvalidated_cache_files_no_changes() {
-        let cache = MetadataCache::new(temp_db("changes-gate"));
+        let cache = temp_cache("changes-gate");
         assert_eq!(cache.record_changes(Some(&["/a.mp3".into()]), &[]), None);
         assert_eq!(cache.changes().head(), None);
     }
@@ -2011,8 +2008,11 @@ mod tests {
         }
     }
 
-    fn sorted_cache(name: &str, tracks: &[CachedTags]) -> MetadataCache {
-        let cache = MetadataCache::new(temp_db(name));
+    fn sorted_cache(
+        name: &str,
+        tracks: &[CachedTags],
+    ) -> crate::test_dir::InTestDir<MetadataCache> {
+        let cache = temp_cache(name);
         cache.reconcile(&[], 1);
         cache.replace_track_index(
             &tracks
@@ -2222,7 +2222,7 @@ mod tests {
     /// rather than dropped.
     #[test]
     fn a_filter_matches_tags_and_falls_back_to_the_file_name() {
-        let cache = MetadataCache::new(temp_db("filter"));
+        let cache = temp_cache("filter");
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/tagged.mp3".into(), "/untagged-gem.mp3".into()]);
         cache.put_track_tags(&[track("/tagged.mp3", "Emerald Sword", 1998)]);
@@ -2269,7 +2269,7 @@ mod tests {
 
     #[test]
     fn the_backfill_is_offered_only_what_has_no_tags() {
-        let cache = MetadataCache::new(temp_db("untagged"));
+        let cache = temp_cache("untagged");
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()]);
         cache.put_track_tags(&[track("/b.mp3", "B", 2000)]);
@@ -2287,8 +2287,11 @@ mod tests {
     }
 
     /// Builds a cache holding one track of each named album, tagged and indexed.
-    fn cache_with_albums(name: &str, albums: &[(&str, i64)]) -> MetadataCache {
-        let cache = MetadataCache::new(temp_db(name));
+    fn cache_with_albums(
+        name: &str,
+        albums: &[(&str, i64)],
+    ) -> crate::test_dir::InTestDir<MetadataCache> {
+        let cache = temp_cache(name);
         let stamps: Vec<(String, i64)> = albums
             .iter()
             .map(|(album, modified)| (album_key("Artist", "Artist", album), *modified))
@@ -2405,7 +2408,7 @@ mod tests {
     /// it is dropped once rather than trusted.
     #[test]
     fn a_cache_with_no_stamps_is_dropped_once() {
-        let cache = MetadataCache::new(temp_db("stamps-cold"));
+        let cache = temp_cache("stamps-cold");
         cache.reconcile(&[], 1);
         cache.put("k", &7u32);
 
@@ -2421,7 +2424,7 @@ mod tests {
 
     #[test]
     fn nav_lists_drop_when_the_library_moves() {
-        let cache = MetadataCache::new(temp_db("nav-moved"));
+        let cache = temp_cache("nav-moved");
         cache.reconcile(&[(album_key("Artist", "Artist", "one"), 100)], 1);
         let nav = format!("{NAV_ALBUM_TRACKS}one");
         cache.put(&nav, &7u32);
@@ -2434,7 +2437,7 @@ mod tests {
 
     #[test]
     fn a_drill_down_fetched_before_a_drop_is_not_kept() {
-        let cache = MetadataCache::new(temp_db("nav-race"));
+        let cache = temp_cache("nav-race");
         cache.reconcile(&[], 1);
         let nav = format!("{NAV_ALBUM_TRACKS}one");
         let (_, generation) = cache.nav_list::<u32>(&nav);
@@ -2450,7 +2453,7 @@ mod tests {
 
     #[test]
     fn nav_lists_from_an_older_version_drop_once() {
-        let cache = MetadataCache::new(temp_db("nav-version"));
+        let cache = temp_cache("nav-version");
         cache.reconcile(&[], 1);
         let nav = format!("{NAV_ARTIST_ALBUMS}Artist");
         cache.put(&nav, &7u32);

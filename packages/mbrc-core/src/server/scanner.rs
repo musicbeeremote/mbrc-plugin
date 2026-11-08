@@ -384,7 +384,10 @@ mod tests {
         assert!(batch.relist && batch.unnamed_edit);
     }
 
-    fn core_with(m: Arc<crate::providers::MockProviders>, name: &str) -> Arc<Core> {
+    fn core_with(
+        m: Arc<crate::providers::MockProviders>,
+        name: &str,
+    ) -> crate::test_dir::InTestDir<Arc<Core>> {
         let core = crate::state::test_core(m, &format!("scanner-{name}"));
         core.metadata_cache.reconcile(&[], 1);
         let library = vec!["/a.mp3".to_string(), "/b.mp3".to_string()];

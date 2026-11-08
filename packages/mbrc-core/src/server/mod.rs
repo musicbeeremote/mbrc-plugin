@@ -831,10 +831,11 @@ mod cover_delta_tests {
 
     /// Builds a `Core` on a fresh temp storage dir with a mock host that returns
     /// `albums` for the album scan and one canned JPEG for every artwork fetch.
-    fn temp_core(name: &str, albums: Vec<AlbumIdentifier>) -> Arc<Core> {
-        let dir = std::env::temp_dir().join(format!("mbrc-cover-delta-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn temp_core(
+        name: &str,
+        albums: Vec<AlbumIdentifier>,
+    ) -> crate::test_dir::InTestDir<Arc<Core>> {
+        let dir = crate::test_dir::TestDir::new(&format!("cover-delta-{name}"));
         let mock = MockProviders {
             track_paths: albums.iter().map(|a| a.path.clone()).collect(),
             album_identifiers: albums,
@@ -845,7 +846,7 @@ mod cover_delta_tests {
             storage_path: dir.to_string_lossy().into_owned(),
             ..Config::default()
         };
-        Arc::new(Core::new(Arc::new(mock), config))
+        dir.holding(Arc::new(Core::new(Arc::new(mock), config)))
     }
 
     fn album(artist: &str, name: &str, path: &str, modified: i64) -> AlbumIdentifier {

@@ -33,6 +33,11 @@ pub mod updates;
 pub mod web;
 pub mod wire;
 
+#[cfg(test)]
+pub(crate) mod test_dir;
+#[cfg(test)]
+mod test_dir_tests;
+
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::sync::Arc;
 

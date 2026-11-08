@@ -539,12 +539,10 @@ mod tests {
     ///
     /// The directory carries the pid so two concurrent test runs cannot open the
     /// same redb file and fail on its lock.
-    fn identities(name: &str) -> ClientIdentities {
-        let dir =
-            std::env::temp_dir().join(format!("mbrc-session-token-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a temp dir");
-        ClientIdentities::new(crate::store::Db::open(&dir.to_string_lossy()))
+    fn identities(name: &str) -> crate::test_dir::InTestDir<ClientIdentities> {
+        let dir = crate::test_dir::TestDir::new(&format!("session-token-{name}"));
+        let identities = ClientIdentities::new(crate::store::Db::open(&dir.to_string_lossy()));
+        dir.holding(identities)
     }
 
     fn handshake_with(s: &mut V6Session, clients: &ClientIdentities, token: Option<&str>) -> Value {

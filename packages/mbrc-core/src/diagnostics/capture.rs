@@ -583,9 +583,7 @@ mod tests {
 
     #[test]
     fn the_persisted_record_round_trips() {
-        let dir = std::env::temp_dir().join("mbrc-capture-persist");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("capture-persist");
         let storage = dir.to_str().expect("utf8 dir");
 
         let session = Session {
@@ -607,17 +605,14 @@ mod tests {
 
         clear_persisted(storage);
         assert!(read_persisted(storage).is_none());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The scratch storage dir a capture end-to-end run works in.
     ///
     /// Seeded with a log line written before the capture starts, which the
     /// window must later exclude.
-    fn scratch_storage() -> (std::path::PathBuf, String, u64) {
-        let dir = std::env::temp_dir().join("mbrc-capture-endtoend");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+    fn scratch_storage() -> (crate::test_dir::TestDir, String, u64) {
+        let dir = crate::test_dir::TestDir::new("capture-endtoend");
         let storage = dir.to_str().expect("utf8 dir").to_owned();
 
         let before = "before the capture\n";
@@ -739,7 +734,6 @@ mod tests {
         );
 
         reset();
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -757,9 +751,7 @@ mod tests {
             "this test needs an uninitialized global core"
         );
 
-        let dir = std::env::temp_dir().join("mbrc-capture-shutdown");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("capture-shutdown");
         let storage = dir.to_str().expect("utf8 dir").to_owned();
         let config = Config {
             storage_path: storage,
@@ -791,7 +783,6 @@ mod tests {
         );
 
         reset();
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -804,9 +795,7 @@ mod tests {
         use std::sync::Arc;
 
         reset();
-        let dir = std::env::temp_dir().join("mbrc-capture-reinit");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("capture-reinit");
         let storage = dir.to_str().expect("utf8 dir").to_owned();
 
         let config = Config {
@@ -836,20 +825,16 @@ mod tests {
 
         cancel(&core);
         reset();
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn an_unreadable_record_is_discarded_not_fatal() {
-        let dir = std::env::temp_dir().join("mbrc-capture-garbage");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("capture-garbage");
         let storage = dir.to_str().expect("utf8 dir");
         std::fs::write(capture_file(storage), "{ not json").expect("seed garbage");
 
         assert!(read_persisted(storage).is_none());
         // And it cleans up after itself, so the next start is not haunted by it.
         assert!(!capture_file(storage).exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

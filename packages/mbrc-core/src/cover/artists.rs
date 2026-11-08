@@ -710,17 +710,17 @@ mod tests {
     use super::*;
     use crate::cover::test_jpeg_bytes;
 
-    fn temp_store(name: &str) -> (ArtistImages, Db, PathBuf) {
-        let (db, dir) = crate::cover::test_storage(&format!("artist-images-{name}"));
+    fn temp_store(name: &str) -> (crate::test_dir::TestDir, ArtistImages, Db, PathBuf) {
+        let (dir, db) = crate::cover::test_storage(&format!("artist-images-{name}"));
         let covers = dir.join("cache").join("covers");
         let store = ArtistImages::new(db.clone(), covers.clone());
         store.set_enabled(true);
-        (store, db, covers)
+        (dir, store, db, covers)
     }
 
     #[test]
     fn a_stored_picture_is_found_by_any_spelling_and_survives_a_restart() {
-        let (store, db, covers) = temp_store("restart");
+        let (_dir, store, db, covers) = temp_store("restart");
         let hash = store
             .store("Gadiel", &test_jpeg_bytes(800, 600), "mbid-1", "wikidata")
             .unwrap();
@@ -734,7 +734,7 @@ mod tests {
 
     #[test]
     fn a_picture_is_fitted_within_500_pixels_keeping_its_aspect() {
-        let (store, _db, covers) = temp_store("size");
+        let (_dir, store, _db, covers) = temp_store("size");
         let hash = store
             .store("A", &test_jpeg_bytes(1000, 2000), "", "wikidata")
             .unwrap();
@@ -744,7 +744,7 @@ mod tests {
 
     #[test]
     fn a_picture_whose_file_is_gone_is_not_served_and_is_fetched_again() {
-        let (store, db, covers) = temp_store("gone");
+        let (_dir, store, db, covers) = temp_store("gone");
         let hash = store
             .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
             .unwrap();
@@ -756,7 +756,7 @@ mod tests {
 
     #[test]
     fn a_miss_waits_30_days_and_an_error_backs_off_from_one_day() {
-        let (store, _db, _) = temp_store("retry");
+        let (_dir, store, _db, _) = temp_store("retry");
         let now = now_unix_secs();
         store.record_miss("Unknown", Status::NotFound, "");
         store.record_miss("Twins", Status::Ambiguous, "");
@@ -775,7 +775,7 @@ mod tests {
 
     #[test]
     fn nothing_is_queued_while_downloading_is_off() {
-        let (store, _db, _) = temp_store("off");
+        let (_dir, store, _db, _) = temp_store("off");
         store.set_enabled(false);
         assert!(!store.request("A"));
         assert_eq!(store.next_queued(), None);
@@ -783,7 +783,7 @@ mod tests {
 
     #[test]
     fn artists_are_fetched_in_the_order_asked_and_duplicates_are_dropped() {
-        let (store, _db, _) = temp_store("queue");
+        let (_dir, store, _db, _) = temp_store("queue");
         assert!(store.request("A"));
         assert!(store.request("B"));
         assert!(store.request("a"));
@@ -794,7 +794,7 @@ mod tests {
 
     #[test]
     fn a_queued_artist_keeps_every_spelling_it_was_asked_for_under() {
-        let (store, _db, _) = temp_store("spellings");
+        let (_dir, store, _db, _) = temp_store("spellings");
         let queue = store.queue();
         store.request("Tico");
         store.request("Tico feat. Gadiel");
@@ -812,7 +812,7 @@ mod tests {
 
     #[test]
     fn a_parked_artist_waits_counted_until_it_is_let_back() {
-        let (store, _db, _) = temp_store("parked");
+        let (_dir, store, _db, _) = temp_store("parked");
         let queue = store.queue();
         let generation = queue.begin_worker();
         store.request("A");
@@ -832,7 +832,7 @@ mod tests {
 
     #[test]
     fn a_picture_is_not_stored_while_a_prune_holds_the_files() {
-        let (store, _db, covers) = temp_store("prune-hold");
+        let (_dir, store, _db, covers) = temp_store("prune-hold");
         let held = store.hold_files();
         std::thread::scope(|scope| {
             let storing =
@@ -847,7 +847,7 @@ mod tests {
 
     #[test]
     fn an_artist_with_a_picture_is_not_queued_but_one_that_missed_is() {
-        let (store, _db, _) = temp_store("skip");
+        let (_dir, store, _db, _) = temp_store("skip");
         store
             .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
             .unwrap();
@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn the_summary_counts_pictures_misses_and_what_waits() {
-        let (store, _db, _) = temp_store("summary");
+        let (_dir, store, _db, _) = temp_store("summary");
         store.set_budget(1 << 20);
         store
             .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
@@ -887,7 +887,7 @@ mod tests {
 
     #[test]
     fn a_featured_name_is_served_and_counted_as_its_lead_artist() {
-        let (store, _db, _) = temp_store("lead");
+        let (_dir, store, _db, _) = temp_store("lead");
         let hash = store
             .store("Adelitas Way", &test_jpeg_bytes(64, 64), "", "musicbee")
             .unwrap();
@@ -905,7 +905,7 @@ mod tests {
 
     #[test]
     fn two_artists_with_the_same_picture_count_its_file_once() {
-        let (store, db, covers) = temp_store("same-file");
+        let (_dir, store, db, covers) = temp_store("same-file");
         store
             .store("Adam Skorupa", &test_jpeg_bytes(64, 64), "", "musicbee")
             .unwrap();
@@ -925,7 +925,7 @@ mod tests {
 
     #[test]
     fn musicbee_is_asked_again_only_after_an_hour_once_it_said_none() {
-        let (store, _db, _) = temp_store("musicbee-none");
+        let (_dir, store, _db, _) = temp_store("musicbee-none");
         store.record_miss("Jormundgard", Status::NotFound, "");
         assert!(store.request("Jormundgard"));
         let _ = store.next_queued();
@@ -937,7 +937,7 @@ mod tests {
 
     #[test]
     fn a_full_budget_stops_queueing_and_says_so() {
-        let (store, db, covers) = temp_store("budget");
+        let (_dir, store, db, covers) = temp_store("budget");
         store.set_budget(1);
         assert!(store.is_accepting());
         let hash = store
@@ -955,7 +955,7 @@ mod tests {
 
     #[test]
     fn a_newer_worker_retires_the_older_one() {
-        let (store, _db, _) = temp_store("worker");
+        let (_dir, store, _db, _) = temp_store("worker");
         let queue = store.queue();
         let first = queue.begin_worker();
         let second = queue.begin_worker();
@@ -967,7 +967,8 @@ mod tests {
 
     #[test]
     fn a_retired_or_orphaned_worker_never_reaches_the_store() {
-        let store = Arc::new(crate::cover::test_cover_store("artist-images-weak"));
+        let (_dir, store) = crate::cover::test_cover_store("artist-images-weak").into_parts();
+        let store = Arc::new(store);
         let weak = Arc::downgrade(&store);
         let queue = store.artists().queue();
         let generation = queue.begin_worker();
@@ -982,7 +983,7 @@ mod tests {
 
     #[test]
     fn a_retired_worker_never_starts_waiting_for_work() {
-        let (store, _db, _) = temp_store("retired-wait");
+        let (_dir, store, _db, _) = temp_store("retired-wait");
         let queue = store.queue();
         let generation = queue.begin_worker();
         queue.retire();
@@ -993,7 +994,7 @@ mod tests {
 
     #[test]
     fn retiring_runs_the_hook_that_stops_a_blocked_fetch_once() {
-        let (store, _db, _) = temp_store("retire-hook");
+        let (_dir, store, _db, _) = temp_store("retire-hook");
         let queue = store.queue();
         let runs = Arc::new(AtomicU64::new(0));
         let counted = runs.clone();

@@ -276,9 +276,7 @@ mod tests {
 
     #[test]
     fn roles_outlive_a_restart() {
-        let dir = std::env::temp_dir().join(format!("mbrc-roles-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("roles");
         let path = dir.to_string_lossy().into_owned();
         {
             let roles = Roles::default();

@@ -745,9 +745,7 @@ mod tests {
 
     #[test]
     fn nothing_staged_is_not_a_failure() {
-        let dir = std::env::temp_dir().join("mbrc-elevate-empty");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("elevate-empty");
         assert_eq!(
             launch(&dir.to_string_lossy(), "1.5.0.0"),
             UpdateLaunch::NothingStaged,
@@ -757,8 +755,7 @@ mod tests {
 
     #[test]
     fn a_staged_bundle_the_release_keys_do_not_trust_is_refused() {
-        let dir = std::env::temp_dir().join("mbrc-elevate-untrusted");
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = crate::test_dir::TestDir::new("elevate-untrusted");
         let staged = dir.join(STAGING_DIR).join("9.9.9");
         std::fs::create_dir_all(&staged).unwrap();
         std::fs::write(
@@ -831,9 +828,7 @@ mod tests {
 
     #[test]
     fn writability_is_tested_by_writing() {
-        let dir = std::env::temp_dir().join("mbrc-elevate-writable");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("elevate-writable");
         assert!(is_writable(&dir));
         // And the probe does not survive the question being asked.
         assert!(std::fs::read_dir(&dir).unwrap().next().is_none());

@@ -295,17 +295,15 @@ fn now_ms() -> i64 {
 mod tests {
     use super::*;
 
-    fn store(name: &str) -> (ClientIdentities, std::path::PathBuf) {
-        let dir = std::env::temp_dir().join(format!("mbrc-clients-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn store(name: &str) -> (crate::test_dir::TestDir, ClientIdentities) {
+        let dir = crate::test_dir::TestDir::new(&format!("clients-{name}"));
         let path = dir.to_string_lossy().into_owned();
-        (ClientIdentities::new(Db::open(&path)), dir)
+        (dir, ClientIdentities::new(Db::open(&path)))
     }
 
     #[test]
     fn first_contact_is_issued_a_token_and_the_token_lets_it_back_in() {
-        let (clients, _dir) = store("issue");
+        let (_dir, clients) = store("issue");
 
         let Identity::Issued(token) = clients.identify(
             "install-a",
@@ -335,7 +333,7 @@ mod tests {
     /// but not the token must not be able to take the identity over.
     #[test]
     fn a_known_id_without_its_token_is_refused() {
-        let (clients, _dir) = store("refuse");
+        let (_dir, clients) = store("refuse");
         let Identity::Issued(token) = clients.identify(
             "install-b",
             None,
@@ -416,7 +414,7 @@ mod tests {
     /// inventing ids churns it, it never grows it.
     #[test]
     fn the_store_is_capped_and_evicts_the_least_recently_seen() {
-        let (clients, _dir) = store("cap");
+        let (_dir, clients) = store("cap");
         for i in 0..(MAX_IDENTITIES + 20) {
             clients.identify(
                 &format!("install-{i:04}"),
@@ -443,9 +441,7 @@ mod tests {
     fn an_app_with_a_party_mode_role_is_never_evicted() {
         use crate::server::permissions::{Principal, Role, Roles};
 
-        let dir = std::env::temp_dir().join(format!("mbrc-clients-pin-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("clients-pin");
         let db = Db::open(&dir.to_string_lossy());
         let clients = ClientIdentities::new(db.clone());
         let roles = Roles::default();
@@ -480,7 +476,7 @@ mod tests {
 
     #[test]
     fn a_handshake_name_is_kept_bounded_and_a_later_one_replaces_it() {
-        let (clients, _dir) = store("name");
+        let (_dir, clients) = store("name");
         let Identity::Issued(token) = clients.identify(
             "install-n",
             None,
@@ -521,7 +517,7 @@ mod tests {
 
     #[test]
     fn the_client_type_is_kept_so_browsers_can_be_told_from_apps() {
-        let (clients, _dir) = store("type");
+        let (_dir, clients) = store("type");
         clients.identify(
             "install-w",
             None,
@@ -535,7 +531,7 @@ mod tests {
 
     #[test]
     fn the_address_of_the_last_handshake_is_kept() {
-        let (clients, _dir) = store("address");
+        let (_dir, clients) = store("address");
         let about = |octet| Introduction {
             client_type: "android",
             address: Some(IpAddr::from([192, 168, 1, octet])),
@@ -550,7 +546,7 @@ mod tests {
 
     #[test]
     fn tokens_are_not_stored_in_the_clear() {
-        let (clients, _dir) = store("hashing");
+        let (_dir, clients) = store("hashing");
         let Identity::Issued(token) = clients.identify(
             "install-d",
             None,

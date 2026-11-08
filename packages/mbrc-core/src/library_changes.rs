@@ -480,11 +480,10 @@ fn new_epoch() -> String {
 mod tests {
     use super::*;
 
-    fn log(name: &str) -> ChangeLog {
-        let dir = std::env::temp_dir().join(format!("mbrc-changes-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        ChangeLog::new(Db::open(dir.to_str().unwrap()))
+    fn log(name: &str) -> crate::test_dir::InTestDir<ChangeLog> {
+        let dir = crate::test_dir::TestDir::new(&format!("changes-{name}"));
+        let log = ChangeLog::new(Db::open(dir.to_str().unwrap()));
+        dir.holding(log)
     }
 
     fn paths(names: &[&str]) -> Vec<String> {

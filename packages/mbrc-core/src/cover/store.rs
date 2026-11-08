@@ -1318,17 +1318,17 @@ mod tests {
     use super::*;
     use crate::cover::test_jpeg_bytes as jpeg_bytes;
 
-    /// A unique temp dir per test name (tests run in parallel), cleaned first,
-    /// plus a shared `Db` on it. redb takes an exclusive file lock, so a test
+    /// A temp dir for one test, plus a shared `Db` on it, to bind in that order
+    /// so the folder goes last. redb takes an exclusive file lock, so a test
     /// that opens a second store at the same dir must reuse this handle (Arc
     /// clone) - which also mirrors production, where one `Db` is shared.
-    fn temp_storage(name: &str) -> (Db, PathBuf) {
+    fn temp_storage(name: &str) -> (crate::test_dir::TestDir, Db) {
         crate::cover::test_storage(&format!("cover-store-{name}"))
     }
 
     #[test]
     fn build_stores_hashes_and_persists_state() {
-        let (db, dir) = temp_storage("build");
+        let (dir, db) = temp_storage("build");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[
             AlbumIdentity {
@@ -1381,7 +1381,7 @@ mod tests {
     #[test]
     fn build_regenerates_a_cover_whose_file_was_deleted() {
         // Otherwise a lost file leaves that album permanently blank.
-        let (db, dir) = temp_storage("selfheal");
+        let (dir, db) = temp_storage("selfheal");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[AlbumIdentity {
             key: "alb1".into(),
@@ -1415,7 +1415,7 @@ mod tests {
 
     #[test]
     fn warm_up_drops_covers_for_modified_tracks() {
-        let (db, dir) = temp_storage("modified");
+        let (dir, db) = temp_storage("modified");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[AlbumIdentity {
             key: "alb1".into(),
@@ -1442,7 +1442,7 @@ mod tests {
     /// whole cache stays at whatever it was first built at.
     #[test]
     fn item_covers_survive_an_album_build_and_a_restart() {
-        let (db, dir) = temp_storage("items-survive");
+        let (dir, db) = temp_storage("items-survive");
         let store = CoverStore::new(db.clone(), &dir);
         let hash = store
             .cache_item_cover("track:/single.mp3", Some(&jpeg_bytes(300, 300)), 7)
@@ -1484,7 +1484,7 @@ mod tests {
 
     #[test]
     fn a_changed_track_loses_its_own_cover_and_the_album_it_represents() {
-        let (db, dir) = temp_storage("forget-tracks");
+        let (dir, db) = temp_storage("forget-tracks");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(2, 0));
         store.build(|_| Some(jpeg_bytes(400, 400)), false);
@@ -1510,7 +1510,7 @@ mod tests {
 
     #[test]
     fn a_manual_rebuild_asks_again_for_items_that_had_no_artwork() {
-        let (db, dir) = temp_storage("items-no-art");
+        let (dir, db) = temp_storage("items-no-art");
         let store = CoverStore::new(db.clone(), &dir);
         store.cache_item_cover("track:/bare.mp3", None, 1).unwrap();
         store
@@ -1526,7 +1526,7 @@ mod tests {
 
     #[test]
     fn warm_up_drops_everything_when_the_cache_size_changed() {
-        let (db, dir) = temp_storage("resized");
+        let (dir, db) = temp_storage("resized");
         let store = CoverStore::new(db.clone(), &dir);
         let album = AlbumIdentity {
             key: "alb1".into(),
@@ -1590,7 +1590,7 @@ mod tests {
     /// after the build runs; what was checkpointed is all the next start gets.
     #[test]
     fn a_build_saves_covers_as_it_goes_not_only_at_the_end() {
-        let (db, dir) = temp_storage("checkpoints");
+        let (dir, db) = temp_storage("checkpoints");
         let store = CoverStore::new(db.clone(), &dir);
         let total = CHECKPOINT_EVERY * 2 + 50;
         store.warm_up(&albums(total, 0));
@@ -1622,7 +1622,7 @@ mod tests {
 
     #[test]
     fn a_stale_cover_leaves_the_saved_table_before_the_build_writes_anything() {
-        let (db, dir) = temp_storage("checkpoint-stale");
+        let (dir, db) = temp_storage("checkpoint-stale");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(2, 0));
         let art = jpeg_bytes(8, 8);
@@ -1653,7 +1653,7 @@ mod tests {
 
     #[test]
     fn a_long_build_reports_its_progress() {
-        let (db, dir) = temp_storage("progress");
+        let (dir, db) = temp_storage("progress");
         let store = CoverStore::new(db.clone(), &dir);
         let total = PROGRESS_EVERY + 10;
         store.warm_up(&albums(total, 0));
@@ -1688,7 +1688,7 @@ mod tests {
 
     #[test]
     fn an_album_without_artwork_is_asked_once_and_remembered_across_restarts() {
-        let (db, dir) = temp_storage("no-art");
+        let (dir, db) = temp_storage("no-art");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(3, 0));
         assert_eq!(build_counting(&store, || Artwork::Missing), 3);
@@ -1702,7 +1702,7 @@ mod tests {
 
     #[test]
     fn a_failed_fetch_is_not_remembered_as_no_artwork() {
-        let (db, dir) = temp_storage("no-art-failed");
+        let (dir, db) = temp_storage("no-art-failed");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(2, 0));
         let stats_calls = build_counting(&store, || Artwork::Unavailable);
@@ -1713,7 +1713,7 @@ mod tests {
 
     #[test]
     fn no_artwork_is_asked_again_after_a_week_a_track_change_or_a_manual_rebuild() {
-        let (db, dir) = temp_storage("no-art-retry");
+        let (dir, db) = temp_storage("no-art-retry");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(3, 0));
         build_counting(&store, || Artwork::Missing);
@@ -1777,7 +1777,7 @@ mod tests {
 
     #[test]
     fn linked_artwork_is_read_by_the_workers_without_asking_musicbee() {
-        let (db, dir) = temp_storage("read-in-core");
+        let (dir, db) = temp_storage("read-in-core");
         let image = dir.join("cover.jpg");
         std::fs::write(&image, jpeg_bytes(300, 300)).unwrap();
         let store = CoverStore::new(db.clone(), &dir);
@@ -1797,7 +1797,7 @@ mod tests {
 
     #[test]
     fn what_the_core_cannot_read_is_fetched_through_musicbee_once() {
-        let (db, dir) = temp_storage("read-fallback");
+        let (dir, db) = temp_storage("read-fallback");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(2, 0));
         let missing = dir.join("gone.jpg");
@@ -1816,7 +1816,7 @@ mod tests {
 
     #[test]
     fn a_fallback_that_finds_no_artwork_is_remembered() {
-        let (db, dir) = temp_storage("read-fallback-bare");
+        let (dir, db) = temp_storage("read-fallback-bare");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&albums(1, 0));
         let missing = dir.join("gone.jpg");
@@ -1832,7 +1832,7 @@ mod tests {
 
     #[test]
     fn the_parity_check_counts_matches_differences_and_unreadable_files() {
-        let (_, dir) = temp_storage("parity");
+        let (dir, _db) = temp_storage("parity");
         let image = dir.join("cover.jpg");
         std::fs::write(&image, [1u8, 2, 3]).unwrap();
         let mut parity = Parity {
@@ -1867,7 +1867,7 @@ mod tests {
     fn build_stops_when_asked_and_keeps_what_it_built() {
         // Teardown waits for this build, and the next one recomputes what is
         // missing rather than starting over.
-        let (db, dir) = temp_storage("build-stops");
+        let (dir, db) = temp_storage("build-stops");
         let store = CoverStore::new(db.clone(), &dir);
         store.warm_up(&[
             AlbumIdentity {
@@ -1910,7 +1910,7 @@ mod tests {
 
     #[test]
     fn build_prunes_orphaned_files() {
-        let (db, dir) = temp_storage("prune");
+        let (dir, db) = temp_storage("prune");
         let store = CoverStore::new(db, &dir);
         // Plant an orphan file in the covers dir.
         std::fs::create_dir_all(dir.join("cache").join("covers")).unwrap();
@@ -1929,7 +1929,7 @@ mod tests {
 
     #[test]
     fn a_cover_build_keeps_the_artist_pictures_it_shares_files_with() {
-        let (db, dir) = temp_storage("prune-artists");
+        let (dir, db) = temp_storage("prune-artists");
         let store = CoverStore::new(db, &dir);
         let hash = store
             .artists()
@@ -1948,7 +1948,7 @@ mod tests {
     fn deleting_one_album_keeps_a_cover_another_album_still_uses() {
         // Identical artwork means one content-hashed file for both albums, so
         // this is the deletion safety the nudge-path cover delta relies on.
-        let (db, dir) = temp_storage("shared-delete");
+        let (dir, db) = temp_storage("shared-delete");
         let store = CoverStore::new(db.clone(), &dir);
         let art = jpeg_bytes(200, 200);
 

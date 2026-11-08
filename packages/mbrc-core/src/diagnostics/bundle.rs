@@ -188,10 +188,8 @@ mod tests {
     use super::*;
 
     /// A scratch storage dir seeded with an active log and one rolled generation.
-    fn seed(case: &str, log_body: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-bundle-{case}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+    fn seed(case: &str, log_body: &str) -> crate::test_dir::TestDir {
+        let dir = crate::test_dir::TestDir::new(&format!("bundle-{case}"));
         std::fs::write(dir.join("mbrc-core.log"), log_body).expect("seed log");
         std::fs::write(dir.join("mbrc-core.1.log.gz"), b"stand-in for a rolled log")
             .expect("seed rolled log");
@@ -253,8 +251,6 @@ mod tests {
         let report: Value =
             serde_json::from_str(&read_entry(&path, "report.json")).expect("report.json parses");
         assert_eq!(report["versions"]["core"], "1.5.0");
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -273,8 +269,6 @@ mod tests {
 
         assert_eq!(read_entry(&path, "capture.log"), "a fresh, short log\n");
         assert!(entries(&path).contains(&"capture.log.note.txt".to_owned()));
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -308,16 +302,12 @@ mod tests {
             "the whole log
 "
         );
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_missing_log_still_produces_a_bundle() {
         // A capture on a fresh install, before anything was logged.
-        let dir = std::env::temp_dir().join("mbrc-bundle-nolog");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
+        let dir = crate::test_dir::TestDir::new("bundle-nolog");
         let out = dir.join("out");
         let path = write(Inputs {
             storage: dir.to_str().expect("utf8 dir"),
@@ -329,6 +319,5 @@ mod tests {
         .expect("bundle written");
 
         assert_eq!(read_entry(&path, "capture.log"), "");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

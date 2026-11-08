@@ -55,11 +55,8 @@ impl SessionMarker {
 mod tests {
     use super::*;
 
-    fn dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-session-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(name: &str) -> crate::test_dir::TestDir {
+        crate::test_dir::TestDir::new(&format!("session-{name}"))
     }
 
     #[test]

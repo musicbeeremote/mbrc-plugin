@@ -1029,15 +1029,16 @@ pub fn stop_networking() -> MbrcResult {
 
 /// A core over `providers`, storing under a fresh temp folder named `name`.
 #[cfg(test)]
-pub(crate) fn test_core(providers: Arc<dyn Providers>, name: &str) -> Arc<Core> {
-    let dir = std::env::temp_dir().join(format!("mbrc-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+pub(crate) fn test_core(
+    providers: Arc<dyn Providers>,
+    name: &str,
+) -> crate::test_dir::InTestDir<Arc<Core>> {
+    let dir = crate::test_dir::TestDir::new(name);
     let config = Config {
         storage_path: dir.to_string_lossy().into_owned(),
         ..Config::for_test(0)
     };
-    Arc::new(Core::new(providers, config))
+    dir.holding(Arc::new(Core::new(providers, config)))
 }
 
 /// The broadcast frames waiting on `rx` that carry `event`.
@@ -1056,17 +1057,15 @@ mod tests {
     use super::*;
     use crate::providers::NullProviders;
 
-    fn core_with_storage(name: &str) -> Arc<Core> {
-        let dir = std::env::temp_dir().join(format!("mbrc-state-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn core_with_storage(name: &str) -> crate::test_dir::InTestDir<Arc<Core>> {
+        let dir = crate::test_dir::TestDir::new(&format!("state-{name}"));
         let config = Config {
             storage_path: dir.to_string_lossy().into_owned(),
             ..Config::for_test(0)
         };
         let core = Arc::new(Core::new(Arc::new(NullProviders), config));
         core.metadata_cache.reconcile(&[], 1);
-        core
+        dir.holding(core)
     }
 
     fn next_event(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>) -> serde_json::Value {
@@ -1225,9 +1224,7 @@ mod tests {
 
     #[test]
     fn settings_and_host_queries_round_trip_through_state() {
-        let dir = std::env::temp_dir().join("mbrc-settings-state-test");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("settings-state-test");
 
         let config = Config {
             port: 4321,

@@ -202,13 +202,11 @@ mod tests {
     use crate::providers::MockProviders;
     use crate::store::Db;
 
-    fn cache(name: &str) -> MetadataCache {
-        let dir = std::env::temp_dir().join(format!("mbrc-library-sync-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn cache(name: &str) -> crate::test_dir::InTestDir<MetadataCache> {
+        let dir = crate::test_dir::TestDir::new(&format!("library-sync-{name}"));
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
-        cache
+        dir.holding(cache)
     }
 
     fn tags(src: &str, title: &str) -> TrackTags {

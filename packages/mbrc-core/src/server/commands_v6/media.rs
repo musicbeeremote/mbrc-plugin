@@ -294,9 +294,7 @@ mod tests {
     #[test]
     fn sources_queues_a_relist_of_every_category() {
         let m = audiobooks(vec![chapter("/b/1.mp3", "Dune", "Herbert", 1, 1)]);
-        let dir = std::env::temp_dir().join(format!("mbrc-media-ops-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("media-ops");
         let cache = MetadataCache::new(crate::store::Db::open(dir.to_str().unwrap()));
 
         dispatch("media_sources", &json!({}), &m, None, Some(&cache))

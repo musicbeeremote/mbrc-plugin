@@ -578,9 +578,7 @@ mod tests {
     /// empty, which is a restart in the only sense that matters here.
     #[test]
     fn a_paired_browser_survives_a_restart() {
-        let dir = std::env::temp_dir().join("mbrc-pairing-restart");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("pairing-restart");
 
         let token = {
             let before = Pairing::default();
@@ -605,9 +603,7 @@ mod tests {
     /// and only a browser holding the token can produce it.
     #[test]
     fn the_stored_record_cannot_be_replayed_as_a_token() {
-        let dir = std::env::temp_dir().join("mbrc-pairing-hashed");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("pairing-hashed");
 
         let db = Db::open(dir.to_str().unwrap());
         let pairing = Pairing::default();
@@ -627,9 +623,7 @@ mod tests {
 
     #[test]
     fn unpairing_one_browser_leaves_the_others_and_outlives_a_restart() {
-        let dir = std::env::temp_dir().join("mbrc-pairing-revoke-one");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("pairing-revoke-one");
 
         let (phone, desk) = {
             let pairing = Pairing::default();

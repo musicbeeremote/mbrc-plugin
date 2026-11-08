@@ -216,9 +216,8 @@ fn is_multiply_linked(_path: &Path, meta: &std::fs::Metadata) -> bool {
 mod tests {
     use super::*;
 
-    fn scratch(case: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-legacy-{case}"));
-        let _ = std::fs::remove_dir_all(&dir);
+    fn scratch(case: &str) -> crate::test_dir::TestDir {
+        let dir = crate::test_dir::TestDir::new(&format!("legacy-{case}"));
         std::fs::create_dir_all(dir.join("cache")).expect("scratch");
         dir
     }
@@ -260,7 +259,6 @@ mod tests {
         ] {
             assert!(dir.join(name).exists(), "{name} must be left alone");
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -280,7 +278,6 @@ mod tests {
             "migrated, so the XML must go - otherwise deleting core_settings.json \
              to reset the settings silently restores the old ones instead"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -297,7 +294,6 @@ mod tests {
             dir.join("settings.xml").exists(),
             "a zero-length settings file must not be taken as a completed migration"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -316,7 +312,6 @@ mod tests {
         for name in ["mb_remote.dll", "mbrc_core.dll", "mbrc-helper.exe"] {
             assert!(plugins.join(name).exists(), "{name} must be left alone");
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -330,7 +325,6 @@ mod tests {
         sweep(dir.to_str().unwrap(), None);
 
         assert!(dir.join("mbrc.log").join("inside").exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -340,7 +334,6 @@ mod tests {
         write(&dir, "somebody-elses-file", "important");
         if std::fs::hard_link(dir.join("somebody-elses-file"), dir.join("mbrc.log")).is_err() {
             // Filesystems that cannot do this have nothing to test.
-            let _ = std::fs::remove_dir_all(&dir);
             return;
         }
 
@@ -351,7 +344,6 @@ mod tests {
             "a hard link must not be unlinked"
         );
         assert!(dir.join("somebody-elses-file").exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -369,7 +361,6 @@ mod tests {
             dir.join("mbrc.log").exists(),
             "a relative path must be refused, not resolved"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -386,8 +377,6 @@ mod tests {
         let linked = std::os::unix::fs::symlink(&elsewhere, dir.join("cache")).is_ok();
         if !linked {
             // Creating one needs a privilege we may not have; nothing to prove.
-            let _ = std::fs::remove_dir_all(&dir);
-            let _ = std::fs::remove_dir_all(&elsewhere);
             return;
         }
 
@@ -397,8 +386,6 @@ mod tests {
             elsewhere.join("state.json.migrated").exists(),
             "a junction in place of cache/ must stop the sweep, not redirect it"
         );
-        let _ = std::fs::remove_dir_all(&dir);
-        let _ = std::fs::remove_dir_all(&elsewhere);
     }
 
     #[test]
@@ -407,13 +394,11 @@ mod tests {
         write(&dir, "mbrc-core.log", "current");
         sweep(dir.to_str().unwrap(), None);
         assert!(dir.join("mbrc-core.log").exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_missing_storage_directory_is_not_an_error() {
-        let dir = std::env::temp_dir().join("mbrc-legacy-absent");
-        let _ = std::fs::remove_dir_all(&dir);
-        sweep(dir.to_str().unwrap(), None);
+        let parent = crate::test_dir::TestDir::new("legacy-absent");
+        sweep(parent.join("absent").to_str().unwrap(), None);
     }
 }

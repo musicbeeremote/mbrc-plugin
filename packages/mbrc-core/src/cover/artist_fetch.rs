@@ -849,12 +849,11 @@ mod tests {
         (queue, worker)
     }
 
-    fn worker_store(name: &str) -> Arc<CoverStore> {
-        let store = Arc::new(crate::cover::test_cover_store(&format!(
-            "artist-fetch-{name}"
-        )));
+    fn worker_store(name: &str) -> crate::test_dir::InTestDir<Arc<CoverStore>> {
+        let (dir, store) =
+            crate::cover::test_cover_store(&format!("artist-fetch-{name}")).into_parts();
         store.artists().set_enabled(true);
-        store
+        dir.holding(Arc::new(store))
     }
 
     #[test]
@@ -922,10 +921,14 @@ mod tests {
         assert!(picture.width() <= 500 && picture.height() <= 500);
     }
 
-    /// A stand-in MusicBee whose thumbnails are files in `dir`: a picture for
-    /// `with`, an empty file (MusicBee found none) for `without`.
-    fn musicbee(case: &str, with: &[&str], without: &[&str]) -> MockProviders {
-        let (_, dir) = crate::cover::test_storage(&format!("artist-fetch-thumbs-{case}"));
+    /// A stand-in MusicBee whose thumbnails are files beside `store`: a picture
+    /// for `with`, an empty file (MusicBee found none) for `without`.
+    fn musicbee(
+        store: &crate::test_dir::InTestDir<Arc<CoverStore>>,
+        with: &[&str],
+        without: &[&str],
+    ) -> MockProviders {
+        let dir = store.dir();
         let mut thumbs = HashMap::new();
         for (name, bytes) in with
             .iter()
@@ -948,7 +951,7 @@ mod tests {
         store.artists().request("Eluveitie");
         let (client, landed) = run_until(
             &store,
-            musicbee("first", &["Eluveitie"], &[]),
+            musicbee(&store, &["Eluveitie"], &[]),
             Recorded::eluveitie(),
             |images| images.hash_for("Eluveitie").is_some(),
         );
@@ -967,7 +970,7 @@ mod tests {
         store.artists().request("Eluveitie");
         let (client, _) = run_until(
             &store,
-            musicbee("none", &[], &["Eluveitie"]),
+            musicbee(&store, &[], &["Eluveitie"]),
             Recorded::eluveitie(),
             |images| images.hash_for("Eluveitie").is_some(),
         );
@@ -990,7 +993,7 @@ mod tests {
         store.artists().request("Jormundgard");
         let (client, _) = run_until(
             &store,
-            musicbee("later", &["Jazzbit"], &["Jormundgard"]),
+            musicbee(&store, &["Jazzbit"], &["Jormundgard"]),
             Recorded::default(),
             |images| images.hash_for("Jazzbit").is_some() && images.summary().waiting == 0,
         );
@@ -1034,7 +1037,7 @@ mod tests {
         let store = worker_store("feat-musicbee");
         let joined = "Adelitas Way feat. Tyler Connolly";
         store.artists().request(joined);
-        let musicbee = musicbee("feat", &["Adelitas Way"], &[]);
+        let musicbee = musicbee(&store, &["Adelitas Way"], &[]);
         let (client, landed) = run_until(&store, musicbee, Recorded::default(), |images| {
             images.hash_for(joined).is_some()
         });
@@ -1081,7 +1084,7 @@ mod tests {
         store.artists().request("Tico feat. Gadiel");
         let (_, landed) = run_until(
             &store,
-            musicbee("spellings", &["Tico"], &[]),
+            musicbee(&store, &["Tico"], &[]),
             Recorded::default(),
             |images| images.hash_for("Tico").is_some(),
         );
@@ -1130,7 +1133,7 @@ mod tests {
         };
         let (client, _) = run_paced(
             &store,
-            musicbee("busy-pause", &["Tico"], &[]),
+            musicbee(&store, &["Tico"], &[]),
             busy(),
             pace,
             |images| images.hash_for("Tico").is_some(),
@@ -1147,7 +1150,7 @@ mod tests {
         store.artists().request("Nobody");
         run_paced(
             &store,
-            musicbee("no-client", &["Tico"], &[]),
+            musicbee(&store, &["Tico"], &[]),
             Unavailable("no session".into()),
             Pace::default(),
             |images| images.lookup("Nobody").is_some(),
@@ -1163,7 +1166,7 @@ mod tests {
         store.artists().request("Slow");
         let musicbee = Arc::new(MockProviders {
             artist_thumb_stall: Some(Duration::from_millis(200)),
-            ..musicbee("off-mid-call", &["Slow"], &[])
+            ..musicbee(&store, &["Slow"], &[])
         });
         let (queue, worker) = spawn_worker(&store, &musicbee);
 

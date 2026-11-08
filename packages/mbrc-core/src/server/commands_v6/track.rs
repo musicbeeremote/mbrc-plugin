@@ -635,9 +635,7 @@ mod tests {
 
     #[test]
     fn track_get_reads_tags_and_resolves_cover_hash() {
-        let dir = std::env::temp_dir().join("mbrc-v6-track-get");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-track-get");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         // Seed the album cover under the same key track_get will resolve.
@@ -690,9 +688,7 @@ mod tests {
     /// episode or a compilation track has art of its own and no album entry.
     #[test]
     fn the_playing_track_is_hashed_by_its_own_artwork() {
-        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-playing-cover");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         let artwork = crate::cover::to_base64(&test_jpeg_bytes(120, 120));
@@ -713,9 +709,7 @@ mod tests {
     /// pin the first song's picture to all that follow.
     #[test]
     fn a_stream_gets_each_songs_artwork_and_keeps_only_the_latest() {
-        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover-stream");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-playing-cover-stream");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         let mut tags = tags();
@@ -737,9 +731,7 @@ mod tests {
     /// the album it belongs to is a better answer than a blank pane.
     #[test]
     fn without_announced_artwork_the_album_answers() {
-        let dir = std::env::temp_dir().join("mbrc-v6-playing-cover-album");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-playing-cover-album");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         let tags = tags();
@@ -756,17 +748,15 @@ mod tests {
     }
 
     /// A store, and an albumless track whose file exists, under a fresh dir.
-    fn albumless(name: &str) -> (CoverStore, TrackTags) {
-        let dir = std::env::temp_dir().join(format!("mbrc-v6-albumless-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+    fn albumless(name: &str) -> (crate::test_dir::TestDir, CoverStore, TrackTags) {
+        let dir = crate::test_dir::TestDir::new(&format!("v6-albumless-{name}"));
         let src = dir.join("single.mp3");
         std::fs::write(&src, b"audio").unwrap();
         let store = CoverStore::open_at(&dir);
         let mut tags = tags();
         tags.src = src.to_string_lossy().into_owned();
         tags.album = String::new();
-        (store, tags)
+        (dir, store, tags)
     }
 
     fn artwork_reads(m: &MockProviders) -> usize {
@@ -778,7 +768,7 @@ mod tests {
 
     #[test]
     fn an_albumless_track_has_its_own_cover_not_its_artists_singles() {
-        let (store, tags) = albumless("own");
+        let (_dir, store, tags) = albumless("own");
         let artists_singles = store
             .cache_cover(
                 &cover_identifier(&tags.album_artist, ""),
@@ -798,7 +788,7 @@ mod tests {
 
     #[test]
     fn an_albumless_cover_is_read_once_until_its_file_changes() {
-        let (store, tags) = albumless("once");
+        let (_dir, store, tags) = albumless("once");
         let m = MockProviders {
             artwork_raw: test_jpeg_bytes(90, 90),
             ..Default::default()
@@ -820,7 +810,7 @@ mod tests {
 
     #[test]
     fn an_albumless_track_without_artwork_is_not_asked_again() {
-        let (store, tags) = albumless("none");
+        let (_dir, store, tags) = albumless("none");
         let m = MockProviders::default(); // no artwork
         assert_eq!(Covers::new(Some(&store), &m).track(&tags), None);
         assert_eq!(Covers::new(Some(&store), &m).track(&tags), None);
@@ -829,7 +819,7 @@ mod tests {
 
     #[test]
     fn past_the_read_budget_an_albumless_track_waits_for_a_later_page() {
-        let (store, tags) = albumless("budget");
+        let (_dir, store, tags) = albumless("budget");
         let m = MockProviders {
             artwork_raw: test_jpeg_bytes(90, 90),
             ..Default::default()
@@ -846,7 +836,7 @@ mod tests {
 
     #[test]
     fn a_stream_with_no_album_has_no_cover_and_costs_no_read() {
-        let (store, mut tags) = albumless("stream");
+        let (_dir, store, mut tags) = albumless("stream");
         tags.src = "http://radio.example/stream".into();
         let m = MockProviders {
             artwork_raw: test_jpeg_bytes(90, 90),
@@ -867,9 +857,7 @@ mod tests {
 
     #[test]
     fn cover_get_hit_not_modified_and_miss() {
-        let dir = std::env::temp_dir().join("mbrc-v6-cover-get");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-cover-get");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         let hash = store

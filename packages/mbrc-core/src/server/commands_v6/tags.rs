@@ -682,9 +682,7 @@ mod tests {
     fn a_value_written_shows_in_the_next_tag_values() {
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-v6-tag-values-after-write");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-tag-values-after-write");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/a.flac".into(), "/b.flac".into()]);
@@ -708,16 +706,14 @@ mod tests {
         assert!(values(&m).to_string().contains("Cello Bow"));
     }
 
-    fn cache_of(name: &str, paths: &[&str]) -> MetadataCache {
+    fn cache_of(name: &str, paths: &[&str]) -> crate::test_dir::InTestDir<MetadataCache> {
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join(name);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new(name);
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&paths.iter().map(|p| p.to_string()).collect::<Vec<_>>());
-        cache
+        dir.holding(cache)
     }
 
     /// Reading every track again for each saved field cost a full library

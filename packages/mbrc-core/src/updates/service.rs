@@ -637,9 +637,7 @@ mod tests {
 
     #[test]
     fn an_empty_storage_directory_starts_from_nothing_staged() {
-        let dir = std::env::temp_dir().join("mbrc-update-service-initial");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("update-service-initial");
         assert_eq!(
             initial_status(&dir.to_string_lossy()),
             UpdateStatus::default()

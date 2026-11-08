@@ -104,11 +104,8 @@ mod tests {
     use super::*;
     use crate::config::migrate_legacy_settings;
 
-    fn scratch(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mbrc-setup-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn scratch(name: &str) -> crate::test_dir::TestDir {
+        crate::test_dir::TestDir::new(&format!("setup-{name}"))
     }
 
     fn loaded_after_migration(dir: &Path) -> Config {
@@ -123,7 +120,6 @@ mod tests {
 
         assert!(!has_saved_settings(dir.to_str().unwrap()));
         assert!(is_needed(&loaded_after_migration(&dir)));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -139,7 +135,6 @@ mod tests {
         let config = loaded_after_migration(&dir);
         assert_eq!(config.port, 3456);
         assert!(is_needed(&config));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -149,7 +144,6 @@ mod tests {
 
         assert!(has_saved_settings(dir.to_str().unwrap()));
         assert!(is_needed(&loaded_after_migration(&dir)));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -162,7 +156,6 @@ mod tests {
         .unwrap();
 
         assert!(!is_needed(&loaded_after_migration(&dir)));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

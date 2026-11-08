@@ -1217,13 +1217,13 @@ mod tests {
 
     /// A split collaboration, a track by its featured artist alone, and a
     /// track nobody split.
-    fn credited_cache(name: &str) -> crate::metadata_cache::MetadataCache {
+    fn credited_cache(
+        name: &str,
+    ) -> crate::test_dir::InTestDir<crate::metadata_cache::MetadataCache> {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join(name);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new(name);
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         let tagged = |src: &str, artist: &str, multi: &str, album: &str| CachedTags {
@@ -1250,7 +1250,7 @@ mod tests {
             tagged("/solo.mp3", "Gadiel", "Gadiel\0", ""),
             tagged("/prose.mp3", "Gadiel feat. Jayko", "", ""),
         ]);
-        cache
+        dir.holding(cache)
     }
 
     /// While the tags are still being read, an artist the host has no albums
@@ -1260,9 +1260,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-v6-compilation-warmup");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-compilation-warmup");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/va/1.mp3".into(), "/untagged.mp3".into()]);
@@ -1293,7 +1291,7 @@ mod tests {
     /// which is nobody's name; V6 lists each credited artist (#139).
     #[test]
     fn each_credited_artist_is_listed_and_counted() {
-        let cache = credited_cache("mbrc-v6-credited-artists");
+        let cache = credited_cache("v6-credited-artists");
         let m = MockProviders::default();
         let out = dispatch("library_artists", &json!({}), &m, None, Some(&cache))
             .unwrap()
@@ -1326,7 +1324,7 @@ mod tests {
     /// artist so its cover and track list are that record's.
     #[test]
     fn a_guest_is_found_on_the_records_they_appear_on() {
-        let cache = credited_cache("mbrc-v6-credited-albums");
+        let cache = credited_cache("v6-credited-albums");
         let m = MockProviders::default();
         let run = |op: &str, data: Value| {
             dispatch(op, &data, &m, None, Some(&cache))
@@ -1344,13 +1342,13 @@ mod tests {
         assert_eq!(queued["count"], 1);
     }
 
-    fn multi_genre_cache(name: &str) -> crate::metadata_cache::MetadataCache {
+    fn multi_genre_cache(
+        name: &str,
+    ) -> crate::test_dir::InTestDir<crate::metadata_cache::MetadataCache> {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join(name);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new(name);
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         let tagged = |src: &str, artist: &str, genre: &str| CachedTags {
@@ -1370,14 +1368,14 @@ mod tests {
             tagged("/power.mp3", "Blind Guardian", "Power Metal"),
             tagged("/rock.mp3", "AC/DC", "Rock"),
         ]);
-        cache
+        dir.holding(cache)
     }
 
     /// MusicBee's genre lookup files a track under its first genre only, and
     /// the genre filters compared the whole field (#228).
     #[test]
     fn a_file_is_found_through_each_of_its_genres() {
-        let cache = multi_genre_cache("mbrc-v6-multi-genre");
+        let cache = multi_genre_cache("v6-multi-genre");
         let m = MockProviders::default();
         let run = |op: &str, data: Value| {
             dispatch(op, &data, &m, None, Some(&cache))
@@ -1422,7 +1420,7 @@ mod tests {
     /// Until every track's tags are cached, the cache cannot know every genre.
     #[test]
     fn genres_come_from_the_host_while_tags_are_missing() {
-        let cache = multi_genre_cache("mbrc-v6-multi-genre-cold");
+        let cache = multi_genre_cache("v6-multi-genre-cold");
         cache.replace_track_index(&["/saga.mp3".into(), "/untagged.mp3".into()]);
         let m = MockProviders {
             browse_genres: Page {
@@ -1448,9 +1446,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-albums-from-tags");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("albums-from-tags");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
 
@@ -1495,9 +1491,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-albums-host-wins");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("albums-host-wins");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         cache.replace_track_index(&["/adele/1.mp3".into()]);
@@ -1536,9 +1530,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-albums-original-year");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("albums-original-year");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         let album = |album: &str, year: i32, original_year: i32| CachedTags {
@@ -1599,9 +1591,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-albums-both-years");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("albums-both-years");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
         let rows = [CachedTags {
@@ -1646,9 +1636,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-tracks-artist-scope");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("tracks-artist-scope");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
 
@@ -1699,9 +1687,7 @@ mod tests {
         use crate::metadata_cache::MetadataCache;
         use crate::store::Db;
 
-        let dir = std::env::temp_dir().join("mbrc-search-sort");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("search-sort");
         let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
         cache.reconcile(&[], 1);
 
@@ -2209,7 +2195,7 @@ mod tests {
         assert!(m.recorded().iter().any(|c| c.starts_with("genre_artists")));
     }
 
-    fn artist_store(name: &str) -> CoverStore {
+    fn artist_store(name: &str) -> crate::test_dir::InTestDir<CoverStore> {
         crate::cover::test_cover_store(&format!("v6-lib-artist-images-{name}"))
     }
 
@@ -2324,9 +2310,7 @@ mod tests {
     fn albums_carry_cover_hash_when_the_store_has_it() {
         use crate::cover::{cover_identifier, test_jpeg_bytes};
         use crate::store::Db;
-        let dir = std::env::temp_dir().join("mbrc-v6-lib-albums");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-lib-albums");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         let hash = store
@@ -2359,9 +2343,7 @@ mod tests {
     fn an_artists_albumless_group_has_no_cover() {
         use crate::cover::{cover_identifier, test_jpeg_bytes};
         use crate::store::Db;
-        let dir = std::env::temp_dir().join("mbrc-v6-lib-albumless-group");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("v6-lib-albumless-group");
         let path = dir.to_string_lossy().into_owned();
         let store = CoverStore::new(Db::open(&path), path.clone());
         store

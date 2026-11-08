@@ -531,8 +531,7 @@ mod tests {
     fn legacy_debug_bool_migrates_to_debug_level() {
         // An old file with `debug:true` and no `log_level`: load() maps it to
         // Debug, and the loaded config no longer carries the legacy key.
-        let dir = std::env::temp_dir().join("mbrc-cfg-legacy-debug");
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("cfg-legacy-debug");
         std::fs::write(
             dir.join("core_settings.json"),
             r#"{"port":3000,"debug":true}"#,
@@ -550,16 +549,11 @@ mod tests {
             Config::load(dir.to_str().unwrap()).log_level,
             LogLevel::Info
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_file_with_the_retired_search_source_still_loads() {
-        let dir = std::env::temp_dir().join(format!(
-            "mbrc-cfg-retired-search-source-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_dir::TestDir::new("cfg-retired-search-source");
         std::fs::write(
             dir.join("core_settings.json"),
             r#"{"port":3456,"search_source":2,"log_level":"debug"}"#,
@@ -570,7 +564,6 @@ mod tests {
         assert_eq!(c.log_level, LogLevel::Debug);
         let saved = serde_json::to_value(&c).unwrap();
         assert!(saved.get("search_source").is_none());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

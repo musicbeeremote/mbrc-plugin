@@ -106,16 +106,11 @@ fn is_uuid(s: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
 
     use super::*;
 
-    fn dir(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("mbrc-server-id-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(name: &str) -> crate::test_dir::TestDir {
+        crate::test_dir::TestDir::new(&format!("server-id-{name}"))
     }
 
     #[test]

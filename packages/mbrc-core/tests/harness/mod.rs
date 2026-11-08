@@ -3,6 +3,9 @@
 
 #![allow(dead_code)]
 
+#[path = "../../src/test_dir.rs"]
+pub mod test_dir;
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::Arc;

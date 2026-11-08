@@ -130,13 +130,14 @@ mod tests {
 
     #[test]
     fn a_missing_file_is_an_error_not_a_panic() {
-        let missing = std::env::temp_dir().join("mbrc-no-such-cover.jpg");
+        let dir = crate::test_dir::TestDir::new("source-missing");
+        let missing = dir.join("no-such-cover.jpg");
         assert!(Source::File(missing.clone()).read().is_err());
         assert!(Source::Embedded(missing).read().is_err());
     }
 
     /// An MP3 carrying `picture` in an ID3v2 tag, followed by one silent frame.
-    fn mp3_with_picture(name: &str, picture: &[u8]) -> PathBuf {
+    fn mp3_with_picture(dir: &Path, picture: &[u8]) -> PathBuf {
         use lofty::config::WriteOptions;
         use lofty::id3::v2::Id3v2Tag;
         use lofty::picture::{MimeType, Picture, PictureType};
@@ -154,8 +155,7 @@ mod tests {
         // MPEG-1 Layer III, 128 kbps, 44.1 kHz: a 417-byte frame.
         bytes.extend([0xFF, 0xFB, 0x90, 0x00]);
         bytes.extend(std::iter::repeat_n(0u8, 413));
-        let path =
-            std::env::temp_dir().join(format!("mbrc-source-{name}-{}.mp3", std::process::id()));
+        let path = dir.join("track.mp3");
         std::fs::write(&path, bytes).unwrap();
         path
     }
@@ -163,9 +163,9 @@ mod tests {
     #[test]
     fn an_embedded_picture_is_read_from_the_tags() {
         let picture = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
-        let path = mp3_with_picture("embedded", &picture);
-        assert_eq!(Source::Embedded(path.clone()).read().unwrap(), picture);
-        let _ = std::fs::remove_file(path);
+        let dir = crate::test_dir::TestDir::new("source-embedded");
+        let path = mp3_with_picture(&dir, &picture);
+        assert_eq!(Source::Embedded(path).read().unwrap(), picture);
     }
 
     /// An ID3v2.3 frame: id, big-endian size, no flags, then `content`.
@@ -193,21 +193,17 @@ mod tests {
         bytes.extend(frames);
         bytes.extend([0xFF, 0xFB, 0x90, 0x00]);
         bytes.extend(std::iter::repeat_n(0u8, 413));
-        let path =
-            std::env::temp_dir().join(format!("mbrc-source-ufid-{}.mp3", std::process::id()));
+        let dir = crate::test_dir::TestDir::new("source-ufid");
+        let path = dir.join("track.mp3");
         std::fs::write(&path, bytes).unwrap();
-        assert_eq!(Source::Embedded(path.clone()).read().unwrap(), picture);
-        let _ = std::fs::remove_file(path);
+        assert_eq!(Source::Embedded(path).read().unwrap(), picture);
     }
 
     #[test]
     fn a_linked_file_is_read_as_it_is() {
-        let path = std::env::temp_dir().join(format!("mbrc-source-{}.jpg", std::process::id()));
+        let dir = crate::test_dir::TestDir::new("source-linked");
+        let path = dir.join("cover.jpg");
         std::fs::write(&path, [0xFF, 0xD8, 0xFF, 0xD9]).unwrap();
-        assert_eq!(
-            Source::File(path.clone()).read().unwrap(),
-            [0xFF, 0xD8, 0xFF, 0xD9]
-        );
-        let _ = std::fs::remove_file(path);
+        assert_eq!(Source::File(path).read().unwrap(), [0xFF, 0xD8, 0xFF, 0xD9]);
     }
 }

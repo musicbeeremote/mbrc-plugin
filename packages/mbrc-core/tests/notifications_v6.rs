@@ -15,12 +15,10 @@ use mbrc_core::config::Config;
 use mbrc_core::ffi::types::NotificationType;
 use mbrc_core::state::{self, Core};
 
+use harness::test_dir::TestDir;
 use harness::{connect, null_core, read_frame, send, start_core, v6_handshake};
 
-fn core(port: u16) -> Arc<Core> {
-    let dir = std::env::temp_dir().join(format!("mbrc-notifications-v6-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn core(port: u16, dir: &TestDir) -> Arc<Core> {
     null_core(Config {
         storage_path: dir.to_string_lossy().into_owned(),
         ..Config::for_test(port)
@@ -42,7 +40,8 @@ fn wait_for_startup_reconcile(core: &Core) {
 /// `notifications_v6` unit tests).
 #[test]
 fn a_reported_edit_emits_library_changed_to_v6_main() {
-    let (port, core, net) = start_core(core);
+    let dir = TestDir::new("notifications-v6");
+    let (port, core, net) = start_core(|port| self::core(port, &dir));
     wait_for_startup_reconcile(&core);
     let library = vec!["/a.mp3".to_string()];
     core.metadata_cache.replace_track_index(&library);
