@@ -12,7 +12,7 @@ import type { Track } from '../api/types'
 
 import { usePreferences } from '../composables/usePreferences'
 
-import type { QueueOptions } from './library'
+import type { QueueOptions } from './libraryTypes'
 
 const PAGE_SIZE = 100
 

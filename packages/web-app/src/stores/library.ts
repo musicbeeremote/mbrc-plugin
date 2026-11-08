@@ -13,36 +13,10 @@ import type { AlbumEntry, ArtistEntry, GenreEntry } from '../api/browse'
 import type { PlaylistEntry, Track } from '../api/types'
 
 import { useArtistImagesStore } from './artistImages'
+import { PAGE_SIZE, readRows, searchArgOf } from './libraryTypes'
+import type { ListOp, QueueOptions, ViewOptions } from './libraryTypes'
 
 export { LibraryLevel } from '../composables/libraryLevels'
-
-/** What a level is showing beyond its scope: a search, and an order. */
-interface ViewOptions {
-  query?: string
-  sort?: string
-  descending?: boolean
-  albumArtists?: boolean
-}
-
-/** How a scope goes into the queue: where, from which track, in what order. */
-export interface QueueOptions {
-  mode?: QueueMode
-  /** The track to start from, for "play all from here". */
-  play?: string
-  shuffle?: boolean
-}
-
-/** One page per scroll batch. Large enough that a phone rarely pages twice. */
-const PAGE_SIZE = 100
-
-/** The ops that answer a `{total, offset, items}` page. */
-type ListOp =
-  | typeof Op.LibraryGenres
-  | typeof Op.LibraryArtists
-  | typeof Op.LibraryAlbums
-  | typeof Op.LibraryTracks
-  | typeof Op.LibraryRadio
-  | typeof Op.PlaylistList
 
 /**
  * Library browsing: four levels and a scope, both read off the URL.
@@ -101,11 +75,7 @@ export const useLibraryStore = defineStore('library', () => {
   })
   const hasMore = computed(() => shown.value < total.value)
 
-  /** The `query` parameter, or nothing at all when the box is empty. */
-  function searchArg(): { query?: string } {
-    const trimmed = query.value.trim()
-    return trimmed === '' ? {} : { query: trimmed }
-  }
+  const searchArg = () => searchArgOf(query.value)
 
   async function page<K extends ListOp>(
     op: K,
@@ -115,6 +85,16 @@ export const useLibraryStore = defineStore('library', () => {
     const result = await client.call(op, { ...data, offset, limit: PAGE_SIZE })
     total.value = result.total
     return result.items
+  }
+
+  /** The search and order on screen; a search with no order goes by how well rows match. */
+  function viewArgs() {
+    const ordered = sort.value ?? (query.value.trim() === '' ? defaultSort(here.value) : undefined)
+    return {
+      ...searchArg(),
+      ...(ordered === undefined ? {} : { sort: ordered }),
+      ...(descending.value ? { order: 'desc' as const } : {}),
+    }
   }
 
   /**
@@ -130,14 +110,7 @@ export const useLibraryStore = defineStore('library', () => {
     // Only the fields this level actually filters by: passing an album to a
     // genre listing would be a request the server is right to find odd.
     const { genre, artist, album } = scope.value
-    // A search with no order asked for is answered by how well each row
-    // matches; naming one is what says to read it another way instead.
-    const ordered = sort.value ?? (query.value.trim() === '' ? defaultSort(here.value) : undefined)
-    const narrow = {
-      ...searchArg(),
-      ...(ordered === undefined ? {} : { sort: ordered }),
-      ...(descending.value ? { order: 'desc' as const } : {}),
-    }
+    const narrow = viewArgs()
     try {
       switch (level.value) {
         case LibraryLevel.Genres: {
@@ -191,6 +164,31 @@ export const useLibraryStore = defineStore('library', () => {
     descending.value = view.descending ?? false
     albumArtists.value = view.albumArtists ?? false
     await load()
+  }
+
+  /**
+   * Reads every album or track row on screen again, for the covers a build found:
+   * `load`'s first page would lose the reader's place. Dropped if the list moved on.
+   */
+  async function refreshCovers(): Promise<void> {
+    const position = here.value
+    const count = shown.value
+    const stillHere = () => here.value === position && shown.value === count
+    const args = viewArgs()
+    const { album, artist } = scope.value
+    try {
+      if (position.level === LibraryLevel.Albums) {
+        const rows = await readRows(count, (at) => page(Op.LibraryAlbums, { ...args, artist }, at))
+        if (stillHere()) albums.value = rows
+      } else if (position.level === LibraryLevel.Tracks) {
+        const rows = await readRows(count, (at) =>
+          page(Op.LibraryTracks, { ...args, album, artist }, at),
+        )
+        if (stillHere()) tracks.value = rows
+      }
+    } catch {
+      // The rows on screen are still right, only without the new covers.
+    }
   }
 
   async function loadPlaylists() {
@@ -265,6 +263,9 @@ export const useLibraryStore = defineStore('library', () => {
   function bind() {
     client.on(WireEvent.LibraryChanged, () => {
       void load()
+    })
+    client.on(WireEvent.CoverCacheChanged, ({ building }) => {
+      if (!building) void refreshCovers()
     })
   }
 

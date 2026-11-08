@@ -5,7 +5,7 @@
 
 import { QueueMode } from '../api/types'
 import { useLibraryStore } from '../stores/library'
-import type { QueueOptions } from '../stores/library'
+import type { QueueOptions } from '../stores/libraryTypes'
 import { usePermissionsStore } from '../stores/permissions'
 
 /** An album, genre or artist row queues a scope, whose size the server alone knows. */
