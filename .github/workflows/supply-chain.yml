@@ -47,24 +47,14 @@ jobs:
         with:
           persist-credentials: false
 
-      # Through the API with the job's token, and retried: release downloads
-      # from a runner can answer 504 for minutes. The digest catches a bad one.
       - name: Install cargo-deny
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          archive="cargo-deny-$DENY_VERSION-x86_64-unknown-linux-musl.tar.gz"
-          install_dir="$RUNNER_TEMP/cargo-deny"
-          mkdir -p "$install_dir"
-          for attempt in 1 2 3 4 5; do
-            gh release download "$DENY_VERSION" --repo EmbarkStudios/cargo-deny \
-              --pattern "$archive" --dir "$RUNNER_TEMP" --clobber && break
-            echo "download attempt $attempt failed"
-            sleep 30
-          done
-          echo "$DENY_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$install_dir" --strip-components=1
-          echo "$install_dir" >> "$GITHUB_PATH"
+        uses: ./.github/actions/release-tool
+        with:
+          repository: EmbarkStudios/cargo-deny
+          tag: ${{ env.DENY_VERSION }}
+          archive: cargo-deny-${{ env.DENY_VERSION }}-x86_64-unknown-linux-musl.tar.gz
+          sha256: ${{ env.DENY_SHA256 }}
+          strip-components: "1"
 
       # Warnings are not failures here: `multiple-versions` is a warning by
       # policy, and a mid-upgrade duplicate should not redden the tree.

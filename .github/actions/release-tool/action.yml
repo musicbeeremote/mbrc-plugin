@@ -1,0 +1,45 @@
+name: Install a release tool
+description: Puts a tool from a GitHub release on PATH, retrying the download and checking its digest.
+
+# Through the API with the job's token, and retried: release downloads from a
+# runner can answer 502 or 504 for minutes. The digest catches a bad archive.
+inputs:
+  repository:
+    description: The owner/name the release belongs to.
+    required: true
+  tag:
+    description: The release tag.
+    required: true
+  archive:
+    description: The .tar.gz asset to download.
+    required: true
+  sha256:
+    description: The archive's digest. A version bump changes both.
+    required: true
+  strip-components:
+    description: Leading path components to drop when unpacking.
+    default: "0"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ inputs.repository }}
+        TAG: ${{ inputs.tag }}
+        ARCHIVE: ${{ inputs.archive }}
+        SHA256: ${{ inputs.sha256 }}
+        STRIP_COMPONENTS: ${{ inputs.strip-components }}
+      run: |
+        for attempt in 1 2 3 4 5; do
+          gh release download "$TAG" --repo "$REPOSITORY" \
+            --pattern "$ARCHIVE" --dir "$RUNNER_TEMP" --clobber && break
+          echo "download attempt $attempt failed"
+          sleep 30
+        done
+        echo "$SHA256  $RUNNER_TEMP/$ARCHIVE" | sha256sum --check --strict
+        install_dir="$RUNNER_TEMP/tools/$REPOSITORY"
+        mkdir -p "$install_dir"
+        tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$install_dir" --strip-components="$STRIP_COMPONENTS"
+        echo "$install_dir" >> "$GITHUB_PATH"
