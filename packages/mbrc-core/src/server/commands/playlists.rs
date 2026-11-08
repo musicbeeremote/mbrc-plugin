@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 
 use super::{HandlerResult, LIST_PAGE, page_request, reply_dto};
 use crate::providers::Providers;
+use crate::server::path_guard;
 
 pub fn list(data: &Value, p: &dyn Providers) -> HandlerResult {
     let (offset, limit) = page_request(data, LIST_PAGE);
@@ -11,7 +12,13 @@ pub fn list(data: &Value, p: &dyn Providers) -> HandlerResult {
 }
 
 pub fn play(data: &Value, p: &dyn Providers) -> HandlerResult {
-    p.play_playlist(data.as_str().unwrap_or(""))?;
+    let url = data.as_str().unwrap_or("");
+    if let Some(unknown) = path_guard::first_refused([url], p) {
+        return Err(format!(
+            "refused a system path or unknown server: {unknown}"
+        ));
+    }
+    p.play_playlist(url)?;
     Ok(vec![("playlistplay".to_string(), json!(true))])
 }
 
@@ -37,6 +44,19 @@ mod tests {
         let out = list(&json!({"offset":0,"limit":100}), &m).unwrap();
         assert_eq!(out[0].0, "playlistlist");
         assert_eq!(out[0].1["data"][0]["name"], json!("X"));
+    }
+
+    #[test]
+    fn a_playlist_on_an_unknown_server_is_never_handed_to_the_host() {
+        let m = MockProviders::default();
+        assert!(play(&json!(r"\\attacker\share\x.mbp"), &m).is_err());
+        assert!(
+            !m.recorded()
+                .iter()
+                .any(|call| call.starts_with("play_playlist")),
+            "{:?}",
+            m.recorded()
+        );
     }
 
     #[test]

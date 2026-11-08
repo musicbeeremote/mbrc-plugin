@@ -8,6 +8,7 @@ use super::{
     Ctx, HandlerResult, Platform, SHORT_PAGE, as_int_lenient, as_set_string, page_request,
 };
 use crate::providers::Providers;
+use crate::server::path_guard;
 
 /// Reads an index from either a bare int (or stringified int) or an
 /// `{ "index": n }` object. The lenient int coercion matches the C#
@@ -72,7 +73,7 @@ pub fn queue(data: &Value, ctx: &Ctx) -> HandlerResult {
         .wire()
         .parse_queue_type(data.get("queue").and_then(Value::as_str).unwrap_or("next"));
     let play = data.get("play").and_then(Value::as_str).unwrap_or("");
-    let files = data
+    let files: Vec<String> = data
         .get("data")
         .and_then(Value::as_array)
         .map(|items| {
@@ -82,6 +83,12 @@ pub fn queue(data: &Value, ctx: &Ctx) -> HandlerResult {
                 .collect()
         })
         .unwrap_or_default();
+    let named = files.iter().map(String::as_str).chain([play]);
+    if let Some(unknown) = path_guard::first_refused(named, ctx.providers) {
+        return Err(format!(
+            "refused a system path or unknown server: {unknown}"
+        ));
+    }
     ctx.providers.queue(queue_type, files, play)?;
     Ok(vec![(
         "nowplayingqueue".to_string(),

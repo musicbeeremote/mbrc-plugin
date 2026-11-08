@@ -450,8 +450,7 @@ namespace MusicBeePlugin.Settings
         {
             switch (kind)
             {
-                case "app": return "App";
-                case "browser": return "Browser";
+                case "paired": return "Paired";
                 case "android": return "Android";
                 default: return kind ?? string.Empty;
             }

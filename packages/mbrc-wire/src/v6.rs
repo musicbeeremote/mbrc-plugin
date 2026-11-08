@@ -86,6 +86,8 @@ pub enum ErrorCode {
     UnknownOp,
     /// A request arrived before the handshake completed.
     Unauthorized,
+    /// The server requires pairing and this client has not paired.
+    PairingRequired,
     /// The connection is not permitted (address filter / connection cap).
     NotAllowed,
     /// Party Mode is on and this client's role does not allow the op.
@@ -118,6 +120,7 @@ impl ErrorCode {
             Self::InvalidField => "invalid_field",
             Self::UnknownOp => "unknown_op",
             Self::Unauthorized => "unauthorized",
+            Self::PairingRequired => "pairing_required",
             Self::NotAllowed => "not_allowed",
             Self::Forbidden => "forbidden",
             Self::InvalidToken => "invalid_token",

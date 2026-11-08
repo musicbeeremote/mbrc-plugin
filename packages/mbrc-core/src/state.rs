@@ -500,18 +500,18 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
         }),
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
-            core.party_mode.unassign_browsers();
-            core.power.revoke_browsers();
+            core.party_mode.unassign_paired();
+            core.power.revoke_paired();
             MbrcResult::Ok
         }),
         HostCommandType::RevokeWebPairing => {
             match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserRef>(params) {
                 Ok(named) => with_core(|core| {
                     if core.pairing.revoke(&named.id) {
-                        let browser =
-                            crate::server::permissions::Principal::Browser(named.id.clone());
-                        core.party_mode.unassign_role(&browser);
-                        core.power.revoke(&browser);
+                        let paired =
+                            crate::server::permissions::Principal::Paired(named.id.clone());
+                        core.party_mode.unassign_role(&paired);
+                        core.power.revoke(&paired);
                         MbrcResult::Ok
                     } else {
                         MbrcResult::InvalidArgument
@@ -678,37 +678,17 @@ struct ProvenDevice {
 /// known by its pairing, so its V6 identity is left out.
 fn proven_devices(core: &Core) -> Vec<ProvenDevice> {
     use crate::server::permissions::Principal;
-    let short = |id: &str| id.chars().take(8).collect::<String>();
-    let mut devices: Vec<ProvenDevice> = core
-        .clients
-        .seen()
+    core.pairing
+        .paired()
         .into_iter()
-        .filter(|app| app.client_type != "web")
-        .map(|app| ProvenDevice {
-            label: if app.name.is_empty() {
-                format!("App {}", short(&app.client_id))
-            } else {
-                app.name
-            },
-            principal: Principal::App(app.client_id),
-            kind: "app",
-            last_seen: app.last_seen_ms / 1000,
-            address: app.address,
+        .map(|client| ProvenDevice {
+            principal: Principal::Paired(client.id),
+            kind: "paired",
+            label: client.label,
+            last_seen: client.last_seen,
+            address: client.address,
         })
-        .collect();
-    devices.extend(
-        core.pairing
-            .paired()
-            .into_iter()
-            .map(|browser| ProvenDevice {
-                principal: Principal::Browser(browser.id),
-                kind: "browser",
-                label: browser.label,
-                last_seen: browser.last_seen,
-                address: browser.address,
-            }),
-    );
-    devices
+        .collect()
 }
 
 fn power_status_bytes() -> Option<Vec<u8>> {
@@ -1439,7 +1419,7 @@ mod tests {
             .redeem(&code, "Laptop", lan)
             .expect("redeem")
             .token;
-        let browser = Principal::Browser(core.pairing.paired_id(&token, Some(lan)).unwrap());
+        let browser = Principal::Paired(core.pairing.paired_id(&token, Some(lan)).unwrap());
         let key = browser.key().unwrap();
         let allow = |allowed: bool| {
             host_command(
@@ -1548,11 +1528,9 @@ mod tests {
                 ..Default::default()
             },
         );
-        let keys: Vec<String> = party_status().devices.into_iter().map(|d| d.key).collect();
-        assert!(keys.contains(&"app:a-phone".to_owned()));
         assert!(
-            !keys.contains(&"app:a-browser".to_owned()),
-            "a browser is known by its pairing"
+            party_status().devices.is_empty(),
+            "a role rests on a pairing, so an unpaired client has no row to give one to"
         );
         let seen: Vec<i64> = party_status().devices.iter().map(|d| d.last_seen).collect();
         assert!(

@@ -7,13 +7,12 @@
 //! exactly what the V6 broadcaster fans out, in the same envelopes, so a client
 //! feeds the lines it receives to the same reader the socket's messages go to.
 
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use axum::extract::{Query, State};
+use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use tokio::sync::mpsc;
@@ -21,18 +20,14 @@ use tokio::sync::mpsc;
 use crate::state::Core;
 use crate::web::router::WebState;
 
-/// The token rides in the query string for the same reason it does on the
-/// WebSocket: `EventSource` takes a URL and nothing else.
-pub async fn stream(
-    State(state): State<WebState>,
-    Query(params): Query<HashMap<String, String>>,
-    headers: axum::http::HeaderMap,
-) -> Response {
-    if !state.admits_request(&headers, params.get("token").map(String::as_str)) {
+/// `EventSource` cannot set a header either, so its token is the cookie, as on the
+/// WebSocket.
+pub async fn stream(State(state): State<WebState>, headers: axum::http::HeaderMap) -> Response {
+    if !state.admits_request(&headers) {
         return crate::web::router::unauthorized();
     }
 
-    let principal = state.principal(&headers, params.get("token").map(String::as_str));
+    let principal = state.principal(&headers);
     let core = state.core;
     let conn_id = core.next_conn_id();
     let (tx, rx) = mpsc::unbounded_channel();

@@ -292,9 +292,9 @@ impl PowerGrants {
     }
 }
 
-/// Whether `principal` is a proven identity, the only kind that can be allowed.
+/// Whether `principal` is a paired client, the only kind that can be allowed.
 fn can_hold(principal: &Principal) -> bool {
-    matches!(principal, Principal::App(_) | Principal::Browser(_))
+    matches!(principal, Principal::Paired(_))
 }
 
 /// The permission list and the timer it guards.
@@ -325,11 +325,11 @@ impl Power {
         true
     }
 
-    /// Takes the permission from every browser, as unpairing them all does.
-    pub fn revoke_browsers(&self) {
+    /// Takes the permission from every paired client, as unpairing them all does.
+    pub fn revoke_paired(&self) {
         for (key, _) in self.grants.granted() {
-            if let Some(browser @ Principal::Browser(_)) = Principal::from_key(&key) {
-                self.revoke(&browser);
+            if let Some(paired @ Principal::Paired(_)) = Principal::from_key(&key) {
+                self.revoke(&paired);
             }
         }
     }
@@ -532,7 +532,7 @@ mod tests {
     const MINUTE: Duration = Duration::from_secs(60);
 
     fn app(id: &str) -> Principal {
-        Principal::App(id.into())
+        Principal::Paired(id.into())
     }
 
     fn anyone_may_stop() -> Result<(), String> {
@@ -640,11 +640,11 @@ mod tests {
         let grants = PowerGrants::default();
         assert!(!grants.grant(&Principal::Anonymous, 1));
         assert!(!grants.grant(&Principal::LegacyDevice("android-1.6".into()), 1));
-        assert!(grants.grant(&Principal::Browser("desk".into()), 1));
-        assert!(grants.allows(&Principal::Browser("desk".into())));
+        assert!(grants.grant(&Principal::Paired("desk".into()), 1));
+        assert!(grants.allows(&Principal::Paired("desk".into())));
         assert!(
-            !grants.allows(&Principal::App("desk".into())),
-            "kinds are keyed apart"
+            !grants.allows(&Principal::Paired("laptop".into())),
+            "a grant is one device's"
         );
     }
 
@@ -704,16 +704,16 @@ mod tests {
     }
 
     #[test]
-    fn unpairing_every_browser_takes_their_permission_and_timer_but_not_apps() {
+    fn unpairing_everything_takes_every_permission_and_timer() {
         let power = Power::default();
-        let desk = Principal::Browser("desk".into());
+        let desk = Principal::Paired("desk".into());
         power.grants.grant(&desk, 1);
         power.grants.grant(&app("phone"), 1);
         set(&power, &desk, "sleep", 10).unwrap();
 
-        power.revoke_browsers();
+        power.revoke_paired();
         assert!(!power.grants.allows(&desk));
-        assert!(power.grants.allows(&app("phone")));
+        assert!(!power.grants.allows(&app("phone")));
         assert_eq!(power.timer.deadline(), None);
     }
 

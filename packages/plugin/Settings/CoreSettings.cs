@@ -45,11 +45,16 @@ namespace MusicBeePlugin.Settings
         public bool web_enabled { get; set; } = true;
 
         /// <summary>
-        ///     Whether a browser must present a paired token. Off admits every
-        ///     browser that can reach the port, the same trust model the JSON
-        ///     protocols already use.
+        ///     Whether a browser or V6 app must pair before it can do anything. Off
+        ///     admits every client that can reach the port.
         /// </summary>
         public bool web_auth_required { get; set; }
+
+        /// <summary>
+        ///     With pairing on, whether V4/V5 apps may connect unpaired. They have no
+        ///     way to pair, so off refuses them.
+        /// </summary>
+        public bool allow_unpaired_legacy_clients { get; set; } = true;
 
         /// <summary>
         ///     Whether the core checks for a newer release on its own. Off by

@@ -15,6 +15,7 @@ pub mod media;
 pub mod monitor;
 pub mod notifications;
 pub mod notifications_v6;
+pub(crate) mod path_guard;
 pub mod permissions;
 pub mod registry;
 pub mod route;

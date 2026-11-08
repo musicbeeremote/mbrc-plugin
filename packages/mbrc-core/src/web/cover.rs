@@ -23,10 +23,9 @@ const NO_CACHE: &str = "no-cache";
 pub async fn get(
     State(state): State<WebState>,
     Path(hash): Path<String>,
-    Query(params): Query<HashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    if !state.admits_request(&headers, params.get("token").map(String::as_str)) {
+    if !state.admits_request(&headers) {
         return crate::web::router::unauthorized();
     }
     if !is_content_hash(&hash) {
@@ -66,7 +65,7 @@ pub async fn now_playing(
     Query(params): Query<HashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    if !state.admits_request(&headers, params.get("token").map(String::as_str)) {
+    if !state.admits_request(&headers) {
         return crate::web::router::unauthorized();
     }
     let path = state.core.now_playing.track_info().path;

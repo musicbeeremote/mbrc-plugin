@@ -12,7 +12,11 @@ import type { V6Error } from './types'
 /** Whether an error means this browser's token will never be accepted as-is. */
 export function isAuthFailure(error: unknown): boolean {
   const code = (error as V6Error | undefined)?.code
-  return code === ErrorCode.Unauthorized || code === ErrorCode.InvalidToken
+  return (
+    code === ErrorCode.Unauthorized ||
+    code === ErrorCode.PairingRequired ||
+    code === ErrorCode.InvalidToken
+  )
 }
 
 /** Whether the stored `client_id` is spoken for, which a new id fixes and pairing does not. */

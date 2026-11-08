@@ -433,11 +433,18 @@ impl Providers for FixtureProviders {
     fn excluded_paths(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    /// The legacy golden traces queue from the share they were recorded on, so the
+    /// server has to be known. Videos is the one list no golden snapshot reads.
     fn media_paths(
         &self,
-        _source: mbrc_core::ffi::types::LibrarySource,
+        source: mbrc_core::ffi::types::LibrarySource,
     ) -> Result<Vec<String>, String> {
-        Ok(Vec::new())
+        Ok(match source {
+            mbrc_core::ffi::types::LibrarySource::Videos => {
+                vec!["\\\\host\\media\\v.mp4".to_owned()]
+            }
+            _ => Vec::new(),
+        })
     }
     fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
         Ok(vec![track()])

@@ -1,15 +1,14 @@
 //! Who a client is, and the role the host has given it.
 //!
-//! A role rests on something a guest cannot copy: a V6 app's `client_id` only
-//! counts once its `client_token` has been checked, and a browser is known by
-//! its pairing token. Android 1.6 sends a plain-text `client_id` and nothing
-//! more, which is weaker trust; the panel says so beside any such device. Every
-//! other client is [`Principal::Anonymous`] and always has the default role.
+//! A role rests on something a guest cannot copy: its pairing token, on every
+//! transport. Android 1.6 sends a plain-text `client_id` and nothing more, which is
+//! weaker trust; the panel says so beside any such device. Every other client is
+//! [`Principal::Anonymous`] and always has the default role.
 //!
 //! Roles are one table in `mbrc.redb` keyed by [`Principal::key`], mirrored in
 //! memory so the check on every request is a map lookup.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use redb::{Durability, ReadableTable};
@@ -17,17 +16,14 @@ use redb::{Durability, ReadableTable};
 use super::Role;
 use crate::store::{Db, PARTY_ROLES};
 
-const APP_PREFIX: &str = "app:";
-const BROWSER_PREFIX: &str = "browser:";
+const PAIRED_PREFIX: &str = "browser:";
 const LEGACY_PREFIX: &str = "v4:";
 
 /// Who a connection or request is, as far as Party Mode can tell.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum Principal {
-    /// A V6 app whose `client_id` was verified by its `client_token`.
-    App(String),
-    /// A paired browser, by the id its pairing token hashes to.
-    Browser(String),
+    /// A paired client, by the id its pairing token hashes to.
+    Paired(String),
     /// An Android 1.6 V4 client, by its unverified `client_id`.
     LegacyDevice(String),
     /// A client that cannot be told apart from any other.
@@ -39,8 +35,7 @@ impl Principal {
     /// The key its role is stored under; `None` for a principal that cannot hold one.
     pub fn key(&self) -> Option<String> {
         match self {
-            Principal::App(id) => Some(format!("{APP_PREFIX}{id}")),
-            Principal::Browser(id) => Some(format!("{BROWSER_PREFIX}{id}")),
+            Principal::Paired(id) => Some(format!("{PAIRED_PREFIX}{id}")),
             Principal::LegacyDevice(id) => Some(format!("{LEGACY_PREFIX}{id}")),
             Principal::Anonymous => None,
         }
@@ -49,10 +44,8 @@ impl Principal {
     /// The principal a [`key`](Self::key) names, for the panel handing one back.
     pub fn from_key(key: &str) -> Option<Principal> {
         let named = |prefix: &str| key.strip_prefix(prefix).filter(|id| !id.is_empty());
-        if let Some(id) = named(APP_PREFIX) {
-            Some(Principal::App(id.to_owned()))
-        } else if let Some(id) = named(BROWSER_PREFIX) {
-            Some(Principal::Browser(id.to_owned()))
+        if let Some(id) = named(PAIRED_PREFIX) {
+            Some(Principal::Paired(id.to_owned()))
         } else {
             named(LEGACY_PREFIX).map(|id| Principal::LegacyDevice(id.to_owned()))
         }
@@ -154,15 +147,15 @@ impl Roles {
     }
 
     /// Returns every paired browser to the default role.
-    pub fn unassign_browsers(&self) {
+    pub fn unassign_paired(&self) {
         let keys: Vec<String> = {
             let mut assigned = self.lock();
             let keys = assigned
                 .keys()
-                .filter(|key| key.starts_with(BROWSER_PREFIX))
+                .filter(|key| key.starts_with(PAIRED_PREFIX))
                 .cloned()
                 .collect();
-            assigned.retain(|key, _| !key.starts_with(BROWSER_PREFIX));
+            assigned.retain(|key, _| !key.starts_with(PAIRED_PREFIX));
             keys
         };
         self.persist(|txn| {
@@ -200,33 +193,18 @@ impl Roles {
 
 /// The V6 app `client_id`s that hold a role, read inside a write transaction.
 ///
-/// An app with a role is pinned: its identity record never ages out, because its
-/// `client_token` is what keeps the role from being claimed by someone else.
-pub(crate) fn pinned_apps(txn: &redb::WriteTransaction) -> Result<HashSet<String>, redb::Error> {
-    let table = txn.open_table(PARTY_ROLES)?;
-    let mut pinned = HashSet::new();
-    for row in table.range::<&str>(APP_PREFIX..)? {
-        let (key, _) = row?;
-        match key.value().strip_prefix(APP_PREFIX) {
-            Some(id) => pinned.insert(id.to_owned()),
-            None => break,
-        };
-    }
-    Ok(pinned)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn app(id: &str) -> Principal {
-        Principal::App(id.to_owned())
+    fn device(id: &str) -> Principal {
+        Principal::LegacyDevice(id.to_owned())
     }
 
     #[test]
     fn an_unassigned_or_anonymous_client_has_the_default_role() {
         let roles = Roles::default();
-        assert_eq!(roles.role_of(&app("a")), Role::Guest);
+        assert_eq!(roles.role_of(&device("a")), Role::Guest);
         assert_eq!(roles.role_of(&Principal::Anonymous), Role::Guest);
         assert!(!roles.assign(&Principal::Anonymous, Role::Host));
     }
@@ -234,20 +212,16 @@ mod tests {
     #[test]
     fn the_same_id_on_different_transports_is_a_different_principal() {
         let roles = Roles::default();
-        roles.assign(&app("x"), Role::Host);
-        assert_eq!(roles.role_of(&app("x")), Role::Host);
-        assert_eq!(
-            roles.role_of(&Principal::LegacyDevice("x".into())),
-            Role::Guest
-        );
-        assert_eq!(roles.role_of(&Principal::Browser("x".into())), Role::Guest);
+        roles.assign(&device("x"), Role::Host);
+        assert_eq!(roles.role_of(&device("x")), Role::Host);
+        assert_eq!(roles.role_of(&Principal::Paired("x".into())), Role::Guest);
     }
 
     #[test]
     fn every_principal_that_holds_a_role_round_trips_through_its_key() {
         for principal in [
-            app("a:b"),
-            Principal::Browser("b".into()),
+            device("a:b"),
+            Principal::Paired("b".into()),
             Principal::LegacyDevice("c".into()),
         ] {
             let key = principal.key().unwrap();
@@ -267,11 +241,11 @@ mod tests {
     #[test]
     fn unpairing_every_browser_leaves_other_roles_alone() {
         let roles = Roles::default();
-        roles.assign(&Principal::Browser("b".into()), Role::Dj);
-        roles.assign(&app("a"), Role::Dj);
-        roles.unassign_browsers();
-        assert_eq!(roles.role_of(&Principal::Browser("b".into())), Role::Guest);
-        assert_eq!(roles.role_of(&app("a")), Role::Dj);
+        roles.assign(&Principal::Paired("b".into()), Role::Dj);
+        roles.assign(&device("a"), Role::Dj);
+        roles.unassign_paired();
+        assert_eq!(roles.role_of(&Principal::Paired("b".into())), Role::Guest);
+        assert_eq!(roles.role_of(&device("a")), Role::Dj);
     }
 
     #[test]
@@ -281,13 +255,13 @@ mod tests {
         {
             let roles = Roles::default();
             roles.open(Db::open(&path));
-            roles.assign(&app("a"), Role::Host);
-            roles.assign(&Principal::Browser("b".into()), Role::Dj);
-            roles.unassign(&Principal::Browser("b".into()));
+            roles.assign(&device("a"), Role::Host);
+            roles.assign(&Principal::Paired("b".into()), Role::Dj);
+            roles.unassign(&Principal::Paired("b".into()));
         }
         let roles = Roles::default();
         roles.open(Db::open(&path));
-        assert_eq!(roles.role_of(&app("a")), Role::Host);
-        assert_eq!(roles.role_of(&Principal::Browser("b".into())), Role::Guest);
+        assert_eq!(roles.role_of(&device("a")), Role::Host);
+        assert_eq!(roles.role_of(&Principal::Paired("b".into())), Role::Guest);
     }
 }

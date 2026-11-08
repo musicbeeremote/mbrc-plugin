@@ -6,10 +6,8 @@
 //! TCP client, through [`Broadcaster`](crate::server::broadcaster::Broadcaster),
 //! whose frames are already JSON lines.
 
-use std::collections::HashMap;
-
+use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
 use axum::response::Response;
 use tokio::sync::mpsc;
 
@@ -17,21 +15,17 @@ use crate::server::permissions::Principal;
 use crate::server::session_v6::V6Session;
 use crate::web::router::WebState;
 
-/// The token rides in the query string, not a header: a browser's `WebSocket`
-/// constructor takes a URL and nothing else, so there is no request to attach an
-/// `Authorization` header to. The URL never leaves the LAN and the connection is
-/// upgraded immediately, so the usual objection to secrets in a URL - proxy and
-/// referrer logs - has nowhere to bite here.
+/// A browser's `WebSocket` constructor cannot set a header, so its token is the
+/// cookie it sends by itself. A native client can send `Authorization` instead.
 pub async fn upgrade(
     State(state): State<WebState>,
-    Query(params): Query<HashMap<String, String>>,
     headers: axum::http::HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    if !state.admits_request(&headers, params.get("token").map(String::as_str)) {
+    if !state.admits_request(&headers) {
         return crate::web::router::unauthorized();
     }
-    let principal = state.principal(&headers, params.get("token").map(String::as_str));
+    let principal = state.principal(&headers);
     ws.on_upgrade(move |socket| run(socket, state, principal))
 }
 

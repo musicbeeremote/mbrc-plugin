@@ -114,8 +114,8 @@ impl PartyMode {
     }
 
     /// Returns every paired browser to the default role.
-    pub fn unassign_browsers(&self) {
-        self.roles.unassign_browsers();
+    pub fn unassign_paired(&self) {
+        self.roles.unassign_paired();
         self.changed();
     }
 
@@ -154,7 +154,7 @@ impl PartyMode {
         principal: Principal,
         told: Value,
         tx: mpsc::UnboundedSender<String>,
-    ) {
+    ) -> tokio::task::AbortHandle {
         let gate = Arc::clone(self);
         let mut changes = self.changes.subscribe();
         tokio::spawn(async move {
@@ -173,7 +173,8 @@ impl PartyMode {
                     () = tx.closed() => break,
                 }
             }
-        });
+        })
+        .abort_handle()
     }
 
     /// Records an Android 1.6 client, so the panel can offer it a role.
@@ -307,7 +308,7 @@ mod tests {
     /// A gate that is on, with one principal of each role that holds one.
     fn with_role(role: Role) -> (PartyMode, Principal) {
         let gate = on();
-        let who = Principal::App(format!("{role:?}"));
+        let who = Principal::Paired(format!("{role:?}"));
         gate.assign_role(&who, role);
         (gate, who)
     }
@@ -370,7 +371,7 @@ mod tests {
     #[test]
     fn an_unmapped_op_passes_only_for_the_host() {
         let (gate, host) = with_role(Role::Host);
-        let dj = Principal::App("dj".into());
+        let dj = Principal::Paired("dj".into());
         gate.assign_role(&dj, Role::Dj);
         assert!(gate.check(&host, "mystery", None, "c").is_ok());
         assert!(gate.check(&dj, "mystery", None, "c").is_err());
@@ -459,10 +460,10 @@ mod tests {
     #[tokio::test]
     async fn a_change_to_someone_else_tells_this_client_nothing() {
         let gate = Arc::new(on());
-        let me = Principal::App("me".into());
+        let me = Principal::Paired("me".into());
         let (tx, mut rx) = mpsc::unbounded_channel();
         gate.watch(me.clone(), gate.permissions(&me), tx);
-        gate.assign_role(&Principal::App("them".into()), Role::Dj);
+        gate.assign_role(&Principal::Paired("them".into()), Role::Dj);
         assert_eq!(next_frame(&mut rx).await, None);
 
         gate.assign_role(&me, Role::Dj);

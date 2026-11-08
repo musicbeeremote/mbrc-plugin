@@ -118,6 +118,12 @@ fn default_web_auth_required() -> bool {
     false
 }
 
+/// On. V4/V5 clients cannot pair at all, so refusing them would cut off every shipped
+/// app the moment a user, or the setup wizard on a Public network, turned pairing on.
+fn default_allow_unpaired_legacy_clients() -> bool {
+    true
+}
+
 /// Off. An automatic check is an unprompted outbound request to github.com, so
 /// it is the user's call to make, not ours to assume. The panel's "Check now"
 /// works whatever this says - never being able to ask would be the other way to
@@ -208,11 +214,14 @@ pub struct Config {
     #[serde(default = "default_web_enabled")]
     pub web_enabled: bool,
 
-    /// Whether the web remote requires a paired token. Off admits every browser
-    /// that can reach the port, which is the same trust model the JSON protocols
-    /// already use.
+    /// Whether a client must pair before it can do anything: browsers and V6 sockets
+    /// alike. Off admits every client that can reach the port.
     #[serde(default = "default_web_auth_required")]
     pub web_auth_required: bool,
+    /// With pairing on, whether V4/V5 clients may still connect unpaired. They have
+    /// no way to pair, so off refuses them outright.
+    #[serde(default = "default_allow_unpaired_legacy_clients")]
+    pub allow_unpaired_legacy_clients: bool,
     /// Whether Party Mode is on at startup. The panel switches it live; this is
     /// what that switch persists.
     #[serde(default)]
@@ -291,6 +300,7 @@ impl Default for Config {
             mdns_enabled: default_mdns_enabled(),
             web_enabled: default_web_enabled(),
             web_auth_required: default_web_auth_required(),
+            allow_unpaired_legacy_clients: default_allow_unpaired_legacy_clients(),
             party_mode_enabled: false,
             update_check_enabled: default_update_check_enabled(),
             update_channel: UpdateChannel::default(),

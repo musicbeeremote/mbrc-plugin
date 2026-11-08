@@ -68,6 +68,7 @@ namespace MusicBeePlugin.Settings
         private CheckBox _mdns;
         private CheckBox _webEnabled;
         private CheckBox _webAuth;
+        private CheckBox _legacyUnpaired;
         private Label _webStatus;
         private Button _webPairBtn;
         private Button _webRevokeBtn;
@@ -725,7 +726,13 @@ namespace MusicBeePlugin.Settings
             };
             _webAuth = new CheckBox
             {
-                Text = "Require browsers to pair with a code",
+                Text = "Require apps and browsers to pair with a code",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+            };
+            _legacyUnpaired = new CheckBox
+            {
+                Text = "Let older apps connect without pairing (they have no way to pair)",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
             };
@@ -744,7 +751,7 @@ namespace MusicBeePlugin.Settings
             _webPairBtn.Click += (s, e) => ShowPairingCode();
             _webCopyCodeBtn = new Button { Text = "Copy code", AutoSize = true, Visible = false };
             _webCopyCodeBtn.Click += (s, e) => CopyPairingCode();
-            _webRevokeBtn = new Button { Text = "Unpair all browsers", AutoSize = true };
+            _webRevokeBtn = new Button { Text = "Unpair all", AutoSize = true };
             _webRevokeBtn.Click += (s, e) =>
             {
                 _host.RevokeWebPairings();
@@ -773,7 +780,7 @@ namespace MusicBeePlugin.Settings
                 Anchor = AnchorStyles.Left | AnchorStyles.Right,
                 Margin = new Padding(3, 2, 3, 2)
             };
-            _webPaired.Columns.Add("Browser");
+            _webPaired.Columns.Add("Client");
             _webPaired.Columns.Add("Paired");
             _webPaired.Columns.Add("Last seen");
             _webPaired.ShowItemToolTips = true;
@@ -788,6 +795,7 @@ namespace MusicBeePlugin.Settings
             var layout = Table();
             _rows.Add(layout, "Web remote", _webEnabled);
             _rows.Add(layout, "Pairing", _webAuth);
+            _rows.Add(layout, string.Empty, _legacyUnpaired);
             _rows.Add(layout, "Status", _webStatus);
             _rows.Add(layout, string.Empty, ActionRow(_webPairBtn, _webCopyCodeBtn), endsBlock: true);
             _rows.Add(layout, "Paired", _webPaired);
@@ -895,8 +903,8 @@ namespace MusicBeePlugin.Settings
 
         private static string Describe(int paired)
         {
-            if (paired == 0) return "No browsers paired";
-            return paired == 1 ? "1 browser paired" : paired + " browsers paired";
+            if (paired == 0) return "Nothing paired";
+            return paired == 1 ? "1 client paired" : paired + " clients paired";
         }
 
         /// <summary>Fills the list, keeping the selection where it still exists.</summary>
@@ -911,7 +919,7 @@ namespace MusicBeePlugin.Settings
             _webPaired.Items.Clear();
             foreach (var browser in paired ?? new List<PairedBrowser>())
             {
-                var label = string.IsNullOrEmpty(browser.label) ? "browser" : browser.label;
+                var label = string.IsNullOrEmpty(browser.label) ? "client" : browser.label;
                 var row = new ListViewItem(label) { Tag = browser.id ?? string.Empty };
                 row.SubItems.Add(PanelText.Ago(browser.paired_at));
                 row.SubItems.Add(PanelText.Ago(browser.last_seen));
@@ -989,13 +997,13 @@ namespace MusicBeePlugin.Settings
             if (_pairingTick != null) _pairingTick.Stop();
         }
 
-        // The pairing buttons only mean anything while the server serves and
-        // demands a token; leaving them live otherwise invites a code nothing
-        // will ever ask for.
+        // The pairing buttons only mean anything while the server demands a token;
+        // leaving them live otherwise invites a code nothing will ever ask for. An app
+        // pairs on its socket, so this does not depend on the web remote being on.
         private void UpdateWebEnabled()
         {
-            _webAuth.Enabled = _webEnabled.Checked;
-            var pairing = _webEnabled.Checked && _webAuth.Checked;
+            var pairing = _webAuth.Checked;
+            _legacyUnpaired.Enabled = pairing;
             _webPairBtn.Enabled = pairing;
             _webRevokeBtn.Enabled = pairing;
             if (_webPaired != null) _webPaired.Enabled = pairing;
@@ -1326,6 +1334,7 @@ namespace MusicBeePlugin.Settings
             _mdns.Checked = s.mdns_enabled;
             _webEnabled.Checked = s.web_enabled;
             _webAuth.Checked = s.web_auth_required;
+            _legacyUnpaired.Checked = s.allow_unpaired_legacy_clients;
             _autoCheck.Checked = s.update_check_enabled;
             _artistImages.Checked = s.artist_images_enabled;
             ShowFilterRows();
@@ -1839,6 +1848,7 @@ namespace MusicBeePlugin.Settings
                 mdns_enabled = _mdns.Checked,
                 web_enabled = _webEnabled.Checked,
                 web_auth_required = _webAuth.Checked,
+                allow_unpaired_legacy_clients = _legacyUnpaired.Checked,
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
                 artist_images_enabled = _artistImages.Checked,

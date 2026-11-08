@@ -23,7 +23,7 @@ describe('parsing an op response', () => {
   it('refuses a payload that is missing a field, naming the field', () => {
     expect(() => parseResponse('player_status', { volume: 42 })).toThrow(OpError)
     expect(() => parseResponse('player_status', { volume: 42 })).toThrow(
-      expect.objectContaining({ code: 'internal', field: 'play_state' }),
+      expect.objectContaining({ code: 'internal_error', field: 'play_state' }),
     )
   })
 

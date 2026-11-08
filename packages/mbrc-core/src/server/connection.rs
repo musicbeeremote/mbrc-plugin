@@ -8,7 +8,7 @@
 //! line terminator (`\r\n` legacy, `\n` V6) is fixed once the connection routes.
 
 use std::net::SocketAddr;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use socket2::{SockRef, TcpKeepalive};
@@ -121,6 +121,15 @@ impl Proto {
         }
     }
 
+    /// Whether events reach this connection now; an unpaired V6 socket waits.
+    fn takes_events(&self) -> bool {
+        match self {
+            Proto::Pending => false,
+            Proto::Legacy(_) => self.is_main(),
+            Proto::V6(s) => s.takes_events(),
+        }
+    }
+
     /// Whether the server keepalive applies, which only the legacy protocol has.
     fn takes_server_ping(&self) -> bool {
         matches!(self, Proto::Legacy(s) if !s.no_broadcast)
@@ -230,6 +239,7 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
     let conn = Conn {
         span: conn_span(conn_id),
         shutdown: Arc::new(Notify::new()),
+        permissions_watch: Mutex::new(None),
         core,
         peer,
         conn_id,
@@ -353,6 +363,8 @@ struct Conn {
     conn_id: u64,
     span: tracing::Span,
     shutdown: Arc<Notify>,
+    /// What tells this connection its permissions moved, replaced when it pairs.
+    permissions_watch: Mutex<Option<tokio::task::AbortHandle>>,
     out_tx: UnboundedSender<String>,
     terminator: Arc<OnceLock<&'static str>>,
 }
@@ -430,15 +442,12 @@ impl Conn {
             let mut refused = false;
             if !*registered && let Some(meta) = proto.reg_meta() {
                 *registered = true;
-                refused = !self.register_and_subscribe(&meta);
+                refused = !self.register_and_subscribe(&meta, proto.takes_events());
                 if !refused
-                    && meta.is_main
+                    && proto.takes_events()
                     && let Proto::V6(session) = &*proto
-                    && let Some((principal, told)) = session.permissions_watch()
                 {
-                    self.core
-                        .party_mode
-                        .watch(principal, told, self.out_tx.clone());
+                    self.watch_permissions(session);
                 }
             }
             if refused && let Some(frame) = proto.cap_refusal() {
@@ -453,8 +462,35 @@ impl Conn {
             if refused || outcome.close {
                 return true;
             }
+            if let Proto::V6(session) = proto
+                && session.take_newly_paired()
+                && session.takes_events()
+            {
+                self.core
+                    .v6_broadcaster
+                    .register(self.conn_id, self.out_tx.clone());
+                self.watch_permissions(session);
+            }
         }
         false
+    }
+
+    /// Watches the session's current identity, ending any watch of its previous one.
+    fn watch_permissions(&self, session: &V6Session) {
+        let Some((principal, told)) = session.permissions_watch() else {
+            return;
+        };
+        let watch = self
+            .core
+            .party_mode
+            .watch(principal, told, self.out_tx.clone());
+        let mut current = self
+            .permissions_watch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(previous) = current.replace(watch) {
+            previous.abort();
+        }
     }
 
     /// Routes the connection from its first frame and fixes the writer's line
@@ -462,6 +498,20 @@ impl Conn {
     fn route(&self, proto: &mut Proto, line: &str) -> bool {
         match route::detect(line) {
             Route::Legacy => {
+                let config = &self.core.config;
+                if config.web_auth_required && !config.allow_unpaired_legacy_clients {
+                    tracing::warn!(
+                        peer = %self.peer,
+                        conn_id = self.conn_id,
+                        "refusing V4/V5 client: pairing is required and it cannot pair"
+                    );
+                    self.core.blocked.record(
+                        self.peer.ip(),
+                        self.peer.port(),
+                        crate::server::blocked::BlockReason::LegacyNeedsPairing,
+                    );
+                    return false;
+                }
                 *proto = Proto::Legacy(Session::default().with_party_mode(&self.core.party_mode));
                 let _ = self.terminator.set("\r\n");
                 true
@@ -472,7 +522,8 @@ impl Conn {
                         .with_party_mode(&self.core.party_mode)
                         .with_pairing(&self.core.pairing, self.peer.ip())
                         .with_power(&self.core.power)
-                        .with_server(&self.core.server),
+                        .with_server(&self.core.server)
+                        .requiring_pairing(self.core.config.web_auth_required),
                 );
                 let _ = self.terminator.set("\n");
                 true
@@ -489,12 +540,13 @@ impl Conn {
         }
     }
 
-    /// Registers a freshly handshaked connection and subscribes a main to its own
-    /// protocol's broadcaster, returning false when the per-client cap refuses it.
+    /// Registers a freshly handshaked connection and subscribes it to its own
+    /// protocol's broadcaster if `events`, returning false when the per-client cap
+    /// refuses it.
     ///
     /// The two client sets never mix formats: V6 events go to the V6 fan-out,
     /// V4/V5 frames to the legacy one.
-    fn register_and_subscribe(&self, meta: &RegMeta) -> bool {
+    fn register_and_subscribe(&self, meta: &RegMeta, events: bool) -> bool {
         let (core, peer, conn_id) = (&self.core, self.peer, self.conn_id);
         let role = if meta.is_main {
             Role::Subscriber
@@ -521,7 +573,7 @@ impl Conn {
                     client_id = meta.client_id.as_deref().unwrap_or("none"),
                     "handshake complete; connection registered"
                 );
-                if meta.is_main {
+                if events {
                     let broadcaster = if meta.protocol >= 6 {
                         &core.v6_broadcaster
                     } else {

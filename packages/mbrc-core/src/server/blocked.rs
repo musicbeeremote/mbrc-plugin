@@ -27,6 +27,8 @@ pub enum BlockReason {
     PerIpCap,
     /// Per-client cap reached (too many sockets from one client id).
     PerClientCap,
+    /// A V4/V5 client, with pairing on and unpaired legacy clients turned off.
+    LegacyNeedsPairing,
 }
 
 impl BlockReason {
@@ -35,6 +37,7 @@ impl BlockReason {
             BlockReason::AddressNotAllowed => "Address not allowed",
             BlockReason::PerIpCap => "Too many connections from this address",
             BlockReason::PerClientCap => "Too many connections from this client",
+            BlockReason::LegacyNeedsPairing => "App too old to pair, and pairing is required",
         }
     }
 }

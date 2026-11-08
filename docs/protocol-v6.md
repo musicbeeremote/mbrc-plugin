@@ -76,18 +76,22 @@ Content-Type: application/json
 {"total": 14, "offset": 0, "items": [ ... ]}
 ```
 
+`Content-Type: application/json` is required on every call, including one with an
+empty body, which means `{}`. Anything else is 415 with `malformed_frame`: the header
+is what makes a browser ask before sending a request from another site.
+
 A failure carries the same V6 error object, with a status chosen to match its code so
 a browser, a proxy and `curl` all read it correctly:
 
 | Error code | Status |
 |---|---|
 | `malformed_frame`, `missing_field`, `invalid_field`, `unsupported_version` | 400 |
-| `unauthorized`, `invalid_token` | 401 |
+| `unauthorized`, `pairing_required`, `invalid_token` | 401 |
 | `not_allowed`, `forbidden` | 403 |
 | `unknown_op`, `not_found` | 404 |
 | `stale_list`, `stale_track` | 409 |
 | `unavailable` | 503 |
-| `internal` | 500 |
+| `internal_error` | 500 |
 
 **`handshake`, `ping` and `pair` are not offered here.** The first two are meaningless
 without a connection to hold their state, and a browser pairs through `POST /api/pair`;
@@ -104,8 +108,8 @@ handshake, then exchange newline-delimited JSON frames, one JSON object per mess
 This is the transport a browser uses when it can hold a connection, and the only one
 besides TCP that carries events without polling.
 
-The pairing token travels in the **query string** (`/ws?token=...`) rather than a
-header, because a browser's `WebSocket` constructor cannot set one.
+A browser's `WebSocket` constructor cannot set a header, so its pairing token is the
+cookie it sends by itself.
 
 ### 4. Server-sent events - `GET /api/events`
 
@@ -126,13 +130,13 @@ response head is not flushed until the body produces something, and a player tha
 changes nothing for an hour would otherwise look like a stream that never opened.
 
 Paired with HTTP-RPC for commands, SSE gives a complete client without a socket. The
-token travels in the query string here too, for the same reason: `EventSource` takes
-a URL and nothing else.
+token is the cookie here too: `EventSource` cannot set a header either.
 
 ## Pairing and authentication
 
-Pairing is off by default (`web_auth_required`), and the admission check is the same
-function whether it is on or off, so the guarded path is never an untested branch.
+Pairing is off by default (`web_auth_required`). With it off, every client that can reach
+the port is admitted, and nothing below is demanded of it. A client pairs once and holds one
+**token**, which is the same credential on every transport.
 
 **Ask first.** `GET /api/pair/status` answers
 `{"auth_required":bool,"paired":bool,"party_mode":bool}`.
@@ -169,11 +173,14 @@ and the V6 [`pair`](#pair) op share the count:
 
 A refusal while waiting is still 401 / `unauthorized`, with a message saying how long.
 
-**Present it.** A token is accepted three ways, checked in this order:
+A V6 app on a socket redeems a code with the [`pair`](#pair) op instead, and keeps the token
+it answers with.
+
+**Present it.** A token is accepted three ways, and never in a URL:
 
 1. the `mbrc_token` cookie, which a browser sends by itself;
-2. `Authorization: Bearer <token>`, for a native client;
-3. `?token=<token>` on `/ws` and `/api/events`, where neither of the above is possible.
+2. `Authorization: Bearer <token>`, for a native client on HTTP;
+3. `token` in the [handshake](#handshake), on a V6 socket.
 
 The cookie is why a browser works at all under pairing. An `<img>`, a `WebSocket` and
 an `EventSource` cannot set a header, and covers, the socket and the stream are
@@ -182,18 +189,34 @@ script on the page, which `localStorage` never did.
 
 Tokens do not expire and are stored **hashed**, so the file cannot be replayed as a
 credential. Pairings outlive the process: a phone is paired once, not once per launch.
-A browser can be listed, renamed and unpaired individually from the Configure panel.
+A paired client can be listed, renamed and unpaired individually from the Configure panel.
 
 **What is guarded.** Under `web_auth_required`, `/api/v6/*`, `/api/cover/*`, `/ws` and
 `/api/events` all answer 401 to an unpaired caller. `/` and `/api/pair*` stay open, so
 the pairing screen can load and pair. An unpaired caller always sees the same shape:
 
 ```json
-{"error": {"code": "unauthorized", "message": "pair this browser first"}}
+{"error": {"code": "pairing_required", "message": "pair this client first"}}
 ```
 
-**Two guards apply whether pairing is on or not**, because an attacker who cannot pair
-can still point a name they control at this address:
+A **V6 socket** can always complete the handshake, because it has to be able to pair. Its reply
+says `"pairing_required":true,"paired":false`, and until it pairs every op but `ping` and `pair`
+answers `pairing_required`, and no events reach it. A client unpaired while connected is sent
+`pairing_required` and closed on its next frame; a `token` the server no longer knows is simply
+`"paired":false`, so discard it and pair again.
+
+**V4 and V5 clients** have no way to pair, so with pairing on they connect unpaired by default
+(`allow_unpaired_legacy_clients`), which leaves them what they could always do. Turned off, the
+server closes such a connection on its first frame, says nothing on the wire since V4 has no
+refusal frame, and lists it under the Configure panel's blocked connections.
+
+**Three guards apply whether pairing is on or not**, because a page on any site can
+reach this address through its visitor's browser, and an attacker who cannot pair can
+still point a name they control at it:
+
+- an **`Origin` check** - a request carrying an `Origin` must name the host and port it
+  was sent to, or it is 403. `null` never matches. A request with no `Origin`, which is
+  any native client, passes.
 
 - a **Host allowlist** - IP literals, `localhost`, a single label (a dotless name
   cannot be delegated in the root, so nobody off this network can aim one here) and
@@ -201,6 +224,12 @@ can still point a name they control at this address:
   is not admitted: `.box` is delegated, so a `fritz.box` is a name someone else can
   come to hold. A rejected Host is 421.
 - a **CSP** admitting only this origin.
+
+**A network path must be on a server the library already uses.** A `src`, `path`, `paths`,
+`play` or `url` naming a server (`\\server\share\...`, in any spelling) that no track in the
+library, the queue, a media source or a playlist is on is `invalid_field`, on every transport
+and in every role, because opening such a path could send the user's Windows credentials to
+that server. A library on a NAS is unaffected.
 
 ## Party Mode
 
@@ -256,15 +285,14 @@ A role rests on something a guest cannot copy.
 
 | Client | Known by | Gains a role by |
 |--------|----------|-----------------|
-| V6 app on a socket | `client_id`, once its `client_token` checked out | the `pair` op |
+| V6 app on a socket | its pairing token, presented at the handshake | the `pair` op |
 | Browser (WebSocket, HTTP-RPC, SSE) | its pairing token | `POST /api/pair` |
 | Android 1.6 (V4) | its plain-text `client_id` | the Configure panel; weaker trust, since anyone who reads the id off the network can claim it |
 | iOS, Android 1.5 and older (V4) | nothing | cannot: always the default role |
 
 A WebSocket is judged by the pairing token it presented when it upgraded, never by the
-`client_id` its page makes up, so a browser that has just paired opens a new socket. A V6
-identity with a role is never pruned from the server's identity store, and an id that is
-issued a fresh token loses any role left on it.
+`client_id` its page makes up, so a browser that has just paired opens a new socket. Neither
+`client_id` nor `client_token` ever holds a role.
 
 ### What a client is told
 
@@ -280,24 +308,27 @@ only what `allowed` permits, and treat a capability it does not recognize as gat
 
 `permissions_changed` carries the same object, sent to a connection that takes events when
 its own permissions change: Party Mode switched, or its role changed. A change to another
-client's role sends nothing.
+client's role sends nothing, and neither does a `pair`, whose reply already carries it.
 
 ### `pair`
 
-A V6 app on a socket gains a role by redeeming a pairing code. The code is made in the
-Configure panel with the role it grants (Host preselected) and lasts two minutes.
+A V6 app on a socket pairs by redeeming a code. The code is made in the Configure panel with
+the role it grants (Host preselected) and lasts two minutes.
 
 ```json
 → {"id":3,"kind":"request","op":"pair","data":{"code":"123456"}}
-← {"id":3,"kind":"response","data":{"role":"dj"}}
+← {"id":3,"kind":"response","data":{"role":"dj","token":"...","permissions":{...}}}
 ```
+
+**Persist `token`, per `server_id`, and send it in every later handshake.** It takes effect on
+this connection at once, including the events a socket was held back from. It is also good on
+HTTP as `Authorization: Bearer`, so the app can fetch `/api/cover/{hash}`. The device appears in
+the panel under its `client_name`.
 
 `pair` is answered whatever the caller's role, since pairing is how a guest stops being
 one. A wrong or expired code, or an address that must wait (see
-[wrong codes](#wrong-codes)), is `unauthorized`. An app whose `client_id` the server cannot
-prove (it runs without a database) gets `unavailable` and the code stays live. On a
-browser's WebSocket it is `not_allowed`: a browser pairs through `POST /api/pair`. It is not
-offered over HTTP-RPC.
+[wrong codes](#wrong-codes)), is `unauthorized`. On a browser's WebSocket it is `not_allowed`: a
+browser pairs through `POST /api/pair`. It is not offered over HTTP-RPC.
 
 ## Discovery
 
@@ -332,6 +363,7 @@ The first frame must be the handshake, `id:0`:
 | `protocol_version` | yes | must be exactly `6` |
 | `client_id` | yes | non-empty string, at most 128 chars; a **per-install UUID**, stable across relaunches |
 | `client_token` | after the first | the token this server issued for that `client_id` - see below |
+| `token` | once paired | the [pairing token](#pair); absent or unknown means unpaired |
 | `client_type` | yes | one of `android`, `ios`, `desktop`, `web`, `cli` |
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
 | `client_name` | no | what the device is called, for the Configure panel's device list ("Pixel 8"); trimmed and cut at 64 chars; a later handshake's name replaces it |
@@ -347,6 +379,8 @@ what this client may do under [Party Mode](#what-a-client-is-told):
 |-------|-------|
 | `server_id` | a UUID generated once per plugin installation. Stable across MusicBee restarts, plugin updates and address changes; it changes only if the plugin's storage folder is deleted. **Key anything you cache per server on this, not on the address**: one machine can move to a new IP, and two machines can take turns at one. Optional: absent when the plugin has no storage folder or cannot read or write the id file, in which case fall back to the address |
 | `server_name` | what to show the user: the machine name, the same one discovery reports |
+| `pairing_required` | whether this server holds ops back until a client has paired |
+| `paired` | whether this connection holds a pairing. Show the pairing screen when `pairing_required` is true and this is false |
 
 The same `server_id` is in the mDNS TXT record, so a picker can merge one server seen on two
 addresses before connecting.
@@ -392,11 +426,9 @@ them is the original. The server issues one on first contact and remembers it.
    backup, is exactly true. A new id is a new installation identity, which is what you are. Do
    not retry the same id: it will be refused every time.
 
-**The token is not authentication on its own.** Anyone who can reach the port can make up a
-new `client_id` and be issued a token for it, so the token proves only that you are the
-installation that first claimed this id. That is enough to **hold** a [Party Mode](#party-mode)
-role once pairing has granted one: nobody else can present your token, and a made-up id only
-ever gets the default role. An identity with a role is never pruned from the store.
+**`client_token` is not a credential.** Anyone who can reach the port can make up a new
+`client_id` and be issued a token for it, so it proves only that you are the installation that
+first claimed this id. It admits nothing and holds no role: that is the [pairing token](#pair).
 
 ## Error codes
 
@@ -414,7 +446,8 @@ offending input directly. Its absence means the error is not about a single fiel
 | `invalid_field` | a field has the wrong type or an unaccepted value |
 | `invalid_token` | the `client_id` is held by an installation with a different `client_token` - generate a new `client_id` and retry |
 | `unknown_op` | no such op |
-| `unauthorized` | op sent before the handshake |
+| `unauthorized` | op sent before the handshake, or a pairing code that is wrong, expired or must wait |
+| `pairing_required` | the server requires pairing and this client has not paired, or was unpaired |
 | `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |
 | `forbidden` | Party Mode is on and this client's role does not allow the op, and the message names the capability it needs; or the device is not allowed to [close MusicBee, sleep or shut down](#auto-shutdown) the PC |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
@@ -556,7 +589,7 @@ There is one timer, so setting it replaces the one before.
 `close`, `sleep` and `shutdown` need the device to be on the list the user ticks under Access in
 the plugin's settings. The list is empty until they tick one, and it is apart from
 [Party Mode](#party-mode): no role grants it, and Party Mode does not take it from a ticked
-device. Only a V6 app proven by its `client_token` or a paired browser can be ticked. A device
+device. Only a [paired](#pairing-and-authentication) app or browser can be ticked. A device
 not on the list gets `forbidden`. `power_allowed` says whether this device is on it, so a client
 can hide what it cannot do.
 

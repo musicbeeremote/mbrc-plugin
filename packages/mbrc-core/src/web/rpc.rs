@@ -6,8 +6,10 @@
 //! dispatch the socket path uses, which is why the two can never drift.
 
 use axum::Json;
+use axum::body::Bytes;
+use axum::extract::rejection::BytesRejection;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 
@@ -32,7 +34,9 @@ fn status_for(code: ErrorCode) -> StatusCode {
         | ErrorCode::MissingField
         | ErrorCode::InvalidField
         | ErrorCode::UnsupportedVersion => StatusCode::BAD_REQUEST,
-        ErrorCode::Unauthorized | ErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
+        ErrorCode::Unauthorized | ErrorCode::PairingRequired | ErrorCode::InvalidToken => {
+            StatusCode::UNAUTHORIZED
+        }
         ErrorCode::NotAllowed | ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::UnknownOp | ErrorCode::NotFound => StatusCode::NOT_FOUND,
         ErrorCode::StaleList | ErrorCode::StaleTrack => StatusCode::CONFLICT,
@@ -42,18 +46,66 @@ fn status_for(code: ErrorCode) -> StatusCode {
 }
 
 fn error_response(err: &V6Error) -> Response {
+    error_response_with(status_for(err.code), err)
+}
+
+fn error_response_with(status: StatusCode, err: &V6Error) -> Response {
     let mut body = json!({ "code": err.code.as_str(), "message": err.message });
     if let Some(field) = &err.field {
         body["field"] = Value::String(field.clone());
     }
-    (status_for(err.code), Json(json!({ "error": body }))).into_response()
+    (status, Json(json!({ "error": body }))).into_response()
+}
+
+/// Whether a `Content-Type` value is JSON, parameters and case aside.
+fn is_json(content_type: &str) -> bool {
+    let essence = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    essence == "application/json" || essence.ends_with("+json")
+}
+
+/// The op's `data` from a request body, or the failure in the V6 error shape.
+///
+/// A JSON `Content-Type` is mandatory, even on an empty body. It is what forces a
+/// browser to send a CORS preflight, so a cross-site form or `fetch` cannot fire an
+/// op that needs no arguments, such as `player_stop`. An empty body then means `{}`.
+fn request_data(headers: &HeaderMap, body: &[u8]) -> Result<Value, (StatusCode, V6Error)> {
+    let json_declared = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(is_json);
+    if !json_declared {
+        return Err((
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            V6Error::new(
+                ErrorCode::MalformedFrame,
+                "`Content-Type: application/json` is required",
+            ),
+        ));
+    }
+    if body.is_empty() {
+        return Ok(json!({}));
+    }
+    serde_json::from_slice(body).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            V6Error::new(
+                ErrorCode::MalformedFrame,
+                format!("the body is not JSON: {e}"),
+            ),
+        )
+    })
 }
 
 pub async fn call(
     State(state): State<WebState>,
     Path(op): Path<String>,
     headers: HeaderMap,
-    body: Option<Json<Value>>,
+    body: Result<Bytes, BytesRejection>,
 ) -> Response {
     if SESSION_ONLY_OPS.contains(&op.as_str()) {
         return error_response(&V6Error::new(
@@ -69,10 +121,22 @@ pub async fn call(
         ));
     }
 
-    let data = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
+    let body = match body {
+        Ok(body) => body,
+        Err(rejection) => {
+            return error_response_with(
+                rejection.status(),
+                &V6Error::new(ErrorCode::MalformedFrame, rejection.body_text()),
+            );
+        }
+    };
+    let data = match request_data(&headers, &body) {
+        Ok(data) => data,
+        Err((status, refused)) => return error_response_with(status, &refused),
+    };
     let party_mode = state.core.party_mode.is_enabled();
-    let principal = (party_mode || crate::power::OPS.contains(&op.as_str()))
-        .then(|| state.principal(&headers, None));
+    let principal =
+        (party_mode || crate::power::OPS.contains(&op.as_str())).then(|| state.principal(&headers));
     if let Some(principal) = principal.as_ref().filter(|_| party_mode) {
         let action = permissions::v6::action(&op, &data);
         if let Err(refusal) = state.core.party_mode.check(principal, &op, action, "http") {
@@ -127,6 +191,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn json_content_types_are_recognized_with_parameters_and_any_case() {
+        assert!(is_json("application/json"));
+        assert!(is_json("Application/JSON; charset=utf-8"));
+        assert!(is_json("application/problem+json"));
+    }
+
+    /// These three are what a browser may send cross-site with no preflight.
+    #[test]
+    fn a_preflight_free_content_type_is_not_json() {
+        assert!(!is_json("text/plain"));
+        assert!(!is_json("application/x-www-form-urlencoded"));
+        assert!(!is_json("multipart/form-data; boundary=x"));
+    }
+
+    #[test]
     fn every_error_code_maps_to_its_class_of_status() {
         assert_eq!(status_for(ErrorCode::InvalidField), StatusCode::BAD_REQUEST);
         assert_eq!(
@@ -156,6 +235,7 @@ mod tests {
             ErrorCode::InvalidField,
             ErrorCode::UnknownOp,
             ErrorCode::Unauthorized,
+            ErrorCode::PairingRequired,
             ErrorCode::NotAllowed,
             ErrorCode::Forbidden,
             ErrorCode::InvalidToken,

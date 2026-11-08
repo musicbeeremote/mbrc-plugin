@@ -58,6 +58,14 @@ pub struct V6Session {
     told: Option<Value>,
     /// Who this server is, sent in the handshake reply; absent in unit tests.
     server: Option<ServerIdentity>,
+    /// Whether every op but `ping` and `pair` waits for a pairing.
+    pairing_required: bool,
+    /// Whether the transport settled the principal, as a browser's WebSocket does.
+    settled_by_transport: bool,
+    /// What the device calls itself, used as the label of a pairing it makes.
+    client_name: Option<String>,
+    /// Set when `pair` succeeds, until the transport has acted on it.
+    newly_paired: bool,
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -173,7 +181,39 @@ impl V6Session {
     /// makes up, so the WebSocket settles the principal before any frame arrives.
     pub fn with_principal(mut self, principal: Principal) -> Self {
         self.principal = Some(principal);
+        self.settled_by_transport = true;
         self
+    }
+
+    /// Holds every op but `ping` and `pair` until this client has paired. Builder-style.
+    pub fn requiring_pairing(mut self, required: bool) -> Self {
+        self.pairing_required = required;
+        self
+    }
+
+    fn is_paired(&self) -> bool {
+        matches!(self.principal, Some(Principal::Paired(_)))
+    }
+
+    /// Whether events reach this connection: never on a `no_broadcast` socket, and not
+    /// before pairing where pairing is required, since events describe the player.
+    pub fn takes_events(&self) -> bool {
+        self.handshaked && !self.no_broadcast && (!self.pairing_required || self.is_paired())
+    }
+
+    /// Whether `pair` has succeeded since this was last asked.
+    pub fn take_newly_paired(&mut self) -> bool {
+        std::mem::take(&mut self.newly_paired)
+    }
+
+    /// Whether this connection's pairing was revoked while it was open.
+    fn pairing_was_revoked(&self) -> bool {
+        match (&self.principal, &self.pairing) {
+            (Some(Principal::Paired(id)), Some((pairing, _))) => {
+                !self.settled_by_transport && !pairing.holds(id)
+            }
+            _ => false,
+        }
     }
 
     /// Process one inbound V6 wire line. `providers`/`now_playing` are the same
@@ -326,12 +366,26 @@ impl V6Session {
         cover_store: Option<&CoverStore>,
         metadata_cache: Option<&MetadataCache>,
     ) -> Outcome {
+        if self.pairing_was_revoked() {
+            return Outcome::reply_and_close(v6::response_error(
+                req.id,
+                ErrorCode::PairingRequired,
+                "this client was unpaired",
+            ));
+        }
         // Echo the request data back, proving id-correlated round-trips.
         if req.op == "ping" {
             return Outcome::reply(v6::response_ok(req.id, req.data));
         }
         if req.op == "pair" {
             return Outcome::reply(self.pair(req.id, &req.data));
+        }
+        if self.pairing_required && !self.is_paired() {
+            return Outcome::reply(v6::response_error(
+                req.id,
+                ErrorCode::PairingRequired,
+                "pair this client first, with the code MusicBee shows",
+            ));
         }
         if let Some(gate) = &self.party_mode {
             let action = permissions::v6::action(&req.op, &req.data);
@@ -418,7 +472,6 @@ impl V6Session {
             .unwrap_or(false);
 
         let token = data.get("client_token").and_then(Value::as_str);
-        let proven = clients.is_some_and(ClientIdentities::verifies);
         let name = data.get("client_name").and_then(Value::as_str);
         let about = Introduction {
             name,
@@ -437,18 +490,15 @@ impl V6Session {
             Some(Identity::Known) | None => None,
         };
 
-        if issued.is_some()
-            && let Some(gate) = &self.party_mode
-        {
-            gate.unassign_role(&Principal::App(client_id.clone()));
-        }
         if self.principal.is_none() {
-            self.principal = Some(if proven {
-                Principal::App(client_id.clone())
-            } else {
-                Principal::Anonymous
-            });
+            let paired = data
+                .get("token")
+                .and_then(Value::as_str)
+                .zip(self.pairing.as_ref())
+                .and_then(|(token, (pairing, peer))| pairing.paired_id(token, Some(*peer)));
+            self.principal = Some(paired.map_or(Principal::Anonymous, Principal::Paired));
         }
+        self.client_name = name.map(str::to_owned);
         self.handshaked = true;
         self.client_id = client_id;
         self.client_type = Some(client_type);
@@ -472,6 +522,8 @@ impl V6Session {
         if let Some(token) = issued {
             reply["client_token"] = json!(token);
         }
+        reply["paired"] = json!(self.is_paired());
+        reply["pairing_required"] = json!(self.pairing_required);
         if let (Some(gate), Some(principal)) = (&self.party_mode, &self.principal) {
             let permissions = gate.permissions(principal);
             reply["permissions"] = permissions.clone();
@@ -480,12 +532,11 @@ impl V6Session {
         Outcome::reply(v6::response_ok(0, reply))
     }
 
-    /// The `pair` op: redeems a pairing code and gives this app the code's role.
+    /// The `pair` op: redeems a pairing code for this client's token and the code's role.
     ///
-    /// Answered before the Party Mode gate, since pairing is how a guest stops
-    /// being one. Only an app whose `client_id` was proven can hold a role; a
-    /// browser pairs over HTTP, and its WebSocket is already known by that pairing.
-    fn pair(&self, id: u64, data: &Value) -> String {
+    /// Answered before every gate, since pairing is how a client gets past them. A
+    /// browser pairs over HTTP instead, where its token can be set as a cookie.
+    fn pair(&mut self, id: u64, data: &Value) -> String {
         let code = match data.get("code") {
             None => {
                 return v6::response_error_field(
@@ -505,33 +556,39 @@ impl V6Session {
                 );
             }
         };
-        let client_id = match &self.principal {
-            Some(Principal::App(client_id)) => client_id.clone(),
-            Some(Principal::Browser(_)) => {
-                return v6::response_error(
-                    id,
-                    ErrorCode::NotAllowed,
-                    "this browser is paired through `POST /api/pair`",
-                );
-            }
-            _ => {
-                return v6::response_error(
-                    id,
-                    ErrorCode::Unavailable,
-                    "this server cannot verify client identities, so it cannot hold a role for this app",
-                );
-            }
-        };
-        let (Some((pairing, peer)), Some(gate)) = (&self.pairing, &self.party_mode) else {
+        if self.settled_by_transport {
+            return v6::response_error(
+                id,
+                ErrorCode::NotAllowed,
+                "a browser pairs through `POST /api/pair`",
+            );
+        }
+        let Some((pairing, peer)) = &self.pairing else {
             return v6::response_error(id, ErrorCode::Unavailable, "pairing is not available here");
         };
-        match pairing.take_code(code, *peer) {
-            Ok(role) => {
-                gate.assign_role(&Principal::App(client_id), role);
-                v6::response_ok(id, json!({ "role": role.as_str() }))
+        let label = self
+            .client_name
+            .as_deref()
+            .filter(|name| !name.trim().is_empty())
+            .or(self.client_type.map(ClientType::as_str))
+            .unwrap_or("app");
+        let paired = match pairing.redeem(code, label, *peer) {
+            Ok(paired) => paired,
+            Err(refused) => {
+                return v6::response_error(id, ErrorCode::Unauthorized, &refused.message());
             }
-            Err(refused) => v6::response_error(id, ErrorCode::Unauthorized, &refused.message()),
+        };
+        let principal = Principal::Paired(paired.id);
+        let mut reply = json!({ "role": paired.role.as_str(), "token": paired.token });
+        if let Some(gate) = &self.party_mode {
+            gate.assign_role(&principal, paired.role);
+            let permissions = gate.permissions(&principal);
+            reply["permissions"] = permissions.clone();
+            self.told = Some(permissions);
         }
+        self.principal = Some(principal);
+        self.newly_paired = true;
+        v6::response_ok(id, reply)
     }
 
     /// A handshake validation failure: reply a typed error (echoing id 0) and close,
@@ -709,20 +766,70 @@ mod tests {
         parse(&out.replies[0])
     }
 
+    /// The token from a pairing, on a later connection, is the same client.
     #[test]
-    fn an_app_that_proved_its_id_gets_the_role_assigned_to_it() {
-        let clients = identities("role-proven");
+    fn a_token_presented_at_the_handshake_brings_its_role_back() {
+        let gate = party_gate();
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code_for(permissions::Role::Dj);
+        let mut first = V6Session::default()
+            .with_party_mode(&gate)
+            .with_pairing(&pairing, LAN);
+        feed(&mut first, GOOD_HANDSHAKE);
+        let token = pair_with(&mut first, &code)["data"]["token"]
+            .as_str()
+            .expect("pairing issues a token")
+            .to_owned();
+
+        let mut back = V6Session::default()
+            .with_party_mode(&gate)
+            .with_pairing(&pairing, LAN);
+        let reply = handshake_with_pairing_token(&mut back, &token);
+        assert_eq!(reply["data"]["paired"], true);
+        assert_eq!(reply["data"]["permissions"]["role"], "dj");
+        assert!(next_track(&mut back).get("error").is_none());
+    }
+
+    /// `client_token` only tells two installs apart; it buys no standing.
+    #[test]
+    fn a_client_token_alone_holds_no_role() {
+        let clients = identities("no-role");
         let gate = party_gate();
         let mut first = V6Session::default().with_party_mode(&gate);
         let token = handshake_with(&mut first, &clients, None)["data"]["client_token"]
             .as_str()
             .expect("first contact is issued a token")
             .to_owned();
-        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Dj);
 
         let mut back = V6Session::default().with_party_mode(&gate);
-        handshake_with(&mut back, &clients, Some(&token));
-        assert!(next_track(&mut back).get("error").is_none());
+        let reply = handshake_with(&mut back, &clients, Some(&token));
+        assert_eq!(reply["data"]["paired"], false);
+        assert_eq!(next_track(&mut back)["error"]["code"], "forbidden");
+    }
+
+    /// Pairing on: a client can reach only what lets it pair.
+    #[test]
+    fn with_pairing_required_only_ping_and_pair_answer_an_unpaired_client() {
+        let pairing = Arc::new(Pairing::default());
+        let mut s = V6Session::default()
+            .with_pairing(&pairing, LAN)
+            .requiring_pairing(true);
+        let reply = parse(&feed(&mut s, GOOD_HANDSHAKE).replies[0]);
+        assert_eq!(reply["data"]["pairing_required"], true);
+        assert_eq!(reply["data"]["paired"], false);
+        assert!(!s.takes_events(), "events describe the player");
+
+        let refused = parse(
+            &feed(
+                &mut s,
+                r#"{"id":3,"kind":"request","op":"player_status","data":{}}"#,
+            )
+            .replies[0],
+        );
+        assert_eq!(refused["error"]["code"], "pairing_required");
+        let ping =
+            parse(&feed(&mut s, r#"{"id":4,"kind":"request","op":"ping","data":{}}"#).replies[0]);
+        assert!(ping.get("error").is_none());
     }
 
     fn set_timer(s: &mut V6Session, action: &str) -> Value {
@@ -736,21 +843,17 @@ mod tests {
     /// grants it to a Host nor takes it from a Listener.
     #[test]
     fn only_a_ticked_device_may_shut_down_whatever_its_party_mode_role() {
-        let clients = identities("power-role");
         let gate = party_gate();
         let power = Arc::new(crate::power::Power::default());
-        let mut first = V6Session::default()
-            .with_party_mode(&gate)
-            .with_power(&power);
-        let token = handshake_with(&mut first, &clients, None)["data"]["client_token"]
-            .as_str()
-            .expect("first contact is issued a token")
-            .to_owned();
-        let me = Principal::App("install-1".into());
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
         let mut s = V6Session::default()
             .with_party_mode(&gate)
-            .with_power(&power);
-        handshake_with(&mut s, &clients, Some(&token));
+            .with_power(&power)
+            .with_pairing(&pairing, LAN);
+        feed(&mut s, GOOD_HANDSHAKE);
+        pair_with(&mut s, &code);
+        let me = s.principal.clone().expect("paired");
 
         gate.assign_role(&me, permissions::Role::Host);
         assert_eq!(set_timer(&mut s, "shutdown")["error"]["code"], "forbidden");
@@ -777,30 +880,82 @@ mod tests {
     }
 
     #[test]
-    fn an_id_that_nothing_verified_is_anonymous_whatever_is_assigned() {
-        let gate = party_gate();
-        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Host);
-        let unverified = ClientIdentities::new(crate::store::Db::disabled());
-        let mut s = V6Session::default().with_party_mode(&gate);
-        handshake_with(&mut s, &unverified, None);
-        assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
+    fn pairing_lets_a_held_socket_through_and_starts_its_events() {
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_pairing(&pairing, LAN)
+            .requiring_pairing(true);
+        feed(&mut s, GOOD_HANDSHAKE);
+
+        assert_eq!(pair_with(&mut s, &code)["data"]["role"], "host");
+
+        assert!(s.takes_events());
+        assert!(s.take_newly_paired());
+        assert!(!s.take_newly_paired(), "the transport acts on it once");
+        let status = parse(
+            &feed(
+                &mut s,
+                r#"{"id":3,"kind":"request","op":"player_status","data":{}}"#,
+            )
+            .replies[0],
+        );
+        assert_ne!(status["error"]["code"], "pairing_required");
     }
 
     #[test]
-    fn a_freshly_issued_id_does_not_inherit_a_role_left_on_it() {
-        let clients = identities("role-stale");
-        let gate = party_gate();
-        gate.assign_role(&Principal::App("install-1".into()), permissions::Role::Host);
-        let mut s = V6Session::default().with_party_mode(&gate);
-        handshake_with(&mut s, &clients, None);
-        assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
+    fn a_stale_token_leaves_the_client_unpaired_but_connected() {
+        let pairing = Arc::new(Pairing::default());
+        let mut s = V6Session::default()
+            .with_pairing(&pairing, LAN)
+            .requiring_pairing(true);
+        let reply = handshake_with_pairing_token(&mut s, "forgotten");
+        assert!(
+            reply.get("error").is_none(),
+            "it still has to be able to pair"
+        );
+        assert_eq!(reply["data"]["paired"], false);
+    }
+
+    #[test]
+    fn unpairing_closes_a_socket_on_its_next_frame() {
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_pairing(&pairing, LAN)
+            .requiring_pairing(true);
+        feed(&mut s, GOOD_HANDSHAKE);
+        pair_with(&mut s, &code);
+        let Some(Principal::Paired(id)) = s.principal.clone() else {
+            panic!("paired");
+        };
+        assert!(pairing.revoke(&id));
+
+        let out = feed(&mut s, r#"{"id":4,"kind":"request","op":"ping","data":{}}"#);
+        assert_eq!(parse(&out.replies[0])["error"]["code"], "pairing_required");
+        assert!(out.close);
+    }
+
+    #[test]
+    fn with_pairing_off_an_unpaired_client_is_served_and_takes_events() {
+        let mut s = V6Session::default();
+        let reply = parse(&feed(&mut s, GOOD_HANDSHAKE).replies[0]);
+        assert_eq!(reply["data"]["pairing_required"], false);
+        assert!(s.takes_events());
+    }
+
+    fn handshake_with_pairing_token(s: &mut V6Session, token: &str) -> Value {
+        let line = format!(
+            r#"{{"id":0,"kind":"request","op":"handshake","data":{{"protocol_version":6,"client_id":"install-1","client_type":"android","token":"{token}"}}}}"#
+        );
+        parse(&feed(s, &line).replies[0])
     }
 
     #[test]
     fn a_principal_the_transport_settled_survives_the_handshake() {
         let clients = identities("role-browser");
         let gate = party_gate();
-        let browser = Principal::Browser("paired".into());
+        let browser = Principal::Paired("paired".into());
         gate.assign_role(&browser, permissions::Role::Dj);
         let mut s = V6Session::default()
             .with_party_mode(&gate)
@@ -824,12 +979,12 @@ mod tests {
         let reply = handshake_with(&mut s, &clients, None);
         assert_eq!(reply["data"]["permissions"]["role"], "guest");
         let (principal, told) = s.permissions_watch().expect("a watch");
-        assert_eq!(principal, Principal::App("install-1".into()));
+        assert_eq!(principal, Principal::Anonymous);
         assert_eq!(told, reply["data"]["permissions"]);
     }
 
     #[test]
-    fn a_proven_app_that_pairs_takes_the_role_of_the_code() {
+    fn an_app_that_pairs_takes_the_role_of_the_code_and_a_token() {
         let clients = identities("pair-proven");
         let gate = party_gate();
         let pairing = Arc::new(Pairing::default());
@@ -840,7 +995,10 @@ mod tests {
         handshake_with(&mut s, &clients, None);
         assert_eq!(next_track(&mut s)["error"]["code"], "forbidden");
 
-        assert_eq!(pair_with(&mut s, &code)["data"]["role"], "dj");
+        let paired = pair_with(&mut s, &code);
+        assert_eq!(paired["data"]["role"], "dj");
+        assert_eq!(paired["data"]["permissions"]["role"], "dj");
+        assert!(paired["data"]["token"].is_string());
         assert!(next_track(&mut s).get("error").is_none());
     }
 
@@ -858,7 +1016,7 @@ mod tests {
     }
 
     #[test]
-    fn an_app_nothing_verified_cannot_pair_and_leaves_the_code_live() {
+    fn pairing_needs_no_identity_store() {
         let pairing = Arc::new(Pairing::default());
         let code = pairing.new_code();
         let mut s = V6Session::default()
@@ -869,8 +1027,19 @@ mod tests {
             &ClientIdentities::new(crate::store::Db::disabled()),
             None,
         );
-        assert_eq!(pair_with(&mut s, &code)["error"]["code"], "unavailable");
-        assert!(pairing.take_code(&code, LAN).is_ok());
+        assert_eq!(pair_with(&mut s, &code)["data"]["role"], "host");
+    }
+
+    /// An unpaired browser, too, is told how it pairs rather than that it cannot.
+    #[test]
+    fn an_anonymous_browser_socket_is_sent_to_http_to_pair() {
+        let pairing = Arc::new(Pairing::default());
+        let code = pairing.new_code();
+        let mut s = V6Session::default()
+            .with_pairing(&pairing, LAN)
+            .with_principal(Principal::Anonymous);
+        feed(&mut s, GOOD_HANDSHAKE);
+        assert_eq!(pair_with(&mut s, &code)["error"]["code"], "not_allowed");
     }
 
     #[test]
@@ -881,7 +1050,7 @@ mod tests {
         let mut s = V6Session::default()
             .with_party_mode(&party_gate())
             .with_pairing(&pairing, LAN)
-            .with_principal(Principal::Browser("paired".into()));
+            .with_principal(Principal::Paired("paired".into()));
         handshake_with(&mut s, &clients, None);
         assert_eq!(pair_with(&mut s, &code)["error"]["code"], "not_allowed");
     }

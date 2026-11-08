@@ -1,9 +1,9 @@
-//! Pairing codes and browser session tokens.
+//! Pairing codes and the session tokens they buy.
 //!
-//! A browser cannot be identified the way a native client is, so it earns a token
-//! by echoing back a short code the user reads out of the MusicBee panel. The
-//! token then travels as `Authorization: Bearer` on HTTP and as an additive
-//! `token` field in the V6 WebSocket handshake.
+//! A client earns a token by echoing back a short code the user reads out of the
+//! MusicBee panel: a browser through `POST /api/pair`, an app through the V6 `pair`
+//! op. The token is the one credential on every transport. It travels as a cookie or
+//! `Authorization: Bearer` on HTTP and as `token` in a V6 socket handshake.
 //!
 //! Enforcement is `web_auth_required`, which defaults off; the admission check is
 //! the same function either way, so the guarded path is never an untested branch.
@@ -400,6 +400,14 @@ impl Pairing {
         let client = updated?;
         self.write(&client);
         Some(client.id)
+    }
+
+    /// Whether an id still names a pairing, so a socket learns it was unpaired.
+    ///
+    /// Unlike [`paired_id`](Self::paired_id) this writes nothing, because it is asked
+    /// on every frame.
+    pub fn holds(&self, id: &str) -> bool {
+        self.lock().tokens.contains_key(id)
     }
 
     /// Every paired browser, for the panel's list.

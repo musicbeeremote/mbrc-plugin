@@ -1,10 +1,14 @@
-//! The `Host` allowlist.
+//! The `Host` allowlist and the `Origin` check.
 //!
-//! A DNS-rebinding defence, and the reason it applies whatever
-//! `web_auth_required` says: an attacker who cannot pair can still point a name
-//! they control at this machine's address and have the victim's own browser make
-//! same-origin requests here. Pinning `Host` to the shapes a LAN client actually
-//! uses removes that, and costs a user nothing.
+//! Both apply whatever `web_auth_required` says. The `Host` allowlist is a
+//! DNS-rebinding defence: an attacker who cannot pair can still point a name they
+//! control at this machine's address and have the victim's own browser make
+//! same-origin requests here. The `Origin` check covers what the allowlist cannot:
+//! a page on any site aiming at this machine's IP literal, which is a valid `Host`.
+//! A WebSocket upgrade is not subject to CORS, so nothing else stops that page.
+//!
+//! A request with no `Origin` passes: browsers send it on every cross-origin
+//! request that could act, and a native client has no origin to send.
 
 use std::net::IpAddr;
 
@@ -14,8 +18,8 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 pub async fn guard(request: Request, next: Next) -> Response {
-    let host = request
-        .headers()
+    let headers = request.headers();
+    let host = headers
         .get(header::HOST)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
@@ -24,7 +28,39 @@ pub async fn guard(request: Request, next: Next) -> Response {
         tracing::debug!(host, "rejecting request: Host is not a LAN name or address");
         return (StatusCode::MISDIRECTED_REQUEST, "unexpected Host").into_response();
     }
+    if let Some(origin) = headers.get(header::ORIGIN)
+        && !origin
+            .to_str()
+            .is_ok_and(|origin| same_origin(origin, host))
+    {
+        tracing::debug!(?origin, host, "rejecting request: Origin is another site");
+        return (StatusCode::FORBIDDEN, "cross-origin request refused").into_response();
+    }
     next.run(request).await
+}
+
+/// Whether an `Origin` header names the host and port this request was sent to.
+///
+/// The scheme is not compared, so a TLS-terminating proxy in front of the plugin
+/// keeps working. An opaque origin (`null`, from a sandboxed frame or a `file:`
+/// page) names no host and never matches.
+fn same_origin(origin: &str, host: &str) -> bool {
+    let Some((scheme, authority)) = origin.split_once("://") else {
+        return false;
+    };
+    let default_port = match scheme.to_ascii_lowercase().as_str() {
+        "http" => ":80",
+        "https" => ":443",
+        _ => return false,
+    };
+    let normalized = |value: &str| {
+        let value = value.to_ascii_lowercase();
+        match value.strip_suffix(default_port) {
+            Some(name) => name.to_owned(),
+            None => value,
+        }
+    };
+    normalized(authority) == normalized(host)
 }
 
 /// Whether a `Host` header names this server the way a LAN client reaches it.
@@ -94,12 +130,57 @@ mod tests {
         assert!(!is_allowed("thoth.lan"));
     }
 
+    #[test]
+    fn a_page_served_from_this_host_and_port_is_same_origin() {
+        assert!(same_origin("http://192.168.1.20:3000", "192.168.1.20:3000"));
+        assert!(same_origin("http://THOTH:3000", "thoth:3000"));
+        assert!(same_origin("http://[::1]:3000", "[::1]:3000"));
+        assert!(same_origin("https://desk.local", "desk.local"));
+    }
+
+    #[test]
+    fn a_default_port_means_the_same_with_or_without_it() {
+        assert!(same_origin("http://thoth", "thoth:80"));
+        assert!(same_origin("http://thoth:80", "thoth"));
+        assert!(same_origin("https://thoth", "thoth:443"));
+        assert!(!same_origin("https://thoth", "thoth:80"));
+    }
+
+    #[test]
+    fn another_site_or_port_is_not_same_origin() {
+        assert!(!same_origin("https://evil.example", "192.168.1.20:3000"));
+        assert!(!same_origin(
+            "http://192.168.1.20:8080",
+            "192.168.1.20:3000"
+        ));
+        assert!(!same_origin(
+            "http://192.168.1.21:3000",
+            "192.168.1.20:3000"
+        ));
+        assert!(!same_origin("http://192.168.1.20", "192.168.1.20:3000"));
+    }
+
+    #[test]
+    fn an_opaque_or_foreign_scheme_origin_is_refused() {
+        assert!(!same_origin("null", "192.168.1.20:3000"));
+        assert!(!same_origin("", "192.168.1.20:3000"));
+        assert!(!same_origin("file://", "192.168.1.20:3000"));
+        assert!(!same_origin("ftp://thoth:3000", "thoth:3000"));
+    }
+
     proptest::proptest! {
         /// The Host header is the first untrusted input every request meets.
         #[test]
         fn any_host_header_is_judged_without_panicking(host in "(?s).{0,80}") {
             let _ = is_allowed(&host);
             let _ = strip_port(&host);
+        }
+
+        #[test]
+        fn any_origin_header_is_judged_without_panicking(
+            origin in "(?s).{0,80}", host in "(?s).{0,40}",
+        ) {
+            let _ = same_origin(&origin, &host);
         }
 
         #[test]

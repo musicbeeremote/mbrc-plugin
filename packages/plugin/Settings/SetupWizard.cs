@@ -378,18 +378,16 @@ namespace MusicBeePlugin.Settings
             };
             _webAuth = new CheckBox
             {
-                Text = "Require browsers to pair with a code",
+                Text = "Require apps and browsers to pair with a code",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Checked = _saved.web_auth_required,
-                Enabled = _saved.web_enabled,
             };
-            _webEnabled.CheckedChanged += (s, e) => _webAuth.Enabled = _webEnabled.Checked;
 
             _rows.Add(rows, "Web remote", _webEnabled);
             _rows.Add(rows, "Pairing", _webAuth);
             _rows.Add(rows, string.Empty,
-                Note("Pairing asks each browser for a code shown in MusicBee before it can control anything."),
+                Note("Pairing asks each browser and app for a code shown in MusicBee before it can control anything. Older apps cannot pair, so they stay allowed unless you turn that off in settings."),
                 endsBlock: true);
             _rows.Add(rows, "Open", _addresses.Count > 0
                 ? (Control)Links(_addresses.Select(a => "http://" + a + "/"))

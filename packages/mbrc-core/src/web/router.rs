@@ -44,27 +44,26 @@ impl WebState {
     ///
     /// The cookie is what a browser sends without being asked, on an `<img>` and
     /// a socket alike, which is why nothing has to put the token in a URL. The
-    /// header is for a caller that builds its own requests, and the query is
-    /// what a browser paired by an older build still has.
-    pub fn admits_request(&self, headers: &axum::http::HeaderMap, query: Option<&str>) -> bool {
+    /// header is for a caller that builds its own requests.
+    pub fn admits_request(&self, headers: &axum::http::HeaderMap) -> bool {
         if !self.core.config.web_auth_required {
             return true;
         }
         let cookie = cookie_token(headers);
-        self.admits(cookie.as_deref()) || self.admits(bearer(headers)) || self.admits(query)
+        self.admits(cookie.as_deref()) || self.admits(bearer(headers))
     }
 }
 
 impl WebState {
-    /// Who a request is for Party Mode: the paired browser its token names, or
+    /// Who a request is for Party Mode: the paired client its token names, or
     /// anonymous. Checked in the same order as [`admits_request`](Self::admits_request).
-    pub fn principal(&self, headers: &axum::http::HeaderMap, query: Option<&str>) -> Principal {
+    pub fn principal(&self, headers: &axum::http::HeaderMap) -> Principal {
         let cookie = cookie_token(headers);
-        [cookie.as_deref(), bearer(headers), query]
+        [cookie.as_deref(), bearer(headers)]
             .into_iter()
             .flatten()
             .find_map(|token| self.core.pairing.paired_id(token, Some(self.peer.ip())))
-            .map_or(Principal::Anonymous, Principal::Browser)
+            .map_or(Principal::Anonymous, Principal::Paired)
     }
 }
 
@@ -109,7 +108,7 @@ const CSP: &str = "default-src 'self'; img-src 'self' data:; style-src 'self' 'u
 /// that cannot load the page has no way to reach the screen asking for the code.
 /// So are the three routes a browser reaches without a request of its own to
 /// attach a header to - `/ws`, the event stream and the covers - which check the
-/// same token from the query string themselves.
+/// same token from the cookie themselves.
 fn guarded_routes(state: &WebState) -> Router<WebState> {
     Router::new()
         .route("/api/v6/capabilities", get(capabilities))
@@ -146,7 +145,7 @@ pub(super) fn app(state: WebState) -> Router {
 
 /// Rejects a request with no paired token, when pairing is enforced.
 async fn gate(State(state): State<WebState>, request: Request, next: Next) -> Response {
-    if !state.admits_request(request.headers(), None) {
+    if !state.admits_request(request.headers()) {
         return unauthorized();
     }
     next.run(request).await
@@ -156,7 +155,9 @@ async fn gate(State(state): State<WebState>, request: Request, next: Next) -> Re
 pub fn unauthorized() -> Response {
     (
         StatusCode::UNAUTHORIZED,
-        Json(json!({ "error": { "code": "unauthorized", "message": "pair this browser first" } })),
+        Json(
+            json!({ "error": { "code": "pairing_required", "message": "pair this client first" } }),
+        ),
     )
         .into_response()
 }
@@ -167,7 +168,7 @@ async fn capabilities(
     headers: axum::http::HeaderMap,
 ) -> Json<Value> {
     let mut capabilities = crate::server::commands_v6::capabilities();
-    let principal = state.principal(&headers, None);
+    let principal = state.principal(&headers);
     capabilities["permissions"] = state.core.party_mode.permissions(&principal);
     Json(capabilities)
 }
@@ -179,7 +180,7 @@ async fn pair_status(State(state): State<WebState>, headers: axum::http::HeaderM
     // the page cannot read, so asking is the only way a browser can know.
     Json(json!({
         "auth_required": state.core.config.web_auth_required,
-        "paired": state.admits_request(&headers, None),
+        "paired": state.admits_request(&headers),
         "party_mode": state.core.party_mode.is_enabled(),
     }))
 }
@@ -196,7 +197,7 @@ async fn pair(State(state): State<WebState>, Json(body): Json<Value>) -> Respons
             state
                 .core
                 .party_mode
-                .assign_role(&Principal::Browser(paired.id), paired.role);
+                .assign_role(&Principal::Paired(paired.id), paired.role);
             (
                 [(header::SET_COOKIE, token_cookie(&paired.token))],
                 Json(json!({ "token": paired.token, "role": paired.role.as_str() })),

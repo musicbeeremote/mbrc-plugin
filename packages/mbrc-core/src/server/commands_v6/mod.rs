@@ -26,6 +26,7 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
+use crate::server::path_guard;
 
 /// Ops the session answers itself, advertised in the handshake capabilities
 /// alongside every domain's own list.
@@ -121,6 +122,9 @@ pub fn dispatch(
     cover_store: Option<&CoverStore>,
     metadata_cache: Option<&MetadataCache>,
 ) -> Option<OpResult> {
+    if let Err(refused) = refuse_guarded_paths(data, providers) {
+        return Some(Err(refused));
+    }
     player::dispatch(op, data, providers, now_playing)
         .or_else(|| system::dispatch(op, data, providers))
         .or_else(|| track::dispatch(op, data, providers, cover_store))
@@ -140,6 +144,24 @@ pub fn dispatch(
                 metadata_cache,
             )
         })
+}
+
+/// `invalid_field` when a request names a system path or a server the host does not use.
+fn refuse_guarded_paths(data: &Value, providers: &dyn Providers) -> Result<(), V6Error> {
+    let named = path_guard::named_paths(data);
+    let unknown = path_guard::first_refused(named.iter().map(|(_, path)| *path), providers);
+    let Some(unknown) = unknown else {
+        return Ok(());
+    };
+    let field = named
+        .iter()
+        .find_map(|(field, path)| (*path == unknown).then_some(*field))
+        .unwrap_or("path");
+    Err(V6Error::field(
+        ErrorCode::InvalidField,
+        field,
+        format!("{unknown} is a system path, or on a network server this library does not use"),
+    ))
 }
 
 /// The shared V6 pagination envelope: `{ total, offset, items }` (#118 §8). `total`

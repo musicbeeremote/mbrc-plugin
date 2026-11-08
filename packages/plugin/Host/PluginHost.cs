@@ -344,6 +344,7 @@ namespace MusicBeePlugin.Host
                    || a.mdns_enabled != b.mdns_enabled
                    || a.web_enabled != b.web_enabled
                    || a.web_auth_required != b.web_auth_required
+                   || a.allow_unpaired_legacy_clients != b.allow_unpaired_legacy_clients
                    || !ListEqual(a.allowed_addresses, b.allowed_addresses);
         }
 
