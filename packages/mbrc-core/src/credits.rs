@@ -122,22 +122,27 @@ pub fn key(name: &str) -> String {
     clean(name).to_lowercase()
 }
 
-/// What marks a guest or a second artist in a name nobody split, matched
-/// case-insensitively. Spaces are part of each, so "AC/DC" stays whole.
-const CREDIT_MARKERS: &[&str] = &[" feat. ", " feat ", " ft. ", " ft ", " featuring ", " / "];
+/// What marks a guest or a second artist in a name nobody split, in any case.
+/// Spaces are part of each, so "AC/DC" stays whole.
+const CREDIT_MARKERS: &[&str] = &[" feat. ", " ft. ", " featuring ", " / "];
+
+/// The markers with no dot, in lowercase only: a capitalized one is as likely to
+/// be a word of the name ("The Feat Collective").
+const BARE_CREDIT_MARKERS: &[&str] = &[" feat ", " ft "];
 
 /// The main artist of a name nobody split: "A feat. B" and "A; B" are "A".
 ///
 /// The first value, as [`crate::multi_value::values`] splits one, up to its
-/// first credit marker; anything else is the name as given. The markers are the conservative ones music servers default to. `&`, `,`,
-/// `x` and `vs` are left alone: they are as often inside one artist's name
-/// ("Simon & Garfunkel", "Earth, Wind & Fire") as between two.
+/// first credit marker; anything else is the name as given. `&`, `,`, `x` and
+/// `vs` are left alone: they are as often inside one artist's name ("Simon &
+/// Garfunkel", "Earth, Wind & Fire") as between two.
 pub fn lead_artist(name: &str) -> &str {
     let first = crate::multi_value::values(name).next().unwrap_or(name);
     let folded = first.to_ascii_lowercase();
-    CREDIT_MARKERS
-        .iter()
-        .filter_map(|marker| folded.find(marker))
+    let marked = CREDIT_MARKERS.iter().filter_map(|m| folded.find(m));
+    let bare = BARE_CREDIT_MARKERS.iter().filter_map(|m| first.find(m));
+    marked
+        .chain(bare)
         .min()
         .map_or(first, |at| &first[..at])
         .trim_end_matches(|c: char| c.is_whitespace() || matches!(c, ',' | '-' | '('))
@@ -348,6 +353,8 @@ mod tests {
             "Bing Crosby vs. Jojo Effect",
             "Arcángel, De La Ghetto & Ken-Y",
             "Feat. Someone",
+            "The Feat Collective",
+            "Mister Ft Knox",
             "Ftera",
         ] {
             assert_eq!(lead_artist(name), name);

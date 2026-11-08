@@ -55,4 +55,4 @@ pub use stage::{Pending, StagedUpdate, clear_staged, read_pending, stage};
 #[cfg(feature = "client")]
 pub use state::UpdateState;
 #[cfg(all(feature = "client", windows))]
-pub use winhttp::WinHttpClient;
+pub use winhttp::{Canceller, WinHttpClient};

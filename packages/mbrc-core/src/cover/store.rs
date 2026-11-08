@@ -865,6 +865,7 @@ impl CoverStore {
 
     /// Deletes cover files that no album key or item cover references.
     fn prune_orphans(&self) {
+        let _pictures = self.artists.hold_files();
         let mut referenced: std::collections::HashSet<String> =
             self.read_covers().values().cloned().collect();
         referenced.extend(

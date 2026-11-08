@@ -20,7 +20,9 @@
 //!   socket is opened.
 
 use std::ffi::c_void;
+use std::mem::ManuallyDrop;
 use std::ptr::{null, null_mut};
+use std::sync::{Arc, Mutex};
 
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, GetLastError};
 use windows_sys::Win32::Networking::WinHttp::{
@@ -106,9 +108,58 @@ unsafe impl Sync for Handle {}
 /// once per request.
 pub struct WinHttpClient {
     session: Handle,
+    in_flight: Arc<Mutex<InFlight>>,
+}
+
+/// The request a client has open: owned here, so [`Canceller`] can close it
+/// under the call blocked on it.
+#[derive(Default)]
+struct InFlight {
+    request: Option<Handle>,
+    cancelled: bool,
+}
+
+/// Stops a [`WinHttpClient`] from any thread: the request it is blocked in fails
+/// at once, and every later one fails before it starts.
+pub struct Canceller(Arc<Mutex<InFlight>>);
+
+impl Canceller {
+    pub fn cancel(&self) {
+        let mut in_flight = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        in_flight.cancelled = true;
+        in_flight.request = None;
+    }
+}
+
+/// Hands a request to [`InFlight`], and closes it when dropped unless a
+/// [`Canceller`] already has.
+struct Registered<'a>(&'a Mutex<InFlight>);
+
+impl<'a> Registered<'a> {
+    /// # Errors
+    /// The client was cancelled; the request is closed.
+    fn new(in_flight: &'a Mutex<InFlight>, request: Handle) -> Result<Self> {
+        let mut state = in_flight.lock().unwrap_or_else(|e| e.into_inner());
+        if state.cancelled {
+            return Err(UpdateError::Network("cancelled".to_owned()));
+        }
+        state.request = Some(request);
+        Ok(Self(in_flight))
+    }
+}
+
+impl Drop for Registered<'_> {
+    fn drop(&mut self) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).request = None;
+    }
 }
 
 impl WinHttpClient {
+    /// A handle that cancels this client's requests from another thread.
+    pub fn canceller(&self) -> Canceller {
+        Canceller(self.in_flight.clone())
+    }
+
     /// Opens a session.
     ///
     /// `user_agent` is sent as `User-Agent` on every request; GitHub rejects
@@ -161,7 +212,10 @@ impl WinHttpClient {
             return Err(last_error("WinHttpSetTimeouts"));
         }
 
-        Ok(Self { session })
+        Ok(Self {
+            session,
+            in_flight: Arc::default(),
+        })
     }
 }
 
@@ -180,7 +234,7 @@ impl HttpClient for WinHttpClient {
         let accept_types = [accept_all.as_ptr(), null()];
         // SAFETY: every pointer is null-terminated and outlives the call;
         // `accept_types` is the required null-terminated array of pointers.
-        let request = Handle::new(
+        let request = ManuallyDrop::new(Handle::new(
             unsafe {
                 WinHttpOpenRequest(
                     connection.as_ptr(),
@@ -193,7 +247,8 @@ impl HttpClient for WinHttpClient {
                 )
             },
             "WinHttpOpenRequest",
-        )?;
+        )?);
+        let _registered = Registered::new(&self.in_flight, Handle(request.as_ptr()))?;
 
         if let Some(etag) = etag {
             add_header(&request, &format!("If-None-Match: {etag}"))?;
@@ -706,6 +761,31 @@ mod tests {
         WinHttpClient::new("mbrc-test/0.0", None).unwrap();
         WinHttpClient::new("mbrc-test/0.0", Some("  ")).unwrap();
         WinHttpClient::new("mbrc-test/0.0", Some("http://127.0.0.1:9")).unwrap();
+    }
+
+    /// A host that accepts and never answers stalls the request in its TLS
+    /// handshake, for the 60 second receive timeout unless it is cancelled.
+    #[test]
+    fn cancelling_ends_a_stalled_request_and_refuses_the_next() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "https://127.0.0.1:{}/",
+            listener.local_addr().unwrap().port()
+        );
+        let client = WinHttpClient::new("mbrc-test/0.0", Some("  ")).unwrap();
+        let canceller = client.canceller();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            canceller.cancel();
+        });
+
+        let started = std::time::Instant::now();
+        assert!(client.get(&url, None).is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+
+        let started = std::time::Instant::now();
+        assert!(client.get(&url, None).is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
     /// The only test that leaves the machine, so it is opt-in:

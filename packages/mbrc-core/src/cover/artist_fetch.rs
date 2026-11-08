@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
 
-use mbrc_release::HttpClient;
+use mbrc_release::{HttpClient, HttpResponse, UpdateError};
 use serde_json::Value;
 
 use super::artists::{ArtistImages, FetchQueue, Status};
@@ -41,7 +41,7 @@ const IDLE_WAIT: Duration = Duration::from_secs(60);
 const MUSICBRAINZ: &str = "musicbrainz.org";
 
 /// The least time between two requests to one host, and how long a busy
-/// service is left alone.
+/// service is left alone. MusicBee's thumbnails go on meanwhile.
 #[derive(Default)]
 pub struct Pace {
     musicbrainz: Duration,
@@ -83,6 +83,66 @@ impl Pace {
 fn host(url: &str) -> &str {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     rest.split(['/', '?']).next().unwrap_or(rest)
+}
+
+/// Stands in when no HTTP client could be opened: MusicBee's thumbnails still
+/// arrive, and the rest are recorded as failed, which the status line shows.
+pub struct Unavailable(pub String);
+
+impl HttpClient for Unavailable {
+    fn get(&self, _url: &str, _etag: Option<&str>) -> mbrc_release::Result<HttpResponse> {
+        Err(UpdateError::Network(self.0.clone()))
+    }
+}
+
+/// How long the web is left alone after it answered busy, doubling each time.
+struct WebPause {
+    until: Option<Instant>,
+    next: Duration,
+    shortest: Duration,
+    longest: Duration,
+}
+
+impl WebPause {
+    fn new(pace: &Pace) -> Self {
+        Self {
+            until: None,
+            next: pace.busy_min,
+            shortest: pace.busy_min,
+            longest: pace.busy_max,
+        }
+    }
+
+    fn is_on(&self) -> bool {
+        self.until.is_some()
+    }
+
+    /// Ends a pause that has run out; true when this call ended one.
+    fn end_if_over(&mut self) -> bool {
+        let over = self.until.is_some_and(|until| until <= Instant::now());
+        if over {
+            self.until = None;
+        }
+        over
+    }
+
+    /// How long an idle worker may wait for work before looking at the pause.
+    fn idle_wait(&self) -> Duration {
+        self.until.map_or(IDLE_WAIT, |until| {
+            until
+                .saturating_duration_since(Instant::now())
+                .min(IDLE_WAIT)
+        })
+    }
+
+    fn begin(&mut self) {
+        self.until = Some(Instant::now() + self.next);
+        self.next = (self.next * 2).min(self.longest);
+    }
+
+    fn reset(&mut self) {
+        self.next = self.shortest;
+    }
 }
 
 /// What looking for one artist's picture came to.
@@ -202,12 +262,13 @@ impl<'a> Fetcher<'a> {
 }
 
 /// Fetches queued artists until this worker is retired or the store is gone,
-/// calling `landed` with each picture stored.
+/// calling `landed` with each picture stored, once per spelling it was asked for.
 ///
 /// MusicBee's thumbnail first; the web only for what MusicBee has none of, once
 /// that artist's last web miss is due. The store is reached only through
 /// [`FetchQueue::with_store`], so a retired worker never keeps `mbrc.redb` open.
-/// A busy web source puts the artist back and pauses the worker.
+/// A busy web source parks whoever needs it until the pause ends; MusicBee's turn
+/// goes on for everyone else.
 pub fn run(
     queue: &FetchQueue,
     store: &Weak<CoverStore>,
@@ -218,14 +279,24 @@ pub fn run(
 ) {
     super::store::below_normal_priority();
     let mut budget_noted = false;
-    let mut busy_pause = fetcher.pace.busy_min;
+    let mut pause = WebPause::new(&fetcher.pace);
     while queue.is_current(generation) {
-        let Some(item) = queue.next(IDLE_WAIT) else {
+        if pause.end_if_over() {
+            queue.unpark();
+        }
+        let Some(item) = queue.next(generation, pause.idle_wait()) else {
             continue;
         };
-        let name = item.name.as_str();
+        let Some(name) = item.names.first().map(String::as_str) else {
+            continue;
+        };
         let lead = credits::lead_artist(name);
+        let announce = |hash: &str| item.names.iter().for_each(|name| landed(name, hash));
         let Some(step) = queue.with_store(generation, store, |images| {
+            if let Some(hash) = images.hash_for(name) {
+                announce(&hash);
+                return None;
+            }
             is_ready(images, name, &mut budget_noted).then(|| images.musicbee_due(name))
         }) else {
             return;
@@ -240,18 +311,27 @@ pub fn run(
         let thumb = ask_musicbee
             .then(|| musicbee_thumb(musicbee, lead))
             .flatten();
-        let Some(web) = queue.with_store(generation, store, |images| match thumb {
-            Some(raw) if store_thumb(images, name, &raw, landed) => false,
-            _ => {
-                if ask_musicbee {
-                    images.musicbee_has_none(name);
-                }
-                images.web_due(name, now_unix_secs())
+        let Some(web) = queue.with_store(generation, store, |images| {
+            if !images.is_enabled() {
+                return false;
             }
+            if let Some(raw) = thumb
+                && store_thumb(images, name, &raw, &announce)
+            {
+                return false;
+            }
+            if ask_musicbee {
+                images.musicbee_has_none(name);
+            }
+            images.web_due(name, now_unix_secs())
         }) else {
             return;
         };
         if !web {
+            continue;
+        }
+        if pause.is_on() {
+            queue.park(item);
             continue;
         }
         let proceed = || queue.is_current(generation) && queue.is_enabled();
@@ -264,15 +344,14 @@ pub fn run(
                 failure: Failure::Busy(error),
                 ..
             } => {
-                tracing::debug!(artist = item.name, %error, pause = ?busy_pause, "artist picture source busy");
-                queue.push(item);
-                queue.pause(generation, busy_pause);
-                busy_pause = (busy_pause * 2).min(fetcher.pace.busy_max);
+                tracing::debug!(artist = name, %error, pause = ?pause.next, "artist picture source busy");
+                pause.begin();
+                queue.park(item);
             }
             outcome => {
-                busy_pause = fetcher.pace.busy_min;
+                pause.reset();
                 let settled = queue.with_store(generation, store, |images| {
-                    settle(images, name, outcome, landed);
+                    settle(images, name, outcome, &announce);
                 });
                 if settled.is_none() {
                     return;
@@ -300,11 +379,11 @@ fn musicbee_thumb(musicbee: &dyn Providers, name: &str) -> Option<Vec<u8>> {
 
 /// Stores MusicBee's thumbnail as `name`'s picture, announcing it; false when
 /// it does not decode.
-fn store_thumb(images: &ArtistImages, name: &str, raw: &[u8], landed: &dyn Fn(&str, &str)) -> bool {
+fn store_thumb(images: &ArtistImages, name: &str, raw: &[u8], announce: &dyn Fn(&str)) -> bool {
     match images.store(name, raw, "", SOURCE_MUSICBEE) {
         Ok(hash) => {
             tracing::debug!(artist = name, %hash, source = SOURCE_MUSICBEE, "artist picture stored");
-            landed(name, &hash);
+            announce(&hash);
             true
         }
         Err(e) => {
@@ -334,7 +413,7 @@ fn is_ready(images: &ArtistImages, name: &str, budget_noted: &mut bool) -> bool 
 
 /// Records what one lookup came to; nothing when downloading was turned off
 /// while it ran.
-fn settle(images: &ArtistImages, name: &str, outcome: Outcome, landed: &dyn Fn(&str, &str)) {
+fn settle(images: &ArtistImages, name: &str, outcome: Outcome, announce: &dyn Fn(&str)) {
     if !images.is_enabled() {
         return;
     }
@@ -346,7 +425,7 @@ fn settle(images: &ArtistImages, name: &str, outcome: Outcome, landed: &dyn Fn(&
         } => match images.store(name, &image, &mbid, source) {
             Ok(hash) => {
                 tracing::debug!(artist = name, %hash, source, "artist picture stored");
-                landed(name, &hash);
+                announce(&hash);
             }
             Err(e) => {
                 tracing::debug!(artist = name, error = %e, "artist picture unusable");
@@ -450,7 +529,6 @@ fn image_file(body: &Value) -> Option<String> {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use mbrc_release::{HttpResponse, UpdateError};
     use serde_json::json;
 
     use super::*;
@@ -697,6 +775,16 @@ mod tests {
         client: Recorded,
         done: impl Fn(&ArtistImages) -> bool,
     ) -> (Recorded, Vec<(String, String)>) {
+        run_paced(store, musicbee, client, Pace::default(), done)
+    }
+
+    fn run_paced<C: HttpClient + Send + 'static>(
+        store: &Arc<CoverStore>,
+        musicbee: MockProviders,
+        client: C,
+        pace: Pace,
+        done: impl Fn(&ArtistImages) -> bool,
+    ) -> (C, Vec<(String, String)>) {
         let queue = store.artists().queue();
         let generation = queue.begin_worker();
         let weak = Arc::downgrade(store);
@@ -704,7 +792,7 @@ mod tests {
             let queue = queue.clone();
             std::thread::spawn(move || {
                 let landed = Mutex::new(Vec::new());
-                let mut fetcher = Fetcher::new(&client, Pace::default());
+                let mut fetcher = Fetcher::new(&client, pace);
                 run(
                     &queue,
                     &weak,
@@ -728,6 +816,38 @@ mod tests {
         }
         queue.retire();
         worker.join().unwrap()
+    }
+
+    /// Runs a worker with a MusicBee the test can watch, returning what it asked
+    /// the web once it is retired and joined.
+    fn spawn_worker(
+        store: &Arc<CoverStore>,
+        musicbee: &Arc<MockProviders>,
+    ) -> (Arc<FetchQueue>, std::thread::JoinHandle<Vec<String>>) {
+        let queue = store.artists().queue();
+        let generation = queue.begin_worker();
+        let weak = Arc::downgrade(store);
+        let worker = {
+            let (queue, musicbee) = (queue.clone(), musicbee.clone());
+            std::thread::spawn(move || {
+                let client = Recorded::default();
+                let mut fetcher = Fetcher::new(&client, Pace::default());
+                run(
+                    &queue,
+                    &weak,
+                    musicbee.as_ref(),
+                    &mut fetcher,
+                    generation,
+                    &|_, _| {},
+                );
+                client.asked()
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while musicbee.recorded().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        (queue, worker)
     }
 
     fn worker_store(name: &str) -> Arc<CoverStore> {
@@ -893,29 +1013,7 @@ mod tests {
             artist_thumb_stall: Some(Duration::from_millis(400)),
             ..MockProviders::default()
         });
-        let queue = store.artists().queue();
-        let generation = queue.begin_worker();
-        let weak = Arc::downgrade(&store);
-        let worker = {
-            let (queue, musicbee) = (queue.clone(), musicbee.clone());
-            std::thread::spawn(move || {
-                let client = Recorded::default();
-                let mut fetcher = Fetcher::new(&client, Pace::default());
-                run(
-                    &queue,
-                    &weak,
-                    musicbee.as_ref(),
-                    &mut fetcher,
-                    generation,
-                    &|_, _| {},
-                );
-                client.asked()
-            })
-        };
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while musicbee.recorded().is_empty() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(5));
-        }
+        let (queue, worker) = spawn_worker(&store, &musicbee);
 
         let started = Instant::now();
         queue.retire();
@@ -981,5 +1079,108 @@ mod tests {
                 .artists()
                 .request("Tico feat. Gadiel", Priority::Requested)
         );
+    }
+
+    #[test]
+    fn a_picture_is_announced_under_every_spelling_asked_for() {
+        let store = worker_store("spellings");
+        store.artists().request("Tico", Priority::Requested);
+        store
+            .artists()
+            .request("Tico feat. Gadiel", Priority::Requested);
+        let (_, landed) = run_until(
+            &store,
+            musicbee("spellings", &["Tico"], &[]),
+            Recorded::default(),
+            |images| images.hash_for("Tico").is_some(),
+        );
+
+        let names: Vec<&str> = landed.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["Tico", "Tico feat. Gadiel"]);
+    }
+
+    /// Queued while its lead's picture was being fetched, so the request itself
+    /// was answered without one.
+    #[test]
+    fn a_spelling_queued_during_the_fetch_is_told_of_the_picture() {
+        let store = worker_store("late-spelling");
+        let hash = store
+            .artists()
+            .store("Tico", &test_jpeg_bytes(64, 64), "", SOURCE_MUSICBEE)
+            .unwrap();
+        let queue = store.artists().queue();
+        queue.push(crate::cover::artists::Queued {
+            key: "tico".into(),
+            names: vec!["Tico feat. Gadiel".into()],
+            priority: Priority::Requested,
+        });
+        let polls = std::cell::Cell::new(0);
+        let (_, landed) = run_until(
+            &store,
+            MockProviders::default(),
+            Recorded::default(),
+            |_| {
+                polls.set(polls.get() + 1);
+                polls.get() > 20
+            },
+        );
+
+        assert_eq!(landed, [("Tico feat. Gadiel".to_owned(), hash)]);
+    }
+
+    #[test]
+    fn a_busy_web_source_does_not_hold_up_musicbees_thumbnails() {
+        let store = worker_store("busy-musicbee");
+        store.artists().request("Eluveitie", Priority::Requested);
+        store.artists().request("Tico", Priority::Requested);
+        let pace = Pace {
+            busy_min: Duration::from_secs(3600),
+            busy_max: Duration::from_secs(3600),
+            ..Pace::default()
+        };
+        let (client, _) = run_paced(
+            &store,
+            musicbee("busy-pause", &["Tico"], &[]),
+            busy(),
+            pace,
+            |images| images.hash_for("Tico").is_some(),
+        );
+
+        assert_eq!(client.asked().len(), 1, "the web is left alone");
+        assert_eq!(store.artists().summary().waiting, 1, "Eluveitie waits");
+    }
+
+    #[test]
+    fn with_no_http_client_musicbee_still_answers_and_the_rest_show_as_failed() {
+        let store = worker_store("no-client");
+        store.artists().request("Tico", Priority::Requested);
+        store.artists().request("Nobody", Priority::Requested);
+        run_paced(
+            &store,
+            musicbee("no-client", &["Tico"], &[]),
+            Unavailable("no session".into()),
+            Pace::default(),
+            |images| images.lookup("Nobody").is_some(),
+        );
+
+        assert!(store.artists().hash_for("Tico").is_some());
+        assert_eq!(store.artists().summary().errors, 1);
+    }
+
+    #[test]
+    fn a_thumbnail_arriving_after_downloads_were_turned_off_is_not_kept() {
+        let store = worker_store("off-mid-call");
+        store.artists().request("Slow", Priority::Requested);
+        let musicbee = Arc::new(MockProviders {
+            artist_thumb_stall: Some(Duration::from_millis(200)),
+            ..musicbee("off-mid-call", &["Slow"], &[])
+        });
+        let (queue, worker) = spawn_worker(&store, &musicbee);
+
+        store.artists().set_enabled(false);
+        std::thread::sleep(Duration::from_millis(400));
+        queue.retire();
+        worker.join().unwrap();
+        assert_eq!(store.artists().hash_for("Slow"), None);
     }
 }

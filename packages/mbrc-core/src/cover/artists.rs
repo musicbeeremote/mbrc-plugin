@@ -1,9 +1,9 @@
 //! Artist pictures (#116): what the store holds, and the queue that fills it.
 //!
-//! An artist is keyed by its credited name ([`crate::credits::key`]), so a
-//! track split into `A` and `B` (#139) has pictures for each and never one for
-//! the joined string. A reply only reads [`ArtistImages::hash_for`], a map
-//! lookup. A missing picture is asked for with [`ArtistImages::request`], which
+//! An artist is keyed by its lead artist ([`crate::credits::lead_artist`]), so
+//! a track split into `A` and `B` (#139) has pictures for each and a name nobody
+//! split ("A feat. B") shares A's. A reply only reads
+//! [`ArtistImages::hash_for`], a map lookup. A missing picture is asked for with [`ArtistImages::request`], which
 //! queues it for the background fetcher ([`super::artist_fetch`]) and returns.
 //!
 //! Pictures are written as the album covers are, one file per content hash, so
@@ -15,7 +15,7 @@
 //! downloads a backdrop of up to 2 MB and is never used.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant};
@@ -50,6 +50,12 @@ const MUSICBEE_RECHECK: Duration = Duration::from_secs(60 * 60);
 /// that scrolled through the whole library; the overflow is asked again when
 /// it is back on screen.
 const MAX_REQUESTED: usize = 1000;
+
+/// How many spellings of one artist a queued entry announces its picture under.
+///
+/// A client is told by the name it asked with, and a page may show several that
+/// share a lead; one past this learns of the picture at its next request.
+const MAX_SPELLINGS: usize = 16;
 
 /// What the fetcher concluded about one artist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,8 +118,19 @@ struct Stored {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Queued {
     pub key: String,
-    pub name: String,
+    /// Every spelling asked for, the first one as it was first queued.
+    pub names: Vec<String>,
     pub priority: Priority,
+}
+
+impl Queued {
+    fn merge(&mut self, names: Vec<String>) {
+        for name in names {
+            if self.names.len() < MAX_SPELLINGS && !self.names.contains(&name) {
+                self.names.push(name);
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -122,16 +139,28 @@ struct Queue {
     requested: VecDeque<Queued>,
     /// Keys waiting in either deque.
     queued: HashSet<String>,
+    /// Artists set aside until the web answers again; apart from `queued`, so a
+    /// new request still gets its MusicBee turn.
+    parked: Vec<Queued>,
 }
 
 impl Queue {
     fn push(&mut self, item: Queued) -> bool {
         if self.queued.contains(&item.key) {
-            if item.priority == Priority::NowPlaying {
-                self.requested.retain(|q| q.key != item.key);
-                if !self.now_playing.iter().any(|q| q.key == item.key) {
-                    self.now_playing.push_back(item);
-                }
+            if item.priority == Priority::NowPlaying
+                && let Some(at) = self.requested.iter().position(|q| q.key == item.key)
+                && let Some(mut moved) = self.requested.remove(at)
+            {
+                moved.priority = Priority::NowPlaying;
+                self.now_playing.push_back(moved);
+            }
+            if let Some(waiting) = self
+                .now_playing
+                .iter_mut()
+                .chain(self.requested.iter_mut())
+                .find(|q| q.key == item.key)
+            {
+                waiting.merge(item.names);
             }
             return true;
         }
@@ -175,7 +204,10 @@ pub struct FetchQueue {
     generation: AtomicU64,
     /// Held while a fetcher uses the store; [`FetchQueue::retire`] waits on it.
     store_access: Mutex<()>,
+    retire_hook: Mutex<Option<RetireHook>>,
 }
+
+type RetireHook = Box<dyn FnOnce() + Send>;
 
 impl FetchQueue {
     pub fn is_enabled(&self) -> bool {
@@ -203,8 +235,14 @@ impl FetchQueue {
     }
 
     /// The next artist to fetch, waiting up to `timeout` for one.
-    pub fn next(&self, timeout: Duration) -> Option<Queued> {
+    ///
+    /// `generation` is checked under the queue lock [`Self::retire`] notifies
+    /// under, so a retire cannot land unseen between a check and the wait.
+    pub fn next(&self, generation: u64, timeout: Duration) -> Option<Queued> {
         let mut queue = self.lock_queue();
+        if !self.is_current(generation) {
+            return None;
+        }
         if let Some(item) = queue.pop() {
             return Some(item);
         }
@@ -216,22 +254,30 @@ impl FetchQueue {
         queue.pop()
     }
 
-    /// Waits `pause` without fetching, returning early only when `generation`
-    /// is retired.
-    pub fn pause(&self, generation: u64, pause: Duration) {
-        let until = Instant::now() + pause;
-        let mut queue = self.lock_queue();
-        while self.is_current(generation) {
-            let left = until.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                return;
-            }
-            queue = self
-                .wake
-                .wait_timeout(queue, left)
-                .unwrap_or_else(|e| e.into_inner())
-                .0;
+    /// Sets `item` aside until [`Self::unpark`], while the web is not answering;
+    /// dropped when downloading is off.
+    pub fn park(&self, item: Queued) {
+        if !self.is_enabled() {
+            return;
         }
+        let mut queue = self.lock_queue();
+        match queue.parked.iter_mut().find(|q| q.key == item.key) {
+            Some(parked) => parked.merge(item.names),
+            None => queue.parked.push(item),
+        }
+    }
+
+    /// Queues again everything [`Self::park`] set aside.
+    pub fn unpark(&self) {
+        let parked = std::mem::take(&mut self.lock_queue().parked);
+        for item in parked {
+            self.push(item);
+        }
+    }
+
+    /// Runs `hook` when this fetcher is retired, to stop what it is blocked in.
+    pub fn on_retire(&self, hook: Box<dyn FnOnce() + Send>) {
+        *self.lock_retire_hook() = Some(hook);
     }
 
     /// Claims the fetcher slot, returning the generation the caller runs as.
@@ -253,6 +299,10 @@ impl FetchQueue {
         {
             let _queue = self.lock_queue();
             self.wake.notify_all();
+        }
+        let hook = self.lock_retire_hook().take();
+        if let Some(hook) = hook {
+            hook();
         }
         drop(self.store_access.lock().unwrap_or_else(|e| e.into_inner()));
     }
@@ -276,7 +326,11 @@ impl FetchQueue {
     /// How many artists are waiting for the fetcher.
     pub(crate) fn waiting(&self) -> usize {
         let queue = self.lock_queue();
-        queue.now_playing.len() + queue.requested.len()
+        queue.now_playing.len() + queue.requested.len() + queue.parked.len()
+    }
+
+    fn lock_retire_hook(&self) -> std::sync::MutexGuard<'_, Option<RetireHook>> {
+        self.retire_hook.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn lock_queue(&self) -> std::sync::MutexGuard<'_, Queue> {
@@ -309,17 +363,22 @@ pub struct ArtistImages {
     /// When MusicBee last said it has no thumbnail, by key: asked again only
     /// after [`MUSICBEE_RECHECK`], since a client re-asks for what it shows.
     musicbee_none: Mutex<HashMap<String, Instant>>,
+    /// Held from writing a picture's file until its hash is listed, and by a
+    /// cover prune, which would otherwise delete the file as an orphan.
+    files: Mutex<()>,
     queue: Arc<FetchQueue>,
 }
 
 impl ArtistImages {
     /// Opens the store over `db`, keeping only pictures whose file still exists.
     pub fn new(db: Db, covers_dir: PathBuf) -> Self {
+        let rows = load_images(&db);
+        let sizes = file_sizes(&covers_dir, &rows.values().map(String::as_str).collect());
         let mut counted = HashSet::new();
-        let images: HashMap<String, Stored> = load_images(&db)
+        let images: HashMap<String, Stored> = rows
             .into_iter()
             .filter_map(|(key, hash)| {
-                let size = std::fs::metadata(covers_dir.join(&hash)).ok()?.len();
+                let size = *sizes.get(&hash)?;
                 let bytes = if counted.insert(hash.clone()) {
                     size
                 } else {
@@ -338,6 +397,7 @@ impl ArtistImages {
             images: RwLock::new(images),
             lookups: RwLock::new(lookups),
             musicbee_none: Mutex::new(HashMap::new()),
+            files: Mutex::new(()),
             queue: Arc::new(FetchQueue::default()),
         }
     }
@@ -408,6 +468,11 @@ impl ArtistImages {
             .map(|s| s.hash.clone())
     }
 
+    /// Holds off storing a picture while a cover prune decides what to delete.
+    pub(super) fn hold_files(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.files.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// Every content hash the store references, for the cover prune to keep.
     pub fn hashes(&self) -> HashSet<String> {
         self.read_images()
@@ -434,7 +499,7 @@ impl ArtistImages {
         }
         self.queue.push(Queued {
             key: picture_key(name),
-            name: name.trim().to_owned(),
+            names: vec![name.trim().to_owned()],
             priority,
         })
     }
@@ -480,7 +545,8 @@ impl ArtistImages {
     /// The next queued name, without waiting.
     #[cfg(test)]
     pub fn next_queued(&self) -> Option<String> {
-        self.queue.next(Duration::ZERO).map(|q| q.name)
+        let item = self.queue.lock_queue().pop()?;
+        item.names.into_iter().next()
     }
 
     /// Fits `raw` within [`ARTIST_IMAGE_SIZE`], stores it as `name`'s picture,
@@ -495,6 +561,7 @@ impl ArtistImages {
         mbid: &str,
         source: &str,
     ) -> Result<String, String> {
+        let _files = self.hold_files();
         let (hash, resized) = write_cover(&self.covers_dir, raw, ARTIST_IMAGE_SIZE)?;
         let key = picture_key(name);
         let lookup = Lookup {
@@ -578,6 +645,26 @@ impl ArtistImages {
 /// nobody split ("A feat. B") is served A's picture and looked up as A.
 fn picture_key(name: &str) -> String {
     credits::key(credits::lead_artist(name))
+}
+
+/// The size of each `wanted` file under `dir`, from one directory read: a store
+/// of thousands of pictures opens during plugin startup, where a stat per
+/// picture would show.
+fn file_sizes(dir: &Path, wanted: &HashSet<&str>) -> HashMap<String, u64> {
+    let Some(entries) = (!wanted.is_empty())
+        .then(|| std::fs::read_dir(dir).ok())
+        .flatten()
+    else {
+        return HashMap::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let size = entry.metadata().ok()?.len();
+            wanted.contains(name.as_str()).then_some((name, size))
+        })
+        .collect()
 }
 
 /// How long the `errors`th error in a row holds off the next try.
@@ -732,7 +819,62 @@ mod tests {
         assert!(store.request("b", Priority::NowPlaying));
         assert!(store.request("C", Priority::NowPlaying));
         let order: Vec<String> = std::iter::from_fn(|| store.next_queued()).collect();
-        assert_eq!(order, ["b", "C", "A"]);
+        assert_eq!(order, ["B", "C", "A"]);
+    }
+
+    #[test]
+    fn a_queued_artist_keeps_every_spelling_it_was_asked_for_under() {
+        let (store, _db, _) = temp_store("spellings");
+        let queue = store.queue();
+        store.request("Tico", Priority::Requested);
+        store.request("Tico feat. Gadiel", Priority::Requested);
+        store.request("Tico", Priority::Requested);
+        store.request("Tico ft. Yandel", Priority::NowPlaying);
+        let item = queue.next(queue.begin_worker(), Duration::ZERO).unwrap();
+        assert_eq!(item.names, ["Tico", "Tico feat. Gadiel", "Tico ft. Yandel"]);
+        assert_eq!(item.priority, Priority::NowPlaying);
+
+        for i in 0..2 * MAX_SPELLINGS {
+            store.request(&format!("Gadiel feat. {i}"), Priority::Requested);
+        }
+        let item = queue.next(queue.begin_worker(), Duration::ZERO).unwrap();
+        assert_eq!(item.names.len(), MAX_SPELLINGS);
+    }
+
+    #[test]
+    fn a_parked_artist_waits_counted_until_it_is_let_back() {
+        let (store, _db, _) = temp_store("parked");
+        let queue = store.queue();
+        let generation = queue.begin_worker();
+        store.request("A", Priority::NowPlaying);
+        let item = queue.next(generation, Duration::ZERO).unwrap();
+
+        queue.park(item);
+        assert_eq!(store.summary().waiting, 1);
+        assert!(queue.next(generation, Duration::ZERO).is_none());
+
+        queue.unpark();
+        let item = queue.next(generation, Duration::ZERO).unwrap();
+        assert_eq!(item.priority, Priority::NowPlaying);
+
+        store.set_enabled(false);
+        queue.park(item);
+        assert_eq!(store.summary().waiting, 0, "off drops it");
+    }
+
+    #[test]
+    fn a_picture_is_not_stored_while_a_prune_holds_the_files() {
+        let (store, _db, covers) = temp_store("prune-hold");
+        let held = store.hold_files();
+        std::thread::scope(|scope| {
+            let storing =
+                scope.spawn(|| store.store("A", &test_jpeg_bytes(64, 64), "", "wikidata"));
+            std::thread::sleep(Duration::from_millis(50));
+            assert!(!covers.exists(), "no file yet for the prune to take");
+            drop(held);
+            let hash = storing.join().unwrap().unwrap();
+            assert!(covers.join(hash).exists());
+        });
     }
 
     #[test]
@@ -880,28 +1022,27 @@ mod tests {
     }
 
     #[test]
-    fn a_pause_ends_early_only_when_the_worker_is_retired() {
-        let (store, _db, _) = temp_store("pause");
+    fn a_retired_worker_never_starts_waiting_for_work() {
+        let (store, _db, _) = temp_store("retired-wait");
         let queue = store.queue();
         let generation = queue.begin_worker();
-        assert!(store.request("A", Priority::Requested));
+        queue.retire();
         let started = Instant::now();
-        queue.pause(generation, Duration::from_millis(50));
-        assert!(
-            started.elapsed() >= Duration::from_millis(50),
-            "a push does not end it"
-        );
-
-        let retirer = {
-            let queue = queue.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(20));
-                queue.retire();
-            })
-        };
-        let started = Instant::now();
-        queue.pause(generation, Duration::from_secs(30));
+        assert!(queue.next(generation, Duration::from_secs(30)).is_none());
         assert!(started.elapsed() < Duration::from_secs(5));
-        retirer.join().unwrap();
+    }
+
+    #[test]
+    fn retiring_runs_the_hook_that_stops_a_blocked_fetch_once() {
+        let (store, _db, _) = temp_store("retire-hook");
+        let queue = store.queue();
+        let runs = Arc::new(AtomicU64::new(0));
+        let counted = runs.clone();
+        queue.on_retire(Box::new(move || {
+            counted.fetch_add(1, Ordering::AcqRel);
+        }));
+        queue.retire();
+        queue.retire();
+        assert_eq!(runs.load(Ordering::Acquire), 1);
     }
 }

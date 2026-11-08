@@ -302,28 +302,33 @@ fn spawn_startup_update_check(core: &Arc<Core>) {
 /// A plain thread rather than a blocking task: it idles for the whole session,
 /// and a Tokio runtime waits for its blocking tasks when it is dropped. It holds
 /// neither the core nor the cover store, only the fetch queue, and ends when
-/// networking stops, which retires it and joins the thread.
+/// networking stops, which retires it, cancels a web request in progress so a
+/// stalled host cannot hold up MusicBee's close, and joins the thread.
 fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> {
     #[cfg(windows)]
     {
-        let config = core.config.clone();
         let musicbee = core.providers.clone();
         let queue = core.cover_store.artists().queue();
         let store = Arc::downgrade(&core.cover_store);
         let weak = Arc::downgrade(core);
         let generation = queue.begin_worker();
+        let client: Box<dyn mbrc_release::HttpClient + Send> =
+            match crate::updates::http_client(&core.config) {
+                Ok(client) => {
+                    let canceller = client.canceller();
+                    queue.on_retire(Box::new(move || canceller.cancel()));
+                    Box::new(client)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "artist pictures: web lookups unavailable");
+                    Box::new(crate::cover::artist_fetch::Unavailable(e.to_string()))
+                }
+            };
         let spawned = std::thread::Builder::new()
             .name("mbrc-artist-images".into())
             .spawn(move || {
-                let client = match crate::updates::http_client(&config) {
-                    Ok(client) => client,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "artist pictures: no HTTP client");
-                        return;
-                    }
-                };
                 let mut fetcher = crate::cover::artist_fetch::Fetcher::new(
-                    &client,
+                    client.as_ref(),
                     crate::cover::artist_fetch::Pace::polite(),
                 );
                 crate::cover::artist_fetch::run(
