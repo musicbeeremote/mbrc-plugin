@@ -48,6 +48,7 @@ jobs:
           tag: ${{ env.TYPOS_VERSION }}
           archive: typos-${{ env.TYPOS_VERSION }}-x86_64-unknown-linux-musl.tar.gz
           sha256: ${{ env.TYPOS_SHA256 }}
+          binary: typos
 
       # A curated misspellings list rather than a dictionary, so it is safe to
       # fail a PR on. `_typos.toml` records the few places it is wrong here.
