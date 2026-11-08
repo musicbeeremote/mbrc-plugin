@@ -37,18 +37,41 @@ jobs:
             manifest: Cargo.toml
           - name: api-debugger
             manifest: tools/api-debugger/src-tauri/Cargo.toml
+    env:
+      # renovate: datasource=github-releases depName=EmbarkStudios/cargo-deny
+      DENY_VERSION: 0.20.2
+      # The archive's digest for that version: a bump changes both.
+      DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
-        with:
-          manifest-path: ${{ matrix.manifest }}
-          command: check
-          # Warnings are not failures here: `multiple-versions` is a warning by
-          # policy, and a mid-upgrade duplicate should not redden the tree.
-          arguments: --all-features
+      # Through the API with the job's token, and retried: release downloads
+      # from a runner can answer 504 for minutes. The digest catches a bad one.
+      - name: Install cargo-deny
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="cargo-deny-$DENY_VERSION-x86_64-unknown-linux-musl.tar.gz"
+          install_dir="$RUNNER_TEMP/cargo-deny"
+          mkdir -p "$install_dir"
+          for attempt in 1 2 3 4 5; do
+            gh release download "$DENY_VERSION" --repo EmbarkStudios/cargo-deny \
+              --pattern "$archive" --dir "$RUNNER_TEMP" --clobber && break
+            echo "download attempt $attempt failed"
+            sleep 30
+          done
+          echo "$DENY_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$install_dir" --strip-components=1
+          echo "$install_dir" >> "$GITHUB_PATH"
+
+      # Warnings are not failures here: `multiple-versions` is a warning by
+      # policy, and a mid-upgrade duplicate should not redden the tree.
+      - name: Check
+        env:
+          MANIFEST: ${{ matrix.manifest }}
+        run: cargo-deny --all-features --manifest-path "$MANIFEST" check
 
   machete:
     name: unused dependencies
