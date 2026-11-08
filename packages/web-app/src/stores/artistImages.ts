@@ -60,11 +60,9 @@ function isFinalRefusal(error: unknown): boolean {
 /**
  * Artist pictures (#116), by artist name.
  *
- * One map for every place a picture shows, so a picture announced while it
- * plays reaches the library row and the now-playing line alike. A page fills it
- * from what the server already sent; `want` names what is on screen now, and
- * only what is still there once scrolling pauses is asked for, never the whole
- * library.
+ * The library's artist rows draw from it. A page fills it from what the server
+ * already sent; `want` names what is on screen now, and only what is still there
+ * once scrolling pauses is asked for, never the whole library.
  */
 export const useArtistImagesStore = defineStore('artistImages', () => {
   const hashes = ref(new Map<string, string>())
