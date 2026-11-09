@@ -52,6 +52,8 @@ pub struct V6Session {
     /// The pairing state the `pair` op redeems codes against, and the address
     /// its wrong-code limits are kept for; absent in unit tests.
     pairing: Option<(Arc<Pairing>, IpAddr)>,
+    /// The auto-shutdown timer and its permission list (#108).
+    power: Option<Arc<crate::power::Power>>,
     /// The permissions this client was last told, in its handshake reply.
     told: Option<Value>,
     /// Who this server is, sent in the handshake reply; absent in unit tests.
@@ -117,6 +119,17 @@ fn log_s2c(reply_to: u64, frame: &str) {
     }
 }
 
+/// An op's answer as the response frame to request `id`.
+fn render(id: u64, answer: Result<Value, commands_v6::V6Error>) -> String {
+    match answer {
+        Ok(data) => v6::response_ok(id, data),
+        Err(e) => match &e.field {
+            Some(field) => v6::response_error_field(id, e.code, &e.message, field),
+            None => v6::response_error(id, e.code, &e.message),
+        },
+    }
+}
+
 impl V6Session {
     /// Attaches the Party Mode gate. Builder-style.
     pub fn with_party_mode(mut self, gate: &Arc<PartyMode>) -> Self {
@@ -148,6 +161,12 @@ impl V6Session {
     ///
     /// A browser is known by its pairing token, not by the `client_id` its page
     /// makes up, so the WebSocket settles the principal before any frame arrives.
+    /// Attaches the auto-shutdown timer. Builder-style.
+    pub fn with_power(mut self, power: &Arc<crate::power::Power>) -> Self {
+        self.power = Some(Arc::clone(power));
+        self
+    }
+
     pub fn with_principal(mut self, principal: Principal) -> Self {
         self.principal = Some(principal);
         self
@@ -321,6 +340,12 @@ impl V6Session {
                 ));
             }
         }
+        if let Some(power) = &self.power {
+            let principal = self.principal.as_ref().unwrap_or(&Principal::Anonymous);
+            if let Some(answer) = power.handle(principal, &req.op, &req.data) {
+                return Outcome::reply(render(req.id, answer));
+            }
+        }
         match commands_v6::dispatch(
             &req.op,
             &req.data,
@@ -329,11 +354,7 @@ impl V6Session {
             cover_store,
             metadata_cache,
         ) {
-            Some(Ok(data)) => Outcome::reply(v6::response_ok(req.id, data)),
-            Some(Err(e)) => Outcome::reply(match &e.field {
-                Some(field) => v6::response_error_field(req.id, e.code, &e.message, field),
-                None => v6::response_error(req.id, e.code, &e.message),
-            }),
+            Some(answer) => Outcome::reply(render(req.id, answer)),
             None => Outcome::reply(v6::response_error(
                 req.id,
                 ErrorCode::UnknownOp,
@@ -692,6 +713,46 @@ mod tests {
         let mut back = V6Session::default().with_party_mode(&gate);
         handshake_with(&mut back, &clients, Some(&token));
         assert!(next_track(&mut back).get("error").is_none());
+    }
+
+    fn set_timer(s: &mut V6Session, action: &str) -> Value {
+        let line = format!(
+            r#"{{"id":9,"kind":"request","op":"system_set_auto_shutdown","data":{{"action":"{action}","minutes":30}}}}"#
+        );
+        parse(&feed(s, &line).replies[0])
+    }
+
+    /// The power permission is the user's tick, not a role: Party Mode neither
+    /// grants it to a Host nor takes it from a Listener.
+    #[test]
+    fn only_a_ticked_device_may_shut_down_whatever_its_party_mode_role() {
+        let clients = identities("power-role");
+        let gate = party_gate();
+        let power = Arc::new(crate::power::Power::default());
+        let mut first = V6Session::default()
+            .with_party_mode(&gate)
+            .with_power(&power);
+        let token = handshake_with(&mut first, &clients, None)["data"]["client_token"]
+            .as_str()
+            .expect("first contact is issued a token")
+            .to_owned();
+        let me = Principal::App("install-1".into());
+        let mut s = V6Session::default()
+            .with_party_mode(&gate)
+            .with_power(&power);
+        handshake_with(&mut s, &clients, Some(&token));
+
+        gate.assign_role(&me, permissions::Role::Host);
+        assert_eq!(set_timer(&mut s, "shutdown")["error"]["code"], "forbidden");
+
+        gate.assign_role(&me, permissions::Role::Listener);
+        power.grants.grant(&me, 1);
+        assert_eq!(set_timer(&mut s, "shutdown")["data"]["action"], "shutdown");
+        assert_eq!(
+            set_timer(&mut s, "stop")["error"]["code"],
+            "forbidden",
+            "stopping playback is still a Party Mode capability"
+        );
     }
 
     #[test]

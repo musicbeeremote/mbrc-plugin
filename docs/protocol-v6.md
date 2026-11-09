@@ -416,7 +416,7 @@ offending input directly. Its absence means the error is not about a single fiel
 | `unknown_op` | no such op |
 | `unauthorized` | op sent before the handshake |
 | `not_allowed` | op not permitted in the current state (a repeat handshake), or the connection was refused by the per-client cap - sent instead of the handshake acceptance, then the socket closes |
-| `forbidden` | Party Mode is on and this client's role does not allow the op; the message names the capability it needs |
+| `forbidden` | Party Mode is on and this client's role does not allow the op, and the message names the capability it needs; or the device is not allowed to [close MusicBee, sleep or shut down](#auto-shutdown) the PC |
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
 | `stale_list` | the queue or playlist moved since the `version` the request carried |
 | `stale_track` | a write named a track that is no longer the one playing; nothing was written |
@@ -541,6 +541,33 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 |----|----------------|----------|
 | `system_info` | `{}` | `{"plugin_version":"<real build version>","protocol_version":6}` (unlike V4's pinned `pluginversion`, this is the actual plugin build) |
 | `pair` | `{"code":"123456"}` | `{"role":"host"}` - see [`pair`](#pair); socket only |
+| `system_auto_shutdown` | `{}` | the [auto-shutdown](#auto-shutdown) status |
+| `system_set_auto_shutdown` | `{"action":"stop"\|"close"\|"sleep"\|"shutdown","minutes":1..1440}` or `{"action":"cancel"}` | the status after the change |
+
+### Auto-shutdown
+
+A timer in the server that stops playback, closes MusicBee, sleeps the PC or shuts it down.
+There is one timer, so setting it replaces the one before.
+
+```json
+{"active":true,"action":"sleep","remaining_ms":1740000,"final_countdown":false,"power_allowed":true}
+```
+
+`close`, `sleep` and `shutdown` need the device to be on the list the user ticks under Access in
+the plugin's settings. The list is empty until they tick one, and it is apart from
+[Party Mode](#party-mode): no role grants it, and Party Mode does not take it from a ticked
+device. Only a V6 app proven by its `client_token` or a paired browser can be ticked. A device
+not on the list gets `forbidden`. `power_allowed` says whether this device is on it, so a client
+can hide what it cannot do.
+
+`stop` and `cancel` need no more than stopping playback does: anything while Party Mode is off,
+and the `playback` capability while it is on. Anyone allowed may cancel any timer.
+
+When the timer runs out on `close`, `sleep` or `shutdown`, `final_countdown` turns true and
+`remaining_ms` restarts at 60 seconds, the warning before it happens, which can still be
+cancelled. `stop` happens at once. Each change is announced with
+[`auto_shutdown_changed`](#events). A device taken off the list also loses the timer it set. The
+timer ends with MusicBee and is not kept across a restart.
 
 ### Player
 
@@ -1121,6 +1148,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
 | `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
+| `auto_shutdown_changed` | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began its final countdown or fired |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 

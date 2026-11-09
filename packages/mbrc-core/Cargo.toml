@@ -104,6 +104,11 @@ windows-sys = { version = "=0.61.2", features = [
     "Win32_System_Registry",
     # Cover build workers run below normal priority (SetThreadPriority).
     "Win32_System_Threading",
+    # Remote sleep and shutdown (#108): the shutdown privilege, SetSuspendState
+    # and InitiateSystemShutdownExW.
+    "Win32_Security",
+    "Win32_System_Power",
+    "Win32_System_Shutdown",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     # GetCurrentApplicationUserModelId, to tell a packaged (Store) MusicBee from

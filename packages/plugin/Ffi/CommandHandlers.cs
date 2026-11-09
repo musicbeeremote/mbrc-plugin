@@ -48,6 +48,7 @@ namespace MusicBeePlugin.Ffi
                 case CommandType.Pause: return _player.Pause();
                 case CommandType.PlayPause: return _player.PlayPause();
                 case CommandType.Stop: return _player.StopPlayback();
+                case CommandType.CloseMusicBee: return _system.CloseMusicBee();
                 case CommandType.Next: return _player.PlayNext();
                 case CommandType.Previous: return _player.PlayPrevious();
                 case CommandType.SetVolume: return _player.SetVolume(Int(p));

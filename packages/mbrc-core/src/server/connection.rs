@@ -471,6 +471,7 @@ impl Conn {
                     V6Session::default()
                         .with_party_mode(&self.core.party_mode)
                         .with_pairing(&self.core.pairing, self.peer.ip())
+                        .with_power(&self.core.power)
                         .with_server(&self.core.server),
                 );
                 let _ = self.terminator.set("\n");

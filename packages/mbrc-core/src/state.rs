@@ -59,6 +59,8 @@ pub struct Core {
     pub session: crate::session::SessionMarker,
     /// Party Mode's switch and refusal log, checked before every command.
     pub party_mode: Arc<crate::server::permissions::PartyMode>,
+    /// The auto-shutdown timer and the devices allowed to power off (#108).
+    pub power: Arc<crate::power::Power>,
     /// This installation's id and name for the V6 handshake.
     pub server: crate::server_identity::ServerIdentity,
     conn_counter: AtomicU64,
@@ -114,6 +116,8 @@ impl Core {
         let party_mode = Arc::new(crate::server::permissions::PartyMode::default());
         party_mode.open(db.clone());
         party_mode.set_enabled(config.party_mode_enabled);
+        let power = Arc::new(crate::power::Power::default());
+        power.grants.open(db.clone());
         let session = crate::session::SessionMarker::open(&config.storage_path);
         let server = crate::server_identity::ServerIdentity::load(&config.storage_path);
         Self {
@@ -130,6 +134,7 @@ impl Core {
             clients,
             blocked: BlockedLog::default(),
             party_mode,
+            power,
             server,
             session,
             conn_counter: AtomicU64::new(0),

@@ -50,6 +50,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "library_changed",
     "media_changed",
     "library_artist_image_updated",
+    crate::power::CHANGED_EVENT,
     "server_shutdown",
     crate::server::permissions::gate::PERMISSIONS_CHANGED,
 ];
@@ -71,6 +72,7 @@ pub fn capabilities() -> Value {
         .chain(podcast::OPS)
         .chain(media::OPS)
         .chain(tags::OPS)
+        .chain(crate::power::OPS)
         .copied()
         .collect();
     json!({ "ops": ops, "events": SUPPORTED_EVENTS })

@@ -72,6 +72,9 @@ pub const PAIRED_BROWSERS: TableDefinition<&str, &[u8]> = TableDefinition::new("
 /// first and last seen. Bounded by `server::clients`, which owns the rules.
 pub const CLIENT_IDENTITIES: TableDefinition<&str, &[u8]> =
     TableDefinition::new("client_identities");
+/// The devices allowed to close MusicBee, sleep or shut down the PC (#108):
+/// `principal key -> unix seconds allowed`. Owned by `power`.
+pub const POWER_GRANTS: TableDefinition<&str, i64> = TableDefinition::new("power_grants");
 /// Party Mode roles: `principal key -> role name`.
 ///
 /// Keyed by `server::permissions::Principal::key`, which owns the format.

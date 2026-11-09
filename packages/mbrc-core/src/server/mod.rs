@@ -162,6 +162,7 @@ fn run_thread(
         spawn_staging_sweep(&core);
         spawn_startup_update_check(&core);
         let artist_images = spawn_artist_images(&core);
+        let auto_shutdown = spawn_auto_shutdown(&core);
 
         tokio::select! {
             _ = accept_loop(listener, core.clone()) => {}
@@ -177,6 +178,7 @@ fn run_thread(
         scanner.abort();
         list_changes.abort();
         media.abort();
+        auto_shutdown.abort();
         artist_images
     });
     // The host unloads mbrc_core.dll once networking stops, so no thread of
@@ -350,6 +352,39 @@ fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> 
         let _ = core;
         None
     }
+}
+
+/// Fires the auto-shutdown timer (#108) and tells V6 clients each change.
+fn spawn_auto_shutdown(core: &Arc<Core>) -> tokio::task::JoinHandle<()> {
+    let core = core.clone();
+    tokio::spawn(async move {
+        loop {
+            let timer = &core.power.timer;
+            match timer.deadline() {
+                Some(at) => tokio::select! {
+                    () = timer.changed() => {}
+                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(at)) => {}
+                },
+                None => timer.changed().await,
+            }
+            if let Some(action) = timer.take_due(std::time::Instant::now()) {
+                tracing::info!(action = action.as_str(), "auto-shutdown fired");
+                let providers = core.providers.clone();
+                let done = tokio::task::spawn_blocking(move || {
+                    crate::power::execute(action, providers.as_ref())
+                })
+                .await;
+                if let Ok(Err(error)) = done {
+                    tracing::warn!(action = action.as_str(), %error, "auto-shutdown failed");
+                }
+            }
+            let status = timer.status(std::time::Instant::now());
+            core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+                crate::power::CHANGED_EVENT,
+                status.to_json(),
+            )]);
+        }
+    })
 }
 
 /// Tells V6 clients a queued artist picture has landed.

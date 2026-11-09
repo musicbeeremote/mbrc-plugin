@@ -187,6 +187,10 @@ pub const SPECS: &[OpSpec] = &[
         ],
     },
     OpSpec {
+        op: "system_auto_shutdown",
+        fields: &[],
+    },
+    OpSpec {
         op: "library_artist_images",
         fields: &[req("artists", Kind::ListFrom(Pool::Artist))],
     },

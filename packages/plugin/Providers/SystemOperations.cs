@@ -1,4 +1,6 @@
-﻿using MusicBeePlugin.Providers;
+﻿using System;
+using System.Windows.Forms;
+using MusicBeePlugin.Providers;
 
 namespace MusicBeePlugin.Providers
 {
@@ -16,6 +18,13 @@ namespace MusicBeePlugin.Providers
         }
 
         /// <inheritdoc />
+        public bool CloseMusicBee()
+        {
+            if (!(Control.FromHandle(_api.MB_GetWindowHandle()) is Form main)) return false;
+            main.BeginInvoke(new Action(main.Close));
+            return true;
+        }
+
         public void SetBackgroundTaskMessage(string message)
         {
             _api.MB_SetBackgroundTaskMessage(message);

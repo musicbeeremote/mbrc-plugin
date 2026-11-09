@@ -20,6 +20,7 @@ pub mod media;
 pub mod metadata_cache;
 pub mod multi_value;
 pub mod nowplaying;
+pub mod power;
 pub mod protocol;
 pub mod providers;
 pub mod server;

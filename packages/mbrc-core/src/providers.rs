@@ -35,6 +35,8 @@ pub trait Providers: Send + Sync {
     fn pause(&self) -> Result<(), String>;
     fn play_pause(&self) -> Result<(), String>;
     fn stop(&self) -> Result<(), String>;
+    /// Closes MusicBee as its window's close button does.
+    fn close_musicbee(&self) -> Result<(), String>;
     fn next(&self) -> Result<(), String>;
     fn previous(&self) -> Result<(), String>;
     fn set_volume(&self, volume: i32) -> Result<(), String>;
@@ -273,6 +275,10 @@ impl Providers for FfiProviders {
     }
     fn stop(&self) -> Result<(), String> {
         self.callbacks.execute_command(CommandType::Stop, &())
+    }
+    fn close_musicbee(&self) -> Result<(), String> {
+        self.callbacks
+            .execute_command(CommandType::CloseMusicBee, &())
     }
     fn next(&self) -> Result<(), String> {
         self.callbacks.execute_command(CommandType::Next, &())
@@ -795,6 +801,9 @@ impl Providers for NullProviders {
     fn stop(&self) -> Result<(), String> {
         Ok(())
     }
+    fn close_musicbee(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn next(&self) -> Result<(), String> {
         Ok(())
     }
@@ -1174,6 +1183,10 @@ impl Providers for MockProviders {
     }
     fn stop(&self) -> Result<(), String> {
         self.record("stop");
+        Ok(())
+    }
+    fn close_musicbee(&self) -> Result<(), String> {
+        self.record("close_musicbee");
         Ok(())
     }
     fn next(&self) -> Result<(), String> {

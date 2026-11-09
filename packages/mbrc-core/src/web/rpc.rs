@@ -77,6 +77,16 @@ pub async fn call(
             return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
         }
     }
+    if let Some(answer) = state
+        .core
+        .power
+        .handle(&state.principal(&headers, None), &op, &data)
+    {
+        return match answer {
+            Ok(value) => (StatusCode::OK, Json(value)).into_response(),
+            Err(e) => error_response(&e),
+        };
+    }
     let core = state.core.clone();
     let outcome = tokio::task::spawn_blocking(move || {
         commands_v6::dispatch(

@@ -312,6 +312,9 @@ pub enum CommandType {
     PlaylistDelete = 32,
     PlaylistAppend = 33,
     PlaylistSetFiles = 34,
+    // Closes MusicBee the way its window's close button does, for the
+    // auto-shutdown timer (#108).
+    CloseMusicBee = 35,
 }
 
 /// Host -> core queries (request/response), the mirror of [`QueryType`] in the

@@ -78,6 +78,9 @@ impl Providers for FixtureProviders {
     fn stop(&self) -> Result<(), String> {
         Ok(())
     }
+    fn close_musicbee(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn next(&self) -> Result<(), String> {
         Ok(())
     }

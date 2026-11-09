@@ -12,5 +12,8 @@
         /// </summary>
         /// <param name="message">The progress message to display</param>
         void SetBackgroundTaskMessage(string message);
+
+        /// <summary>Closes MusicBee as its window's close button does; false without a window to close.</summary>
+        bool CloseMusicBee();
     }
 }
