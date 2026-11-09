@@ -170,6 +170,7 @@ namespace MusicBeePlugin.Ffi.Generated
         FirewallStatus = 9,
         FixFirewall = 10,
         ConnectQr = 11,
+        PowerStatus = 12,
     }
 
     public enum HostCommandType
@@ -191,6 +192,8 @@ namespace MusicBeePlugin.Ffi.Generated
         SetPartyRole = 15,
         ClearPartyRefusals = 16,
         CompleteSetup = 17,
+        SetPowerAllowed = 18,
+        CancelAutoShutdown = 19,
     }
 
     public enum HostEventType
@@ -198,6 +201,7 @@ namespace MusicBeePlugin.Ffi.Generated
         CacheStatusChanged = 1,
         UpdateStatusChanged = 2,
         CaptureStatusChanged = 3,
+        AutoShutdownChanged = 4,
     }
 
 }

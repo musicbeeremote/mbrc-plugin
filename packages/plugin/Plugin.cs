@@ -230,6 +230,26 @@ namespace MusicBeePlugin
         }
 
         /// <summary>A live control on MusicBee's UI thread: the menu our Tools entry sits in, or an open form.</summary>
+        /// <summary>Shows or clears the auto-shutdown warning as the core's timer changes.</summary>
+        private void OnCoreEvent(FfiGen.HostEventType type)
+        {
+            if (type != FfiGen.HostEventType.AutoShutdownChanged) return;
+            var host = _host;
+            var ui = UiControl();
+            if (host == null || ui == null) return;
+            ui.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    AutoShutdownDialog.Sync(host);
+                }
+                catch (Exception ex)
+                {
+                    LogToFallback("Auto-shutdown warning failed", ex);
+                }
+            }));
+        }
+
         private Control UiControl()
         {
             for (var item = _menuItem; item != null; item = item.OwnerItem)
@@ -267,6 +287,7 @@ namespace MusicBeePlugin
             try
             {
                 _host = new PluginHost(_api, _api.Setting_GetPersistentStoragePath(), _version);
+                _host.CoreEvent += OnCoreEvent;
                 _host.Start();
             }
             catch (Exception ex)

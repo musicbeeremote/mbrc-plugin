@@ -194,6 +194,15 @@ namespace MusicBeePlugin.Host
         /// <inheritdoc cref="NativeBridge.GeneratePairingCode" />
         public bool GeneratePairingCode(string role) => _bridge.GeneratePairingCode(role);
 
+        /// <inheritdoc cref="NativeBridge.ReadPowerStatus" />
+        public PowerPanelStatus ReadPowerStatus() => _bridge.ReadPowerStatus();
+
+        /// <inheritdoc cref="NativeBridge.SetPowerAllowed" />
+        public bool SetPowerAllowed(string key, bool allowed) => _bridge.SetPowerAllowed(key, allowed);
+
+        /// <inheritdoc cref="NativeBridge.CancelAutoShutdown" />
+        public bool CancelAutoShutdown() => _bridge.CancelAutoShutdown();
+
         /// <inheritdoc cref="NativeBridge.ReadPartyModeStatus" />
         public PartyModeStatus ReadPartyModeStatus() => _bridge.ReadPartyModeStatus();
 

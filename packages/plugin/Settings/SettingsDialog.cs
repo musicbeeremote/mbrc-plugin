@@ -86,6 +86,10 @@ namespace MusicBeePlugin.Settings
         private bool _renaming;
         private ListView _webPaired;
         private Label _partyStatus;
+        private ListView _powerDevices;
+
+        /// <summary>True while the power list is being filled, so its checks are not saved back.</summary>
+        private bool _loadingPower;
 
         /// <summary>
         ///     Ticks while a pairing code is outstanding, so the panel counts it
@@ -215,6 +219,7 @@ namespace MusicBeePlugin.Settings
                 case SettingsPage.Access:
                     LoadBlockedCount();
                     LoadPartyMode();
+                    LoadPowerDevices();
                     break;
                 case SettingsPage.WebRemote:
                     // A code made in the Party Mode window shows here too, counting down.
@@ -423,6 +428,34 @@ namespace MusicBeePlugin.Settings
             var openParty = new Button { Text = "Open Party Mode...", AutoSize = true };
             openParty.Click += (s, e) => PartyModeWindow.Open(_host);
 
+            _powerDevices = new ListView
+            {
+                View = View.Details,
+                CheckBoxes = true,
+                FullRowSelect = true,
+                HeaderStyle = ColumnHeaderStyle.Nonclickable,
+                Width = 380,
+                Height = 90,
+                Anchor = AnchorStyles.Left,
+            };
+            _powerDevices.Columns.Add("Device");
+            _powerDevices.Columns.Add("Address");
+            _powerDevices.Columns.Add("Last seen");
+            _powerDevices.ClientSizeChanged += (s, e) => FitPowerColumns();
+            _powerDevices.ItemChecked += (s, e) =>
+            {
+                if (_loadingPower) return;
+                _host.SetPowerAllowed((string)e.Item.Tag, e.Item.Checked);
+            };
+            var powerHint = new Label
+            {
+                Text = PowerHint,
+                AutoSize = true,
+                MaximumSize = new Size(380, 0),
+                ForeColor = SystemColors.GrayText,
+                Anchor = AnchorStyles.Left,
+            };
+
             var layout = Table();
             _rows.Add(layout, "Allowed clients", _filterMode);
             _rangePanel = rangePanel;
@@ -432,6 +465,8 @@ namespace MusicBeePlugin.Settings
             _rows.Add(layout, "Blocked", _blockedBtn, endsBlock: true);
             _rows.Add(layout, "Party Mode", _partyStatus);
             _rows.Add(layout, string.Empty, ActionRow(openParty), endsBlock: true);
+            _rows.Add(layout, "Sleep and shut down", _powerDevices);
+            _rows.Add(layout, string.Empty, powerHint);
             return layout;
         }
 
@@ -970,6 +1005,47 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>Summarize Party Mode: off, or on with how many devices hold a role.</summary>
+        /// <summary>What ticking a device allows, and the network it should not be ticked on.</summary>
+        private const string PowerHint =
+            "Ticked devices may close MusicBee, sleep or shut down this PC from a timer, whatever their Party Mode role. "
+            + "Only apps and paired browsers are listed. Leave this empty on a network you do not trust.";
+
+        private void LoadPowerDevices()
+        {
+            var status = _host.ReadPowerStatus();
+            _loadingPower = true;
+            try
+            {
+                _powerDevices.BeginUpdate();
+                _powerDevices.Items.Clear();
+                foreach (var device in status?.devices ?? new List<PowerDevice>())
+                {
+                    var seen = device.last_seen > 0 ? PanelText.Ago(device.last_seen) : string.Empty;
+                    var item = new ListViewItem(new[] { device.label, device.address, seen })
+                    {
+                        Tag = device.key,
+                        Checked = device.allowed,
+                    };
+                    _powerDevices.Items.Add(item);
+                }
+            }
+            finally
+            {
+                _powerDevices.EndUpdate();
+                _loadingPower = false;
+            }
+
+            FitPowerColumns();
+        }
+
+        private void FitPowerColumns()
+        {
+            var width = _powerDevices.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+            _powerDevices.Columns[0].Width = width * 2 / 5;
+            _powerDevices.Columns[1].Width = width * 3 / 10;
+            _powerDevices.Columns[2].Width = width - width * 2 / 5 - width * 3 / 10;
+        }
+
         private void LoadPartyMode()
         {
             var status = _host.ReadPartyModeStatus();

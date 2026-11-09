@@ -549,6 +549,23 @@ namespace MusicBeePlugin.Ffi
                 role = role ?? string.Empty
             }));
 
+        /// <summary>
+        ///     The devices that may close MusicBee, sleep or shut down the PC, and the
+        ///     auto-shutdown timer. Null if the core is not initialized.
+        /// </summary>
+        public PowerPanelStatus ReadPowerStatus() => Query<PowerPanelStatus>(HostQueryType.PowerStatus);
+
+        /// <summary>Allow or stop the device listed under <paramref name="key" /> closing MusicBee, sleeping or shutting down.</summary>
+        public bool SetPowerAllowed(string key, bool allowed) =>
+            Command(HostCommandType.SetPowerAllowed, Msgpack.Serialize(new PowerPermission
+            {
+                key = key ?? string.Empty,
+                allowed = allowed
+            }));
+
+        /// <summary>Cancel the auto-shutdown timer.</summary>
+        public bool CancelAutoShutdown() => Command(HostCommandType.CancelAutoShutdown);
+
         /// <summary>Clear the core's in-memory Party Mode refusal log.</summary>
         public bool ClearPartyRefusals() => Command(HostCommandType.ClearPartyRefusals);
 

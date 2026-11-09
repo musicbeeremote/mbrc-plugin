@@ -431,6 +431,7 @@ pub fn host_query(kind: HostQueryType, params: &[u8]) -> Option<Vec<u8>> {
         HostQueryType::CaptureStatus => crate::diagnostics::capture::status_bytes(),
         HostQueryType::WebStatus => web_status_bytes(),
         HostQueryType::PartyModeStatus => party_mode_status_bytes(),
+        HostQueryType::PowerStatus => power_status_bytes(),
         HostQueryType::SetupStatus => crate::setup::status_bytes(),
         HostQueryType::FirewallStatus => firewall_port(params)
             .and_then(crate::firewall::check)
@@ -492,6 +493,11 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
             MbrcResult::Ok
         }),
         HostCommandType::CompleteSetup => crate::setup::complete(params),
+        HostCommandType::SetPowerAllowed => set_power_allowed(params),
+        HostCommandType::CancelAutoShutdown => with_core(|core| {
+            core.power.timer.cancel(std::time::Instant::now());
+            MbrcResult::Ok
+        }),
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
             core.party_mode.unassign_browsers();
@@ -656,6 +662,114 @@ fn set_party_role(core: &Core, assignment: &crate::ffi::dtos::PartyRoleAssignmen
     MbrcResult::Ok
 }
 
+/// A device whose identity is proven, as the settings windows list it.
+struct ProvenDevice {
+    principal: crate::server::permissions::Principal,
+    kind: &'static str,
+    label: String,
+    /// Unix seconds.
+    last_seen: i64,
+    address: String,
+}
+
+/// The V6 apps verified by their token and the paired browsers. A browser is
+/// known by its pairing, so its V6 identity is left out.
+fn proven_devices(core: &Core) -> Vec<ProvenDevice> {
+    use crate::server::permissions::Principal;
+    let short = |id: &str| id.chars().take(8).collect::<String>();
+    let mut devices: Vec<ProvenDevice> = core
+        .clients
+        .seen()
+        .into_iter()
+        .filter(|app| app.client_type != "web")
+        .map(|app| ProvenDevice {
+            label: if app.name.is_empty() {
+                format!("App {}", short(&app.client_id))
+            } else {
+                app.name
+            },
+            principal: Principal::App(app.client_id),
+            kind: "app",
+            last_seen: app.last_seen_ms / 1000,
+            address: app.address,
+        })
+        .collect();
+    devices.extend(
+        core.pairing
+            .paired()
+            .into_iter()
+            .map(|browser| ProvenDevice {
+                principal: Principal::Browser(browser.id),
+                kind: "browser",
+                label: browser.label,
+                last_seen: browser.last_seen,
+                address: browser.address,
+            }),
+    );
+    devices
+}
+
+fn power_status_bytes() -> Option<Vec<u8>> {
+    let core = {
+        let guard = lock();
+        guard.as_ref()?.core.clone()
+    };
+    rmp_serde::to_vec_named(&power_status(&core)).ok()
+}
+
+fn power_status(core: &Core) -> crate::ffi::dtos::PowerPanelStatus {
+    let mut devices: Vec<crate::ffi::dtos::PowerDevice> = proven_devices(core)
+        .into_iter()
+        .map(|d| crate::ffi::dtos::PowerDevice {
+            key: d.principal.key().unwrap_or_default(),
+            allowed: core.power.grants.allows(&d.principal),
+            kind: d.kind.to_owned(),
+            label: d.label,
+            last_seen: d.last_seen,
+            address: d.address,
+        })
+        .collect();
+    devices.sort_by_key(|d| std::cmp::Reverse(d.last_seen));
+    let status = core.power.timer.status(std::time::Instant::now());
+    crate::ffi::dtos::PowerPanelStatus {
+        devices,
+        timer_active: status.action.is_some(),
+        action: status
+            .action
+            .map(|a| a.as_str().to_owned())
+            .unwrap_or_default(),
+        remaining_ms: i64::try_from(status.remaining.as_millis()).unwrap_or(i64::MAX),
+        final_countdown: status.final_countdown,
+    }
+}
+
+/// Ticks or unticks a device; untick also cancels a timer it set.
+fn set_power_allowed(params: &[u8]) -> MbrcResult {
+    use crate::server::permissions::Principal;
+    let Ok(permission) = rmp_serde::from_slice::<crate::ffi::dtos::PowerPermission>(params) else {
+        tracing::warn!("ignoring a malformed power permission");
+        return MbrcResult::InvalidArgument;
+    };
+    let Some(principal) = Principal::from_key(&permission.key) else {
+        return MbrcResult::InvalidArgument;
+    };
+    with_core(|core| {
+        let done = if permission.allowed {
+            core.power
+                .grants
+                .grant(&principal, crate::cover::store::now_unix_secs())
+        } else {
+            core.power.revoke(&principal);
+            true
+        };
+        if done {
+            MbrcResult::Ok
+        } else {
+            MbrcResult::InvalidArgument
+        }
+    })
+}
+
 fn party_mode_status_bytes() -> Option<Vec<u8>> {
     let core = core_handle()?;
     rmp_serde::to_vec_named(&party_mode_status(&core)).ok()
@@ -679,34 +793,10 @@ fn party_mode_status(core: &Core) -> crate::ffi::dtos::PartyModeStatus {
         };
     let short = |id: &str| id.chars().take(8).collect::<String>();
 
-    // A browser is known by its pairing, so its V6 identity holds no role.
-    let mut devices: Vec<PartyDevice> = core
-        .clients
-        .seen()
+    let mut devices: Vec<PartyDevice> = proven_devices(core)
         .into_iter()
-        .filter(|app| app.client_type != "web")
-        .map(|app| {
-            let label = if app.name.is_empty() {
-                format!("App {}", short(&app.client_id))
-            } else {
-                app.name
-            };
-            device(
-                Principal::App(app.client_id),
-                "app",
-                label,
-                (app.last_seen_ms / 1000, app.address),
-            )
-        })
+        .map(|d| device(d.principal, d.kind, d.label, (d.last_seen, d.address)))
         .collect();
-    devices.extend(core.pairing.paired().into_iter().map(|browser| {
-        device(
-            Principal::Browser(browser.id),
-            "browser",
-            browser.label,
-            (browser.last_seen, browser.address),
-        )
-    }));
     devices.extend(gate.legacy_devices().into_iter().map(|(id, seen)| {
         let label = format!("Android {}", short(&id));
         let from = seen.from.map(|a| a.to_string()).unwrap_or_default();
@@ -1248,6 +1338,7 @@ mod tests {
         listening_addresses_reports_the_port_the_core_is_bound_to();
         party_mode_switches_live_and_is_remembered(&dir);
         the_party_mode_panel_round_trips_through_host_calls();
+        the_power_list_round_trips_through_host_calls();
 
         let _ = shutdown();
     }
@@ -1333,6 +1424,69 @@ mod tests {
 
     fn msgpack(value: serde_json::Value) -> Vec<u8> {
         rmp_serde::to_vec_named(&value).unwrap()
+    }
+
+    fn power_status() -> crate::ffi::dtos::PowerPanelStatus {
+        rmp_serde::from_slice(&host_query(HostQueryType::PowerStatus, &[]).unwrap()).unwrap()
+    }
+
+    /// Ticking a paired browser lets it shut down; unticking or Cancel stops it.
+    fn the_power_list_round_trips_through_host_calls() {
+        use crate::server::permissions::Principal;
+        let core = core_handle().unwrap();
+        let code = core.pairing.new_code();
+        let lan = std::net::IpAddr::from([192, 168, 1, 30]);
+        let token = core
+            .pairing
+            .redeem(&code, "Laptop", lan)
+            .expect("redeem")
+            .token;
+        let browser = Principal::Browser(core.pairing.paired_id(&token, Some(lan)).unwrap());
+        let key = browser.key().unwrap();
+        let allow = |allowed: bool| {
+            host_command(
+                HostCommandType::SetPowerAllowed,
+                &msgpack(serde_json::json!({ "key": key, "allowed": allowed })),
+            )
+        };
+        let listed = |status: &crate::ffi::dtos::PowerPanelStatus| {
+            status
+                .devices
+                .iter()
+                .find(|d| d.key == key)
+                .map(|d| d.allowed)
+        };
+        assert_eq!(listed(&power_status()), Some(false), "listed, not allowed");
+
+        assert_eq!(allow(true), MbrcResult::Ok);
+        assert_eq!(listed(&power_status()), Some(true));
+        let shutdown = serde_json::json!({ "action": "shutdown", "minutes": 30 });
+        let set = core
+            .power
+            .handle(&browser, "system_set_auto_shutdown", &shutdown);
+        assert!(set.unwrap().is_ok());
+        assert_eq!(power_status().action, "shutdown");
+        assert_eq!(
+            host_command(HostCommandType::CancelAutoShutdown, &[]),
+            MbrcResult::Ok
+        );
+        assert!(!power_status().timer_active);
+
+        core.power
+            .handle(&browser, "system_set_auto_shutdown", &shutdown);
+        assert_eq!(allow(false), MbrcResult::Ok);
+        assert!(
+            !power_status().timer_active,
+            "unticking drops the timer it set"
+        );
+        assert_eq!(listed(&power_status()), Some(false));
+        let legacy = msgpack(
+            serde_json::json!({ "key": Principal::LegacyDevice("x".into()).key(), "allowed": true }),
+        );
+        assert_eq!(
+            host_command(HostCommandType::SetPowerAllowed, &legacy),
+            MbrcResult::InvalidArgument
+        );
     }
 
     /// Every Party Mode control the panel has, driven through the FFI entry points.

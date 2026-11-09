@@ -1304,7 +1304,7 @@ pub(super) fn below_normal_priority() {
     }
 }
 
-pub(super) fn now_unix_secs() -> i64 {
+pub(crate) fn now_unix_secs() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)

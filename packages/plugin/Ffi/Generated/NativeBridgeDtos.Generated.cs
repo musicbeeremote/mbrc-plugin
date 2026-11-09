@@ -553,6 +553,31 @@ namespace MusicBeePlugin.Ffi
         public bool weaker_trust { get; set; }
     }
 
+    public class PowerPanelStatus
+    {
+        public List<PowerDevice> devices { get; set; }
+        public bool timer_active { get; set; }
+        public string action { get; set; }
+        public long remaining_ms { get; set; }
+        public bool final_countdown { get; set; }
+    }
+
+    public class PowerDevice
+    {
+        public string key { get; set; }
+        public string kind { get; set; }
+        public string label { get; set; }
+        public long last_seen { get; set; }
+        public string address { get; set; }
+        public bool allowed { get; set; }
+    }
+
+    public class PowerPermission
+    {
+        public string key { get; set; }
+        public bool allowed { get; set; }
+    }
+
     public class PartyRefusal
     {
         public long unix_ms { get; set; }

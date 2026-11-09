@@ -513,6 +513,41 @@ pub struct PartyDevice {
     pub weaker_trust: bool,
 }
 
+/// The devices allowed to close MusicBee, sleep or shut down the PC, and the
+/// auto-shutdown timer (#108).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerPanelStatus {
+    /// Only proven identities: V6 apps and paired browsers.
+    pub devices: Vec<PowerDevice>,
+    pub timer_active: bool,
+    /// `stop`, `close`, `sleep` or `shutdown`; empty with no timer.
+    pub action: String,
+    pub remaining_ms: i64,
+    /// Whether this is the warning before closing MusicBee, sleeping or shutting down.
+    pub final_countdown: bool,
+}
+
+/// One device the user can allow to close MusicBee, sleep or shut down the PC.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerDevice {
+    /// What `SetPowerAllowed` names it by.
+    pub key: String,
+    /// `app` or `browser`.
+    pub kind: String,
+    pub label: String,
+    /// Unix seconds, or zero when not seen since MusicBee started.
+    pub last_seen: i64,
+    pub address: String,
+    pub allowed: bool,
+}
+
+/// `SetPowerAllowed`'s parameters.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerPermission {
+    pub key: String,
+    pub allowed: bool,
+}
+
 /// One request Party Mode refused.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PartyRefusal {

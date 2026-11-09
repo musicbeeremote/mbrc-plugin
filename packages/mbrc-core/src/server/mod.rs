@@ -383,6 +383,8 @@ fn spawn_auto_shutdown(core: &Arc<Core>) -> tokio::task::JoinHandle<()> {
                 crate::power::CHANGED_EVENT,
                 status.to_json(),
             )]);
+            core.providers
+                .emit_event(crate::ffi::types::HostEventType::AutoShutdownChanged, &[]);
         }
     })
 }

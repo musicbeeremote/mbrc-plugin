@@ -375,6 +375,9 @@ pub enum HostQueryType {
     /// and the settings window's "Show a QR code" buttons. Built on each call.
     /// Returns a MessagePack `ConnectQr`.
     ConnectQr = 11,
+    // The devices allowed to close MusicBee, sleep or shut down the PC, and the
+    // auto-shutdown timer (#108).
+    PowerStatus = 12,
 }
 
 impl HostQueryType {
@@ -391,6 +394,7 @@ impl HostQueryType {
             9 => Some(Self::FirewallStatus),
             10 => Some(Self::FixFirewall),
             11 => Some(Self::ConnectQr),
+            12 => Some(Self::PowerStatus),
             _ => None,
         }
     }
@@ -464,6 +468,10 @@ pub enum HostCommandType {
     /// not open again until a release adds a step. The params are an optional
     /// MessagePack `SetupChoices`, saved in the same write; empty for Skip.
     CompleteSetup = 17,
+    // Ticks or unticks a device for closing MusicBee, sleeping or shutting down.
+    SetPowerAllowed = 18,
+    // Cancels the auto-shutdown timer, for the countdown window's Cancel button.
+    CancelAutoShutdown = 19,
 }
 
 impl HostCommandType {
@@ -486,6 +494,8 @@ impl HostCommandType {
             15 => Some(Self::SetPartyRole),
             16 => Some(Self::ClearPartyRefusals),
             17 => Some(Self::CompleteSetup),
+            18 => Some(Self::SetPowerAllowed),
+            19 => Some(Self::CancelAutoShutdown),
             _ => None,
         }
     }
@@ -513,6 +523,9 @@ pub enum HostEventType {
     /// auto-stop; the panel should re-query [`HostQueryType::CaptureStatus`].
     /// The auto-stop fires from a timer thread, so the host marshals first.
     CaptureStatusChanged = 3,
+    // The auto-shutdown timer was set, cancelled, began its final countdown or
+    // fired; read `PowerStatus` for where it stands.
+    AutoShutdownChanged = 4,
 }
 
 /// Callback table handed from C# to Rust at `mbrc_initialize`.
@@ -609,6 +622,7 @@ mod tests {
             (9, HostQueryType::FirewallStatus),
             (10, HostQueryType::FixFirewall),
             (11, HostQueryType::ConnectQr),
+            (12, HostQueryType::PowerStatus),
         ];
         for (value, expected) in queries {
             assert_eq!(
@@ -638,6 +652,8 @@ mod tests {
             (15, HostCommandType::SetPartyRole),
             (16, HostCommandType::ClearPartyRefusals),
             (17, HostCommandType::CompleteSetup),
+            (18, HostCommandType::SetPowerAllowed),
+            (19, HostCommandType::CancelAutoShutdown),
         ];
         for (value, expected) in commands {
             assert_eq!(
