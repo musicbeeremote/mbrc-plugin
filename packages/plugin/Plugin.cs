@@ -202,12 +202,26 @@ namespace MusicBeePlugin
         private void OpenSetupIfDue()
         {
             var host = _host;
+            RunOnUi("Setup wizard", () => SetupWindow.OpenIfDue(host));
+        }
+
+        /// <summary>Shows or clears the auto-shutdown warning as the core's timer changes.</summary>
+        private void OnCoreEvent(FfiGen.HostEventType type)
+        {
+            var host = _host;
+            if (type != FfiGen.HostEventType.AutoShutdownChanged || host == null) return;
+            RunOnUi("Auto-shutdown warning", () => AutoShutdownDialog.Sync(host));
+        }
+
+        /// <summary>Queues <paramref name="action" /> on MusicBee's UI thread, logging what it throws.</summary>
+        private void RunOnUi(string what, Action action)
+        {
             try
             {
                 var ui = UiControl();
                 if (ui == null)
                 {
-                    LogToFallback("Setup wizard", "no MusicBee window to open it on");
+                    LogToFallback(what, "no MusicBee window to run it on");
                     return;
                 }
 
@@ -215,41 +229,21 @@ namespace MusicBeePlugin
                 {
                     try
                     {
-                        SetupWindow.OpenIfDue(host);
+                        action();
                     }
                     catch (Exception ex)
                     {
-                        LogToFallback("Setup wizard failed", ex);
+                        LogToFallback(what + " failed", ex);
                     }
                 }));
             }
             catch (Exception ex)
             {
-                LogToFallback("Setup wizard could not be queued", ex);
+                LogToFallback(what + " could not be queued", ex);
             }
         }
 
         /// <summary>A live control on MusicBee's UI thread: the menu our Tools entry sits in, or an open form.</summary>
-        /// <summary>Shows or clears the auto-shutdown warning as the core's timer changes.</summary>
-        private void OnCoreEvent(FfiGen.HostEventType type)
-        {
-            if (type != FfiGen.HostEventType.AutoShutdownChanged) return;
-            var host = _host;
-            var ui = UiControl();
-            if (host == null || ui == null) return;
-            ui.BeginInvoke(new Action(() =>
-            {
-                try
-                {
-                    AutoShutdownDialog.Sync(host);
-                }
-                catch (Exception ex)
-                {
-                    LogToFallback("Auto-shutdown warning failed", ex);
-                }
-            }));
-        }
-
         private Control UiControl()
         {
             for (var item = _menuItem; item != null; item = item.OwnerItem)

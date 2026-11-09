@@ -13,19 +13,22 @@ namespace MusicBeePlugin.Settings
     /// </summary>
     internal sealed class AutoShutdownDialog : Form
     {
-        private readonly PluginHost _host;
+        private readonly string _action;
+        private readonly DateTime _firesAt;
         private readonly Label _message;
         private readonly Timer _tick;
 
-        public AutoShutdownDialog(PluginHost host)
+        /// <summary>Counts down from <paramref name="status" /> on its own clock; <see cref="Sync" /> brings the core's changes.</summary>
+        /// <remarks>No title-bar close: only Cancel, or Esc, makes the warning go away.</remarks>
+        public AutoShutdownDialog(PluginHost host, PowerPanelStatus status)
         {
-            _host = host;
+            _action = status.action;
+            _firesAt = DateTime.UtcNow.AddMilliseconds(status.remaining_ms);
             Text = "MusicBee Remote";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterScreen;
             TopMost = true;
-            MinimizeBox = false;
-            MaximizeBox = false;
+            ControlBox = false;
             ShowInTaskbar = true;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -35,7 +38,7 @@ namespace MusicBeePlugin.Settings
             var cancel = new Button { Text = "Cancel", AutoSize = true, Anchor = AnchorStyles.Right };
             cancel.Click += (s, e) =>
             {
-                _host.CancelAutoShutdown();
+                host.CancelAutoShutdown();
                 Close();
             };
             CancelButton = cancel;
@@ -46,20 +49,17 @@ namespace MusicBeePlugin.Settings
             Controls.Add(layout);
 
             _tick = new Timer { Interval = 500 };
-            _tick.Tick += (s, e) =>
-            {
-                if (!ShowStatus(_host.ReadPowerStatus())) Close();
-            };
+            _tick.Tick += (s, e) => ShowCountdown();
             _tick.Start();
-            ShowStatus(_host.ReadPowerStatus());
+            ShowCountdown();
         }
 
         /// <summary>Shows the warning while the final countdown runs, and closes it otherwise.</summary>
         public static void Sync(PluginHost host)
         {
             var status = host?.ReadPowerStatus();
-            if (status != null && status.timer_active && status.final_countdown)
-                AutoShutdownWindow.Open(host);
+            if (status != null && status.final_countdown)
+                AutoShutdownWindow.Open(host, status);
             else
                 AutoShutdownWindow.CloseIfOpen();
         }
@@ -70,18 +70,14 @@ namespace MusicBeePlugin.Settings
             base.Dispose(disposing);
         }
 
-        /// <summary>Writes the countdown; false once there is none to show.</summary>
-        private bool ShowStatus(PowerPanelStatus status)
+        private void ShowCountdown()
         {
-            if (status == null || !status.timer_active || !status.final_countdown) return false;
-
-            var seconds = (int)Math.Ceiling(status.remaining_ms / 1000.0);
+            var left = Math.Max(0, (_firesAt - DateTime.UtcNow).TotalSeconds);
             _message.Text = string.Format(
                 CultureInfo.CurrentCulture,
                 "A remote timer will {0} in {1} seconds.",
-                Describe(status.action),
-                seconds);
-            return true;
+                Describe(_action),
+                (int)Math.Ceiling(left));
         }
 
         private static string Describe(string action)
@@ -101,7 +97,8 @@ namespace MusicBeePlugin.Settings
     {
         private static readonly ModelessWindow<AutoShutdownDialog> Window = new ModelessWindow<AutoShutdownDialog>();
 
-        public static void Open(PluginHost host) => Window.Open(host, () => new AutoShutdownDialog(host));
+        public static void Open(PluginHost host, PowerPanelStatus status) =>
+            Window.Open(host, () => new AutoShutdownDialog(host, status));
 
         public static void CloseIfOpen() => Window.CloseIfOpen();
     }

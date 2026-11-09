@@ -157,16 +157,16 @@ impl V6Session {
         self
     }
 
-    /// Fixes who this connection is, overriding what the handshake would settle.
-    ///
-    /// A browser is known by its pairing token, not by the `client_id` its page
-    /// makes up, so the WebSocket settles the principal before any frame arrives.
     /// Attaches the auto-shutdown timer. Builder-style.
     pub fn with_power(mut self, power: &Arc<crate::power::Power>) -> Self {
         self.power = Some(Arc::clone(power));
         self
     }
 
+    /// Fixes who this connection is, overriding what the handshake would settle.
+    ///
+    /// A browser is known by its pairing token, not by the `client_id` its page
+    /// makes up, so the WebSocket settles the principal before any frame arrives.
     pub fn with_principal(mut self, principal: Principal) -> Self {
         self.principal = Some(principal);
         self

@@ -236,12 +236,15 @@ namespace MusicBeePlugin.Settings
         }
 
         /// <summary>Split the paired list's width between its columns, leaving room for the scrollbar.</summary>
-        private void FitPairedColumns()
+        private void FitPairedColumns() => FitColumns(_webPaired, 50, 25);
+
+        /// <summary>Gives a three-column list's first two columns these percentages of its width, the third the rest.</summary>
+        private static void FitColumns(ListView list, int first, int second)
         {
-            var width = _webPaired.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
-            _webPaired.Columns[0].Width = width / 2;
-            _webPaired.Columns[1].Width = width / 4;
-            _webPaired.Columns[2].Width = width - width / 2 - width / 4;
+            var width = list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+            list.Columns[0].Width = width * first / 100;
+            list.Columns[1].Width = width * second / 100;
+            list.Columns[2].Width = width - list.Columns[0].Width - list.Columns[1].Width;
         }
 
         /// <summary>Ctrl+Tab and Ctrl+Shift+Tab step through the pages, as in a tabbed dialog.</summary>
@@ -441,7 +444,7 @@ namespace MusicBeePlugin.Settings
             _powerDevices.Columns.Add("Device");
             _powerDevices.Columns.Add("Address");
             _powerDevices.Columns.Add("Last seen");
-            _powerDevices.ClientSizeChanged += (s, e) => FitPowerColumns();
+            _powerDevices.ClientSizeChanged += (s, e) => FitColumns(_powerDevices, 40, 30);
             _powerDevices.ItemChecked += (s, e) =>
             {
                 if (_loadingPower) return;
@@ -1004,7 +1007,6 @@ namespace MusicBeePlugin.Settings
             }
         }
 
-        /// <summary>Summarize Party Mode: off, or on with how many devices hold a role.</summary>
         /// <summary>What ticking a device allows, and the network it should not be ticked on.</summary>
         private const string PowerHint =
             "Ticked devices may close MusicBee, sleep or shut down this PC from a timer, whatever their Party Mode role. "
@@ -1035,17 +1037,10 @@ namespace MusicBeePlugin.Settings
                 _loadingPower = false;
             }
 
-            FitPowerColumns();
+            FitColumns(_powerDevices, 40, 30);
         }
 
-        private void FitPowerColumns()
-        {
-            var width = _powerDevices.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
-            _powerDevices.Columns[0].Width = width * 2 / 5;
-            _powerDevices.Columns[1].Width = width * 3 / 10;
-            _powerDevices.Columns[2].Width = width - width * 2 / 5 - width * 3 / 10;
-        }
-
+        /// <summary>Summarize Party Mode: off, or on with how many devices hold a role.</summary>
         private void LoadPartyMode()
         {
             var status = _host.ReadPartyModeStatus();

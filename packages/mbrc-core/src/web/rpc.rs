@@ -70,22 +70,20 @@ pub async fn call(
     }
 
     let data = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
-    if state.core.party_mode.is_enabled() {
+    let party_mode = state.core.party_mode.is_enabled();
+    let principal = (party_mode || crate::power::OPS.contains(&op.as_str()))
+        .then(|| state.principal(&headers, None));
+    if let Some(principal) = principal.as_ref().filter(|_| party_mode) {
         let action = permissions::v6::action(&op, &data);
-        let principal = state.principal(&headers, None);
-        if let Err(refusal) = state.core.party_mode.check(&principal, &op, action, "http") {
+        if let Err(refusal) = state.core.party_mode.check(principal, &op, action, "http") {
             return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
         }
     }
-    if let Some(answer) = state
-        .core
-        .power
-        .handle(&state.principal(&headers, None), &op, &data)
+    if let Some(answer) = principal
+        .as_ref()
+        .and_then(|principal| state.core.power.handle(principal, &op, &data))
     {
-        return match answer {
-            Ok(value) => (StatusCode::OK, Json(value)).into_response(),
-            Err(e) => error_response(&e),
-        };
+        return respond(answer);
     }
     let core = state.core.clone();
     let outcome = tokio::task::spawn_blocking(move || {
@@ -102,13 +100,20 @@ pub async fn call(
     .await;
 
     match outcome {
-        Ok(Ok(Ok(value))) => (StatusCode::OK, Json(value)).into_response(),
-        Ok(Ok(Err(err))) => error_response(&err),
+        Ok(Ok(answer)) => respond(answer),
         Ok(Err(op)) => error_response(&V6Error::new(
             ErrorCode::UnknownOp,
             format!("unknown op `{op}`"),
         )),
         Err(e) => error_response(&V6Error::new(ErrorCode::Internal, e.to_string())),
+    }
+}
+
+/// An op's answer as the HTTP response.
+fn respond(answer: Result<Value, V6Error>) -> Response {
+    match answer {
+        Ok(value) => (StatusCode::OK, Json(value)).into_response(),
+        Err(err) => error_response(&err),
     }
 }
 

@@ -25,6 +25,7 @@ namespace MusicBeePlugin.Providers
             return true;
         }
 
+        /// <inheritdoc />
         public void SetBackgroundTaskMessage(string message)
         {
             _api.MB_SetBackgroundTaskMessage(message);

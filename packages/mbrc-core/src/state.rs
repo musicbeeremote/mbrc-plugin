@@ -501,15 +501,17 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
         HostCommandType::RevokeWebPairings => with_core(|core| {
             core.pairing.revoke_all();
             core.party_mode.unassign_browsers();
+            core.power.revoke_browsers();
             MbrcResult::Ok
         }),
         HostCommandType::RevokeWebPairing => {
             match rmp_serde::from_slice::<crate::ffi::dtos::PairedBrowserRef>(params) {
                 Ok(named) => with_core(|core| {
                     if core.pairing.revoke(&named.id) {
-                        core.party_mode.unassign_role(
-                            &crate::server::permissions::Principal::Browser(named.id.clone()),
-                        );
+                        let browser =
+                            crate::server::permissions::Principal::Browser(named.id.clone());
+                        core.party_mode.unassign_role(&browser);
+                        core.power.revoke(&browser);
                         MbrcResult::Ok
                     } else {
                         MbrcResult::InvalidArgument
@@ -710,10 +712,7 @@ fn proven_devices(core: &Core) -> Vec<ProvenDevice> {
 }
 
 fn power_status_bytes() -> Option<Vec<u8>> {
-    let core = {
-        let guard = lock();
-        guard.as_ref()?.core.clone()
-    };
+    let core = core_handle()?;
     rmp_serde::to_vec_named(&power_status(&core)).ok()
 }
 
@@ -754,15 +753,14 @@ fn set_power_allowed(params: &[u8]) -> MbrcResult {
         return MbrcResult::InvalidArgument;
     };
     with_core(|core| {
-        let done = if permission.allowed {
-            core.power
-                .grants
-                .grant(&principal, crate::cover::store::now_unix_secs())
-        } else {
+        if !permission.allowed {
             core.power.revoke(&principal);
-            true
-        };
-        if done {
+            MbrcResult::Ok
+        } else if core
+            .power
+            .grants
+            .grant(&principal, crate::cover::store::now_unix_secs())
+        {
             MbrcResult::Ok
         } else {
             MbrcResult::InvalidArgument

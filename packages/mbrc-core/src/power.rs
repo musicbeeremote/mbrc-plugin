@@ -7,7 +7,8 @@
 //! browser, and the list is empty until the user ticks one.
 //!
 //! When the timer runs out on one of those three, the PC gets a last
-//! [`FINAL_COUNTDOWN`] that any client can still cancel. The timer lives in the
+//! [`FINAL_COUNTDOWN`] that the PC, or any client that may stop playback, can
+//! still cancel. The timer lives in the
 //! core, so it ends when MusicBee does.
 
 use std::collections::HashMap;
@@ -20,7 +21,7 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 
 use crate::providers::Providers;
-use crate::server::commands_v6::{V6Error, req_str};
+use crate::server::commands_v6::{V6Error, req_i64, req_str};
 use crate::server::permissions::Principal;
 use crate::store::{Db, POWER_GRANTS};
 
@@ -128,14 +129,12 @@ impl AutoShutdown {
     }
 
     /// Cancels the timer if the device under `key` set it, as it loses the permission.
-    pub fn cancel_set_by(&self, key: &str) -> bool {
+    pub fn cancel_set_by(&self, key: &str) {
         let mut armed = self.lock();
-        if armed.as_ref().and_then(|a| a.by.as_deref()) != Some(key) {
-            return false;
+        if armed.as_ref().and_then(|a| a.by.as_deref()) == Some(key) {
+            *armed = None;
+            self.changed.notify_one();
         }
-        *armed = None;
-        self.changed.notify_one();
-        true
     }
 
     pub fn status(&self, now: Instant) -> Status {
@@ -254,7 +253,8 @@ impl PowerGrants {
     }
 
     fn persist(&self, f: impl FnOnce(&redb::WriteTransaction) -> Result<(), redb::Error>) {
-        if let Some(db) = self.lock_store().as_ref() {
+        let db = self.lock_store().clone();
+        if let Some(db) = db {
             db.write(Durability::Immediate, f);
         }
     }
@@ -292,10 +292,22 @@ impl std::fmt::Debug for Power {
 impl Power {
     /// Takes the permission from `principal`, cancelling a timer it set.
     pub fn revoke(&self, principal: &Principal) -> bool {
+        if !self.grants.revoke(principal) {
+            return false;
+        }
         if let Some(key) = principal.key() {
             self.timer.cancel_set_by(&key);
         }
-        self.grants.revoke(principal)
+        true
+    }
+
+    /// Takes the permission from every browser, as unpairing them all does.
+    pub fn revoke_browsers(&self) {
+        for (key, _) in self.grants.granted() {
+            if let Some(browser @ Principal::Browser(_)) = Principal::from_key(&key) {
+                self.revoke(&browser);
+            }
+        }
     }
 
     /// Answers a power op for `principal`; `None` for any other op.
@@ -305,10 +317,9 @@ impl Power {
         op: &str,
         data: &Value,
     ) -> Option<Result<Value, V6Error>> {
-        let now = Instant::now();
         let answer = match op {
-            "system_auto_shutdown" => Ok(self.timer.status(now)),
-            "system_set_auto_shutdown" => self.set(principal, data, now),
+            "system_auto_shutdown" => Ok(self.timer.status(Instant::now())),
+            "system_set_auto_shutdown" => self.set(principal, data, Instant::now()),
             _ => return None,
         };
         Some(answer.map(|status| {
@@ -336,25 +347,16 @@ impl Power {
                 "this device may not close MusicBee, sleep or shut down this PC; allow it under Access in MusicBee Remote's settings",
             ));
         }
-        let minutes = match data.get("minutes") {
-            None => {
-                return Err(V6Error::field(
-                    ErrorCode::MissingField,
+        let minutes = u64::try_from(req_i64(data, "minutes")?)
+            .ok()
+            .filter(|m| (1..=MAX_MINUTES).contains(m))
+            .ok_or_else(|| {
+                V6Error::field(
+                    ErrorCode::InvalidField,
                     "minutes",
-                    "missing required field: minutes",
-                ));
-            }
-            Some(value) => value
-                .as_u64()
-                .filter(|m| (1..=MAX_MINUTES).contains(m))
-                .ok_or_else(|| {
-                    V6Error::field(
-                        ErrorCode::InvalidField,
-                        "minutes",
-                        format!("minutes must be a whole number from 1 to {MAX_MINUTES}"),
-                    )
-                })?,
-        };
+                    format!("minutes must be a whole number from 1 to {MAX_MINUTES}"),
+                )
+            })?;
         Ok(self.timer.set(
             action,
             Duration::from_secs(minutes * 60),
@@ -381,7 +383,9 @@ pub fn execute(action: PowerAction, providers: &dyn Providers) -> Result<(), Str
 mod windows {
     use std::ptr::{null, null_mut};
 
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, LUID};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_NOT_ALL_ASSIGNED, GetLastError, HANDLE, LUID,
+    };
     use windows_sys::Win32::Security::{
         AdjustTokenPrivileges, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW, SE_PRIVILEGE_ENABLED,
         SE_SHUTDOWN_NAME, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
@@ -399,8 +403,9 @@ mod windows {
 
     /// Enables the shutdown privilege, which sleep and shutdown both need.
     ///
-    /// Judged by the call's own result: `GetLastError` can still hold an error
-    /// from an earlier call when this one succeeds.
+    /// Judged by the call's own result, then by `ERROR_NOT_ALL_ASSIGNED`, which
+    /// `AdjustTokenPrivileges` reports alongside success when the account does
+    /// not hold the privilege at all.
     fn enable_shutdown_privilege() -> Result<(), String> {
         let mut token: HANDLE = null_mut();
         // SAFETY: the process pseudo-handle is always valid and `token` outlives the call.
@@ -434,7 +439,9 @@ mod windows {
         let error = last_error();
         // SAFETY: `token` was opened above and is closed once.
         unsafe { CloseHandle(token) };
-        if adjusted {
+        if adjusted && error == ERROR_NOT_ALL_ASSIGNED {
+            Err("this Windows account may not sleep or shut down the PC".into())
+        } else if adjusted {
             Ok(())
         } else {
             Err(format!(
@@ -594,6 +601,28 @@ mod tests {
         assert!(power.revoke(&app("phone")));
         assert_eq!(power.timer.deadline(), None);
         assert!(!power.grants.allows(&app("phone")));
+    }
+
+    #[test]
+    fn revoking_a_device_that_held_nothing_leaves_its_stop_timer() {
+        let power = Power::default();
+        set(&power, &app("phone"), "stop", 10).unwrap();
+        assert!(!power.revoke(&app("phone")));
+        assert!(power.timer.deadline().is_some());
+    }
+
+    #[test]
+    fn unpairing_every_browser_takes_their_permission_and_timer_but_not_apps() {
+        let power = Power::default();
+        let desk = Principal::Browser("desk".into());
+        power.grants.grant(&desk, 1);
+        power.grants.grant(&app("phone"), 1);
+        set(&power, &desk, "sleep", 10).unwrap();
+
+        power.revoke_browsers();
+        assert!(!power.grants.allows(&desk));
+        assert!(power.grants.allows(&app("phone")));
+        assert_eq!(power.timer.deadline(), None);
     }
 
     #[test]
