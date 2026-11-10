@@ -45,9 +45,12 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "playlist_move_tracks"
         | "playlist_set_tracks" => change(PlaylistEdit),
         "player_set_output" => change(Output),
-        // `Power::handle` checks it: the device permission for close, sleep and
-        // shutdown, and this gate's Playback verdict for stop.
-        "system_set_auto_shutdown" => Action::Read,
+        // `Power::handle` checks cancel and the three power actions against the
+        // device permission, and asks this gate about a stop timer it cancels.
+        "system_set_auto_shutdown" => match data.get("action").and_then(Value::as_str) {
+            Some("close" | "sleep" | "shutdown" | "cancel") => Action::Read,
+            _ => change(Playback),
+        },
         "handshake"
         | "ping"
         | "pair"
