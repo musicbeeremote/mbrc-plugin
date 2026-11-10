@@ -560,12 +560,14 @@ device. Only a V6 app proven by its `client_token` or a paired browser can be ti
 not on the list gets `forbidden`. `power_allowed` says whether this device is on it, so a client
 can hide what it cannot do.
 
-`stop` and `cancel` need no more than stopping playback does: anything while Party Mode is off,
-and the `playback` capability while it is on. Anyone allowed may cancel any timer.
+Once `close`, `sleep` or `shutdown` is set, only a device on the list may cancel or replace it,
+whatever its Party Mode role; anyone else gets `forbidden`. The warning on the PC can always
+cancel it. `stop`, and cancelling a `stop` timer, need no more than stopping playback does:
+anything while Party Mode is off, and the `playback` capability while it is on.
 
 When the timer runs out on `close`, `sleep` or `shutdown`, `final_countdown` turns true and
 `remaining_ms` restarts at 60 seconds, the warning before it happens, which can still be
-cancelled. `stop` happens at once. Each change is announced with
+cancelled the same way. `stop` happens at once. Each change is announced with
 [`auto_shutdown_changed`](#events). A device taken off the list also loses the timer it set. The
 timer ends with MusicBee and is not kept across a restart.
 

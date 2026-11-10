@@ -119,6 +119,10 @@ fn log_s2c(reply_to: u64, frame: &str) {
     }
 }
 
+/// What stopping playback needs under Party Mode, for the auto-shutdown `stop`.
+const PLAYBACK: permissions::Action =
+    permissions::Action::Change(permissions::Capability::Playback);
+
 /// An op's answer as the response frame to request `id`.
 fn render(id: u64, answer: Result<Value, commands_v6::V6Error>) -> String {
     match answer {
@@ -342,7 +346,13 @@ impl V6Session {
         }
         if let Some(power) = &self.power {
             let principal = self.principal.as_ref().unwrap_or(&Principal::Anonymous);
-            if let Some(answer) = power.handle(principal, &req.op, &req.data) {
+            let may_stop = || match &self.party_mode {
+                Some(gate) => gate
+                    .check(principal, &req.op, Some(PLAYBACK), &self.client_id)
+                    .map_err(|refusal| refusal.message),
+                None => Ok(()),
+            };
+            if let Some(answer) = power.handle(principal, &req.op, &req.data, &may_stop) {
                 return Outcome::reply(render(req.id, answer));
             }
         }
@@ -753,6 +763,17 @@ mod tests {
             "forbidden",
             "stopping playback is still a Party Mode capability"
         );
+
+        gate.assign_role(&me, permissions::Role::Host);
+        power.grants.revoke(&me);
+        assert_eq!(
+            set_timer(&mut s, "cancel")["error"]["code"],
+            "forbidden",
+            "a Host without the tick may not cancel a shutdown"
+        );
+        gate.assign_role(&me, permissions::Role::Listener);
+        power.grants.grant(&me, 1);
+        assert_eq!(set_timer(&mut s, "cancel")["data"]["active"], false);
     }
 
     #[test]

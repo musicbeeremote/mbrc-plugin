@@ -45,12 +45,9 @@ pub fn action(op: &str, data: &Value) -> Option<Action> {
         | "playlist_move_tracks"
         | "playlist_set_tracks" => change(PlaylistEdit),
         "player_set_output" => change(Output),
-        // Closing MusicBee, sleeping and shutting down are guarded by the power
-        // permission instead, which no role grants and none takes away.
-        "system_set_auto_shutdown" => match data.get("action").and_then(Value::as_str) {
-            Some("close" | "sleep" | "shutdown") => Action::Read,
-            _ => change(Playback),
-        },
+        // `Power::handle` checks it: the device permission for close, sleep and
+        // shutdown, and this gate's Playback verdict for stop.
+        "system_set_auto_shutdown" => Action::Read,
         "handshake"
         | "ping"
         | "pair"

@@ -1461,7 +1461,7 @@ mod tests {
         let shutdown = serde_json::json!({ "action": "shutdown", "minutes": 30 });
         let set = core
             .power
-            .handle(&browser, "system_set_auto_shutdown", &shutdown);
+            .handle(&browser, "system_set_auto_shutdown", &shutdown, &|| Ok(()));
         assert!(set.unwrap().is_ok());
         assert_eq!(power_status().action, "shutdown");
         assert_eq!(
@@ -1471,7 +1471,7 @@ mod tests {
         assert!(!power_status().timer_active);
 
         core.power
-            .handle(&browser, "system_set_auto_shutdown", &shutdown);
+            .handle(&browser, "system_set_auto_shutdown", &shutdown, &|| Ok(()));
         assert_eq!(allow(false), MbrcResult::Ok);
         assert!(
             !power_status().timer_active,

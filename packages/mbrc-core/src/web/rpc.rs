@@ -79,10 +79,15 @@ pub async fn call(
             return error_response(&V6Error::new(ErrorCode::Forbidden, refusal.message));
         }
     }
-    if let Some(answer) = principal
-        .as_ref()
-        .and_then(|principal| state.core.power.handle(principal, &op, &data))
-    {
+    if let Some(answer) = principal.as_ref().and_then(|principal| {
+        let may_stop = || {
+            let playback = permissions::Action::Change(permissions::Capability::Playback);
+            (state.core.party_mode)
+                .check(principal, &op, Some(playback), "http")
+                .map_err(|refusal| refusal.message)
+        };
+        state.core.power.handle(principal, &op, &data, &may_stop)
+    }) {
         return respond(answer);
     }
     let core = state.core.clone();

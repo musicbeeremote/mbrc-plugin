@@ -6,9 +6,9 @@
 //! identity can hold it, a V6 app verified by its `client_token` or a paired
 //! browser, and the list is empty until the user ticks one.
 //!
-//! When the timer runs out on one of those three, the PC gets a last
-//! [`FINAL_COUNTDOWN`] that the PC, or any client that may stop playback, can
-//! still cancel. The timer lives in the
+//! Once one of those three is set, only a device holding the permission may
+//! cancel or replace it, and the warning on the PC can always cancel it. When it
+//! runs out the PC gets a last [`FINAL_COUNTDOWN`]. The timer lives in the
 //! core, so it ends when MusicBee does.
 
 use std::collections::HashMap;
@@ -36,6 +36,10 @@ pub const FINAL_COUNTDOWN: Duration = Duration::from_secs(60);
 
 /// The longest timer a client may set, in minutes.
 const MAX_MINUTES: u64 = 24 * 60;
+
+const NOT_ALLOWED: &str = "this device may not close MusicBee, sleep or shut down this PC; allow it under Access in MusicBee Remote's settings";
+
+const GUARDED: &str = "only a device allowed to close MusicBee, sleep or shut down this PC may cancel or replace this timer";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerAction {
@@ -111,14 +115,34 @@ impl AutoShutdown {
         by: Option<String>,
         now: Instant,
     ) -> Status {
-        *self.lock() = Some(Armed {
+        self.replace(Some((action, after, by)), true, now)
+            .unwrap_or_else(|| self.status(now))
+    }
+
+    /// Sets `next`, or cancels with `None`; `None` back when a timer that needs
+    /// the permission is armed and `allowed` is false.
+    fn replace(
+        &self,
+        next: Option<(PowerAction, Duration, Option<String>)>,
+        allowed: bool,
+        now: Instant,
+    ) -> Option<Status> {
+        let mut armed = self.lock();
+        if !allowed && armed.as_ref().is_some_and(|a| a.action.needs_permission()) {
+            return None;
+        }
+        let had = armed.is_some();
+        *armed = next.map(|(action, after, by)| Armed {
             action,
             fires_at: now + after,
             last: false,
             by,
         });
-        self.changed.notify_one();
-        self.status(now)
+        if had || armed.is_some() {
+            self.changed.notify_one();
+        }
+        drop(armed);
+        Some(self.status(now))
     }
 
     pub fn cancel(&self, now: Instant) -> Status {
@@ -311,15 +335,19 @@ impl Power {
     }
 
     /// Answers a power op for `principal`; `None` for any other op.
+    ///
+    /// `may_stop` is asked only when the request stops playback or cancels a
+    /// `stop` timer: Party Mode's verdict on the Playback capability.
     pub fn handle(
         &self,
         principal: &Principal,
         op: &str,
         data: &Value,
+        may_stop: &dyn Fn() -> Result<(), String>,
     ) -> Option<Result<Value, V6Error>> {
         let answer = match op {
             "system_auto_shutdown" => Ok(self.timer.status(Instant::now())),
-            "system_set_auto_shutdown" => self.set(principal, data, Instant::now()),
+            "system_set_auto_shutdown" => self.set(principal, data, may_stop, Instant::now()),
             _ => return None,
         };
         Some(answer.map(|status| {
@@ -329,10 +357,24 @@ impl Power {
         }))
     }
 
-    fn set(&self, principal: &Principal, data: &Value, now: Instant) -> Result<Status, V6Error> {
+    fn set(
+        &self,
+        principal: &Principal,
+        data: &Value,
+        may_stop: &dyn Fn() -> Result<(), String>,
+        now: Instant,
+    ) -> Result<Status, V6Error> {
         let name = req_str(data, "action")?;
+        let allowed = self.grants.allows(principal);
+        let refused = |message: String| V6Error::new(ErrorCode::Forbidden, message);
         if name == "cancel" {
-            return Ok(self.timer.cancel(now));
+            if self.timer.status(now).action == Some(PowerAction::Stop) {
+                may_stop().map_err(refused)?;
+            }
+            return self
+                .timer
+                .replace(None, allowed, now)
+                .ok_or_else(|| refused(GUARDED.into()));
         }
         let action = PowerAction::parse(name).ok_or_else(|| {
             V6Error::field(
@@ -341,11 +383,11 @@ impl Power {
                 "action must be stop, close, sleep, shutdown or cancel",
             )
         })?;
-        if action.needs_permission() && !self.grants.allows(principal) {
-            return Err(V6Error::new(
-                ErrorCode::Forbidden,
-                "this device may not close MusicBee, sleep or shut down this PC; allow it under Access in MusicBee Remote's settings",
-            ));
+        if action.needs_permission() && !allowed {
+            return Err(refused(NOT_ALLOWED.into()));
+        }
+        if action == PowerAction::Stop {
+            may_stop().map_err(refused)?;
         }
         let minutes = u64::try_from(req_i64(data, "minutes")?)
             .ok()
@@ -357,12 +399,10 @@ impl Power {
                     format!("minutes must be a whole number from 1 to {MAX_MINUTES}"),
                 )
             })?;
-        Ok(self.timer.set(
-            action,
-            Duration::from_secs(minutes * 60),
-            principal.key(),
-            now,
-        ))
+        let next = (action, Duration::from_secs(minutes * 60), principal.key());
+        self.timer
+            .replace(Some(next), allowed, now)
+            .ok_or_else(|| refused(GUARDED.into()))
     }
 }
 
@@ -495,12 +535,28 @@ mod tests {
         Principal::App(id.into())
     }
 
+    fn anyone_may_stop() -> Result<(), String> {
+        Ok(())
+    }
+
     fn set(power: &Power, who: &Principal, action: &str, minutes: u64) -> Result<Value, V6Error> {
         power
             .handle(
                 who,
                 "system_set_auto_shutdown",
                 &json!({ "action": action, "minutes": minutes }),
+                &anyone_may_stop,
+            )
+            .unwrap()
+    }
+
+    fn cancel(power: &Power, who: &Principal) -> Result<Value, V6Error> {
+        power
+            .handle(
+                who,
+                "system_set_auto_shutdown",
+                &json!({ "action": "cancel" }),
+                &anyone_may_stop,
             )
             .unwrap()
     }
@@ -525,22 +581,58 @@ mod tests {
     }
 
     #[test]
-    fn anyone_may_stop_or_cancel() {
+    fn a_device_that_may_stop_playback_may_set_or_cancel_a_stop_timer() {
         let power = Power::default();
         assert_eq!(
             set(&power, &Principal::Anonymous, "stop", 30).unwrap()["action"],
             "stop"
         );
-        let out = power
-            .handle(
-                &Principal::Anonymous,
-                "system_set_auto_shutdown",
-                &json!({ "action": "cancel" }),
-            )
-            .unwrap()
-            .unwrap();
+        let out = cancel(&power, &Principal::Anonymous).unwrap();
         assert_eq!(out["active"], false);
         assert_eq!(out["power_allowed"], false);
+    }
+
+    #[test]
+    fn stopping_or_cancelling_a_stop_timer_asks_party_mode() {
+        let power = Power::default();
+        let refuse = || Err("guests may not stop playback".to_owned());
+        let stop = json!({ "action": "stop", "minutes": 5 });
+        let ask = |data: &Value| {
+            power
+                .handle(&app("guest"), "system_set_auto_shutdown", data, &refuse)
+                .unwrap()
+        };
+        assert_eq!(ask(&stop).unwrap_err().code, ErrorCode::Forbidden);
+
+        set(&power, &app("host"), "stop", 5).unwrap();
+        let err = ask(&json!({ "action": "cancel" })).unwrap_err();
+        assert_eq!(err.message, "guests may not stop playback");
+        assert!(power.timer.deadline().is_some());
+    }
+
+    #[test]
+    fn only_an_allowed_device_may_cancel_or_replace_a_shutdown() {
+        let power = Power::default();
+        power.grants.grant(&app("phone"), 1);
+        set(&power, &app("phone"), "shutdown", 10).unwrap();
+
+        let guest = app("guest");
+        assert_eq!(
+            cancel(&power, &guest).unwrap_err().code,
+            ErrorCode::Forbidden
+        );
+        assert_eq!(
+            set(&power, &guest, "stop", 10).unwrap_err().code,
+            ErrorCode::Forbidden,
+            "a stop timer would replace the shutdown"
+        );
+        assert_eq!(
+            power.timer.status(Instant::now()).action,
+            Some(PowerAction::Shutdown)
+        );
+
+        power.grants.grant(&app("tablet"), 1);
+        assert_eq!(cancel(&power, &app("tablet")).unwrap()["active"], false);
     }
 
     #[test]
@@ -630,7 +722,12 @@ mod tests {
         let power = Power::default();
         let bad = |data: Value| {
             power
-                .handle(&Principal::Anonymous, "system_set_auto_shutdown", &data)
+                .handle(
+                    &Principal::Anonymous,
+                    "system_set_auto_shutdown",
+                    &data,
+                    &anyone_may_stop,
+                )
                 .unwrap()
                 .unwrap_err()
         };
@@ -654,7 +751,12 @@ mod tests {
         );
         assert!(
             power
-                .handle(&Principal::Anonymous, "player_stop", &json!({}))
+                .handle(
+                    &Principal::Anonymous,
+                    "player_stop",
+                    &json!({}),
+                    &anyone_may_stop
+                )
                 .is_none()
         );
     }
