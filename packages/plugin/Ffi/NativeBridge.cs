@@ -20,16 +20,13 @@ namespace MusicBeePlugin.Ffi
     /// </summary>
     /// <remarks>
     ///     Every callback body is wrapped so a managed exception never crosses
-    ///     the native boundary, and all provider access runs under a single lock
-    ///     (MusicBee's API is not thread-safe and Rust calls from tokio threads).
+    ///     the native boundary. Only the kinds <see cref="SerialHostCalls"/> names
+    ///     run under the serial lock; every other call reaches MusicBee concurrently.
     ///     P/Invoke signatures and the MbrcCallbacks layout are generated into
     ///     <see cref="NativeMethods"/> from the Rust source.
     /// </remarks>
     public sealed class NativeBridge : IDisposable
     {
-        /// <summary>Must equal MBRC_ABI_VERSION in mbrc-core/src/ffi/types.rs.</summary>
-        private const int MbrcAbiVersion = 2;
-
         #region FFI delegate types (match MbrcCallbacks in ffi/types.rs)
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -161,7 +158,7 @@ namespace MusicBeePlugin.Ffi
                 var pathBytes = Encoding.UTF8.GetBytes(storagePath + "\0");
                 fixed (byte* pathPtr = pathBytes)
                 {
-                    var result = NativeMethods.mbrc_initialize(MbrcAbiVersion, callbacks, pathPtr);
+                    var result = NativeMethods.mbrc_initialize(AbiContract.Version, callbacks, pathPtr);
                     if (result == 0)
                     {
                         _initialized = true;

@@ -1,9 +1,10 @@
 //! The C-ABI surface between the Rust core and the C# plugin shim.
 //!
 //! The `QueryType` / `CommandType` / `NotificationType` numeric values and the
-//! `MbrcCallbacks` layout are the contract; the matching `Query*` / `Cmd*`
-//! constants and the `MbrcCallbacks` struct on the C# side
-//! (`plugin/Ffi/NativeBridge.cs`) must stay identical. The contract is
+//! `MbrcCallbacks` layout are the contract. `build.rs` generates the C# enums,
+//! the `MbrcCallbacks` struct and `AbiContract.Version` from this file into
+//! `plugin/Ffi/Generated/`; the callback delegates in `NativeBridge.cs` are
+//! the one hand-written mirror. The contract is
 //! additive-only: append enum variants, never renumber; and bump
 //! [`MBRC_ABI_VERSION`] on any incompatible change so a stale DLL is rejected at
 //! `mbrc_initialize` instead of decoding garbage.
@@ -137,10 +138,10 @@ impl NotificationType {
 
 /// Query types for the fat `query_data` callback (C# reads MusicBee data).
 ///
-/// Numeric values are part of the FFI contract and must match the `Query*`
-/// constants in `plugin/Ffi/NativeBridge.cs`. Never renumber or reuse a
-/// value. Some variants (library search/queue) are reserved for the C# side
-/// and are not issued by the maintained V4 wire surface.
+/// Numeric values are part of the FFI contract, mirrored to the generated C#
+/// `QueryType`. Never renumber or reuse a value. Some variants (library
+/// search/queue) are reserved for the C# side and are not issued by the
+/// maintained V4 wire surface.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -257,9 +258,8 @@ pub enum QueryType {
 
 /// Command types for the fat `execute_command` callback (C# mutates state).
 ///
-/// Numeric values are part of the FFI contract and must match the `Cmd*`
-/// constants in `plugin/Ffi/NativeBridge.cs`. Never renumber or reuse a
-/// value.
+/// Numeric values are part of the FFI contract, mirrored to the generated C#
+/// `CommandType`. Never renumber or reuse a value.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]

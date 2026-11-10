@@ -14,6 +14,7 @@ use crate::config::Config;
 use crate::cover::store::CoverStore;
 use crate::ffi::types::{HostCommandType, HostQueryType, MbrcResult, NotificationType};
 use crate::metadata_cache::MetadataCache;
+use crate::notification_queue::NotificationQueue;
 use crate::nowplaying::NowPlayingCache;
 use crate::providers::Providers;
 use crate::server::blocked::BlockedLog;
@@ -214,6 +215,7 @@ impl Drop for ReconcileGuard<'_> {
 struct Runtime {
     core: Arc<Core>,
     net: Option<NetHandle>,
+    notifications: NotificationQueue,
 }
 
 static STATE: Mutex<Option<Runtime>> = Mutex::new(None);
@@ -232,9 +234,27 @@ pub fn initialize(providers: Arc<dyn Providers>, config: Config) -> MbrcResult {
     if guard.is_some() {
         return MbrcResult::AlreadyInitialized;
     }
+    let core = Arc::new(Core::new(providers, config));
+    // Weak, so a notification still running after shutdown cannot keep the core open.
+    let worker_core = Arc::downgrade(&core);
+    let started = NotificationQueue::start(move |kind, path| {
+        if let Some(core) = worker_core.upgrade()
+            && !core.is_stopping()
+        {
+            dispatch_notification(&core, kind, path.as_deref());
+        }
+    });
+    let notifications = match started {
+        Ok(queue) => queue,
+        Err(error) => {
+            tracing::error!(%error, "could not start the notification worker");
+            return MbrcResult::RuntimeError;
+        }
+    };
     *guard = Some(Runtime {
-        core: Arc::new(Core::new(providers, config)),
+        core,
         net: None,
+        notifications,
     });
     MbrcResult::Ok
 }
@@ -917,24 +937,17 @@ fn rebuild(scope: RebuildScope) -> MbrcResult {
     MbrcResult::Ok
 }
 
-/// Builds and fan out the broadcast frames for a MusicBee notification.
+/// Queues a MusicBee notification for [`dispatch_notification`] and returns.
 ///
-/// Library-changing notifications also maintain the metadata cache, which
-/// happens here rather than in the pure [`notifications::on_notification`]
-/// because it needs the owned `Arc<Core>`: the C# notification thread has no
-/// Tokio runtime, so the reconcile is spawned on a plain thread and does
-/// blocking FFI.
+/// MusicBee waits on its own thread until this returns, so the host queries a
+/// notification triggers run on the queue's worker instead; see
+/// [`crate::notification_queue`].
 pub fn handle_notification(ntype: NotificationType, path: Option<String>) -> MbrcResult {
-    // Clone the Arc and drop the lock before querying/broadcasting.
-    let core = {
-        let guard = lock();
-        match guard.as_ref() {
-            Some(runtime) => runtime.core.clone(),
-            None => return MbrcResult::NotInitialized,
-        }
+    let guard = lock();
+    let Some(runtime) = guard.as_ref() else {
+        return MbrcResult::NotInitialized;
     };
-
-    dispatch_notification(&core, ntype, path.as_deref());
+    runtime.notifications.push(ntype, path);
     MbrcResult::Ok
 }
 
@@ -1046,20 +1059,21 @@ pub fn begin_stopping() -> MbrcResult {
 }
 
 /// Stops networking (if running) and drops the core, allowing a later re-init.
+///
+/// The runtime is taken out first, so the teardown waits below never hold the
+/// state lock a MusicBee notification needs to return.
 pub fn shutdown() -> MbrcResult {
-    let mut guard = lock();
-    match guard.take() {
-        Some(runtime) => {
-            runtime.core.begin_stopping();
-            if let Some(net) = runtime.net {
-                broadcast_server_shutdown(&runtime.core);
-                net.stop();
-            }
-            runtime.core.session.close();
-            MbrcResult::Ok
-        }
-        None => MbrcResult::NotInitialized,
+    let Some(runtime) = lock().take() else {
+        return MbrcResult::NotInitialized;
+    };
+    runtime.core.begin_stopping();
+    runtime.notifications.stop();
+    if let Some(net) = runtime.net {
+        broadcast_server_shutdown(&runtime.core);
+        net.stop();
     }
+    runtime.core.session.close();
+    MbrcResult::Ok
 }
 
 /// Starts the TCP server + discovery responder.
@@ -1323,7 +1337,24 @@ mod tests {
         the_party_mode_panel_round_trips_through_host_calls();
         the_power_list_round_trips_through_host_calls();
 
-        let _ = shutdown();
+        shutdown_releases_the_core_after_queued_notifications();
+    }
+
+    /// A reload opens the same `mbrc.redb`, so nothing may still hold the old core.
+    fn shutdown_releases_the_core_after_queued_notifications() {
+        let core = Arc::downgrade(&lock().as_ref().expect("initialized").core);
+        for kind in [
+            NotificationType::TrackChanged,
+            NotificationType::PlayStateChanged,
+        ] {
+            assert_eq!(handle_notification(kind, None), MbrcResult::Ok);
+        }
+        assert_eq!(shutdown(), MbrcResult::Ok);
+        assert!(core.upgrade().is_none(), "the old core is still alive");
+        assert_eq!(
+            handle_notification(NotificationType::TrackChanged, None),
+            MbrcResult::NotInitialized
+        );
     }
 
     fn a_read_reflects_the_in_memory_config() {

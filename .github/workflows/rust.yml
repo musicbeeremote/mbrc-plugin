@@ -95,6 +95,12 @@ jobs:
           rustup target add i686-pc-windows-msvc
           cargo build -p mbrc-core -p mbrc-helper --target i686-pc-windows-msvc --profile plugin --locked
 
+      # build.rs regenerates the C# bindings, DTOs and enums; a commit that changed
+      # the Rust contract without them would build here and break the C# shim.
+      - name: generated C# matches the Rust contract
+        if: matrix.os == 'windows-latest'
+        run: git diff --exit-code -- packages/plugin/Ffi/Generated packages/plugin/Models/DomainEnums.Generated.cs
+
   # The suite runs once per PR, instrumented, on the target the plugin ships as.
   # A second run at another pointer width measured the same assertions twice and
   # bought a configuration nothing is released for; if another architecture ever

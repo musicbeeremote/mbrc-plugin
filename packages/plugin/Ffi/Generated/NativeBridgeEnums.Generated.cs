@@ -204,4 +204,9 @@ namespace MusicBeePlugin.Ffi.Generated
         AutoShutdownChanged = 4,
     }
 
+    public static class AbiContract
+    {
+        public const int Version = 2;
+    }
+
 }
