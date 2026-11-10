@@ -5,12 +5,15 @@
 //! be able to name an arbitrary server. UNC paths cannot simply be refused, since a
 //! library on a NAS is made of them. A server is known when the library, the queue,
 //! a media source or a playlist already holds a path on it. The host is asked only
-//! when a request names a network path, so an ordinary request costs nothing.
+//! when a request names a network path, so an ordinary request costs nothing, and
+//! [`KnownServers`] keeps the answer so a library on a NAS is not walked per request.
 //!
 //! Device paths, pipes, admin shares, reserved names, data streams and the Windows
 //! folder hold no music and are refused wherever they are, even on a known server.
 
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -173,28 +176,113 @@ pub(crate) fn is_system_path(path: &str) -> bool {
 /// A list the host fails to give counts as empty, so a failure refuses rather than
 /// admits.
 fn known_servers(p: &dyn Providers) -> HashSet<String> {
-    let mut paths = p.track_paths().unwrap_or_default();
-    paths.extend(p.now_playing_list_paths().unwrap_or_default());
+    let mut servers = HashSet::new();
+    let mut add = |paths: Vec<String>| {
+        servers.extend(paths.iter().filter_map(|path| remote_server(path)));
+    };
+    add(p.track_paths().unwrap_or_default());
+    add(p.now_playing_list_paths().unwrap_or_default());
     for source in [
         LibrarySource::Inbox,
         LibrarySource::Audiobooks,
         LibrarySource::Videos,
     ] {
-        paths.extend(p.media_paths(source).unwrap_or_default());
+        add(p.media_paths(source).unwrap_or_default());
     }
     if let Ok(playlists) = p.playlists(0, 0) {
-        paths.extend(playlists.data.into_iter().map(|playlist| playlist.url));
+        add(playlists
+            .data
+            .into_iter()
+            .map(|playlist| playlist.url)
+            .collect());
     }
-    paths
+    servers
+}
+
+/// How long a server seen in the host's lists stays known without asking again.
+///
+/// Bounds how long a server that left the queue or a playlist, which raise no
+/// notification that clears the snapshot, is still admitted.
+const KNOWN_SERVERS_TTL: Duration = Duration::from_secs(60);
+
+/// How long an unknown server is refused from the snapshot before the host is asked again.
+///
+/// Bounds the host walks a client can cause by naming servers nobody uses.
+const MISS_RECHECK_AFTER: Duration = Duration::from_secs(5);
+
+#[derive(Clone)]
+struct Snapshot {
+    servers: Arc<HashSet<String>>,
+    read_at: Instant,
+}
+
+/// The servers the host's lists used when last asked.
+///
+/// A hit costs no host call. The walk runs under its own lock, outside the
+/// snapshot's, so hits are answered while it runs and misses queue for one walk.
+#[derive(Default)]
+pub struct KnownServers {
+    snapshot: Mutex<Option<Snapshot>>,
+    walk: Mutex<()>,
+}
+
+impl KnownServers {
+    /// Drops the snapshot, for a change that can remove a server from every list.
+    pub(crate) fn forget(&self) {
+        *lock(&self.snapshot) = None;
+    }
+
+    fn first_unknown<'a>(
+        &self,
+        remote: &[(&'a str, String)],
+        p: &dyn Providers,
+    ) -> Option<&'a str> {
+        if let Some(answer) = self.answer_from_snapshot(remote) {
+            return answer;
+        }
+        let _walk = lock(&self.walk);
+        if let Some(answer) = self.answer_from_snapshot(remote) {
+            return answer;
+        }
+        let servers = Arc::new(known_servers(p));
+        let unknown = unknown_in(remote, &servers);
+        *lock(&self.snapshot) = Some(Snapshot {
+            servers,
+            read_at: Instant::now(),
+        });
+        unknown
+    }
+
+    /// The answer when the snapshot settles it without asking the host.
+    fn answer_from_snapshot<'a>(&self, remote: &[(&'a str, String)]) -> Option<Option<&'a str>> {
+        let snapshot = lock(&self.snapshot).clone()?;
+        let age = snapshot.read_at.elapsed();
+        match unknown_in(remote, &snapshot.servers) {
+            None if age < KNOWN_SERVERS_TTL => Some(None),
+            Some(path) if age < MISS_RECHECK_AFTER => Some(Some(path)),
+            _ => None,
+        }
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn unknown_in<'a>(remote: &[(&'a str, String)], known: &HashSet<String>) -> Option<&'a str> {
+    remote
         .iter()
-        .filter_map(|path| remote_server(path))
-        .collect()
+        .find(|(_, server)| !known.contains(server))
+        .map(|(path, _)| *path)
 }
 
 /// The first of `paths` that is a system path, or else on a server the host does not use.
+///
+/// `known` is the production snapshot; without one every network path asks the host.
 pub(crate) fn first_refused<'a>(
     paths: impl IntoIterator<Item = &'a str>,
     p: &dyn Providers,
+    known: Option<&KnownServers>,
 ) -> Option<&'a str> {
     let paths: Vec<&str> = paths.into_iter().collect();
     if let Some(system) = paths.iter().find(|path| is_system_path(path)) {
@@ -207,11 +295,10 @@ pub(crate) fn first_refused<'a>(
     if remote.is_empty() {
         return None;
     }
-    let known = known_servers(p);
-    remote
-        .into_iter()
-        .find(|(_, server)| !known.contains(server))
-        .map(|(path, _)| path)
+    match known {
+        Some(known) => known.first_unknown(&remote, p),
+        None => unknown_in(&remote, &known_servers(p)),
+    }
 }
 
 /// Every string a V6 request names a track or playlist file with, and its field.
@@ -331,7 +418,7 @@ mod tests {
             ..Default::default()
         };
         let share = r"\\nas\c$\a.mp3";
-        assert_eq!(first_refused([share], &host), Some(share));
+        assert_eq!(first_refused([share], &host, None), Some(share));
     }
 
     #[test]
@@ -382,7 +469,7 @@ mod tests {
             track_paths: vec![r"\\NAS\music\a.mp3".into()],
             ..Default::default()
         };
-        assert_eq!(first_refused([r"\\nas\other\b.mp3"], &host), None);
+        assert_eq!(first_refused([r"\\nas\other\b.mp3"], &host, None), None);
     }
 
     #[test]
@@ -391,7 +478,7 @@ mod tests {
             now_playing_list_paths: vec![r"\\nas\music\a.mp3".into()],
             ..Default::default()
         };
-        assert_eq!(first_refused([r"\\nas\music\b.mp3"], &host), None);
+        assert_eq!(first_refused([r"\\nas\music\b.mp3"], &host, None), None);
     }
 
     #[test]
@@ -402,7 +489,7 @@ mod tests {
         };
         let evil = r"\\attacker\share\a.mp3";
         assert_eq!(
-            first_refused([r"C:\a.mp3", r"\\nas\music\b.mp3", evil], &host),
+            first_refused([r"C:\a.mp3", r"\\nas\music\b.mp3", evil], &host, None),
             Some(evil)
         );
     }
@@ -410,8 +497,45 @@ mod tests {
     #[test]
     fn a_request_naming_only_local_paths_never_asks_the_host() {
         let host = MockProviders::default();
-        assert_eq!(first_refused([r"C:\a.mp3", "b.mp3"], &host), None);
+        assert_eq!(first_refused([r"C:\a.mp3", "b.mp3"], &host, None), None);
         assert!(host.recorded().is_empty(), "{:?}", host.recorded());
+    }
+
+    /// The answer for `path` and how many host calls the lookup made.
+    fn lookup<'a>(
+        path: &'a str,
+        host: &MockProviders,
+        known: &KnownServers,
+    ) -> (Option<&'a str>, usize) {
+        let before = host.recorded().len();
+        let answer = first_refused([path], host, Some(known));
+        (answer, host.recorded().len() - before)
+    }
+
+    #[test]
+    fn a_known_server_is_answered_from_the_snapshot_until_forgotten() {
+        let host = MockProviders {
+            track_paths: vec![r"\\nas\music\a.mp3".into()],
+            ..Default::default()
+        };
+        let known = KnownServers::default();
+        let (answer, walked) = lookup(r"\\nas\music\b.mp3", &host, &known);
+        assert_eq!(answer, None);
+        assert!(walked > 0, "the first lookup asks the host");
+        assert_eq!(lookup(r"\\nas\music\c.mp3", &host, &known), (None, 0));
+        known.forget();
+        assert_eq!(lookup(r"\\nas\music\c.mp3", &host, &known), (None, walked));
+    }
+
+    #[test]
+    fn a_repeated_unknown_server_is_refused_without_asking_the_host_again() {
+        let host = MockProviders::default();
+        let known = KnownServers::default();
+        let evil = r"\\attacker\share\a.mp3";
+        let (answer, walked) = lookup(evil, &host, &known);
+        assert_eq!(answer, Some(evil));
+        assert!(walked > 0, "the first lookup asks the host");
+        assert_eq!(lookup(evil, &host, &known), (Some(evil), 0));
     }
 
     #[test]

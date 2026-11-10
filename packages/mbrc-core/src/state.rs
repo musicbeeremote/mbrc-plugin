@@ -947,6 +947,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
         NotificationType::LibrarySwitched => {
             // Gate reads off + clear immediately so nothing stale is served in
             // the gap; the reconcile re-fingerprints, re-prewarms, re-validates.
+            core.metadata_cache.known_servers().forget();
             core.metadata_cache.invalidate();
             core.metadata_cache.forget_library();
             core.metadata_cache.media().forget();
@@ -958,6 +959,9 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
         // Queued, not applied: the Scanner debounces these, so a big import or
         // a bulk edit collapses to one pass, which then broadcasts.
         NotificationType::FileAddedToLibrary | NotificationType::FileDeleted => {
+            if ntype == NotificationType::FileDeleted {
+                core.metadata_cache.known_servers().forget();
+            }
             core.library_events.membership_changed(path);
             core.scanner_nudge.notify_one();
             return;
@@ -973,6 +977,7 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             return;
         }
         NotificationType::InboxChanged => {
+            core.metadata_cache.known_servers().forget();
             core.metadata_cache
                 .media()
                 .request_relist(&[crate::media::MediaSource::Inbox]);

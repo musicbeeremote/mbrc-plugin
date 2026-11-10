@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 
-use super::{HandlerResult, LIST_PAGE, page_request, reply_dto};
+use super::{Ctx, HandlerResult, LIST_PAGE, page_request, reply_dto};
 use crate::providers::Providers;
 use crate::server::path_guard;
 
@@ -11,9 +11,10 @@ pub fn list(data: &Value, p: &dyn Providers) -> HandlerResult {
     reply_dto("playlistlist", &p.playlists(offset, limit)?)
 }
 
-pub fn play(data: &Value, p: &dyn Providers) -> HandlerResult {
+pub fn play(data: &Value, ctx: &Ctx) -> HandlerResult {
+    let p = ctx.providers;
     let url = data.as_str().unwrap_or("");
-    if let Some(unknown) = path_guard::first_refused([url], p) {
+    if let Some(unknown) = path_guard::first_refused([url], p, ctx.known_servers()) {
         return Err(format!(
             "refused a system path or unknown server: {unknown}"
         ));
@@ -26,6 +27,7 @@ pub fn play(data: &Value, p: &dyn Providers) -> HandlerResult {
 mod tests {
     use super::*;
     use crate::protocol::messages::{Page, Playlist};
+    use crate::protocol::version::ProtocolVersion;
     use crate::providers::MockProviders;
 
     #[test]
@@ -49,7 +51,8 @@ mod tests {
     #[test]
     fn a_playlist_on_an_unknown_server_is_never_handed_to_the_host() {
         let m = MockProviders::default();
-        assert!(play(&json!(r"\\attacker\share\x.mbp"), &m).is_err());
+        let ctx = Ctx::new(&m, ProtocolVersion::V4);
+        assert!(play(&json!(r"\\attacker\share\x.mbp"), &ctx).is_err());
         assert!(
             !m.recorded()
                 .iter()
@@ -62,8 +65,9 @@ mod tests {
     #[test]
     fn play_acks_and_calls_provider() {
         let m = MockProviders::default();
+        let ctx = Ctx::new(&m, ProtocolVersion::V4);
         assert_eq!(
-            play(&json!("playlist://x"), &m).unwrap()[0],
+            play(&json!("playlist://x"), &ctx).unwrap()[0],
             ("playlistplay".into(), json!(true))
         );
         assert!(

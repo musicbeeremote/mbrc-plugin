@@ -545,6 +545,8 @@ pub struct MetadataCache {
     nav_generation: AtomicU64,
     /// The non-music categories, held in memory only and never written here.
     media: crate::media::MediaLibrary,
+    /// The network servers the host's lists use, for the client path guard.
+    known_servers: crate::server::path_guard::KnownServers,
 }
 
 impl MetadataCache {
@@ -559,7 +561,13 @@ impl MetadataCache {
             tags_generation: AtomicU64::new(0),
             nav_generation: AtomicU64::new(0),
             media: crate::media::MediaLibrary::default(),
+            known_servers: crate::server::path_guard::KnownServers::default(),
         }
+    }
+
+    /// The network servers the host's lists use, kept for the client path guard.
+    pub(crate) fn known_servers(&self) -> &crate::server::path_guard::KnownServers {
+        &self.known_servers
     }
 
     /// The non-music categories' listings.

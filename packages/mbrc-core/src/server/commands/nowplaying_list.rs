@@ -84,7 +84,8 @@ pub fn queue(data: &Value, ctx: &Ctx) -> HandlerResult {
         })
         .unwrap_or_default();
     let named = files.iter().map(String::as_str).chain([play]);
-    if let Some(unknown) = path_guard::first_refused(named, ctx.providers) {
+    let known = ctx.known_servers();
+    if let Some(unknown) = path_guard::first_refused(named, ctx.providers, known) {
         return Err(format!(
             "refused a system path or unknown server: {unknown}"
         ));

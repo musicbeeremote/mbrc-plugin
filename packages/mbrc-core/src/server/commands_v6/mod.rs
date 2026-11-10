@@ -122,7 +122,7 @@ pub fn dispatch(
     cover_store: Option<&CoverStore>,
     metadata_cache: Option<&MetadataCache>,
 ) -> Option<OpResult> {
-    if let Err(refused) = refuse_guarded_paths(data, providers) {
+    if let Err(refused) = refuse_guarded_paths(data, providers, metadata_cache) {
         return Some(Err(refused));
     }
     player::dispatch(op, data, providers, now_playing)
@@ -147,9 +147,17 @@ pub fn dispatch(
 }
 
 /// `invalid_field` when a request names a system path or a server the host does not use.
-fn refuse_guarded_paths(data: &Value, providers: &dyn Providers) -> Result<(), V6Error> {
+fn refuse_guarded_paths(
+    data: &Value,
+    providers: &dyn Providers,
+    metadata_cache: Option<&MetadataCache>,
+) -> Result<(), V6Error> {
     let named = path_guard::named_paths(data);
-    let unknown = path_guard::first_refused(named.iter().map(|(_, path)| *path), providers);
+    let unknown = path_guard::first_refused(
+        named.iter().map(|(_, path)| *path),
+        providers,
+        metadata_cache.map(MetadataCache::known_servers),
+    );
     let Some(unknown) = unknown else {
         return Ok(());
     };

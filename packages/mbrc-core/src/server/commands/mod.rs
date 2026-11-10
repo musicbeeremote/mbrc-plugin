@@ -23,6 +23,7 @@ use crate::protocol::messages::{
 };
 use crate::protocol::version::ProtocolVersion;
 use crate::providers::Providers;
+use crate::server::path_guard::KnownServers;
 use crate::wire::WireCodec;
 
 pub use crate::protocol::Platform;
@@ -83,6 +84,11 @@ impl<'a> Ctx<'a> {
     pub fn with_metadata_cache(mut self, cache: &'a MetadataCache) -> Self {
         self.metadata_cache = Some(cache);
         self
+    }
+
+    /// The path guard's snapshot of known servers, when the metadata cache is wired.
+    pub fn known_servers(&self) -> Option<&'a KnownServers> {
+        self.metadata_cache.map(MetadataCache::known_servers)
     }
 
     /// The wire codec for the negotiated protocol version.
@@ -329,7 +335,7 @@ pub fn dispatch(ctx: &Ctx, context: &str, data: &Value) -> Option<HandlerResult>
         "radiostations" => library::radio_stations(data, p),
         "libraryplayall" => library::play_all(data, p),
         "playlistlist" => playlists::list(data, p),
-        "playlistplay" => playlists::play(data, p),
+        "playlistplay" => playlists::play(data, ctx),
         "pluginversion" => system::plugin_version(p),
         "init" => system::init(ctx),
         _ => return None,
