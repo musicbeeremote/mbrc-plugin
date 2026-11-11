@@ -172,6 +172,29 @@ describe('events and connections', () => {
     expect(images.hashFor('Tico')).toBe('t2')
   })
 
+  it('ignores an answer sent before the server cleared its pictures', async () => {
+    const replies: ((value: unknown) => void)[] = []
+    call.mockReturnValueOnce(
+      new Promise((resolve) => {
+        replies.push(resolve)
+      }),
+    )
+    const reply = (value: unknown) => {
+      for (const resolve of replies) resolve(value)
+    }
+    const images = useArtistImagesStore()
+    images.bind()
+    images.want(['Tico'])
+    await settle()
+
+    answer({})
+    handler('library_artist_images_cleared')({})
+    reply({ artists: [{ artist: 'Tico', image_hash: 'gone' }], enabled: true })
+    await settle()
+
+    expect(images.hashFor('Tico')).toBeUndefined()
+  })
+
   it('asks again after reconnecting, since the setting may have changed', async () => {
     answer({}, false)
     const images = useArtistImagesStore()

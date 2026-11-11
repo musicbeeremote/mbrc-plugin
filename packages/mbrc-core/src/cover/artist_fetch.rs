@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use mbrc_release::{HttpClient, HttpResponse, UpdateError};
 use serde_json::Value;
 
-use super::artists::{ArtistImages, FetchQueue, Sources, Status};
+use super::artists::{ArtistImages, FetchQueue, Status};
 use super::backdrops::Backdrops;
 use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
@@ -303,32 +303,21 @@ pub fn run(
                 announce(&hash);
                 return None;
             }
-            is_ready(images, name, &mut budget_noted)
-                .then(|| (images.musicbee_due(name), images.sources()))
+            is_ready(images, name, &mut budget_noted).then(|| Local::due(images, name))
         }) else {
             return;
         };
-        let Some((ask_musicbee, sources)) = step else {
+        let Some(local) = step else {
             continue;
         };
         if !queue.is_current(generation) || !queue.is_enabled() {
             continue;
         }
-        // Outside the store: retiring never waits on MusicBee, joining the thread does.
-        let local = ask_musicbee
-            .then(|| musicbee_picture(musicbee, backdrops, sources, lead))
-            .flatten();
+        // Outside the store: retiring never waits on MusicBee or the disk, joining the thread does.
+        let local = local.read(musicbee, backdrops, lead);
         let Some(web) = queue.with_store(generation, store, |images| {
-            if !images.is_enabled() {
+            if !images.is_enabled() || local.store(images, name, lead, backdrops, &announce) {
                 return false;
-            }
-            if let Some((raw, source)) = local
-                && store_local(images, name, &raw, source, &announce)
-            {
-                return false;
-            }
-            if ask_musicbee {
-                images.musicbee_has_none(name);
             }
             images.web_due(name, now_unix_secs())
         }) else {
@@ -368,43 +357,97 @@ pub fn run(
     }
 }
 
-/// MusicBee's thumbnail of `name`, when it has or can get one: about a second
-/// when it downloads, instant once it has answered.
-fn musicbee_thumb(musicbee: &dyn Providers, backdrops: &Backdrops, name: &str) -> Option<Vec<u8>> {
-    let path = match musicbee.artist_picture_thumb(name) {
-        Ok(path) if !path.is_empty() => path,
-        Ok(_) => return None,
-        Err(e) => {
-            tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail failed");
-            return None;
-        }
-    };
-    backdrops.learn_from_thumb(std::path::Path::new(&path));
-    // MusicBee writes an empty file when it found none.
-    let has_picture = std::fs::metadata(&path).is_ok_and(|m| m.len() > 0);
-    has_picture.then(|| std::fs::read(&path).ok()).flatten()
+/// One artist's turn at MusicBee's two sources: which are due, then what they had.
+#[derive(Default)]
+struct Local {
+    ask_thumb: bool,
+    ask_backdrop: bool,
+    thumb: Option<Vec<u8>>,
+    backdrop: Option<Vec<u8>>,
 }
 
-/// MusicBee's thumbnail of `name`, or else the backdrop it cached, with the
-/// source it came from; only from the sources switched on.
-fn musicbee_picture(
-    musicbee: &dyn Providers,
-    backdrops: &Backdrops,
-    sources: Sources,
-    name: &str,
-) -> Option<(Vec<u8>, &'static str)> {
-    let thumb = sources
-        .musicbee
-        .then(|| musicbee_thumb(musicbee, backdrops, name))
-        .flatten();
-    if let Some(raw) = thumb {
-        return Some((raw, SOURCE_MUSICBEE));
+impl Local {
+    /// The sources switched on, when MusicBee is due to be asked about `name`.
+    fn due(images: &ArtistImages, name: &str) -> Self {
+        let due = images.musicbee_due(name);
+        let sources = images.sources();
+        Self {
+            ask_thumb: due && sources.musicbee,
+            ask_backdrop: due && sources.backdrops,
+            ..Self::default()
+        }
     }
-    sources
-        .backdrops
-        .then(|| backdrops.read(name))
-        .flatten()
-        .map(|raw| (raw, SOURCE_BACKDROP))
+
+    /// Reads the thumbnail, and the backdrop when there is no thumbnail, off the store lock.
+    fn read(self, musicbee: &dyn Providers, backdrops: &Backdrops, lead: &str) -> Self {
+        let thumb = self
+            .ask_thumb
+            .then(|| musicbee_thumb_path(musicbee, lead))
+            .flatten()
+            .and_then(|path| {
+                backdrops.learn_from_thumb(std::path::Path::new(&path));
+                read_picture(&path)
+            });
+        let backdrop = (self.ask_backdrop && thumb.is_none())
+            .then(|| backdrops.read(lead))
+            .flatten();
+        Self {
+            thumb,
+            backdrop,
+            ..self
+        }
+    }
+
+    /// Stores the first picture that decodes, thumbnail first; with none, records
+    /// that MusicBee had nothing. True when a picture was stored.
+    fn store(
+        self,
+        images: &ArtistImages,
+        name: &str,
+        lead: &str,
+        backdrops: &Backdrops,
+        announce: &dyn Fn(&str),
+    ) -> bool {
+        let had_thumb = self.thumb.is_some();
+        if let Some(raw) = self.thumb
+            && store_local(images, name, &raw, SOURCE_MUSICBEE, announce)
+        {
+            return true;
+        }
+        // Read here only when MusicBee's thumbnail did not decode, which is rare.
+        let backdrop = if had_thumb && self.ask_backdrop {
+            backdrops.read(lead)
+        } else {
+            self.backdrop
+        };
+        if let Some(raw) = backdrop
+            && store_local(images, name, &raw, SOURCE_BACKDROP, announce)
+        {
+            return true;
+        }
+        if self.ask_thumb || self.ask_backdrop {
+            images.musicbee_has_none(name);
+        }
+        false
+    }
+}
+
+/// Where MusicBee keeps its thumbnail of `name`, when it has or can get one:
+/// about a second when it downloads, instant once it has answered.
+fn musicbee_thumb_path(musicbee: &dyn Providers, name: &str) -> Option<String> {
+    match musicbee.artist_picture_thumb(name) {
+        Ok(path) if !path.is_empty() => Some(path),
+        Ok(_) => None,
+        Err(e) => {
+            tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail failed");
+            None
+        }
+    }
+}
+
+/// The picture at `path`; `None` for the empty file MusicBee writes when it found none.
+fn read_picture(path: &str) -> Option<Vec<u8>> {
+    std::fs::read(path).ok().filter(|raw| !raw.is_empty())
 }
 
 /// Stores a picture MusicBee had as `name`'s, announcing it; false when it
@@ -569,6 +612,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::cover::artists::Sources;
     use crate::cover::test_jpeg_bytes;
     use crate::providers::MockProviders;
 
@@ -1267,6 +1311,31 @@ mod tests {
         assert_eq!(
             store.artists().lookup("Adele").map(|l| l.source),
             Some(SOURCE_MUSICBEE.to_owned())
+        );
+    }
+
+    #[test]
+    fn a_thumbnail_that_does_not_decode_falls_back_to_the_backdrop() {
+        let store = worker_store("broken-thumb");
+        backdrop(&store, "Adele");
+        let path = store.dir().join("Adele.png");
+        std::fs::write(&path, b"not an image").unwrap();
+        let musicbee = MockProviders {
+            artist_thumbs: HashMap::from([(
+                "Adele".to_owned(),
+                path.to_string_lossy().into_owned(),
+            )]),
+            ..MockProviders::default()
+        };
+        store.artists().request("Adele");
+        let (client, _) = run_until(&store, musicbee, Recorded::default(), |images| {
+            images.hash_for("Adele").is_some()
+        });
+
+        assert!(client.asked().is_empty(), "the web is not asked");
+        assert_eq!(
+            store.artists().lookup("Adele").map(|l| l.source),
+            Some(SOURCE_BACKDROP.to_owned())
         );
     }
 

@@ -56,7 +56,7 @@ namespace MusicBeePlugin.Settings
             if (!status.artist_images_enabled)
                 parts.Add("downloads off");
             else if (status.artist_image_bytes >= status.artist_image_budget)
-                parts.Add("disk budget full");
+                parts.Add("disk budget full; raise it or clear the pictures to fetch more");
             return string.Join(" · ", parts) + ".";
         }
 

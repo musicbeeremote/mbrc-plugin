@@ -441,8 +441,17 @@ impl ArtistImages {
 
     /// Switches sources for the lookups that follow; a lookup in progress ends
     /// as it began.
+    ///
+    /// A MusicBee source switched on forgets when MusicBee last had nothing, since
+    /// that answer came without it.
     pub fn set_sources(&self, sources: Sources) {
-        *self.sources.write().unwrap_or_else(|e| e.into_inner()) = sources;
+        let before = std::mem::replace(
+            &mut *self.sources.write().unwrap_or_else(|e| e.into_inner()),
+            sources,
+        );
+        if (sources.musicbee && !before.musicbee) || (sources.backdrops && !before.backdrops) {
+            self.lock_musicbee_none().clear();
+        }
     }
 
     /// Whether the stored pictures have used up the disk budget.
@@ -652,7 +661,6 @@ impl ArtistImages {
     /// The caller holds [`Self::hold_files`] and deletes the files no album
     /// cover shares, so a fetch landing meanwhile cannot lose its file.
     pub(super) fn forget_all(&self) -> Option<HashSet<String>> {
-        let hashes = self.hashes();
         let written = self.db.try_write(Durability::Immediate, |txn| {
             txn.delete_table(ARTIST_IMAGE)?;
             txn.delete_table(ARTIST_LOOKUP)?;
@@ -661,7 +669,10 @@ impl ArtistImages {
         if !written {
             return None;
         }
-        self.write_images().clear();
+        let hashes = std::mem::take(&mut *self.write_images())
+            .into_values()
+            .map(|stored| stored.hash)
+            .collect();
         self.write_lookups().clear();
         self.used.store(0, Ordering::Release);
         self.lock_musicbee_none().clear();
@@ -839,6 +850,20 @@ mod tests {
             ..Sources::default()
         });
         assert!(store.request("Gadiel"));
+    }
+
+    #[test]
+    fn switching_a_musicbee_source_on_asks_musicbee_again() {
+        let (_dir, store, _db, _) = temp_store("source-on");
+        store.set_sources(Sources {
+            musicbee: false,
+            ..Sources::default()
+        });
+        store.musicbee_has_none("Gadiel");
+        assert!(!store.musicbee_due("Gadiel"));
+
+        store.set_sources(Sources::default());
+        assert!(store.musicbee_due("Gadiel"));
     }
 
     #[test]

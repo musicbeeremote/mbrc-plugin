@@ -45,7 +45,7 @@ namespace MusicBeeRemote.Core.Tests.Settings
             };
             var off = new CoreCacheStatus { artist_images = 2, artist_image_budget = 100 * MiB };
 
-            PanelText.ArtistPictures(full).Should().EndWith("disk budget full.");
+            PanelText.ArtistPictures(full).Should().EndWith("disk budget full; raise it or clear the pictures to fetch more.");
             PanelText.ArtistPictures(off).Should().EndWith("downloads off.");
         }
     }

@@ -88,6 +88,8 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
   let recheck: ReturnType<typeof setTimeout> | null = null
   /** A server that refuses the op, which no recheck will change. */
   let refused = false
+  /** Bumped on every reset, so an answer sent before it is not kept. */
+  let epoch = 0
 
   function setEnabled(on: boolean): void {
     enabled.value = on
@@ -133,10 +135,13 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
 
   /** Sends `artists`; true when the server will send pictures for them. */
   async function send(artists: string[]): Promise<boolean> {
+    const sentAt = epoch
     try {
       const result = await client.call(Op.LibraryArtistImages, { artists })
       setEnabled(result.enabled)
-      for (const item of result.artists) remember(item.artist, item.image_hash)
+      if (sentAt === epoch) {
+        for (const item of result.artists) remember(item.artist, item.image_hash)
+      }
       return result.enabled
     } catch (error) {
       refused = isFinalRefusal(error)
@@ -175,15 +180,21 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
     }, ASK_DELAY_MS)
   }
 
+  /** Forgets what was asked and answered, then asks again for what is on screen. */
+  function reset(): void {
+    epoch += 1
+    asked.clear()
+    broken.value.clear()
+    want(shown)
+  }
+
   function bind(): void {
     client.on(WireEvent.LibraryArtistImageUpdated, (data) => {
       remember(data.artist, data.image_hash)
     })
     client.on(WireEvent.LibraryArtistImagesCleared, () => {
       hashes.value.clear()
-      broken.value.clear()
-      asked.clear()
-      want(shown)
+      reset()
     })
     // What landed while the socket was down was never announced, and the
     // setting or the server's queue may have changed.
@@ -191,11 +202,9 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
       if (!data.connected) return
       enabled.value = null
       refused = false
-      asked.clear()
-      broken.value.clear()
       if (recheck !== null) clearTimeout(recheck)
       recheck = null
-      want(shown)
+      reset()
     })
   }
 

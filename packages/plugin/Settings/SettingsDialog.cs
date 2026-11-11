@@ -122,6 +122,7 @@ namespace MusicBeePlugin.Settings
         private CheckBox _artistBackdrops;
         private CheckBox _artistWeb;
         private NumericUpDown _artistBudget;
+        private bool _budgetRangeKnown;
         private Label _artistStatus;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
@@ -1364,7 +1365,6 @@ namespace MusicBeePlugin.Settings
             _artistMusicBee.Checked = s.artist_images_musicbee;
             _artistBackdrops.Checked = s.artist_images_backdrops;
             _artistWeb.Checked = s.artist_images_web;
-            UseBudgetRange(_host.ReadCacheStatus());
             _artistBudget.Value = Clamp(s.artist_images_budget_mb, (int)_artistBudget.Minimum, (int)_artistBudget.Maximum);
             UpdateArtistSources();
             ShowFilterRows();
@@ -1404,6 +1404,8 @@ namespace MusicBeePlugin.Settings
         private void LoadCacheStatus()
         {
             var status = _host.ReadCacheStatus();
+            UseBudgetRange(status);
+            UpdateArtistSources();
             // Re-read every few seconds: an unchanged line is left alone, not relaid out.
             var pictures = PanelText.ArtistPictures(status) ?? string.Empty;
             if (_artistStatus.Text != pictures)
@@ -1800,11 +1802,15 @@ namespace MusicBeePlugin.Settings
             if (!_host.RebuildCovers()) LoadCacheStatus();
         }
 
-        /// <summary>Bounds the budget control by the range the core accepts, once it has said.</summary>
+        /// <summary>
+        ///     Bounds the budget control by the range the core accepts. Without it the
+        ///     control stays locked on the saved value, which the core clamped on load.
+        /// </summary>
         private void UseBudgetRange(CoreCacheStatus status)
         {
-            if (status == null || status.artist_images_budget_max_mb < status.artist_images_budget_min_mb
-                || status.artist_images_budget_min_mb <= 0) return;
+            _budgetRangeKnown = status != null && status.artist_images_budget_min_mb > 0
+                && status.artist_images_budget_max_mb >= status.artist_images_budget_min_mb;
+            if (!_budgetRangeKnown) return;
             _artistBudget.Minimum = status.artist_images_budget_min_mb;
             _artistBudget.Maximum = status.artist_images_budget_max_mb;
         }
@@ -1815,7 +1821,7 @@ namespace MusicBeePlugin.Settings
             _artistMusicBee.Enabled = on;
             _artistBackdrops.Enabled = on;
             _artistWeb.Enabled = on;
-            _artistBudget.Enabled = on;
+            _artistBudget.Enabled = on && _budgetRangeKnown;
         }
 
         private void ClearArtistImages()
