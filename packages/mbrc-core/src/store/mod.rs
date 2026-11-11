@@ -227,23 +227,34 @@ impl Db {
         durability: Durability,
         f: impl FnOnce(&WriteTransaction) -> Result<(), redb::Error>,
     ) {
+        self.try_write(durability, f);
+    }
+
+    /// [`Self::write`], saying whether the transaction committed; true when
+    /// persistence is off, since there is nothing on disk to disagree with.
+    pub fn try_write(
+        &self,
+        durability: Durability,
+        f: impl FnOnce(&WriteTransaction) -> Result<(), redb::Error>,
+    ) -> bool {
         let Some(db) = self.0.as_deref() else {
-            return;
+            return true;
         };
         let mut txn = match db.begin_write() {
             Ok(txn) => txn,
             Err(e) => {
                 tracing::warn!(error = %e, "redb begin_write failed");
-                return;
+                return false;
             }
         };
         // Only fails if a persistent savepoint was modified in this txn (never
         // here), so the result is safe to ignore.
         let _ = txn.set_durability(durability);
         let result = f(&txn).and_then(|()| txn.commit().map_err(redb::Error::from));
-        if let Err(e) = result {
+        if let Err(e) = &result {
             tracing::warn!(error = %e, "redb write failed");
         }
+        result.is_ok()
     }
 
     /// One-time import of the shipped plugin's `cache/state.json` into redb, so

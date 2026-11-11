@@ -43,5 +43,11 @@
 
         /// <summary>Artists waiting to be looked up.</summary>
         public int artist_images_waiting { get; set; }
+
+        /// <summary>The smallest disk budget the core accepts, in MiB.</summary>
+        public int artist_images_budget_min_mb { get; set; }
+
+        /// <summary>The largest disk budget the core accepts, in MiB.</summary>
+        public int artist_images_budget_max_mb { get; set; }
     }
 }

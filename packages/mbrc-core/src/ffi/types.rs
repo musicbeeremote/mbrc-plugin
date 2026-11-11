@@ -472,6 +472,9 @@ pub enum HostCommandType {
     SetPowerAllowed = 18,
     // Cancels the auto-shutdown timer, for the countdown window's Cancel button.
     CancelAutoShutdown = 19,
+    /// Delete every artist picture and forget every lookup, so each artist is
+    /// asked for again.
+    ClearArtistImages = 20,
 }
 
 impl HostCommandType {
@@ -496,6 +499,7 @@ impl HostCommandType {
             17 => Some(Self::CompleteSetup),
             18 => Some(Self::SetPowerAllowed),
             19 => Some(Self::CancelAutoShutdown),
+            20 => Some(Self::ClearArtistImages),
             _ => None,
         }
     }
@@ -654,6 +658,7 @@ mod tests {
             (17, HostCommandType::CompleteSetup),
             (18, HostCommandType::SetPowerAllowed),
             (19, HostCommandType::CancelAutoShutdown),
+            (20, HostCommandType::ClearArtistImages),
         ];
         for (value, expected) in commands {
             assert_eq!(

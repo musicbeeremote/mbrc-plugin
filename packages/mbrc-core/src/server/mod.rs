@@ -308,6 +308,9 @@ fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> 
     #[cfg(windows)]
     {
         let musicbee = core.providers.clone();
+        let backdrops = crate::cover::backdrops::Backdrops::beside(std::path::Path::new(
+            &core.config.storage_path,
+        ));
         let queue = core.cover_store.artists().queue();
         let store = Arc::downgrade(&core.cover_store);
         let weak = Arc::downgrade(core);
@@ -335,6 +338,7 @@ fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> 
                     &queue,
                     &store,
                     musicbee.as_ref(),
+                    &backdrops,
                     &mut fetcher,
                     generation,
                     &|artist, hash| {
@@ -388,6 +392,41 @@ fn spawn_auto_shutdown(core: &Arc<Core>) -> tokio::task::JoinHandle<()> {
                 .emit_event(crate::ffi::types::HostEventType::AutoShutdownChanged, &[]);
         }
     })
+}
+
+/// The V6 event telling clients every artist picture is gone: drop the
+/// `image_hash` values held and ask `library_artist_images` again.
+pub const ARTIST_IMAGES_CLEARED: &str = "library_artist_images_cleared";
+
+/// Clears the artist pictures on a thread of its own, since it waits on a
+/// picture being stored and deletes a file per picture; then tells V6 clients
+/// and the settings panel.
+pub fn clear_artist_images(core: &Arc<Core>) -> crate::ffi::types::MbrcResult {
+    let core = core.clone();
+    let spawned = std::thread::Builder::new()
+        .name("mbrc-artist-clear".into())
+        .spawn(move || clear_artist_images_now(&core));
+    match spawned {
+        Ok(_) => crate::ffi::types::MbrcResult::Ok,
+        Err(e) => {
+            tracing::warn!(error = %e, "artist pictures: clear not started");
+            crate::ffi::types::MbrcResult::RuntimeError
+        }
+    }
+}
+
+fn clear_artist_images_now(core: &Core) {
+    let Some(dropped) = core.cover_store.clear_artist_images() else {
+        tracing::warn!("artist pictures not cleared: mbrc.redb could not be written");
+        return;
+    };
+    tracing::info!(dropped, "artist pictures cleared");
+    core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
+        ARTIST_IMAGES_CLEARED,
+        serde_json::json!({}),
+    )]);
+    core.providers
+        .emit_event(crate::ffi::types::HostEventType::CacheStatusChanged, &[]);
 }
 
 /// Tells V6 clients a queued artist picture has landed.
@@ -941,6 +980,29 @@ mod cover_delta_tests {
             core.metadata_cache.track_tags("/two.mp3").is_some(),
             "the album that did not move keeps them"
         );
+    }
+
+    #[test]
+    fn clearing_artist_pictures_tells_v6_clients_to_drop_their_hashes() {
+        let core = temp_core("artist-clear", Vec::new());
+        let hash = core
+            .cover_store
+            .artists()
+            .store(
+                "Gadiel",
+                &crate::cover::test_jpeg_bytes(64, 64),
+                "",
+                "musicbee",
+            )
+            .unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        core.v6_broadcaster.register(1, tx);
+
+        clear_artist_images_now(&core);
+
+        assert!(core.cover_store.read_cover_bytes(&hash).is_none());
+        let frame = rx.try_recv().expect("a clear is announced");
+        assert!(frame.contains(ARTIST_IMAGES_CLEARED), "{frame}");
     }
 
     /// The nudge-path cover delta broadcasts `librarycovercachebuildstatus` only

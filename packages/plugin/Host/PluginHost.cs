@@ -144,6 +144,9 @@ namespace MusicBeePlugin.Host
         /// <inheritdoc cref="NativeBridge.RebuildCovers" />
         public bool RebuildCovers() => _bridge.RebuildCovers();
 
+        /// <inheritdoc cref="NativeBridge.ClearArtistImages" />
+        public bool ClearArtistImages() => _bridge.ClearArtistImages();
+
         /// <summary>
         ///     Recent rejected connection attempts (newest first) for the settings
         ///     panel's blocked-connections view. Never null.

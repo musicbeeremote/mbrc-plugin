@@ -235,6 +235,8 @@ export const EventPayloadSchemas = {
   media_changed: z.object({ source: z.string() }),
   /** A picture queued by `library_artist_images` or for the playing track was stored. */
   library_artist_image_updated: z.object({ artist: z.string(), image_hash: z.string() }),
+  /** Every stored artist picture was deleted: drop the hashes held and ask again. */
+  library_artist_images_cleared: EmptySchema,
   server_shutdown: EmptySchema,
   /** Also raised by the client itself with what the handshake reported. */
   permissions_changed: PermissionsSchema,

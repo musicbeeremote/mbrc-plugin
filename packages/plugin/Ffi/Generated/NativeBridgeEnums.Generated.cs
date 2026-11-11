@@ -194,6 +194,7 @@ namespace MusicBeePlugin.Ffi.Generated
         CompleteSetup = 17,
         SetPowerAllowed = 18,
         CancelAutoShutdown = 19,
+        ClearArtistImages = 20,
     }
 
     public enum HostEventType

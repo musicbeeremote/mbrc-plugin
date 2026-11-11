@@ -1,8 +1,9 @@
 //! The artist picture fetcher (#116): one background worker that turns a
 //! queued name into a stored picture, or a recorded miss.
 //!
-//! MusicBee's own thumbnail comes first, so a client shows what MusicBee shows.
-//! The web is the fallback for artists MusicBee has none of. There MusicBrainz
+//! MusicBee's own thumbnail comes first, so a client shows what MusicBee shows,
+//! then the backdrop MusicBee cached on disk ([`Backdrops`]). The web is the
+//! fallback for artists MusicBee has none of. There MusicBrainz
 //! resolves the name to an artist id. A wrong picture is worse than
 //! none, so the id is taken only when exactly one result carries the name
 //! itself (case-insensitive) and that result scores 100; anything else is
@@ -19,7 +20,8 @@ use std::time::{Duration, Instant};
 use mbrc_release::{HttpClient, HttpResponse, UpdateError};
 use serde_json::Value;
 
-use super::artists::{ArtistImages, FetchQueue, Status};
+use super::artists::{ArtistImages, FetchQueue, Sources, Status};
+use super::backdrops::Backdrops;
 use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
 use crate::credits;
@@ -30,6 +32,9 @@ pub const SOURCE_WIKIDATA: &str = "wikidata";
 
 /// The source name recorded for MusicBee's own thumbnail.
 const SOURCE_MUSICBEE: &str = "musicbee";
+
+/// The source name recorded for a backdrop MusicBee cached on disk.
+const SOURCE_BACKDROP: &str = "musicbee_backdrop";
 
 /// The width Commons is asked to render, matching the stored box.
 const COMMONS_WIDTH: u32 = super::artists::ARTIST_IMAGE_SIZE;
@@ -264,15 +269,16 @@ impl<'a> Fetcher<'a> {
 /// Fetches queued artists until this worker is retired or the store is gone,
 /// calling `landed` with each picture stored, once per spelling it was asked for.
 ///
-/// MusicBee's thumbnail first; the web only for what MusicBee has none of, once
-/// that artist's last web miss is due. The store is reached only through
-/// [`FetchQueue::with_store`], so a retired worker never keeps `mbrc.redb` open.
+/// MusicBee's thumbnail, then its cached backdrop; the web only for what MusicBee
+/// has none of, once that artist's last web miss is due. The store is reached only
+/// through [`FetchQueue::with_store`], so a retired worker never keeps `mbrc.redb` open.
 /// A busy web source parks whoever needs it until the pause ends; MusicBee's turn
 /// goes on for everyone else.
 pub fn run(
     queue: &FetchQueue,
     store: &Weak<CoverStore>,
     musicbee: &dyn Providers,
+    backdrops: &Backdrops,
     fetcher: &mut Fetcher<'_>,
     generation: u64,
     landed: &dyn Fn(&str, &str),
@@ -297,26 +303,27 @@ pub fn run(
                 announce(&hash);
                 return None;
             }
-            is_ready(images, name, &mut budget_noted).then(|| images.musicbee_due(name))
+            is_ready(images, name, &mut budget_noted)
+                .then(|| (images.musicbee_due(name), images.sources()))
         }) else {
             return;
         };
-        let Some(ask_musicbee) = step else {
+        let Some((ask_musicbee, sources)) = step else {
             continue;
         };
         if !queue.is_current(generation) || !queue.is_enabled() {
             continue;
         }
         // Outside the store: retiring never waits on MusicBee, joining the thread does.
-        let thumb = ask_musicbee
-            .then(|| musicbee_thumb(musicbee, lead))
+        let local = ask_musicbee
+            .then(|| musicbee_picture(musicbee, backdrops, sources, lead))
             .flatten();
         let Some(web) = queue.with_store(generation, store, |images| {
             if !images.is_enabled() {
                 return false;
             }
-            if let Some(raw) = thumb
-                && store_thumb(images, name, &raw, &announce)
+            if let Some((raw, source)) = local
+                && store_local(images, name, &raw, source, &announce)
             {
                 return false;
             }
@@ -363,7 +370,7 @@ pub fn run(
 
 /// MusicBee's thumbnail of `name`, when it has or can get one: about a second
 /// when it downloads, instant once it has answered.
-fn musicbee_thumb(musicbee: &dyn Providers, name: &str) -> Option<Vec<u8>> {
+fn musicbee_thumb(musicbee: &dyn Providers, backdrops: &Backdrops, name: &str) -> Option<Vec<u8>> {
     let path = match musicbee.artist_picture_thumb(name) {
         Ok(path) if !path.is_empty() => path,
         Ok(_) => return None,
@@ -372,22 +379,51 @@ fn musicbee_thumb(musicbee: &dyn Providers, name: &str) -> Option<Vec<u8>> {
             return None;
         }
     };
+    backdrops.learn_from_thumb(std::path::Path::new(&path));
     // MusicBee writes an empty file when it found none.
     let has_picture = std::fs::metadata(&path).is_ok_and(|m| m.len() > 0);
     has_picture.then(|| std::fs::read(&path).ok()).flatten()
 }
 
-/// Stores MusicBee's thumbnail as `name`'s picture, announcing it; false when
-/// it does not decode.
-fn store_thumb(images: &ArtistImages, name: &str, raw: &[u8], announce: &dyn Fn(&str)) -> bool {
-    match images.store(name, raw, "", SOURCE_MUSICBEE) {
+/// MusicBee's thumbnail of `name`, or else the backdrop it cached, with the
+/// source it came from; only from the sources switched on.
+fn musicbee_picture(
+    musicbee: &dyn Providers,
+    backdrops: &Backdrops,
+    sources: Sources,
+    name: &str,
+) -> Option<(Vec<u8>, &'static str)> {
+    let thumb = sources
+        .musicbee
+        .then(|| musicbee_thumb(musicbee, backdrops, name))
+        .flatten();
+    if let Some(raw) = thumb {
+        return Some((raw, SOURCE_MUSICBEE));
+    }
+    sources
+        .backdrops
+        .then(|| backdrops.read(name))
+        .flatten()
+        .map(|raw| (raw, SOURCE_BACKDROP))
+}
+
+/// Stores a picture MusicBee had as `name`'s, announcing it; false when it
+/// does not decode.
+fn store_local(
+    images: &ArtistImages,
+    name: &str,
+    raw: &[u8],
+    source: &str,
+    announce: &dyn Fn(&str),
+) -> bool {
+    match images.store(name, raw, "", source) {
         Ok(hash) => {
-            tracing::debug!(artist = name, %hash, source = SOURCE_MUSICBEE, "artist picture stored");
+            tracing::debug!(artist = name, %hash, source, "artist picture stored");
             announce(&hash);
             true
         }
         Err(e) => {
-            tracing::debug!(artist = name, error = %e, "MusicBee artist thumbnail unusable");
+            tracing::debug!(artist = name, source, error = %e, "MusicBee artist picture unusable");
             false
         }
     }
@@ -408,6 +444,7 @@ fn is_ready(images: &ArtistImages, name: &str, budget_noted: &mut bool) -> bool 
         }
         return false;
     }
+    *budget_noted = false;
     true
 }
 
@@ -769,7 +806,7 @@ mod tests {
 
     /// Runs a worker on its own thread until `done` holds, then retires it.
     fn run_until(
-        store: &Arc<CoverStore>,
+        store: &TestStore,
         musicbee: MockProviders,
         client: Recorded,
         done: impl Fn(&ArtistImages) -> bool,
@@ -778,7 +815,7 @@ mod tests {
     }
 
     fn run_paced<C: HttpClient + Send + 'static>(
-        store: &Arc<CoverStore>,
+        store: &TestStore,
         musicbee: MockProviders,
         client: C,
         pace: Pace,
@@ -787,6 +824,7 @@ mod tests {
         let queue = store.artists().queue();
         let generation = queue.begin_worker();
         let weak = Arc::downgrade(store);
+        let backdrops = test_backdrops(store);
         let worker = {
             let queue = queue.clone();
             std::thread::spawn(move || {
@@ -796,6 +834,7 @@ mod tests {
                     &queue,
                     &weak,
                     &musicbee,
+                    &backdrops,
                     &mut fetcher,
                     generation,
                     &|name, hash| {
@@ -820,12 +859,13 @@ mod tests {
     /// Runs a worker with a MusicBee the test can watch, returning what it asked
     /// the web once it is retired and joined.
     fn spawn_worker(
-        store: &Arc<CoverStore>,
+        store: &TestStore,
         musicbee: &Arc<MockProviders>,
     ) -> (Arc<FetchQueue>, std::thread::JoinHandle<Vec<String>>) {
         let queue = store.artists().queue();
         let generation = queue.begin_worker();
         let weak = Arc::downgrade(store);
+        let backdrops = test_backdrops(store);
         let worker = {
             let (queue, musicbee) = (queue.clone(), musicbee.clone());
             std::thread::spawn(move || {
@@ -835,6 +875,7 @@ mod tests {
                     &queue,
                     &weak,
                     musicbee.as_ref(),
+                    &backdrops,
                     &mut fetcher,
                     generation,
                     &|_, _| {},
@@ -849,7 +890,21 @@ mod tests {
         (queue, worker)
     }
 
-    fn worker_store(name: &str) -> crate::test_dir::InTestDir<Arc<CoverStore>> {
+    type TestStore = crate::test_dir::InTestDir<Arc<CoverStore>>;
+
+    /// The backdrop folder a test worker reads, beside its store.
+    fn test_backdrops(store: &TestStore) -> Backdrops {
+        Backdrops::in_dir(store.dir().join("ArtistBackdrops"))
+    }
+
+    /// Leaves a backdrop of `name` where the test worker looks for one.
+    fn backdrop(store: &TestStore, name: &str) {
+        let dir = store.dir().join("ArtistBackdrops");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{name}.dat")), test_jpeg_bytes(320, 180)).unwrap();
+    }
+
+    fn worker_store(name: &str) -> TestStore {
         let (dir, store) =
             crate::cover::test_cover_store(&format!("artist-fetch-{name}")).into_parts();
         store.artists().set_enabled(true);
@@ -1175,5 +1230,71 @@ mod tests {
         queue.retire();
         worker.join().unwrap();
         assert_eq!(store.artists().hash_for("Slow"), None);
+    }
+
+    #[test]
+    fn a_cached_backdrop_stands_in_when_musicbee_has_no_thumbnail() {
+        let store = worker_store("backdrop");
+        backdrop(&store, "AC DC");
+        store.artists().request("AC/DC");
+        let (client, landed) = run_until(
+            &store,
+            MockProviders::default(),
+            Recorded::default(),
+            |images| images.hash_for("AC/DC").is_some(),
+        );
+
+        assert!(client.asked().is_empty(), "the web is not asked");
+        assert_eq!(landed.len(), 1);
+        assert_eq!(
+            store.artists().lookup("AC/DC").map(|l| l.source),
+            Some(SOURCE_BACKDROP.to_owned())
+        );
+    }
+
+    #[test]
+    fn musicbees_thumbnail_wins_over_its_backdrop() {
+        let store = worker_store("thumb-over-backdrop");
+        backdrop(&store, "Adele");
+        store.artists().request("Adele");
+        run_until(
+            &store,
+            musicbee(&store, &["Adele"], &[]),
+            Recorded::default(),
+            |images| images.hash_for("Adele").is_some(),
+        );
+
+        assert_eq!(
+            store.artists().lookup("Adele").map(|l| l.source),
+            Some(SOURCE_MUSICBEE.to_owned())
+        );
+    }
+
+    #[test]
+    fn a_source_switched_off_is_not_used() {
+        let store = worker_store("sources-off");
+        backdrop(&store, "Adele");
+        backdrop(&store, "Last");
+        store.artists().set_sources(Sources {
+            musicbee: false,
+            backdrops: true,
+            web: false,
+        });
+        store.artists().request("Adele");
+        store.artists().request("Eluveitie");
+        store.artists().request("Last");
+        let musicbee = musicbee(&store, &["Adele", "Eluveitie"], &[]);
+        // The queue is first in, first out: Last's picture means Eluveitie's turn is over.
+        let (client, _) = run_until(&store, musicbee, Recorded::eluveitie(), |images| {
+            images.hash_for("Last").is_some()
+        });
+
+        assert_eq!(
+            store.artists().lookup("Adele").map(|l| l.source),
+            Some(SOURCE_BACKDROP.to_owned()),
+            "MusicBee's thumbnail is off"
+        );
+        assert_eq!(store.artists().hash_for("Eluveitie"), None);
+        assert!(client.asked().is_empty(), "the web is off");
     }
 }

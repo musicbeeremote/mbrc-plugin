@@ -140,6 +140,22 @@ fn default_artist_images_budget_mb() -> u64 {
     crate::cover::artists::DEFAULT_BUDGET_MB
 }
 
+/// The disk budget for artist pictures the settings accept, in MiB.
+pub const ARTIST_IMAGES_BUDGET_MB: std::ops::RangeInclusive<u64> = 10..=10_240;
+
+/// `mb` moved into [`ARTIST_IMAGES_BUDGET_MB`], so a hand-edited file cannot
+/// make every later settings write fail validation.
+fn budget_in_range(mb: u64) -> u64 {
+    mb.clamp(
+        *ARTIST_IMAGES_BUDGET_MB.start(),
+        *ARTIST_IMAGES_BUDGET_MB.end(),
+    )
+}
+
+fn default_artist_image_source() -> bool {
+    true
+}
+
 /// The core's runtime configuration. Every field has a default so a missing or
 /// partial `core_settings.json` still yields a usable config.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -257,6 +273,17 @@ pub struct Config {
     /// in MiB.
     #[serde(default = "default_artist_images_budget_mb")]
     pub artist_images_budget_mb: u64,
+    /// Whether MusicBee is asked for its own artist thumbnail.
+    #[serde(default = "default_artist_image_source")]
+    pub artist_images_musicbee: bool,
+    /// Whether the backdrops MusicBee cached in `InternalCache\ArtistBackdrops`
+    /// are read from disk when it has no thumbnail.
+    #[serde(default = "default_artist_image_source")]
+    pub artist_images_backdrops: bool,
+    /// Whether the names no local source has a picture of are looked up on
+    /// MusicBrainz and Wikimedia.
+    #[serde(default = "default_artist_image_source")]
+    pub artist_images_web: bool,
     /// The storage directory handed to `mbrc_initialize` (not read from JSON;
     /// set by [`Config::load`]). Roots the on-disk cover cache. Empty in unit
     /// tests that build a `Config` literal - the cover build is skipped then.
@@ -309,6 +336,9 @@ impl Default for Config {
             setup_version: 0,
             artist_images_enabled: false,
             artist_images_budget_mb: default_artist_images_budget_mb(),
+            artist_images_musicbee: true,
+            artist_images_backdrops: true,
+            artist_images_web: true,
             storage_path: String::new(),
         }
     }
@@ -337,6 +367,7 @@ impl Config {
         } else {
             tracing::info!("no core_settings.json found; using default config");
         }
+        config.artist_images_budget_mb = budget_in_range(config.artist_images_budget_mb);
         config.storage_path = storage_path.to_string();
         config
     }
@@ -356,6 +387,13 @@ impl Config {
         }
         if self.last_octet_max > 255 {
             return Err("last_octet_max must be between 0 and 255".into());
+        }
+        if !ARTIST_IMAGES_BUDGET_MB.contains(&self.artist_images_budget_mb) {
+            return Err(format!(
+                "artist_images_budget_mb must be between {} and {}",
+                ARTIST_IMAGES_BUDGET_MB.start(),
+                ARTIST_IMAGES_BUDGET_MB.end()
+            ));
         }
         Ok(())
     }
@@ -574,6 +612,41 @@ mod tests {
         assert_eq!(c.log_level, LogLevel::Debug);
         let saved = serde_json::to_value(&c).unwrap();
         assert!(saved.get("search_source").is_none());
+    }
+
+    #[test]
+    fn a_file_from_before_the_source_switches_keeps_every_artist_picture_source_on() {
+        let c: Config = serde_json::from_str(r#"{"artist_images_enabled":true}"#).unwrap();
+        assert!(c.artist_images_musicbee && c.artist_images_backdrops && c.artist_images_web);
+        assert_eq!(c.artist_images_budget_mb, 100);
+    }
+
+    #[test]
+    fn the_artist_picture_budget_is_bounded() {
+        let with = |mb| Config {
+            artist_images_budget_mb: mb,
+            ..Config::default()
+        };
+        assert!(with(10).validate().is_ok());
+        assert!(with(10_240).validate().is_ok());
+        assert!(with(0).validate().is_err());
+        assert!(with(10_241).validate().is_err());
+    }
+
+    #[test]
+    fn a_saved_budget_out_of_range_loads_clamped_so_later_writes_validate() {
+        let dir = crate::test_dir::TestDir::new("cfg-budget-clamp");
+        let load = |mb: u64| {
+            std::fs::write(
+                dir.join("core_settings.json"),
+                format!(r#"{{"artist_images_budget_mb":{mb}}}"#),
+            )
+            .unwrap();
+            Config::load(dir.to_str().unwrap())
+        };
+        assert_eq!(load(5).artist_images_budget_mb, 10);
+        assert_eq!(load(50_000).artist_images_budget_mb, 10_240);
+        assert!(load(0).validate().is_ok());
     }
 
     #[test]

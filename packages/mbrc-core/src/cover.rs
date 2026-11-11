@@ -14,6 +14,7 @@ use sha1::{Digest, Sha1};
 
 pub mod artist_fetch;
 pub mod artists;
+pub mod backdrops;
 pub mod source;
 pub mod store;
 

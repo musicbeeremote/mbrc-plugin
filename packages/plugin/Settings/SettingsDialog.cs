@@ -118,6 +118,10 @@ namespace MusicBeePlugin.Settings
         private bool _loading;
         private Label _cacheStatus;
         private CheckBox _artistImages;
+        private CheckBox _artistMusicBee;
+        private CheckBox _artistBackdrops;
+        private CheckBox _artistWeb;
+        private NumericUpDown _artistBudget;
         private Label _artistStatus;
         private System.Windows.Forms.Timer _blockedTimer;
         private Button _rebuildMeta;
@@ -504,6 +508,7 @@ namespace MusicBeePlugin.Settings
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
             };
+            _artistImages.CheckedChanged += (s, e) => UpdateArtistSources();
             var artistImagesHint = new Label
             {
                 Text = PanelText.ArtistPicturesHint,
@@ -511,6 +516,20 @@ namespace MusicBeePlugin.Settings
                 Anchor = AnchorStyles.Left,
                 ForeColor = SystemColors.GrayText,
             };
+            _artistMusicBee = new CheckBox { Text = "MusicBee thumbnails", AutoSize = true, Anchor = AnchorStyles.Left };
+            _artistBackdrops = new CheckBox { Text = "MusicBee backdrops", AutoSize = true, Anchor = AnchorStyles.Left };
+            _artistWeb = new CheckBox { Text = "MusicBrainz and Wikimedia", AutoSize = true, Anchor = AnchorStyles.Left };
+            _artistBudget = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Increment = 10, Width = 80 };
+            var budgetRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0), Anchor = AnchorStyles.Left };
+            budgetRow.Controls.Add(_artistBudget);
+            budgetRow.Controls.Add(new Label { Text = "MB", AutoSize = true, Padding = new Padding(4, 6, 4, 0) });
+            var clearArtistImages = new Button
+            {
+                Text = "Clear artist pictures",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            };
+            clearArtistImages.Click += (s, e) => ClearArtistImages();
 
             _artistStatus = new Label
             {
@@ -527,6 +546,11 @@ namespace MusicBeePlugin.Settings
             _rows.Add(layout, string.Empty, ActionRow(_rebuildMeta, _rebuildCovers), endsBlock: true);
             _rows.Add(layout, "Artist pictures", _artistImages);
             _rows.Add(layout, string.Empty, artistImagesHint);
+            _rows.Add(layout, "Sources", _artistMusicBee);
+            _rows.Add(layout, string.Empty, _artistBackdrops);
+            _rows.Add(layout, string.Empty, _artistWeb);
+            _rows.Add(layout, "Disk budget", budgetRow);
+            _rows.Add(layout, string.Empty, ActionRow(clearArtistImages), endsBlock: true);
             return layout;
         }
 
@@ -1337,6 +1361,12 @@ namespace MusicBeePlugin.Settings
             _legacyUnpaired.Checked = s.allow_unpaired_legacy_clients;
             _autoCheck.Checked = s.update_check_enabled;
             _artistImages.Checked = s.artist_images_enabled;
+            _artistMusicBee.Checked = s.artist_images_musicbee;
+            _artistBackdrops.Checked = s.artist_images_backdrops;
+            _artistWeb.Checked = s.artist_images_web;
+            UseBudgetRange(_host.ReadCacheStatus());
+            _artistBudget.Value = Clamp(s.artist_images_budget_mb, (int)_artistBudget.Minimum, (int)_artistBudget.Maximum);
+            UpdateArtistSources();
             ShowFilterRows();
             UpdateWebEnabled();
             LoadWebStatus();
@@ -1770,6 +1800,39 @@ namespace MusicBeePlugin.Settings
             if (!_host.RebuildCovers()) LoadCacheStatus();
         }
 
+        /// <summary>Bounds the budget control by the range the core accepts, once it has said.</summary>
+        private void UseBudgetRange(CoreCacheStatus status)
+        {
+            if (status == null || status.artist_images_budget_max_mb < status.artist_images_budget_min_mb
+                || status.artist_images_budget_min_mb <= 0) return;
+            _artistBudget.Minimum = status.artist_images_budget_min_mb;
+            _artistBudget.Maximum = status.artist_images_budget_max_mb;
+        }
+
+        private void UpdateArtistSources()
+        {
+            var on = _artistImages.Checked;
+            _artistMusicBee.Enabled = on;
+            _artistBackdrops.Enabled = on;
+            _artistWeb.Enabled = on;
+            _artistBudget.Enabled = on;
+        }
+
+        private void ClearArtistImages()
+        {
+            var confirm = MessageBox.Show(
+                this,
+                "Delete every stored artist picture? With downloads on, each artist is looked up "
+                + "again when an app shows it.",
+                "MusicBee Remote",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.OK) return;
+            // The core clears in the background and pushes CacheStatusChanged when done.
+            if (_host.ClearArtistImages()) SetStatus("Clearing artist pictures; the count above updates when it is done.", true);
+            else SetStatus("Could not clear artist pictures - see mbrc-core.log.", false);
+        }
+
         // Core -> host push (raised on a background thread): marshal to the UI
         // thread and refresh the line the event is about - the cache one when a
         // rebuild starts/finishes, the update one when a check or download does.
@@ -1852,6 +1915,10 @@ namespace MusicBeePlugin.Settings
                 log_level = IndexToLogLevel(_logLevel.SelectedIndex),
                 update_check_enabled = _autoCheck.Checked,
                 artist_images_enabled = _artistImages.Checked,
+                artist_images_musicbee = _artistMusicBee.Checked,
+                artist_images_backdrops = _artistBackdrops.Checked,
+                artist_images_web = _artistWeb.Checked,
+                artist_images_budget_mb = (int)_artistBudget.Value,
             };
         }
 

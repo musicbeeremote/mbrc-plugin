@@ -272,6 +272,7 @@ export const WireEvent = {
   LibraryChanged: 'library_changed',
   MediaChanged: 'media_changed',
   LibraryArtistImageUpdated: 'library_artist_image_updated',
+  LibraryArtistImagesCleared: 'library_artist_images_cleared',
   ServerShutdown: 'server_shutdown',
   PermissionsChanged: 'permissions_changed',
 } as const

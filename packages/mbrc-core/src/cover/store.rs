@@ -863,9 +863,24 @@ impl CoverStore {
         });
     }
 
-    /// Deletes cover files that no album key or item cover references.
-    fn prune_orphans(&self) {
+    /// Deletes every artist picture and forgets every lookup, so each artist is
+    /// asked for again; a file an album cover shares stays. Returns how many
+    /// pictures were dropped, or `None` when `mbrc.redb` could not be written
+    /// and nothing changed.
+    pub fn clear_artist_images(&self) -> Option<usize> {
         let _pictures = self.artists.hold_files();
+        let dropped = self.artists.forget_all()?;
+        let albums = self.album_hashes();
+        for hash in dropped.iter().filter(|hash| !albums.contains(*hash)) {
+            if let Err(e) = std::fs::remove_file(self.covers_dir().join(hash)) {
+                tracing::debug!(file = %hash, error = %e, "artist picture delete failed");
+            }
+        }
+        Some(dropped.len())
+    }
+
+    /// The hashes album keys and item covers reference.
+    fn album_hashes(&self) -> std::collections::HashSet<String> {
         let mut referenced: std::collections::HashSet<String> =
             self.read_covers().values().cloned().collect();
         referenced.extend(
@@ -875,6 +890,13 @@ impl CoverStore {
                 .values()
                 .filter_map(|cover| cover.hash.clone()),
         );
+        referenced
+    }
+
+    /// Deletes cover files that no album key or item cover references.
+    fn prune_orphans(&self) {
+        let _pictures = self.artists.hold_files();
+        let mut referenced = self.album_hashes();
         referenced.extend(self.artists.hashes());
         let Ok(entries) = std::fs::read_dir(self.covers_dir()) else {
             return; // no covers dir yet
@@ -1941,6 +1963,54 @@ mod tests {
             modified: 0,
         }]);
         store.build(|_| Some(jpeg_bytes(150, 150)), false);
+        assert!(store.read_cover_bytes(&hash).is_some());
+    }
+
+    #[test]
+    fn clearing_artist_pictures_deletes_their_files_and_asks_for_every_artist_again() {
+        let (dir, db) = temp_storage("clear-artists");
+        let store = CoverStore::new(db.clone(), &dir);
+        let artists = store.artists();
+        artists.set_enabled(true);
+        let hash = artists
+            .store("Gadiel", &jpeg_bytes(300, 300), "", "wikidata")
+            .unwrap();
+        artists.record_miss("Nobody", super::super::artists::Status::NotFound, "");
+
+        assert_eq!(store.clear_artist_images(), Some(1));
+
+        assert!(store.read_cover_bytes(&hash).is_none());
+        assert_eq!(artists.hash_for("Gadiel"), None);
+        assert_eq!(artists.used_bytes(), 0);
+        assert!(artists.request("Nobody"), "a recorded miss is forgotten");
+        let reopened = CoverStore::new(db, &dir);
+        assert_eq!(reopened.artists().hash_for("Gadiel"), None);
+        assert_eq!(reopened.artists().summary().not_found, 0);
+    }
+
+    #[test]
+    fn clearing_artist_pictures_keeps_a_file_an_album_cover_shares() {
+        let (dir, db) = temp_storage("clear-artists-shared");
+        let store = CoverStore::new(db, &dir);
+        let art = jpeg_bytes(150, 150);
+        store.warm_up(&[AlbumIdentity {
+            key: "alb1".into(),
+            path: "/a.mp3".into(),
+            modified: 0,
+        }]);
+        store.build(|_| Some(art.clone()), false);
+        let hash = store
+            .artists()
+            .store("Gadiel", &art, "", "musicbee")
+            .unwrap();
+        assert_eq!(
+            store.read_covers().get("alb1"),
+            Some(&hash),
+            "one shared file"
+        );
+
+        store.clear_artist_images();
+
         assert!(store.read_cover_bytes(&hash).is_some());
     }
 

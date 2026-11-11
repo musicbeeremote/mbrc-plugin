@@ -98,12 +98,7 @@ impl Core {
         let db = Db::open(&config.storage_path);
         db.migrate_cover_state(&config.storage_path);
         let cover_store = Arc::new(CoverStore::new(db.clone(), config.storage_path.clone()));
-        cover_store
-            .artists()
-            .set_enabled(config.artist_images_enabled);
-        cover_store
-            .artists()
-            .set_budget(config.artist_images_budget_mb.saturating_mul(1024 * 1024));
+        apply_artist_image_settings(cover_store.artists(), &config);
         let metadata_cache = Arc::new(MetadataCache::new(db.clone()));
         let registry = Arc::new(ConnectionRegistry::new(
             config.max_conns_per_client,
@@ -327,9 +322,18 @@ pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
 
 /// Applies the saved settings that take effect without a re-init.
 fn apply_live_settings(core: &Core, config: &Config) {
-    core.cover_store
-        .artists()
-        .set_enabled(config.artist_images_enabled);
+    apply_artist_image_settings(core.cover_store.artists(), config);
+}
+
+/// The artist picture switch, sources and disk budget, all applied live.
+fn apply_artist_image_settings(artists: &crate::cover::artists::ArtistImages, config: &Config) {
+    artists.set_sources(crate::cover::artists::Sources {
+        musicbee: config.artist_images_musicbee,
+        backdrops: config.artist_images_backdrops,
+        web: config.artist_images_web,
+    });
+    artists.set_budget(config.artist_images_budget_mb.saturating_mul(1024 * 1024));
+    artists.set_enabled(config.artist_images_enabled);
 }
 
 /// Hands the staged update to the elevated helper.
@@ -432,6 +436,9 @@ struct CacheStatus {
     artist_images_failed: u32,
     /// Artists waiting for the fetcher.
     artist_images_waiting: u32,
+    /// The disk budget the settings accept, in MiB, for the panel's control.
+    artist_images_budget_min_mb: u64,
+    artist_images_budget_max_mb: u64,
 }
 
 /// Dispatches a host -> core query (request/response).
@@ -514,6 +521,9 @@ pub fn host_command(kind: HostCommandType, params: &[u8]) -> MbrcResult {
         }),
         HostCommandType::CompleteSetup => crate::setup::complete(params),
         HostCommandType::SetPowerAllowed => set_power_allowed(params),
+        HostCommandType::ClearArtistImages => {
+            with_core(|core| crate::server::clear_artist_images(&core))
+        }
         HostCommandType::CancelAutoShutdown => with_core(|core| {
             core.power.timer.cancel(std::time::Instant::now());
             MbrcResult::Ok
@@ -611,6 +621,8 @@ fn cache_status_bytes() -> Option<Vec<u8>> {
         artist_images_ambiguous: saturate(images.ambiguous),
         artist_images_failed: saturate(images.errors),
         artist_images_waiting: saturate(images.waiting),
+        artist_images_budget_min_mb: *crate::config::ARTIST_IMAGES_BUDGET_MB.start(),
+        artist_images_budget_max_mb: *crate::config::ARTIST_IMAGES_BUDGET_MB.end(),
     };
     rmp_serde::to_vec_named(&status).ok()
 }

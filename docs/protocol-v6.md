@@ -889,8 +889,9 @@ name nobody split shares its lead artist's picture: "A feat. B", "A ft. B", "A f
 "A; B" and "A / B" show A's. A marker with no dot counts only in lowercase, so "The Feat
 Collective" stays whole. Names joined with `&`, `,`, `x` or `vs` are left whole too, since they
 are as often one artist ("Simon & Garfunkel") as two.
-MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows; once it has
-none, it is not asked again for an hour. For an
+MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows; then the
+backdrop MusicBee cached on disk for that artist, if any. Once neither has a picture, MusicBee
+is not asked again for an hour. The user can switch each source off in the settings. For an
 artist MusicBee has none of, the server looks on the web, and only takes a picture it is sure
 of: a MusicBrainz search must find exactly one artist with that exact name, at full score, and
 that artist's Wikidata entry must have an image. Anything less is recorded as no picture and the
@@ -901,8 +902,8 @@ arriving meanwhile.
 `image_hash` on `library_artists`, `track_get` and `now_playing_state` is a lookup and never
 starts a download. To get pictures for the artists on screen, send `library_artist_images`
 with their names. It answers at once with the hashes already stored and queues the rest;
-`enabled: false` means downloading is off or the server's space for pictures is full, so
-nothing will arrive. Each queued picture that
+`enabled: false` means downloading is off, every picture source is switched off, or the
+server's space for pictures is full, so nothing will arrive. Each queued picture that
 lands is announced with [`library_artist_image_updated`](#events). Only this request starts a
 download, so playing a track fetches nothing. A client should not send the
 whole library: the queue is bounded, and an artist dropped from it is queued again the next
@@ -1183,6 +1184,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
 | `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
 | `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
+| `library_artist_images_cleared` | `{}` | the user deleted every stored artist picture -> drop each `image_hash` held, since its file is gone, and send [`library_artist_images`](#artist-pictures) again for the artists on screen |
 | `auto_shutdown_changed` | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began its final countdown or fired |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |

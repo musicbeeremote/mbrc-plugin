@@ -310,6 +310,39 @@ impl FetchQueue {
     }
 }
 
+/// Which sources the fetcher may use, as the settings panel switches them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Sources {
+    /// MusicBee's own thumbnail.
+    pub musicbee: bool,
+    /// The backdrops MusicBee cached on disk.
+    pub backdrops: bool,
+    /// MusicBrainz, Wikidata and Commons.
+    pub web: bool,
+}
+
+impl Default for Sources {
+    fn default() -> Self {
+        Self {
+            musicbee: true,
+            backdrops: true,
+            web: true,
+        }
+    }
+}
+
+impl Sources {
+    /// Whether either of MusicBee's sources is on.
+    pub fn local(self) -> bool {
+        self.musicbee || self.backdrops
+    }
+
+    /// Whether any source is on.
+    pub fn any(self) -> bool {
+        self.local() || self.web
+    }
+}
+
 /// What the artist picture store holds and is waiting on, for the settings panel.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Summary {
@@ -327,12 +360,13 @@ pub struct ArtistImages {
     covers_dir: PathBuf,
     db: Db,
     budget: AtomicU64,
+    sources: RwLock<Sources>,
     /// The stored pictures' bytes, kept beside the map so the budget check
     /// does not walk it.
     used: AtomicU64,
     images: RwLock<HashMap<String, Stored>>,
     lookups: RwLock<HashMap<String, Lookup>>,
-    /// When MusicBee last said it has no thumbnail, by key: asked again only
+    /// When MusicBee last had no thumbnail or backdrop, by key: asked again only
     /// after [`MUSICBEE_RECHECK`], since a client re-asks for what it shows.
     musicbee_none: Mutex<HashMap<String, Instant>>,
     /// Held from writing a picture's file until its hash is listed, and by a
@@ -365,6 +399,7 @@ impl ArtistImages {
             covers_dir,
             db,
             budget: AtomicU64::new(DEFAULT_BUDGET_MB * 1024 * 1024),
+            sources: RwLock::new(Sources::default()),
             used: AtomicU64::new(used),
             images: RwLock::new(images),
             lookups: RwLock::new(lookups),
@@ -390,14 +425,24 @@ impl ArtistImages {
         self.queue.set_enabled(enabled);
     }
 
-    /// Whether a requested picture can arrive: downloading is on and the disk
-    /// budget has room.
+    /// Whether a requested picture can arrive: downloading is on, a source is
+    /// switched on, and the disk budget has room.
     pub fn is_accepting(&self) -> bool {
-        self.is_enabled() && !self.over_budget()
+        self.is_enabled() && self.sources().any() && !self.over_budget()
     }
 
     pub fn set_budget(&self, bytes: u64) {
         self.budget.store(bytes, Ordering::Release);
+    }
+
+    pub fn sources(&self) -> Sources {
+        *self.sources.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Switches sources for the lookups that follow; a lookup in progress ends
+    /// as it began.
+    pub fn set_sources(&self, sources: Sources) {
+        *self.sources.write().unwrap_or_else(|e| e.into_inner()) = sources;
     }
 
     /// Whether the stored pictures have used up the disk budget.
@@ -481,20 +526,22 @@ impl ArtistImages {
         !key.is_empty() && !self.read_images().contains_key(&key)
     }
 
-    /// Whether `name` has no picture and either source is due to be asked:
-    /// MusicBee an hour after it last said none, the web once a miss expires.
+    /// Whether `name` has no picture and a source is due to be asked: MusicBee
+    /// an hour after it last had none, the web once a miss expires.
     pub fn is_due(&self, name: &str, now: i64) -> bool {
         self.lacks_picture(name) && (self.musicbee_due(name) || self.web_due(name, now))
     }
 
-    /// Whether MusicBee has not said it has no thumbnail of `name` lately.
+    /// Whether a MusicBee source is on and has not lately had nothing for `name`.
     pub fn musicbee_due(&self, name: &str) -> bool {
-        self.lock_musicbee_none()
-            .get(&picture_key(name))
-            .is_none_or(|at| at.elapsed() >= MUSICBEE_RECHECK)
+        self.sources().local()
+            && self
+                .lock_musicbee_none()
+                .get(&picture_key(name))
+                .is_none_or(|at| at.elapsed() >= MUSICBEE_RECHECK)
     }
 
-    /// Records that MusicBee has no thumbnail of `name`.
+    /// Records that MusicBee has no thumbnail or backdrop of `name`.
     pub fn musicbee_has_none(&self, name: &str) {
         self.lock_musicbee_none()
             .insert(picture_key(name), Instant::now());
@@ -503,7 +550,8 @@ impl ArtistImages {
     /// Whether `name` has no picture and its web lookup is due at `now`.
     pub fn web_due(&self, name: &str, now: i64) -> bool {
         let key = picture_key(name);
-        !key.is_empty()
+        self.sources().web
+            && !key.is_empty()
             && !self.read_images().contains_key(&key)
             && self
                 .lookups
@@ -596,6 +644,29 @@ impl ArtistImages {
             insert_lookup(txn, &key, &lookup)
         });
         self.write_lookups().insert(key, lookup);
+    }
+
+    /// Forgets every picture and lookup, returning the hashes the pictures had;
+    /// `None`, with nothing forgotten, when `mbrc.redb` could not be written.
+    ///
+    /// The caller holds [`Self::hold_files`] and deletes the files no album
+    /// cover shares, so a fetch landing meanwhile cannot lose its file.
+    pub(super) fn forget_all(&self) -> Option<HashSet<String>> {
+        let hashes = self.hashes();
+        let written = self.db.try_write(Durability::Immediate, |txn| {
+            txn.delete_table(ARTIST_IMAGE)?;
+            txn.delete_table(ARTIST_LOOKUP)?;
+            Ok(())
+        });
+        if !written {
+            return None;
+        }
+        self.write_images().clear();
+        self.write_lookups().clear();
+        self.used.store(0, Ordering::Release);
+        self.lock_musicbee_none().clear();
+        self.queue.lock_queue().clear();
+        Some(hashes)
     }
 
     fn lock_musicbee_none(&self) -> std::sync::MutexGuard<'_, HashMap<String, Instant>> {
@@ -752,6 +823,22 @@ mod tests {
         let reopened = ArtistImages::new(db, covers);
         assert_eq!(reopened.hash_for("A"), None);
         assert!(reopened.web_due("A", now_unix_secs()));
+    }
+
+    #[test]
+    fn with_every_source_switched_off_nothing_is_queued() {
+        let (_dir, store, _db, _) = temp_store("sources-off");
+        store.set_sources(Sources {
+            musicbee: false,
+            backdrops: false,
+            web: false,
+        });
+        assert!(!store.request("Gadiel"));
+        store.set_sources(Sources {
+            backdrops: true,
+            ..Sources::default()
+        });
+        assert!(store.request("Gadiel"));
     }
 
     #[test]

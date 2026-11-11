@@ -51,6 +51,7 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     "library_changed",
     "media_changed",
     "library_artist_image_updated",
+    crate::server::ARTIST_IMAGES_CLEARED,
     crate::power::CHANGED_EVENT,
     "server_shutdown",
     crate::server::permissions::gate::PERMISSIONS_CHANGED,

@@ -156,6 +156,22 @@ describe('events and connections', () => {
     expect(images.showsPictures).toBe(true)
   })
 
+  it('drops every picture when the server clears them, and asks again', async () => {
+    answer({ Tico: 't1' })
+    const images = useArtistImagesStore()
+    images.bind()
+    images.want(['Tico'])
+    await settle()
+
+    answer({ Tico: 't2' })
+    handler('library_artist_images_cleared')({})
+    expect(images.hashFor('Tico')).toBeUndefined()
+    await settle()
+
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(images.hashFor('Tico')).toBe('t2')
+  })
+
   it('asks again after reconnecting, since the setting may have changed', async () => {
     answer({}, false)
     const images = useArtistImagesStore()

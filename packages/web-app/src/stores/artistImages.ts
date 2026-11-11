@@ -179,6 +179,12 @@ export const useArtistImagesStore = defineStore('artistImages', () => {
     client.on(WireEvent.LibraryArtistImageUpdated, (data) => {
       remember(data.artist, data.image_hash)
     })
+    client.on(WireEvent.LibraryArtistImagesCleared, () => {
+      hashes.value.clear()
+      broken.value.clear()
+      asked.clear()
+      want(shown)
+    })
     // What landed while the socket was down was never announced, and the
     // setting or the server's queue may have changed.
     client.on(WireEvent.ConnectionChanged, (data) => {

@@ -71,5 +71,17 @@ namespace MusicBeePlugin.Settings
         ///     the names MusicBee has no picture for to MusicBrainz and Wikimedia. Applied live.
         /// </summary>
         public bool artist_images_enabled { get; set; }
+
+        /// <summary>The disk the stored artist pictures may use, in MiB. Applied live.</summary>
+        public int artist_images_budget_mb { get; set; } = 100;
+
+        /// <summary>Whether MusicBee is asked for its own artist thumbnail. Applied live.</summary>
+        public bool artist_images_musicbee { get; set; } = true;
+
+        /// <summary>Whether MusicBee's cached backdrops are read when it has no thumbnail. Applied live.</summary>
+        public bool artist_images_backdrops { get; set; } = true;
+
+        /// <summary>Whether MusicBrainz and Wikimedia are asked for what MusicBee has none of. Applied live.</summary>
+        public bool artist_images_web { get; set; } = true;
     }
 }

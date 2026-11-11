@@ -449,6 +449,9 @@ namespace MusicBeePlugin.Ffi
         /// <summary>Trigger a background rebuild of the cover cache.</summary>
         public bool RebuildCovers() => Command(HostCommandType.RebuildCovers);
 
+        /// <summary>Delete every artist picture and forget every lookup, so each artist is asked for again.</summary>
+        public bool ClearArtistImages() => Command(HostCommandType.ClearArtistImages);
+
         /// <summary>
         ///     Recent rejected connection attempts (newest first) for the settings
         ///     panel's blocked-connections view. Never null - an empty or
