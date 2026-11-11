@@ -518,7 +518,7 @@ namespace MusicBeePlugin.Settings
                 ForeColor = SystemColors.GrayText,
             };
             _artistMusicBee = new CheckBox { Text = "MusicBee thumbnails", AutoSize = true, Anchor = AnchorStyles.Left };
-            _artistBackdrops = new CheckBox { Text = "MusicBee backdrops", AutoSize = true, Anchor = AnchorStyles.Left };
+            _artistBackdrops = new CheckBox { Text = "MusicBee backdrops (can show the wrong artist)", AutoSize = true, Anchor = AnchorStyles.Left };
             _artistWeb = new CheckBox { Text = "MusicBrainz and Wikimedia", AutoSize = true, Anchor = AnchorStyles.Left };
             _artistBudget = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Increment = 10, Width = 80 };
             var budgetRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0), Anchor = AnchorStyles.Left };

@@ -325,7 +325,7 @@ impl Default for Sources {
     fn default() -> Self {
         Self {
             musicbee: true,
-            backdrops: true,
+            backdrops: false,
             web: true,
         }
     }

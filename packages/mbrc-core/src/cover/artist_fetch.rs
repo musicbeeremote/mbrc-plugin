@@ -952,6 +952,10 @@ mod tests {
         let (dir, store) =
             crate::cover::test_cover_store(&format!("artist-fetch-{name}")).into_parts();
         store.artists().set_enabled(true);
+        store.artists().set_sources(Sources {
+            backdrops: true,
+            ..Sources::default()
+        });
         dir.holding(Arc::new(store))
     }
 

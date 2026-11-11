@@ -79,7 +79,7 @@ namespace MusicBeePlugin.Settings
         public bool artist_images_musicbee { get; set; } = true;
 
         /// <summary>Whether MusicBee's cached backdrops are read when it has no thumbnail. Applied live.</summary>
-        public bool artist_images_backdrops { get; set; } = true;
+        public bool artist_images_backdrops { get; set; }
 
         /// <summary>Whether MusicBrainz and Wikimedia are asked for what MusicBee has none of. Applied live.</summary>
         public bool artist_images_web { get; set; } = true;

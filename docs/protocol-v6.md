@@ -889,9 +889,11 @@ name nobody split shares its lead artist's picture: "A feat. B", "A ft. B", "A f
 "A; B" and "A / B" show A's. A marker with no dot counts only in lowercase, so "The Feat
 Collective" stays whole. Names joined with `&`, `,`, `x` or `vs` are left whole too, since they
 are as often one artist ("Simon & Garfunkel") as two.
-MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows; then the
-backdrop MusicBee cached on disk for that artist, if any. Once neither has a picture, MusicBee
-is not asked again for an hour. The user can switch each source off in the settings. For an
+MusicBee's own thumbnail comes first, so a client shows the picture MusicBee shows. The user
+can also turn on the backdrops MusicBee cached on disk as a second source; it is off by default,
+since MusicBee's backdrop lookup can match a different artist sharing part of the name. Once no
+local source has a picture, MusicBee is not asked again for an hour. The user can switch each
+source off in the settings. For an
 artist MusicBee has none of, the server looks on the web, and only takes a picture it is sure
 of: a MusicBrainz search must find exactly one artist with that exact name, at full score, and
 that artist's Wikidata entry must have an image. Anything less is recorded as no picture and the

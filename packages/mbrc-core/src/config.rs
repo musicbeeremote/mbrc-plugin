@@ -278,7 +278,10 @@ pub struct Config {
     pub artist_images_musicbee: bool,
     /// Whether the backdrops MusicBee cached in `InternalCache\ArtistBackdrops`
     /// are read from disk when it has no thumbnail.
-    #[serde(default = "default_artist_image_source")]
+    ///
+    /// Off by default: MusicBee's backdrop lookup can match a different artist
+    /// sharing part of the name, and nothing here checks it.
+    #[serde(default)]
     pub artist_images_backdrops: bool,
     /// Whether the names no local source has a picture of are looked up on
     /// MusicBrainz and Wikimedia.
@@ -337,7 +340,7 @@ impl Default for Config {
             artist_images_enabled: false,
             artist_images_budget_mb: default_artist_images_budget_mb(),
             artist_images_musicbee: true,
-            artist_images_backdrops: true,
+            artist_images_backdrops: false,
             artist_images_web: true,
             storage_path: String::new(),
         }
@@ -615,9 +618,11 @@ mod tests {
     }
 
     #[test]
-    fn a_file_from_before_the_source_switches_keeps_every_artist_picture_source_on() {
+    fn a_file_from_before_the_source_switches_keeps_its_sources_and_leaves_backdrops_off() {
         let c: Config = serde_json::from_str(r#"{"artist_images_enabled":true}"#).unwrap();
-        assert!(c.artist_images_musicbee && c.artist_images_backdrops && c.artist_images_web);
+        assert!(c.artist_images_musicbee && c.artist_images_web);
+        assert!(!c.artist_images_backdrops);
+        assert!(!Config::default().artist_images_backdrops);
         assert_eq!(c.artist_images_budget_mb, 100);
     }
 
