@@ -180,6 +180,12 @@ fn run_thread(
         list_changes.abort();
         media.abort();
         auto_shutdown.abort();
+        let handing_back = core.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let player = crate::power::HostPlayback(handing_back.providers.as_ref());
+            handing_back.power.timer.hand_back(&player);
+        })
+        .await;
         artist_images
     });
     // The host unloads mbrc_core.dll once networking stops, so no thread of
@@ -365,23 +371,32 @@ fn spawn_auto_shutdown(core: &Arc<Core>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             let timer = &core.power.timer;
-            match timer.deadline() {
+            let set_or_cancelled = match timer.next_wake(std::time::Instant::now()) {
                 Some(at) => tokio::select! {
-                    () = timer.changed() => {}
-                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(at)) => {}
+                    () = timer.changed() => true,
+                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(at)) => false,
                 },
-                None => timer.changed().await,
-            }
-            if let Some(action) = timer.take_due(std::time::Instant::now()) {
-                tracing::info!(action = action.as_str(), "auto-shutdown fired");
-                let providers = core.providers.clone();
-                let done = tokio::task::spawn_blocking(move || {
-                    crate::power::execute(action, providers.as_ref())
-                })
-                .await;
-                if let Ok(Err(error)) = done {
-                    tracing::warn!(action = action.as_str(), %error, "auto-shutdown failed");
+                None => {
+                    timer.changed().await;
+                    true
                 }
+            };
+            let ticking = core.clone();
+            let tick = tokio::task::spawn_blocking(move || {
+                let player = crate::power::HostPlayback(ticking.providers.as_ref());
+                let tick = ticking.power.timer.tick(std::time::Instant::now(), &player);
+                if let Some(action) = tick.fired {
+                    tracing::info!(action = action.as_str(), "auto-shutdown fired");
+                    if let Err(error) = crate::power::execute(action, ticking.providers.as_ref()) {
+                        tracing::warn!(action = action.as_str(), %error, "auto-shutdown failed");
+                    }
+                }
+                tick
+            })
+            .await
+            .unwrap_or_default();
+            if !set_or_cancelled && !tick.changed {
+                continue;
             }
             let status = timer.status(std::time::Instant::now());
             core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(

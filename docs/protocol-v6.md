@@ -575,7 +575,7 @@ returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
 | `system_info` | `{}` | `{"plugin_version":"<real build version>","protocol_version":6}` (unlike V4's pinned `pluginversion`, this is the actual plugin build) |
 | `pair` | `{"code":"123456"}` | `{"role":"host"}` - see [`pair`](#pair); socket only |
 | `system_auto_shutdown` | `{}` | the [auto-shutdown](#auto-shutdown) status |
-| `system_set_auto_shutdown` | `{"action":"stop"\|"close"\|"sleep"\|"shutdown","minutes":1..1440}` or `{"action":"cancel"}` | the status after the change |
+| `system_set_auto_shutdown` | `{"action":"stop"\|"close"\|"sleep"\|"shutdown","minutes":1..1440,"fade_out"?:bool,"complete_last_track"?:bool}` or `{"action":"cancel"}` | the status after the change |
 
 ### Auto-shutdown
 
@@ -583,8 +583,23 @@ A timer in the server that stops playback, closes MusicBee, sleeps the PC or shu
 There is one timer, so setting it replaces the one before.
 
 ```json
-{"active":true,"action":"sleep","remaining_ms":1740000,"final_countdown":false,"power_allowed":true}
+{"active":true,"action":"sleep","remaining_ms":1740000,"final_countdown":false,"waiting_for_track":false,"fade_out":true,"complete_last_track":true,"power_allowed":true}
 ```
+
+Two optional booleans, both `false` when left out, shape the end of the timer. `cancel` ignores
+them, and the status echoes the ones the timer was set with.
+
+- `complete_last_track`: when the minutes run out, the track playing then is let finish.
+  `waiting_for_track` turns true and `remaining_ms` restarts at the time left in that track, so
+  the timer can run past the minutes asked for by up to one track (longer if a seek or skip during
+  the wait leaves more to play). The server turns on MusicBee's
+  stop-after-current for the wait, unless it was already on, and turns it off again afterwards or
+  on cancel. With nothing playing there is no wait.
+- `fade_out`: over the last 30 seconds before playback is due to end, the volume steps down to
+  silence; then playback stops and the volume is put back to where it was, so the next play is
+  not silent. Playback is due to end when the minutes run out, or with `complete_last_track` when
+  the track ends (a track with less than 30 seconds left fades over what is left). Cancelling or
+  replacing the timer mid-fade puts the volume back too. The fade owns the volume while it runs.
 
 `close`, `sleep` and `shutdown` need the device to be on the list the user ticks under Access in
 the plugin's settings. The list is empty until they tick one, and it is apart from
@@ -598,7 +613,8 @@ whatever its Party Mode role; anyone else gets `forbidden`. The warning on the P
 cancel it. `stop`, and cancelling a `stop` timer, need no more than stopping playback does:
 anything while Party Mode is off, and the `playback` capability while it is on.
 
-When the timer runs out on `close`, `sleep` or `shutdown`, `final_countdown` turns true and
+When the timer runs out on `close`, `sleep` or `shutdown` (after the last track and the fade, when
+asked for), `final_countdown` turns true and
 `remaining_ms` restarts at 60 seconds, the warning before it happens, which can still be
 cancelled the same way. `stop` happens at once. Each change is announced with
 [`auto_shutdown_changed`](#events). A device taken off the list also loses the timer it set. The
@@ -1187,7 +1203,7 @@ events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building
 | `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
 | `library_artist_image_updated` | `{"artist":..,"image_hash":..}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
 | `library_artist_images_cleared` | `{}` | the user deleted every stored artist picture -> drop each `image_hash` held, since its file is gone, and send [`library_artist_images`](#artist-pictures) again for the artists on screen |
-| `auto_shutdown_changed` | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began its final countdown or fired |
+| `auto_shutdown_changed` | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began waiting for the last track, began its final countdown or fired |
 | `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
 | `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 
