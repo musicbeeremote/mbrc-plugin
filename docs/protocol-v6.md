@@ -591,7 +591,8 @@ them, and the status echoes the ones the timer was set with.
 
 - `complete_last_track`: when the minutes run out, the track playing then is let finish.
   `waiting_for_track` turns true and `remaining_ms` restarts at the time left in that track, so
-  the timer can run past the minutes asked for by up to one track. The server turns on MusicBee's
+  the timer can run past the minutes asked for by up to one track (longer if a seek or skip during
+  the wait leaves more to play). The server turns on MusicBee's
   stop-after-current for the wait, unless it was already on, and turns it off again afterwards or
   on cancel. With nothing playing there is no wait.
 - `fade_out`: over the last 30 seconds before playback is due to end, the volume steps down to

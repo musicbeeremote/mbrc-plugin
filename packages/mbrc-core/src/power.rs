@@ -45,6 +45,10 @@ pub const FADE_OUT: Duration = Duration::from_secs(30);
 /// How often the volume steps down during a fade.
 const FADE_STEP: Duration = Duration::from_millis(500);
 
+/// How much of the last track may still be left when the wait for it ends:
+/// more means a seek or skip, and the wait goes on.
+const TRACK_END_SLACK: Duration = Duration::from_secs(1);
+
 /// The longest timer a client may set, in minutes.
 const MAX_MINUTES: u64 = 24 * 60;
 
@@ -111,10 +115,7 @@ struct Armed {
     started: Instant,
     fires_at: Instant,
     by: Option<String>,
-    /// The volume before the fade, put back once playback stops.
-    fade_from: Option<i32>,
-    /// Whether the timer turned MusicBee's stop-after-current on.
-    set_stop_after_current: bool,
+    undo: Undo,
 }
 
 impl Armed {
@@ -132,7 +133,7 @@ impl Armed {
         self.fires_at - FADE_OUT.min(self.fires_at.saturating_duration_since(self.started))
     }
 
-    /// The share of [`Armed::fade_from`] to play at `now`, while the fade runs.
+    /// The share of the volume before the fade to play at `now`, while it runs.
     fn fade_level(&self, now: Instant) -> Option<f64> {
         let starts = self.fade_starts();
         if !self.fades() || now < starts || now >= self.fires_at {
@@ -141,19 +142,14 @@ impl Armed {
         let left = self.fires_at.saturating_duration_since(now).as_secs_f64();
         Some(left / self.fires_at.duration_since(starts).as_secs_f64())
     }
-
-    fn undo(&self) -> Undo {
-        Undo {
-            volume: self.fade_from,
-            stop_after_current: self.set_stop_after_current,
-        }
-    }
 }
 
 /// What a timer changed in MusicBee, to be put back once it is gone.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Undo {
+    /// The volume before the fade.
     volume: Option<i32>,
+    /// Whether the timer turned MusicBee's stop-after-current on.
     stop_after_current: bool,
 }
 
@@ -209,6 +205,8 @@ pub struct Playing {
 pub trait Playback {
     /// `None` while MusicBee is paused, stopped or cannot say.
     fn playing(&self) -> Option<Playing>;
+    /// [`Playing::volume`] alone, without asking where the track is.
+    fn playing_volume(&self) -> Option<i32>;
     fn set_volume(&self, volume: i32);
     fn stop(&self);
     fn set_stop_after_current(&self, on: bool);
@@ -238,6 +236,11 @@ impl Playback for HostPlayback<'_> {
             track_left: Duration::from_millis(left),
             stop_after_current: state.stop_after_current,
         })
+    }
+
+    fn playing_volume(&self) -> Option<i32> {
+        let state = self.0.player_state().ok()?;
+        (state.play_state == PlayState::Playing).then_some(state.volume)
     }
 
     fn set_volume(&self, volume: i32) {
@@ -280,12 +283,15 @@ pub struct Plan {
 pub struct AutoShutdown {
     armed: Mutex<Option<Armed>>,
     undo: Mutex<Undo>,
+    /// Held across a tick's player calls, so a hand-back never interleaves.
+    player_calls: Mutex<()>,
     next_id: AtomicU64,
     changed: Notify,
 }
 
 impl AutoShutdown {
     /// Sets `plan` from `now`, replacing any timer set before.
+    #[cfg(test)]
     pub fn set(&self, plan: Plan, now: Instant) -> Status {
         self.replace(Some(plan), true, now)
             .unwrap_or_else(|| self.status(now))
@@ -294,53 +300,47 @@ impl AutoShutdown {
     /// Sets `next`, or cancels with `None`; `None` back when a timer that needs
     /// the permission is armed and `allowed` is false.
     fn replace(&self, next: Option<Plan>, allowed: bool, now: Instant) -> Option<Status> {
-        let mut armed = self.lock();
+        let armed = self.lock();
         if !allowed && armed.as_ref().is_some_and(|a| a.action.needs_permission()) {
             return None;
         }
-        let old = std::mem::replace(
-            &mut *armed,
-            next.map(|plan| Armed {
-                id: self.next_id.fetch_add(1, Ordering::Relaxed),
-                action: plan.action,
-                options: plan.options,
-                phase: Phase::Timer,
-                started: now,
-                fires_at: now + plan.after,
-                by: plan.by,
-                fade_from: None,
-                set_stop_after_current: false,
-            }),
-        );
-        let changed = old.is_some() || armed.is_some();
-        drop(armed);
-        if let Some(old) = old {
-            self.retire(&old);
-        }
-        if changed {
-            self.changed.notify_one();
-        }
+        let next = next.map(|plan| Armed {
+            id: self.next_id.fetch_add(1, Ordering::Relaxed),
+            action: plan.action,
+            options: plan.options,
+            phase: Phase::Timer,
+            started: now,
+            fires_at: now + plan.after,
+            by: plan.by,
+            undo: Undo::default(),
+        });
+        self.swap(armed, next);
         Some(self.status(now))
     }
 
     pub fn cancel(&self, now: Instant) -> Status {
-        let old = self.lock().take();
-        if let Some(old) = old {
-            self.retire(&old);
-            self.changed.notify_one();
-        }
+        self.swap(self.lock(), None);
         self.status(now)
     }
 
     /// Cancels the timer if the device under `key` set it, as it loses the permission.
     pub fn cancel_set_by(&self, key: &str) {
-        let mut armed = self.lock();
+        let armed = self.lock();
         if armed.as_ref().and_then(|a| a.by.as_deref()) == Some(key) {
-            let old = armed.take();
-            drop(armed);
-            if let Some(old) = old {
-                self.retire(&old);
-            }
+            self.swap(armed, None);
+        }
+    }
+
+    /// Puts `next` in place of the timer held under `armed`, leaving what the
+    /// old one changed in MusicBee for the next tick to put back.
+    fn swap(&self, mut armed: MutexGuard<'_, Option<Armed>>, next: Option<Armed>) {
+        let old = std::mem::replace(&mut *armed, next);
+        let changed = old.is_some() || armed.is_some();
+        drop(armed);
+        if let Some(old) = old {
+            self.lock_undo().merge(old.undo);
+        }
+        if changed {
             self.changed.notify_one();
         }
     }
@@ -387,9 +387,11 @@ impl AutoShutdown {
     ///
     /// When the minutes run out with `complete_last_track`, the timer waits out
     /// the playing track, with stop-after-current on so the next one does not
-    /// start. Playback then ends, faded with `fade_out`, and close, sleep and
-    /// shutdown get their [`FINAL_COUNTDOWN`].
+    /// start; a seek or skip that leaves more to play stretches the wait.
+    /// Playback then ends, faded with `fade_out`, and close, sleep and shutdown
+    /// get their [`FINAL_COUNTDOWN`].
     pub fn tick(&self, now: Instant, player: &dyn Playback) -> Tick {
+        let _calls = self.lock_calls();
         std::mem::take(&mut *self.lock_undo()).apply(player);
         let Some(armed) = self.lock().clone() else {
             return Tick::default();
@@ -408,7 +410,14 @@ impl AutoShutdown {
                     None => self.end_playback(&armed, now, player),
                 }
             }
-            Phase::Timer | Phase::LastTrack => self.end_playback(&armed, now, player),
+            Phase::LastTrack => match player.playing().filter(|p| p.track_left > TRACK_END_SLACK) {
+                Some(playing) => Tick {
+                    fired: None,
+                    changed: self.update(armed.id, |a| a.fires_at = now + playing.track_left),
+                },
+                None => self.end_playback(&armed, now, player),
+            },
+            Phase::Timer => self.end_playback(&armed, now, player),
             Phase::Warning => Tick {
                 fired: self.take(armed.id).then_some(armed.action),
                 changed: true,
@@ -416,32 +425,27 @@ impl AutoShutdown {
         }
     }
 
-    /// Puts back what the timer changed in MusicBee as the server stops. A timer
-    /// still set fades again from the volume it finds once the server is back.
+    /// Puts the volume back as the server stops, so MusicBee never keeps a faded
+    /// one. A timer still set fades again from the volume it finds once the
+    /// server is back; stop-after-current stays on for a wait still running.
     pub fn hand_back(&self, player: &dyn Playback) {
+        let _calls = self.lock_calls();
         let mut undo = std::mem::take(&mut *self.lock_undo());
         if let Some(armed) = self.lock().as_mut() {
-            undo.merge(armed.undo());
-            armed.fade_from = None;
-            armed.set_stop_after_current = false;
+            undo.volume = undo.volume.or(armed.undo.volume.take());
         }
         undo.apply(player);
     }
 
     fn fade(&self, armed: &Armed, level: f64, player: &dyn Playback) {
-        let from = match armed.fade_from {
-            Some(volume) => volume,
-            None => {
-                let Some(playing) = player.playing() else {
-                    return;
-                };
-                if !self.update(armed.id, |a| a.fade_from = Some(playing.volume)) {
-                    return;
-                }
-                playing.volume
-            }
-        };
-        player.set_volume(faded(from, level));
+        let from = armed.undo.volume.or_else(|| {
+            let volume = player.playing_volume()?;
+            self.update(armed.id, |a| a.undo.volume = Some(volume))
+                .then_some(volume)
+        });
+        if let Some(from) = from {
+            player.set_volume(faded(from, level));
+        }
     }
 
     fn wait_for_track(
@@ -459,7 +463,7 @@ impl AutoShutdown {
             a.phase = Phase::LastTrack;
             a.started = now;
             a.fires_at = now + playing.track_left;
-            a.set_stop_after_current = turn_on;
+            a.undo.stop_after_current = turn_on;
         });
         if !changed && turn_on {
             player.set_stop_after_current(false);
@@ -470,36 +474,35 @@ impl AutoShutdown {
         }
     }
 
+    /// Ends playback for a timer that faded or waited out the track, then fires
+    /// `stop` or starts the warning.
+    ///
+    /// The timer moves on before any player call, so one cancelled or replaced
+    /// meanwhile is left alone. Playback is stopped before stop-after-current
+    /// goes off, so a track end that MusicBee reaches later cannot start the next.
     fn end_playback(&self, armed: &Armed, now: Instant, player: &dyn Playback) -> Tick {
-        if let Some(volume) = armed.fade_from {
+        let fires = !armed.action.needs_permission();
+        let moved_on = if fires {
+            self.take(armed.id)
+        } else {
+            self.update(armed.id, |a| {
+                a.phase = Phase::Warning;
+                a.started = now;
+                a.fires_at = now + FINAL_COUNTDOWN;
+                a.undo = Undo::default();
+            })
+        };
+        if !moved_on {
+            return Tick::default();
+        }
+        if armed.undo != Undo::default() {
             player.stop();
-            player.set_volume(volume);
         }
-        if armed.set_stop_after_current {
-            player.set_stop_after_current(false);
-        }
-        if !armed.action.needs_permission() {
-            return Tick {
-                fired: self.take(armed.id).then_some(armed.action),
-                changed: true,
-            };
-        }
-        let changed = self.update(armed.id, |a| {
-            a.phase = Phase::Warning;
-            a.started = now;
-            a.fires_at = now + FINAL_COUNTDOWN;
-            a.fade_from = None;
-            a.set_stop_after_current = false;
-        });
+        armed.undo.apply(player);
         Tick {
-            fired: None,
-            changed,
+            fired: fires.then_some(armed.action),
+            changed: true,
         }
-    }
-
-    /// Leaves what `old` changed in MusicBee for the next tick to put back.
-    fn retire(&self, old: &Armed) {
-        self.lock_undo().merge(old.undo());
     }
 
     /// Changes the timer if it is still the one with `id`.
@@ -531,6 +534,10 @@ impl AutoShutdown {
 
     fn lock(&self) -> MutexGuard<'_, Option<Armed>> {
         self.armed.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn lock_calls(&self) -> MutexGuard<'_, ()> {
+        self.player_calls.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn lock_undo(&self) -> MutexGuard<'_, Undo> {
@@ -1016,6 +1023,18 @@ mod tests {
             player
         }
 
+        fn with_stop_after_current(self) -> Self {
+            if let Some(playing) = self.playing.lock().unwrap().as_mut() {
+                playing.stop_after_current = true;
+            }
+            self
+        }
+
+        /// MusicBee reaching the end of the track with stop-after-current on.
+        fn track_ends(&self) {
+            *self.playing.lock().unwrap() = None;
+        }
+
         fn calls(&self) -> Vec<String> {
             std::mem::take(&mut *self.calls.lock().unwrap())
         }
@@ -1028,6 +1047,10 @@ mod tests {
     impl Playback for FakePlayer {
         fn playing(&self) -> Option<Playing> {
             *self.playing.lock().unwrap()
+        }
+
+        fn playing_volume(&self) -> Option<i32> {
+            Playback::playing(self).map(|p| p.volume)
         }
 
         fn set_volume(&self, volume: i32) {
@@ -1185,8 +1208,13 @@ mod tests {
         assert_eq!(player.calls(), ["stop_after_current true"]);
 
         let track_end = start + MINUTE + 90 * SECOND;
+        player.track_ends();
         assert_eq!(timer.tick(track_end, &player), MOVED_ON);
-        assert_eq!(player.calls(), ["stop_after_current false"]);
+        assert_eq!(
+            player.calls(),
+            ["stop", "stop_after_current false"],
+            "stopped first, so a late track end cannot start the next"
+        );
         assert!(timer.status(track_end).final_countdown);
     }
 
@@ -1201,14 +1229,7 @@ mod tests {
 
     #[test]
     fn complete_last_track_leaves_a_stop_after_current_the_user_set() {
-        let player = FakePlayer::playing(80, 90 * SECOND);
-        player
-            .playing
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .stop_after_current = true;
+        let player = FakePlayer::playing(80, 90 * SECOND).with_stop_after_current();
         let timer = AutoShutdown::default();
         let start = Instant::now();
         timer.set(plan(PowerAction::Stop, MINUTE, false, true), start);
@@ -1252,10 +1273,11 @@ mod tests {
             player.calls(),
             ["stop_after_current true", "volume 60", "volume 30"]
         );
+        player.track_ends();
         assert_eq!(timer.tick(track_end, &player), fired(PowerAction::Stop));
         assert_eq!(
             player.calls(),
-            ["stop", "volume 60", "stop_after_current false"]
+            ["stop", "stop_after_current false", "volume 60"]
         );
     }
 
@@ -1289,6 +1311,81 @@ mod tests {
         assert!(timer.deadline().is_some(), "the timer stays set");
         timer.tick(start + 51 * SECOND, &player);
         assert_eq!(player.calls(), ["volume 24"]);
+    }
+
+    #[test]
+    fn a_seek_back_during_the_wait_stretches_it() {
+        let (timer, player) = (
+            AutoShutdown::default(),
+            FakePlayer::playing(80, 90 * SECOND),
+        );
+        let start = Instant::now();
+        timer.set(plan(PowerAction::Sleep, MINUTE, false, true), start);
+        timer.tick(start + MINUTE, &player);
+
+        let first_end = start + MINUTE + 90 * SECOND;
+        player.playing.lock().unwrap().as_mut().unwrap().track_left = 20 * SECOND;
+        assert_eq!(timer.tick(first_end, &player), MOVED_ON);
+        let still = timer.status(first_end);
+        assert!(still.waiting_for_track);
+        assert_eq!(still.remaining, 20 * SECOND);
+
+        player.playing.lock().unwrap().as_mut().unwrap().track_left = SECOND / 2;
+        timer.tick(first_end + 20 * SECOND, &player);
+        assert!(
+            timer.status(first_end + 20 * SECOND).final_countdown,
+            "half a second left is the end"
+        );
+    }
+
+    #[test]
+    fn host_playback_reads_the_time_left_and_only_while_playing() {
+        use crate::protocol::messages::{PlaybackPositionResponse, PlayerState};
+        let mut host = crate::providers::MockProviders {
+            player_state: PlayerState {
+                play_state: PlayState::Playing,
+                volume: 70,
+                stop_after_current: true,
+                ..PlayerState::default()
+            },
+            position: PlaybackPositionResponse {
+                current: 1_000,
+                total: 61_000,
+            },
+            ..Default::default()
+        };
+        let playing = HostPlayback(&host).playing().unwrap();
+        assert_eq!(playing.track_left, MINUTE);
+        assert_eq!((playing.volume, playing.stop_after_current), (70, true));
+        assert_eq!(HostPlayback(&host).playing_volume(), Some(70));
+
+        host.position.total = -1;
+        assert_eq!(
+            HostPlayback(&host).playing().unwrap().track_left,
+            Duration::ZERO,
+            "a stream with no length has nothing to wait for"
+        );
+        host.player_state.play_state = PlayState::Paused;
+        assert_eq!(HostPlayback(&host).playing(), None);
+        assert_eq!(HostPlayback(&host).playing_volume(), None);
+    }
+
+    #[test]
+    fn a_stopping_server_leaves_stop_after_current_on_for_the_wait() {
+        let (timer, player) = (
+            AutoShutdown::default(),
+            FakePlayer::playing(80, 90 * SECOND),
+        );
+        let start = Instant::now();
+        timer.set(plan(PowerAction::Sleep, MINUTE, false, true), start);
+        timer.tick(start + MINUTE, &player);
+        player.calls();
+
+        timer.hand_back(&player);
+        assert!(player.calls().is_empty());
+        timer.cancel(start + MINUTE);
+        timer.tick(start + MINUTE, &player);
+        assert_eq!(player.calls(), ["stop_after_current false"]);
     }
 
     #[test]
