@@ -45,8 +45,8 @@ pub const FADE_OUT: Duration = Duration::from_secs(30);
 /// How often the volume steps down during a fade.
 const FADE_STEP: Duration = Duration::from_millis(500);
 
-/// How much of the last track may still be left when the wait for it ends:
-/// more means a seek or skip, and the wait goes on.
+/// How much of the last track may be left when the wait for it runs out and
+/// still count as its end. MusicBee's position runs a little behind the clock.
 const TRACK_END_SLACK: Duration = Duration::from_secs(1);
 
 /// The longest timer a client may set, in minutes.
@@ -131,6 +131,12 @@ impl Armed {
 
     fn fade_starts(&self) -> Instant {
         self.fires_at - FADE_OUT.min(self.fires_at.saturating_duration_since(self.started))
+    }
+
+    /// Whether `track_left`, read as the wait runs out, is the last track running
+    /// late; more time left than the whole wait means the next track started.
+    fn same_track_outlasts_the_wait(&self, track_left: Duration) -> bool {
+        track_left > TRACK_END_SLACK && track_left < self.fires_at.duration_since(self.started)
     }
 
     /// The share of the volume before the fade to play at `now`, while it runs.
@@ -387,7 +393,7 @@ impl AutoShutdown {
     ///
     /// When the minutes run out with `complete_last_track`, the timer waits out
     /// the playing track, with stop-after-current on so the next one does not
-    /// start; a seek or skip that leaves more to play stretches the wait.
+    /// start. A track that outlasts the wait stretches it to its real end.
     /// Playback then ends, faded with `fade_out`, and close, sleep and shutdown
     /// get their [`FINAL_COUNTDOWN`].
     pub fn tick(&self, now: Instant, player: &dyn Playback) -> Tick {
@@ -410,7 +416,10 @@ impl AutoShutdown {
                     None => self.end_playback(&armed, now, player),
                 }
             }
-            Phase::LastTrack => match player.playing().filter(|p| p.track_left > TRACK_END_SLACK) {
+            Phase::LastTrack => match player
+                .playing()
+                .filter(|p| armed.same_track_outlasts_the_wait(p.track_left))
+            {
                 Some(playing) => Tick {
                     fired: None,
                     changed: self.update(armed.id, |a| a.fires_at = now + playing.track_left),
@@ -1004,6 +1013,7 @@ mod tests {
     }
 
     const SECOND: Duration = Duration::from_secs(1);
+    const MS: Duration = Duration::from_millis(1);
 
     /// A player that records each call and plays what it is given.
     #[derive(Default)]
@@ -1314,28 +1324,45 @@ mod tests {
     }
 
     #[test]
-    fn a_seek_back_during_the_wait_stretches_it() {
+    fn a_late_track_end_stretches_the_wait_and_the_next_track_ends_it() {
         let (timer, player) = (
             AutoShutdown::default(),
-            FakePlayer::playing(80, 90 * SECOND),
+            FakePlayer::playing(80, 30 * SECOND),
+        );
+        let start = Instant::now();
+        timer.set(plan(PowerAction::Stop, MINUTE, true, true), start);
+        timer.tick(start + MINUTE, &player);
+        let wait_end = start + MINUTE + 30 * SECOND;
+        timer.tick(wait_end - 15 * SECOND, &player);
+
+        player.playing.lock().unwrap().as_mut().unwrap().track_left = 1500 * MS;
+        assert_eq!(timer.tick(wait_end, &player), MOVED_ON);
+        assert_eq!(timer.status(wait_end).remaining, 1500 * MS);
+
+        player.playing.lock().unwrap().as_mut().unwrap().track_left = 208 * SECOND;
+        player.calls();
+        let next_track = wait_end + 1500 * MS;
+        assert_eq!(timer.tick(next_track, &player), fired(PowerAction::Stop));
+        assert_eq!(
+            player.calls(),
+            ["stop", "stop_after_current false", "volume 80"],
+            "the next track is stopped and the volume put back"
+        );
+    }
+
+    #[test]
+    fn half_a_second_left_is_the_end_of_the_track() {
+        let (timer, player) = (
+            AutoShutdown::default(),
+            FakePlayer::playing(80, 30 * SECOND),
         );
         let start = Instant::now();
         timer.set(plan(PowerAction::Sleep, MINUTE, false, true), start);
         timer.tick(start + MINUTE, &player);
-
-        let first_end = start + MINUTE + 90 * SECOND;
-        player.playing.lock().unwrap().as_mut().unwrap().track_left = 20 * SECOND;
-        assert_eq!(timer.tick(first_end, &player), MOVED_ON);
-        let still = timer.status(first_end);
-        assert!(still.waiting_for_track);
-        assert_eq!(still.remaining, 20 * SECOND);
-
         player.playing.lock().unwrap().as_mut().unwrap().track_left = SECOND / 2;
-        timer.tick(first_end + 20 * SECOND, &player);
-        assert!(
-            timer.status(first_end + 20 * SECOND).final_countdown,
-            "half a second left is the end"
-        );
+        let wait_end = start + MINUTE + 30 * SECOND;
+        timer.tick(wait_end, &player);
+        assert!(timer.status(wait_end).final_countdown);
     }
 
     #[test]
