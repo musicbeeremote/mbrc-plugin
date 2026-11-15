@@ -445,7 +445,8 @@ pub struct ArtistImages {
 
 impl ArtistImages {
     /// Opens the store over `db`, keeping only pictures whose file still exists
-    /// and whose source loads (see [`Source::load`]).
+    /// and whose source is known; a Commons picture without its credit is
+    /// dropped, so it is fetched again.
     pub fn new(db: Db, covers_dir: PathBuf) -> Self {
         let rows = load_images(&db);
         let sizes = file_sizes(&covers_dir, &rows.values().map(String::as_str).collect());
@@ -572,8 +573,9 @@ impl ArtistImages {
             .map(|s| s.hash.clone())
     }
 
-    /// Adds `name`'s stored picture to a V6 reply object (see [`Stored::add_to`]);
-    /// false, leaving it as it was, when there is none.
+    /// Adds `image_hash`, `image_source` and, for Commons, `image_credit` for
+    /// `name`'s stored picture to a V6 reply object; false, leaving it as it
+    /// was, when there is none.
     pub fn add_picture_to(&self, name: &str, item: &mut serde_json::Value) -> bool {
         self.read_images()
             .get(&picture_key(name))
