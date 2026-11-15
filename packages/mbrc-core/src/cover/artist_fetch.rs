@@ -20,21 +20,14 @@ use std::time::{Duration, Instant};
 use mbrc_release::{HttpClient, HttpResponse, UpdateError};
 use serde_json::Value;
 
-use super::artists::{ArtistImages, FetchQueue, Status};
+use super::artists::{ArtistImages, Credit, FetchQueue, Source, Status};
+#[cfg(test)]
+use super::artists::{SOURCE_BACKDROP, SOURCE_MUSICBEE, SOURCE_WIKIDATA};
 use super::backdrops::Backdrops;
 use super::store::{CoverStore, now_unix_secs};
 use crate::connect_link::percent_encode;
 use crate::credits;
 use crate::providers::Providers;
-
-/// The source name recorded for a picture from Wikimedia Commons via Wikidata.
-pub const SOURCE_WIKIDATA: &str = "wikidata";
-
-/// The source name recorded for MusicBee's own thumbnail.
-const SOURCE_MUSICBEE: &str = "musicbee";
-
-/// The source name recorded for a backdrop MusicBee cached on disk.
-const SOURCE_BACKDROP: &str = "musicbee_backdrop";
 
 /// The width Commons is asked to render, matching the stored box.
 const COMMONS_WIDTH: u32 = super::artists::ARTIST_IMAGE_SIZE;
@@ -156,7 +149,7 @@ pub enum Outcome {
     Found {
         image: Vec<u8>,
         mbid: String,
-        source: &'static str,
+        source: Source,
     },
     /// No picture, as a fact about the sources rather than a failure.
     Missing {
@@ -209,34 +202,59 @@ impl<'a> Fetcher<'a> {
 
     /// Looks `name` up and, when every step finds exactly one answer, downloads
     /// its picture. `proceed` is asked before each request.
-    pub fn fetch(&mut self, name: &str, proceed: &dyn Fn() -> bool) -> Outcome {
-        let mut mbid = String::new();
+    ///
+    /// A `tagged` MusicBrainz id, read from the artist's own files, skips the
+    /// name search and the ambiguity it can end in.
+    pub fn fetch(
+        &mut self,
+        name: &str,
+        tagged: Option<&str>,
+        proceed: &dyn Fn() -> bool,
+    ) -> Outcome {
+        let mut mbid = tagged.unwrap_or_default().to_owned();
         match self.chain(name, proceed, &mut mbid) {
-            Ok(image) => Outcome::Found {
+            Ok((image, credit)) => Outcome::Found {
                 image,
                 mbid,
-                source: SOURCE_WIKIDATA,
+                source: Source::Commons(credit),
             },
             Err(Stop::Missing(status)) => Outcome::Missing { status, mbid },
             Err(Stop::Failed(failure)) => Outcome::Failed { failure, mbid },
         }
     }
 
-    /// MusicBrainz search, its Wikidata link, P18, then the Commons file,
-    /// leaving the resolved id in `mbid` for whatever the chain ends in.
+    /// The artist `mbid` names, or a MusicBrainz search when it is empty or
+    /// unknown; its Wikidata link, P18, the Commons file's credit, then the file
+    /// itself, leaving the resolved id in `mbid` for whatever the chain ends in.
     fn chain(
         &mut self,
         name: &str,
         proceed: &dyn Fn() -> bool,
         mbid: &mut String,
-    ) -> Result<Vec<u8>, Stop> {
-        let search = found(self.json(&musicbrainz_search_url(name), proceed))?;
-        *mbid = pick_artist(name, &search).map_err(Stop::Missing)?;
-        let artist = found(self.json(&musicbrainz_lookup_url(mbid), proceed))?;
+    ) -> Result<(Vec<u8>, Credit), Stop> {
+        let tagged = if mbid.is_empty() {
+            None
+        } else {
+            self.json(&musicbrainz_lookup_url(mbid), proceed)
+                .map_err(Stop::Failed)?
+        };
+        let artist = match tagged {
+            Some(artist) => artist,
+            None => {
+                let search = found(self.json(&musicbrainz_search_url(name), proceed))?;
+                *mbid = pick_artist(name, &search).map_err(Stop::Missing)?;
+                found(self.json(&musicbrainz_lookup_url(mbid), proceed))?
+            }
+        };
         let item = wikidata_item(&artist).ok_or(Stop::Missing(Status::NotFound))?;
         let claims = found(self.json(&wikidata_image_url(&item), proceed))?;
         let file = image_file(&claims).ok_or(Stop::Missing(Status::NotFound))?;
-        found(self.get(&commons_url(&file), proceed))
+        let meta = self
+            .json(&commons_meta_url(&file), proceed)
+            .map_err(Stop::Failed)?;
+        let credit = commons_credit(&file, meta.as_ref());
+        let image = found(self.get(&commons_url(&file), proceed))?;
+        Ok((image, credit))
     }
 
     fn get(&mut self, url: &str, proceed: &dyn Fn() -> bool) -> Fetched {
@@ -277,8 +295,7 @@ impl<'a> Fetcher<'a> {
 pub fn run(
     queue: &FetchQueue,
     store: &Weak<CoverStore>,
-    musicbee: &dyn Providers,
-    backdrops: &Backdrops,
+    library: &Library<'_>,
     fetcher: &mut Fetcher<'_>,
     generation: u64,
     landed: &dyn Fn(&str, &str),
@@ -314,9 +331,10 @@ pub fn run(
             continue;
         }
         // Outside the store: retiring never waits on MusicBee or the disk, joining the thread does.
-        let local = local.read(musicbee, backdrops, lead);
+        let local = local.read(library.musicbee, library.backdrops, lead);
         let Some(web) = queue.with_store(generation, store, |images| {
-            if !images.is_enabled() || local.store(images, name, lead, backdrops, &announce) {
+            if !images.is_enabled() || local.store(images, name, lead, library.backdrops, &announce)
+            {
                 return false;
             }
             images.web_due(name, now_unix_secs())
@@ -331,7 +349,11 @@ pub fn run(
             continue;
         }
         let proceed = || queue.is_current(generation) && queue.is_enabled();
-        match fetcher.fetch(lead, &proceed) {
+        let tagged = proceed().then(|| (library.tagged_id)(lead)).flatten();
+        if let Some(mbid) = &tagged {
+            tracing::debug!(artist = name, mbid, "artist id from tags");
+        }
+        match fetcher.fetch(lead, tagged.as_deref(), &proceed) {
             Outcome::Failed {
                 failure: Failure::Cancelled,
                 ..
@@ -355,6 +377,14 @@ pub fn run(
             }
         }
     }
+}
+
+/// What the user's own library can say about an artist before the web is asked.
+pub struct Library<'a> {
+    pub musicbee: &'a dyn Providers,
+    pub backdrops: &'a Backdrops,
+    /// The MusicBrainz id an artist's files are tagged with.
+    pub tagged_id: &'a dyn Fn(&str) -> Option<String>,
 }
 
 /// One artist's turn at MusicBee's two sources: which are due, then what they had.
@@ -410,7 +440,7 @@ impl Local {
     ) -> bool {
         let had_thumb = self.thumb.is_some();
         if let Some(raw) = self.thumb
-            && store_local(images, name, &raw, SOURCE_MUSICBEE, announce)
+            && store_local(images, name, &raw, Source::MusicBee, announce)
         {
             return true;
         }
@@ -421,7 +451,7 @@ impl Local {
             self.backdrop
         };
         if let Some(raw) = backdrop
-            && store_local(images, name, &raw, SOURCE_BACKDROP, announce)
+            && store_local(images, name, &raw, Source::Backdrop, announce)
         {
             return true;
         }
@@ -456,17 +486,18 @@ fn store_local(
     images: &ArtistImages,
     name: &str,
     raw: &[u8],
-    source: &str,
+    source: Source,
     announce: &dyn Fn(&str),
 ) -> bool {
+    let label = source.as_str();
     match images.store(name, raw, "", source) {
         Ok(hash) => {
-            tracing::debug!(artist = name, %hash, source, "artist picture stored");
+            tracing::debug!(artist = name, %hash, source = label, "artist picture stored");
             announce(&hash);
             true
         }
         Err(e) => {
-            tracing::debug!(artist = name, source, error = %e, "MusicBee artist picture unusable");
+            tracing::debug!(artist = name, source = label, error = %e, "MusicBee artist picture unusable");
             false
         }
     }
@@ -504,7 +535,7 @@ fn settle(images: &ArtistImages, name: &str, outcome: Outcome, announce: &dyn Fn
             source,
         } => match images.store(name, &image, &mbid, source) {
             Ok(hash) => {
-                tracing::debug!(artist = name, %hash, source, "artist picture stored");
+                tracing::debug!(artist = name, %hash, "artist picture stored");
                 announce(&hash);
             }
             Err(e) => {
@@ -543,10 +574,77 @@ fn wikidata_image_url(item: &str) -> String {
     )
 }
 
+fn commons_meta_url(file: &str) -> String {
+    format!(
+        concat!(
+            "https://commons.wikimedia.org/w/api.php?action=query&titles=File:{}",
+            "&prop=imageinfo&iiprop=extmetadata",
+            "&iiextmetadatafilter=Artist%7CLicenseShortName%7CLicenseUrl",
+            "&format=json&formatversion=2",
+        ),
+        commons_title(file)
+    )
+}
+
+fn commons_page_url(file: &str) -> String {
+    format!(
+        "https://commons.wikimedia.org/wiki/File:{}",
+        commons_title(file)
+    )
+}
+
+/// A Commons file name as its URLs spell it: underscores for spaces, encoded.
+fn commons_title(file: &str) -> String {
+    percent_encode(&file.replace(' ', "_"))
+}
+
+/// Who to credit for a Commons file, from its `extmetadata`; the file's page
+/// alone when Commons had none, since that page names the author and license.
+fn commons_credit(file: &str, meta: Option<&Value>) -> Credit {
+    let fields = meta.map_or(
+        &Value::Null,
+        |m| &m["query"]["pages"][0]["imageinfo"][0]["extmetadata"],
+    );
+    let field = |name: &str| {
+        fields[name]["value"]
+            .as_str()
+            .map_or_else(String::new, plain_text)
+    };
+    Credit {
+        author: field("Artist"),
+        license: field("LicenseShortName"),
+        license_url: field("LicenseUrl"),
+        page_url: commons_page_url(file),
+    }
+}
+
+/// `html` with its tags dropped, the few entities Commons writes decoded, and
+/// its whitespace collapsed.
+fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let text = text
+        .replace("&quot;", "\"")
+        .replace("&#039;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&");
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn commons_url(file: &str) -> String {
     format!(
         "https://commons.wikimedia.org/wiki/Special:FilePath/{}?width={COMMONS_WIDTH}",
-        percent_encode(&file.replace(' ', "_"))
+        commons_title(file)
     )
 }
 
@@ -658,6 +756,11 @@ mod tests {
                     fixture("wd_claims_q75788.json"),
                 )
                 .with(
+                    commons_meta_url("Eluveitie, 3-Majówka 2023, 056.jpg"),
+                    200,
+                    fixture("commons_meta_eluveitie.json"),
+                )
+                .with(
                     commons_url("Eluveitie, 3-Majówka 2023, 056.jpg"),
                     200,
                     test_jpeg_bytes(500, 333),
@@ -687,7 +790,7 @@ mod tests {
     }
 
     fn fetch(client: &Recorded, name: &str) -> Outcome {
-        Fetcher::new(client, Pace::default()).fetch(name, &|| true)
+        Fetcher::new(client, Pace::default()).fetch(name, None, &|| true)
     }
 
     #[test]
@@ -702,10 +805,18 @@ mod tests {
             panic!("expected a picture");
         };
         assert_eq!(mbid, ELUVEITIE_MBID);
-        assert_eq!(source, SOURCE_WIKIDATA);
         assert_eq!(image, test_jpeg_bytes(500, 333));
+        assert_eq!(
+            source,
+            Source::Commons(Credit {
+                author: "Wojciech Pędzich".into(),
+                license: "CC BY 4.0".into(),
+                license_url: "https://creativecommons.org/licenses/by/4.0".into(),
+                page_url: "https://commons.wikimedia.org/wiki/File:Eluveitie%2C_3-Maj%C3%B3wka_2023%2C_056.jpg".into(),
+            })
+        );
         assert!(
-            client.asked()[3].ends_with(
+            client.asked()[4].ends_with(
                 "Special:FilePath/Eluveitie%2C_3-Maj%C3%B3wka_2023%2C_056.jpg?width=500"
             ),
             "Commons is asked for the file pre-sized"
@@ -728,6 +839,87 @@ mod tests {
             }
         );
         assert_eq!(client.asked().len(), 1);
+    }
+
+    #[test]
+    fn an_id_from_the_tags_skips_the_name_search() {
+        let client = Recorded::eluveitie();
+        let outcome = Fetcher::new(&client, Pace::default()).fetch(
+            "Eluveitie",
+            Some(ELUVEITIE_MBID),
+            &|| true,
+        );
+        assert!(matches!(outcome, Outcome::Found { ref mbid, .. } if mbid == ELUVEITIE_MBID));
+        assert_eq!(client.asked()[0], musicbrainz_lookup_url(ELUVEITIE_MBID));
+        assert!(
+            !client
+                .asked()
+                .contains(&musicbrainz_search_url("Eluveitie")),
+            "a tagged id is not second-guessed by a search"
+        );
+    }
+
+    #[test]
+    fn an_id_musicbrainz_does_not_know_falls_back_to_the_name_search() {
+        let client = Recorded::eluveitie();
+        let stale = "00000000-0000-0000-0000-000000000000";
+        let outcome =
+            Fetcher::new(&client, Pace::default()).fetch("Eluveitie", Some(stale), &|| true);
+        assert!(matches!(outcome, Outcome::Found { ref mbid, .. } if mbid == ELUVEITIE_MBID));
+        assert_eq!(client.asked()[1], musicbrainz_search_url("Eluveitie"));
+    }
+
+    #[test]
+    fn the_metadata_url_has_no_spaces_and_names_the_file() {
+        let url = commons_meta_url("Eluveitie, 3-Majówka 2023, 056.jpg");
+        assert!(!url.contains(' '), "{url}");
+        assert!(url.contains("&titles=File:Eluveitie%2C_3-Maj%C3%B3wka_2023%2C_056.jpg&prop="));
+        assert!(url.ends_with("&format=json&formatversion=2"));
+    }
+
+    #[test]
+    fn a_commons_file_without_metadata_is_credited_by_its_page() {
+        let mut client = Recorded::eluveitie();
+        client
+            .answers
+            .remove(&commons_meta_url("Eluveitie, 3-Majówka 2023, 056.jpg"));
+        let Outcome::Found {
+            source: Source::Commons(credit),
+            ..
+        } = fetch(&client, "Eluveitie")
+        else {
+            panic!("expected a Commons picture");
+        };
+        assert!(credit.author.is_empty() && credit.license.is_empty());
+        assert!(
+            credit
+                .page_url
+                .starts_with("https://commons.wikimedia.org/wiki/File:Eluveitie")
+        );
+    }
+
+    #[test]
+    fn a_failed_credit_lookup_fails_the_picture_rather_than_storing_it_uncredited() {
+        let client = Recorded::eluveitie().with(
+            commons_meta_url("Eluveitie, 3-Majówka 2023, 056.jpg"),
+            500,
+            Vec::new(),
+        );
+        assert!(matches!(
+            fetch(&client, "Eluveitie"),
+            Outcome::Failed {
+                failure: Failure::Error(_),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn commons_html_credit_becomes_plain_text() {
+        assert_eq!(
+            plain_text(r#"<a href="//x" title="User:A">Ann &amp; Bo</a>, <span>own   work</span>"#),
+            "Ann & Bo, own work"
+        );
     }
 
     #[test]
@@ -805,7 +997,7 @@ mod tests {
     #[test]
     fn nothing_is_sent_once_told_to_stop() {
         let client = Recorded::eluveitie();
-        let outcome = Fetcher::new(&client, Pace::default()).fetch("Eluveitie", &|| false);
+        let outcome = Fetcher::new(&client, Pace::default()).fetch("Eluveitie", None, &|| false);
         assert!(matches!(
             outcome,
             Outcome::Failed {
@@ -877,8 +1069,11 @@ mod tests {
                 run(
                     &queue,
                     &weak,
-                    &musicbee,
-                    &backdrops,
+                    &Library {
+                        musicbee: &musicbee,
+                        backdrops: &backdrops,
+                        tagged_id: &|_| None,
+                    },
                     &mut fetcher,
                     generation,
                     &|name, hash| {
@@ -918,8 +1113,11 @@ mod tests {
                 run(
                     &queue,
                     &weak,
-                    musicbee.as_ref(),
-                    &backdrops,
+                    &Library {
+                        musicbee: musicbee.as_ref(),
+                        backdrops: &backdrops,
+                        tagged_id: &|_| None,
+                    },
                     &mut fetcher,
                     generation,
                     &|_, _| {},
@@ -1015,13 +1213,43 @@ mod tests {
     #[ignore = "live network"]
     fn live_eluveitie_resolves_to_a_picture_through_winhttp() {
         let client = crate::updates::http_client(&crate::config::Config::default()).unwrap();
-        let outcome = Fetcher::new(&client, Pace::polite()).fetch("Eluveitie", &|| true);
-        let Outcome::Found { image, mbid, .. } = outcome else {
-            panic!("expected a picture, got {outcome:?}");
+        let outcome = Fetcher::new(&client, Pace::polite()).fetch("Eluveitie", None, &|| true);
+        let Outcome::Found {
+            image,
+            mbid,
+            source: Source::Commons(credit),
+        } = outcome
+        else {
+            panic!("expected a Commons picture, got {outcome:?}");
         };
         assert_eq!(mbid, ELUVEITIE_MBID);
         let picture = image::load_from_memory(&image).expect("an image");
         assert!(picture.width() <= 500 && picture.height() <= 500);
+        assert!(
+            !credit.author.is_empty() && !credit.license.is_empty(),
+            "{credit:?}"
+        );
+    }
+
+    /// A tagged id against the live services: the lookup goes straight to it.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "live network"]
+    fn live_a_tagged_id_resolves_without_a_search() {
+        let client = crate::updates::http_client(&crate::config::Config::default()).unwrap();
+        let outcome =
+            Fetcher::new(&client, Pace::polite())
+                .fetch("Eluveitie", Some(ELUVEITIE_MBID), &|| true);
+        assert!(
+            matches!(
+                outcome,
+                Outcome::Found {
+                    source: Source::Commons(_),
+                    ..
+                }
+            ),
+            "{outcome:?}"
+        );
     }
 
     /// A stand-in MusicBee whose thumbnails are files beside `store`: a picture
@@ -1078,7 +1306,7 @@ mod tests {
             |images| images.hash_for("Eluveitie").is_some(),
         );
 
-        assert_eq!(client.asked().len(), 4);
+        assert_eq!(client.asked().len(), 5);
         assert_eq!(
             store.artists().lookup("Eluveitie").map(|l| l.source),
             Some(SOURCE_WIKIDATA.to_owned())
@@ -1173,7 +1401,7 @@ mod tests {
         let store = worker_store("feat-stored");
         let hash = store
             .artists()
-            .store("Tico", &test_jpeg_bytes(64, 64), "", SOURCE_MUSICBEE)
+            .store("Tico", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
 
         assert_eq!(store.artists().hash_for("Tico feat. Gadiel"), Some(hash));
@@ -1203,7 +1431,7 @@ mod tests {
         let store = worker_store("late-spelling");
         let hash = store
             .artists()
-            .store("Tico", &test_jpeg_bytes(64, 64), "", SOURCE_MUSICBEE)
+            .store("Tico", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         let queue = store.artists().queue();
         queue.push(crate::cover::artists::Queued {

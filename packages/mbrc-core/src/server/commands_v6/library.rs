@@ -133,8 +133,8 @@ fn artists(
         .into_iter()
         .map(|a| {
             let mut item = json!({ "artist": a.artist, "count": a.count });
-            if let Some(hash) = images.and_then(|i| i.hash_for(&a.artist)) {
-                item["image_hash"] = json!(hash);
+            if let Some(images) = images {
+                images.add_picture_to(&a.artist, &mut item);
             }
             item
         })
@@ -165,13 +165,10 @@ fn artist_images(data: &Value, store: Option<&CoverStore>) -> OpResult {
         .iter()
         .map(|name| {
             let mut item = json!({ "artist": name });
-            if let Some(images) = images {
-                match images.hash_for(name) {
-                    Some(hash) => item["image_hash"] = json!(hash),
-                    None => {
-                        images.request(name);
-                    }
-                }
+            if let Some(images) = images
+                && !images.add_picture_to(name, &mut item)
+            {
+                images.request(name);
             }
             item
         })
@@ -2208,7 +2205,7 @@ mod tests {
                 "Miles Davis",
                 &crate::cover::test_jpeg_bytes(64, 64),
                 "",
-                "wikidata",
+                crate::cover::artists::Source::MusicBee,
             )
             .unwrap();
         let artist = |name: &str| ArtistData {
@@ -2245,12 +2242,18 @@ mod tests {
         let store = artist_store("op");
         let images = store.artists();
         images.set_enabled(true);
+        let credit = crate::cover::artists::Credit {
+            author: "Ann".into(),
+            license: "CC BY 4.0".into(),
+            license_url: "https://creativecommons.org/licenses/by/4.0".into(),
+            page_url: "https://commons.wikimedia.org/wiki/File:G.jpg".into(),
+        };
         let hash = images
             .store(
                 "Gadiel",
                 &crate::cover::test_jpeg_bytes(64, 64),
                 "",
-                "wikidata",
+                crate::cover::artists::Source::Commons(credit.clone()),
             )
             .unwrap();
         let m = MockProviders::default();
@@ -2267,7 +2270,17 @@ mod tests {
             out,
             json!({
                 "artists": [
-                    { "artist": "gadiel", "image_hash": hash },
+                    {
+                        "artist": "gadiel",
+                        "image_hash": hash,
+                        "image_source": "wikidata",
+                        "image_credit": {
+                            "author": "Ann",
+                            "license": "CC BY 4.0",
+                            "license_url": "https://creativecommons.org/licenses/by/4.0",
+                            "page_url": "https://commons.wikimedia.org/wiki/File:G.jpg",
+                        },
+                    },
                     { "artist": "Tico" },
                 ],
                 "enabled": true,

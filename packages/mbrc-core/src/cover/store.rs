@@ -1955,7 +1955,12 @@ mod tests {
         let store = CoverStore::new(db, &dir);
         let hash = store
             .artists()
-            .store("Gadiel", &jpeg_bytes(300, 300), "", "wikidata")
+            .store(
+                "Gadiel",
+                &jpeg_bytes(300, 300),
+                "",
+                crate::cover::artists::Source::MusicBee,
+            )
             .unwrap();
         store.warm_up(&[AlbumIdentity {
             key: "alb1".into(),
@@ -1973,7 +1978,12 @@ mod tests {
         let artists = store.artists();
         artists.set_enabled(true);
         let hash = artists
-            .store("Gadiel", &jpeg_bytes(300, 300), "", "wikidata")
+            .store(
+                "Gadiel",
+                &jpeg_bytes(300, 300),
+                "",
+                crate::cover::artists::Source::MusicBee,
+            )
             .unwrap();
         artists.record_miss("Nobody", super::super::artists::Status::NotFound, "");
 
@@ -2001,7 +2011,7 @@ mod tests {
         store.build(|_| Some(art.clone()), false);
         let hash = store
             .artists()
-            .store("Gadiel", &art, "", "musicbee")
+            .store("Gadiel", &art, "", crate::cover::artists::Source::MusicBee)
             .unwrap();
         assert_eq!(
             store.read_covers().get("alb1"),

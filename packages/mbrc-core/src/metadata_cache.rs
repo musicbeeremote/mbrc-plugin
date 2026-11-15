@@ -1158,9 +1158,14 @@ impl MetadataCache {
         Some(rows)
     }
 
-    /// Every cached tag row, for building an order or a derived map.
-    pub fn all_cached_tags(&self) -> Vec<CachedTags> {
-        if !self.is_validated() {
+    /// Up to `limit` cached tag rows that `admits`, in path order, reading no
+    /// further than it takes to find them.
+    pub fn first_tracks_where(
+        &self,
+        admits: impl Fn(&CachedTags) -> bool,
+        limit: usize,
+    ) -> Vec<CachedTags> {
+        if !self.is_validated() || limit == 0 {
             return Vec::new();
         }
         self.db
@@ -1169,16 +1174,26 @@ impl MetadataCache {
                     Ok(t) => t,
                     Err(_) => return Ok(Vec::new()),
                 };
-                let mut all = Vec::new();
+                let mut found = Vec::new();
                 for row in table.iter()? {
                     let (_path, bytes) = row?;
-                    if let Ok(tags) = rmp_serde::from_slice::<CachedTags>(bytes.value()) {
-                        all.push(tags);
+                    if let Ok(tags) = rmp_serde::from_slice::<CachedTags>(bytes.value())
+                        && admits(&tags)
+                    {
+                        found.push(tags);
+                        if found.len() == limit {
+                            break;
+                        }
                     }
                 }
-                Ok(all)
+                Ok(found)
             })
             .unwrap_or_default()
+    }
+
+    /// Every cached tag row, for building an order or a derived map.
+    pub fn all_cached_tags(&self) -> Vec<CachedTags> {
+        self.first_tracks_where(|_| true, usize::MAX)
     }
 
     /// The indexed paths a filter admits, best answer first.

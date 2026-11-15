@@ -96,7 +96,7 @@ fn new_uuid() -> Option<String> {
 }
 
 /// Whether `s` is a hyphenated UUID, any version.
-fn is_uuid(s: &str) -> bool {
+pub(crate) fn is_uuid(s: &str) -> bool {
     let groups: Vec<&str> = s.split('-').collect();
     groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12])
         && groups

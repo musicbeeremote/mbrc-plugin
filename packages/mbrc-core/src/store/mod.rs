@@ -53,6 +53,9 @@ pub const ARTIST_IMAGE: TableDefinition<&str, &str> = TableDefinition::new("arti
 /// Owned by `cover::artists`, which decides when a miss is asked again.
 pub const ARTIST_LOOKUP: TableDefinition<&str, (&str, &str, &str, i64, u32)> =
     TableDefinition::new("artist_lookup");
+/// Who to credit for a stored artist picture, by artist key: a MessagePack
+/// `cover::artists::Credit`. Only pictures whose license asks for credit have a row.
+pub const ARTIST_CREDIT: TableDefinition<&str, &[u8]> = TableDefinition::new("artist_credit");
 /// Core-wide scalars: migration markers and the library fingerprint. Values are
 /// opaque bytes (a 1-byte marker, a u64 LE, ...).
 pub const META: TableDefinition<&str, &[u8]> = TableDefinition::new("meta");

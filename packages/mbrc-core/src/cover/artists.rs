@@ -21,10 +21,11 @@ use std::sync::{Arc, Condvar, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant};
 
 use redb::{Durability, ReadableTable};
+use serde::{Deserialize, Serialize};
 
 use super::store::{CoverStore, now_unix_secs, write_cover};
 use crate::credits;
-use crate::store::{ARTIST_IMAGE, ARTIST_LOOKUP, Db};
+use crate::store::{ARTIST_CREDIT, ARTIST_IMAGE, ARTIST_LOOKUP, Db};
 
 /// The box an artist picture is fitted within, aspect kept, never upscaled.
 pub const ARTIST_IMAGE_SIZE: u32 = 500;
@@ -99,10 +100,77 @@ pub struct Lookup {
     pub errors: u32,
 }
 
+/// Who made a stored picture and under which license, for a client to show
+/// beside it. Every field is plain text or a URL, empty when the source has none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Credit {
+    pub author: String,
+    pub license: String,
+    pub license_url: String,
+    /// The picture's own page, which names everything a license asks for.
+    pub page_url: String,
+}
+
+/// The source name recorded for MusicBee's own thumbnail.
+pub const SOURCE_MUSICBEE: &str = "musicbee";
+
+/// The source name recorded for a backdrop MusicBee cached on disk.
+pub const SOURCE_BACKDROP: &str = "musicbee_backdrop";
+
+/// The source name recorded for a picture from Wikimedia Commons via Wikidata.
+pub const SOURCE_WIKIDATA: &str = "wikidata";
+
+/// Where a stored picture came from; a Commons picture always with its credit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Source {
+    MusicBee,
+    Backdrop,
+    Commons(Credit),
+}
+
+impl Source {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::MusicBee => SOURCE_MUSICBEE,
+            Self::Backdrop => SOURCE_BACKDROP,
+            Self::Commons(_) => SOURCE_WIKIDATA,
+        }
+    }
+
+    /// The source a stored row names; `None` for a Commons picture whose
+    /// credit is missing, which is then fetched again, or a name not known.
+    fn load(name: &str, credit: Option<Credit>) -> Option<Self> {
+        match name {
+            SOURCE_MUSICBEE => Some(Self::MusicBee),
+            SOURCE_BACKDROP => Some(Self::Backdrop),
+            SOURCE_WIKIDATA => credit.map(Self::Commons),
+            _ => None,
+        }
+    }
+
+    /// Adds `image_source` and, for Commons, `image_credit` to a V6 object.
+    fn add_to(&self, item: &mut serde_json::Value) {
+        item["image_source"] = serde_json::json!(self.as_str());
+        if let Self::Commons(credit) = self {
+            item["image_credit"] = serde_json::json!(credit);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Stored {
     hash: String,
     bytes: u64,
+    source: Source,
+}
+
+impl Stored {
+    /// Adds `image_hash`, `image_source` and, for Commons, `image_credit` to a
+    /// V6 reply object.
+    fn add_to(&self, item: &mut serde_json::Value) {
+        item["image_hash"] = serde_json::json!(self.hash);
+        self.source.add_to(item);
+    }
 }
 
 /// One artist waiting for the fetcher, under the key it was queued by.
@@ -376,25 +444,35 @@ pub struct ArtistImages {
 }
 
 impl ArtistImages {
-    /// Opens the store over `db`, keeping only pictures whose file still exists.
+    /// Opens the store over `db`, keeping only pictures whose file still exists
+    /// and whose source loads (see [`Source::load`]).
     pub fn new(db: Db, covers_dir: PathBuf) -> Self {
         let rows = load_images(&db);
         let sizes = file_sizes(&covers_dir, &rows.values().map(String::as_str).collect());
+        let lookups = load_lookups(&db);
+        let mut credits = load_credits(&db);
         let mut counted = HashSet::new();
         let images: HashMap<String, Stored> = rows
             .into_iter()
             .filter_map(|(key, hash)| {
                 let size = *sizes.get(&hash)?;
+                let source = Source::load(&lookups.get(&key)?.source, credits.remove(&key))?;
                 let bytes = if counted.insert(hash.clone()) {
                     size
                 } else {
                     0
                 };
-                Some((key, Stored { hash, bytes }))
+                Some((
+                    key,
+                    Stored {
+                        hash,
+                        bytes,
+                        source,
+                    },
+                ))
             })
             .collect();
         let used = images.values().map(|s| s.bytes).sum();
-        let lookups = load_lookups(&db);
         Self {
             covers_dir,
             db,
@@ -494,6 +572,22 @@ impl ArtistImages {
             .map(|s| s.hash.clone())
     }
 
+    /// Adds `name`'s stored picture to a V6 reply object (see [`Stored::add_to`]);
+    /// false, leaving it as it was, when there is none.
+    pub fn add_picture_to(&self, name: &str, item: &mut serde_json::Value) -> bool {
+        self.read_images()
+            .get(&picture_key(name))
+            .map(|s| s.add_to(item))
+            .is_some()
+    }
+
+    /// Where `name`'s stored picture came from.
+    pub fn source_for(&self, name: &str) -> Option<Source> {
+        self.read_images()
+            .get(&picture_key(name))
+            .map(|s| s.source.clone())
+    }
+
     /// Holds off storing a picture while a cover prune decides what to delete.
     pub(super) fn hold_files(&self) -> std::sync::MutexGuard<'_, ()> {
         self.files.lock().unwrap_or_else(|e| e.into_inner())
@@ -587,21 +681,32 @@ impl ArtistImages {
         name: &str,
         raw: &[u8],
         mbid: &str,
-        source: &str,
+        source: Source,
     ) -> Result<String, String> {
         let _files = self.hold_files();
         let (hash, resized) = write_cover(&self.covers_dir, raw, ARTIST_IMAGE_SIZE)?;
         let key = picture_key(name);
         let lookup = Lookup {
             mbid: mbid.to_owned(),
-            source: source.to_owned(),
+            source: source.as_str().to_owned(),
             status: Status::Found,
             retry_after: 0,
             errors: 0,
         };
+        let credit_bytes = match &source {
+            Source::Commons(credit) => rmp_serde::to_vec_named(credit).ok(),
+            Source::MusicBee | Source::Backdrop => None,
+        };
         self.db.write(Durability::Immediate, |txn| {
             txn.open_table(ARTIST_IMAGE)?
                 .insert(key.as_str(), hash.as_str())?;
+            {
+                let mut credits = txn.open_table(ARTIST_CREDIT)?;
+                match &credit_bytes {
+                    Some(bytes) => credits.insert(key.as_str(), bytes.as_slice()).map(drop)?,
+                    None => credits.remove(key.as_str()).map(drop)?,
+                }
+            }
             insert_lookup(txn, &key, &lookup)
         });
         let shared = self
@@ -614,6 +719,7 @@ impl ArtistImages {
             Stored {
                 hash: hash.clone(),
                 bytes,
+                source,
             },
         );
         self.used.fetch_add(bytes, Ordering::AcqRel);
@@ -664,6 +770,7 @@ impl ArtistImages {
         let written = self.db.try_write(Durability::Immediate, |txn| {
             txn.delete_table(ARTIST_IMAGE)?;
             txn.delete_table(ARTIST_LOOKUP)?;
+            txn.delete_table(ARTIST_CREDIT)?;
             Ok(())
         });
         if !written {
@@ -696,7 +803,7 @@ impl ArtistImages {
 
 /// The key an artist's picture is kept under: its lead artist's, so a name
 /// nobody split ("A feat. B") is served A's picture and looked up as A.
-fn picture_key(name: &str) -> String {
+pub(super) fn picture_key(name: &str) -> String {
     credits::key(credits::lead_artist(name))
 }
 
@@ -757,6 +864,25 @@ fn load_images(db: &Db) -> HashMap<String, String> {
     .unwrap_or_default()
 }
 
+fn load_credits(db: &Db) -> HashMap<String, Credit> {
+    db.read(|txn| {
+        let table = match txn.open_table(ARTIST_CREDIT) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(HashMap::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut map = HashMap::new();
+        for entry in table.iter()? {
+            let (k, v) = entry?;
+            if let Ok(credit) = rmp_serde::from_slice(v.value()) {
+                map.insert(k.value().to_owned(), credit);
+            }
+        }
+        Ok(map)
+    })
+    .unwrap_or_default()
+}
+
 fn load_lookups(db: &Db) -> HashMap<String, Lookup> {
     db.read(|txn| {
         let table = match txn.open_table(ARTIST_LOOKUP) {
@@ -804,7 +930,12 @@ mod tests {
     fn a_stored_picture_is_found_by_any_spelling_and_survives_a_restart() {
         let (_dir, store, db, covers) = temp_store("restart");
         let hash = store
-            .store("Gadiel", &test_jpeg_bytes(800, 600), "mbid-1", "wikidata")
+            .store(
+                "Gadiel",
+                &test_jpeg_bytes(800, 600),
+                "mbid-1",
+                Source::MusicBee,
+            )
             .unwrap();
         assert_eq!(store.hash_for(" gadiel "), Some(hash.clone()));
         assert!(covers.join(&hash).exists());
@@ -814,11 +945,87 @@ mod tests {
         assert_eq!(reopened.lookup("Gadiel").unwrap().mbid, "mbid-1");
     }
 
+    fn commons_credit() -> Credit {
+        Credit {
+            author: "Wojciech Pędzich".into(),
+            license: "CC BY 4.0".into(),
+            license_url: "https://creativecommons.org/licenses/by/4.0".into(),
+            page_url: "https://commons.wikimedia.org/wiki/File:E.jpg".into(),
+        }
+    }
+
+    #[test]
+    fn a_picture_keeps_its_source_and_credit_across_a_restart() {
+        let (_dir, store, db, covers) = temp_store("credit");
+        let credit = commons_credit();
+        let hash = store
+            .store(
+                "Eluveitie",
+                &test_jpeg_bytes(64, 64),
+                "m",
+                Source::Commons(credit.clone()),
+            )
+            .unwrap();
+        store
+            .store("Tico", &test_jpeg_bytes(32, 32), "", Source::MusicBee)
+            .unwrap();
+
+        let reopened = ArtistImages::new(db, covers);
+        assert_eq!(reopened.hash_for("eluveitie"), Some(hash));
+        assert_eq!(
+            reopened.source_for("eluveitie"),
+            Some(Source::Commons(credit))
+        );
+        assert_eq!(reopened.source_for("Tico"), Some(Source::MusicBee));
+    }
+
+    #[test]
+    fn a_commons_picture_stored_without_its_credit_is_fetched_again() {
+        let (_dir, store, db, covers) = temp_store("no-credit");
+        store
+            .store(
+                "Eluveitie",
+                &test_jpeg_bytes(64, 64),
+                "m",
+                Source::Commons(commons_credit()),
+            )
+            .unwrap();
+        db.write(Durability::Immediate, |txn| {
+            txn.open_table(ARTIST_CREDIT)?.remove("eluveitie")?;
+            Ok(())
+        });
+
+        let reopened = ArtistImages::new(db, covers);
+        assert_eq!(reopened.hash_for("Eluveitie"), None);
+        assert!(reopened.web_due("Eluveitie", now_unix_secs()));
+    }
+
+    #[test]
+    fn a_picture_replaced_without_credit_drops_the_old_credit() {
+        let (_dir, store, db, covers) = temp_store("credit-replaced");
+        store
+            .store(
+                "A",
+                &test_jpeg_bytes(64, 64),
+                "",
+                Source::Commons(commons_credit().clone()),
+            )
+            .unwrap();
+        store
+            .store("A", &test_jpeg_bytes(32, 32), "", Source::MusicBee)
+            .unwrap();
+        assert_eq!(store.source_for("A"), Some(Source::MusicBee));
+        assert_eq!(
+            ArtistImages::new(db, covers).source_for("A"),
+            Some(Source::MusicBee)
+        );
+    }
+
     #[test]
     fn a_picture_is_fitted_within_500_pixels_keeping_its_aspect() {
         let (_dir, store, _db, covers) = temp_store("size");
         let hash = store
-            .store("A", &test_jpeg_bytes(1000, 2000), "", "wikidata")
+            .store("A", &test_jpeg_bytes(1000, 2000), "", Source::MusicBee)
             .unwrap();
         let img = image::load_from_memory(&std::fs::read(covers.join(hash)).unwrap()).unwrap();
         assert_eq!((img.width(), img.height()), (250, 500));
@@ -828,7 +1035,7 @@ mod tests {
     fn a_picture_whose_file_is_gone_is_not_served_and_is_fetched_again() {
         let (_dir, store, db, covers) = temp_store("gone");
         let hash = store
-            .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store("A", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         std::fs::remove_file(covers.join(hash)).unwrap();
         let reopened = ArtistImages::new(db, covers);
@@ -948,7 +1155,7 @@ mod tests {
         let held = store.hold_files();
         std::thread::scope(|scope| {
             let storing =
-                scope.spawn(|| store.store("A", &test_jpeg_bytes(64, 64), "", "wikidata"));
+                scope.spawn(|| store.store("A", &test_jpeg_bytes(64, 64), "", Source::MusicBee));
             std::thread::sleep(Duration::from_millis(50));
             assert!(!covers.exists(), "no file yet for the prune to take");
             drop(held);
@@ -961,7 +1168,7 @@ mod tests {
     fn an_artist_with_a_picture_is_not_queued_but_one_that_missed_is() {
         let (_dir, store, _db, _) = temp_store("skip");
         store
-            .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store("A", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         store.record_miss("B", Status::NotFound, "");
         assert!(!store.request("A"));
@@ -975,7 +1182,7 @@ mod tests {
         let (_dir, store, _db, _) = temp_store("summary");
         store.set_budget(1 << 20);
         store
-            .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store("A", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         store.record_miss("B", Status::NotFound, "");
         store.record_miss("C", Status::Ambiguous, "");
@@ -1001,7 +1208,12 @@ mod tests {
     fn a_featured_name_is_served_and_counted_as_its_lead_artist() {
         let (_dir, store, _db, _) = temp_store("lead");
         let hash = store
-            .store("Adelitas Way", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .store(
+                "Adelitas Way",
+                &test_jpeg_bytes(64, 64),
+                "",
+                Source::MusicBee,
+            )
             .unwrap();
         store.set_budget(1);
 
@@ -1019,7 +1231,12 @@ mod tests {
     fn two_artists_with_the_same_picture_count_its_file_once() {
         let (_dir, store, db, covers) = temp_store("same-file");
         store
-            .store("Adam Skorupa", &test_jpeg_bytes(64, 64), "", "musicbee")
+            .store(
+                "Adam Skorupa",
+                &test_jpeg_bytes(64, 64),
+                "",
+                Source::MusicBee,
+            )
             .unwrap();
         let used = store.used_bytes();
         store
@@ -1027,7 +1244,7 @@ mod tests {
                 "Adam Skorupa & Krzysztof Wierzynkiewicz",
                 &test_jpeg_bytes(64, 64),
                 "",
-                "musicbee",
+                Source::MusicBee,
             )
             .unwrap();
 
@@ -1053,10 +1270,10 @@ mod tests {
         store.set_budget(1);
         assert!(store.is_accepting());
         let hash = store
-            .store("A", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store("A", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         store
-            .store("a", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store("a", &test_jpeg_bytes(64, 64), "", Source::MusicBee)
             .unwrap();
         let bytes = std::fs::metadata(covers.join(hash)).unwrap().len();
         assert_eq!(store.used_bytes(), bytes, "a replaced picture counts once");

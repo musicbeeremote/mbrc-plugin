@@ -13,6 +13,7 @@ use base64::Engine;
 use sha1::{Digest, Sha1};
 
 pub mod artist_fetch;
+pub mod artist_ids;
 pub mod artists;
 pub mod backdrops;
 pub mod source;
@@ -405,6 +406,15 @@ fn scaled_size(w: u32, h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
     };
     let s = sx.min(sy);
     (((w as f32) * s) as u32, ((h as f32) * s) as u32)
+}
+
+/// One silent MPEG-1 Layer III frame (128 kbps, 44.1 kHz, 417 bytes), which
+/// makes a test tag a readable MP3 when appended after it.
+#[cfg(test)]
+pub(crate) fn silent_mp3_frame() -> Vec<u8> {
+    let mut frame = vec![0xFF, 0xFB, 0x90, 0x00];
+    frame.resize(417, 0);
+    frame
 }
 
 /// A synthetic JPEG of the given size, as raw bytes. Shared by the cover unit

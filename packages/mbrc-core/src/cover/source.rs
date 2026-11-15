@@ -79,7 +79,7 @@ fn first_picture(path: &Path) -> Result<Vec<u8>, String> {
 
 /// A track's tags without its audio properties or lofty's ID3v2.4 conversions,
 /// which only add ways to fail.
-fn read_tags(path: &Path, mode: ParsingMode) -> Result<TaggedFile, String> {
+pub(super) fn read_tags(path: &Path, mode: ParsingMode) -> Result<TaggedFile, String> {
     Probe::open(path)
         .map_err(|e| format!("open track: {e}"))?
         .options(
@@ -152,9 +152,7 @@ mod tests {
         );
         let mut bytes = Vec::new();
         tag.dump_to(&mut bytes, WriteOptions::default()).unwrap();
-        // MPEG-1 Layer III, 128 kbps, 44.1 kHz: a 417-byte frame.
-        bytes.extend([0xFF, 0xFB, 0x90, 0x00]);
-        bytes.extend(std::iter::repeat_n(0u8, 413));
+        bytes.extend(crate::cover::silent_mp3_frame());
         let path = dir.join("track.mp3");
         std::fs::write(&path, bytes).unwrap();
         path
@@ -191,8 +189,7 @@ mod tests {
                 .map(|i| ((frames.len() >> (7 * i)) & 0x7F) as u8),
         );
         bytes.extend(frames);
-        bytes.extend([0xFF, 0xFB, 0x90, 0x00]);
-        bytes.extend(std::iter::repeat_n(0u8, 413));
+        bytes.extend(crate::cover::silent_mp3_frame());
         let dir = crate::test_dir::TestDir::new("source-ufid");
         let path = dir.join("track.mp3");
         std::fs::write(&path, bytes).unwrap();

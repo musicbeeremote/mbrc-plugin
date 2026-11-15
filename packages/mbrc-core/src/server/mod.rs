@@ -319,6 +319,7 @@ fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> 
         ));
         let queue = core.cover_store.artists().queue();
         let store = Arc::downgrade(&core.cover_store);
+        let tag_cache = Arc::downgrade(&core.metadata_cache);
         let weak = Arc::downgrade(core);
         let generation = queue.begin_worker();
         let client: Box<dyn mbrc_release::HttpClient + Send> =
@@ -340,11 +341,15 @@ fn spawn_artist_images(core: &Arc<Core>) -> Option<std::thread::JoinHandle<()>> 
                     client.as_ref(),
                     crate::cover::artist_fetch::Pace::polite(),
                 );
+                let tag_ids = crate::cover::artist_ids::TagIds::new(tag_cache);
                 crate::cover::artist_fetch::run(
                     &queue,
                     &store,
-                    musicbee.as_ref(),
-                    &backdrops,
+                    &crate::cover::artist_fetch::Library {
+                        musicbee: musicbee.as_ref(),
+                        backdrops: &backdrops,
+                        tagged_id: &|name| tag_ids.get(name),
+                    },
                     &mut fetcher,
                     generation,
                     &|artist, hash| {
@@ -449,8 +454,22 @@ fn clear_artist_images_now(core: &Core) {
 fn broadcast_artist_image(core: &Core, artist: &str, hash: &str) {
     core.v6_broadcaster.broadcast(&[mbrc_wire::v6::event(
         "library_artist_image_updated",
-        serde_json::json!({ "artist": artist, "image_hash": hash }),
+        artist_image_event(core.cover_store.artists(), artist, hash),
     )]);
+}
+
+/// `{artist, image_hash}`, with the picture's source and credit while it is
+/// still the one stored.
+fn artist_image_event(
+    images: &crate::cover::artists::ArtistImages,
+    artist: &str,
+    hash: &str,
+) -> serde_json::Value {
+    let mut data = serde_json::json!({ "artist": artist });
+    if !images.add_picture_to(artist, &mut data) || data["image_hash"] != hash {
+        data = serde_json::json!({ "artist": artist, "image_hash": hash });
+    }
+    data
 }
 
 /// Waits for the mDNS advertisement to withdraw, rather than aborting it.
@@ -1007,7 +1026,7 @@ mod cover_delta_tests {
                 "Gadiel",
                 &crate::cover::test_jpeg_bytes(64, 64),
                 "",
-                "musicbee",
+                crate::cover::artists::Source::MusicBee,
             )
             .unwrap();
         let (tx, mut rx) = mpsc::unbounded_channel();
@@ -1059,6 +1078,37 @@ mod cover_delta_tests {
         assert!(frame.contains("librarycovercachebuildstatus"), "{frame}");
         let key = crate::cover::cover_identifier("Artist", "Album");
         assert!(core.cover_store.hash_for(&key).is_some());
+    }
+
+    #[test]
+    fn a_landed_picture_is_announced_with_its_source_and_credit() {
+        let store = crate::cover::test_cover_store("artist-image-event");
+        let images = store.artists();
+        let credit = crate::cover::artists::Credit {
+            author: "Ann".into(),
+            page_url: "https://commons.wikimedia.org/wiki/File:E.jpg".into(),
+            ..Default::default()
+        };
+        let hash = images
+            .store(
+                "Eluveitie",
+                &crate::cover::test_jpeg_bytes(64, 64),
+                "",
+                crate::cover::artists::Source::Commons(credit.clone()),
+            )
+            .unwrap();
+
+        let event = artist_image_event(images, "eluveitie feat. Anna Murphy", &hash);
+        assert_eq!(event["artist"], "eluveitie feat. Anna Murphy");
+        assert_eq!(event["image_hash"], hash.as_str());
+        assert_eq!(event["image_source"], "wikidata");
+        assert_eq!(event["image_credit"]["author"], "Ann");
+
+        let stale = artist_image_event(images, "Eluveitie", "older-hash");
+        assert_eq!(
+            stale,
+            serde_json::json!({ "artist": "Eluveitie", "image_hash": "older-hash" })
+        );
     }
 }
 

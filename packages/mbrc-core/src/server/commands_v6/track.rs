@@ -267,8 +267,8 @@ pub(crate) fn artist_json(raw: &str, display: &str, shown: Credits<'_>) -> (Valu
         .filter(|c| every || c.role != Role::Performer)
         .map(|c| {
             let mut credit = c.to_json();
-            if let Some(hash) = images.and_then(|i| i.hash_for(&c.name)) {
-                credit["image_hash"] = json!(hash);
+            if let Some(images) = images {
+                images.add_picture_to(&c.name, &mut credit);
             }
             credit
         })
@@ -663,7 +663,12 @@ mod tests {
         let store = crate::cover::test_cover_store("v6-track-artist-image");
         let hash = store
             .artists()
-            .store("Gadiel", &test_jpeg_bytes(64, 64), "", "wikidata")
+            .store(
+                "Gadiel",
+                &test_jpeg_bytes(64, 64),
+                "",
+                crate::cover::artists::Source::MusicBee,
+            )
             .unwrap();
         let mut t = tags();
         t.multi_artist = "Tico\0\u{1}Gadiel\0".into();
