@@ -58,6 +58,8 @@ pub struct Core {
     pub blocked: BlockedLog,
     /// Tells the next start whether this session ended cleanly, and where it was.
     pub session: crate::session::SessionMarker,
+    /// Background threads started on the core's behalf, joined at [`shutdown`].
+    pub workers: crate::workers::Workers,
     /// Party Mode's switch and refusal log, checked before every command.
     pub party_mode: Arc<crate::server::permissions::PartyMode>,
     /// The auto-shutdown timer and the devices allowed to power off (#108).
@@ -133,6 +135,7 @@ impl Core {
             power,
             server,
             session,
+            workers: crate::workers::Workers::default(),
             conn_counter: AtomicU64::new(0),
             scanner_nudge: Arc::new(Notify::new()),
             library_events: Default::default(),
@@ -305,15 +308,18 @@ pub fn write_settings_patch(patch: &serde_json::Value) -> Result<(), String> {
 /// # Errors
 /// The payload failed to parse, failed validation, or could not be written.
 pub fn write_settings_bytes(bytes: &[u8]) -> Result<(), String> {
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let storage = storage_path().ok_or("core not initialized")?;
     let patch: serde_json::Value =
         rmp_serde::from_slice(bytes).map_err(|e| format!("invalid settings msgpack: {e}"))?;
+    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let mut config = merge_settings(Config::load(&storage), &patch)?;
     config.validate()?;
     config.storage_path = storage.clone();
     let pretty = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     let path = std::path::Path::new(&storage).join("core_settings.json");
-    std::fs::write(&path, pretty).map_err(|e| format!("write settings: {e}"))?;
+    crate::config::write_atomic(&path, pretty.as_bytes())
+        .map_err(|e| format!("write settings: {e}"))?;
     if let Some(core) = core_handle() {
         apply_live_settings(&core, &config);
     }
@@ -945,8 +951,14 @@ fn rebuild(scope: RebuildScope) -> MbrcResult {
         core.metadata_cache.invalidate();
     }
     let rebuild_core = core.clone();
-    std::thread::spawn(move || server::rebuild(&rebuild_core, scope));
-    MbrcResult::Ok
+    if core
+        .workers
+        .spawn("rebuild", move || server::rebuild(&rebuild_core, scope))
+    {
+        MbrcResult::Ok
+    } else {
+        MbrcResult::RuntimeError
+    }
 }
 
 /// Queues a MusicBee notification for [`dispatch_notification`] and returns.
@@ -978,7 +990,9 @@ pub fn dispatch_notification(core: &Arc<Core>, ntype: NotificationType, path: Op
             core.metadata_cache.media().forget();
             broadcast_library_changed(core);
             let reconcile_core = core.clone();
-            std::thread::spawn(move || server::reconcile_library(&reconcile_core));
+            core.workers.spawn("reconcile", move || {
+                server::reconcile_library(&reconcile_core);
+            });
             return;
         }
         // Queued, not applied: the Scanner debounces these, so a big import or
@@ -1070,7 +1084,12 @@ pub fn begin_stopping() -> MbrcResult {
     }
 }
 
-/// Stops networking (if running) and drops the core, allowing a later re-init.
+/// How long [`shutdown`] waits for background work, which checks
+/// [`Core::is_stopping`] and normally ends well within it.
+const WORKERS_JOIN_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Stops networking (if running), waits for the core's background threads and
+/// drops the core, allowing a later re-init.
 ///
 /// The runtime is taken out first, so the teardown waits below never hold the
 /// state lock a MusicBee notification needs to return.
@@ -1083,6 +1102,10 @@ pub fn shutdown() -> MbrcResult {
     if let Some(net) = runtime.net {
         broadcast_server_shutdown(&runtime.core);
         net.stop();
+    }
+    let still_running = runtime.core.workers.join(WORKERS_JOIN_WAIT);
+    if !still_running.is_empty() {
+        tracing::warn!(?still_running, "background work still running at shutdown");
     }
     runtime.core.session.close();
     MbrcResult::Ok

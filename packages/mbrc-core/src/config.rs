@@ -355,7 +355,14 @@ impl Config {
         let mut config = Config::default();
         if let Ok(contents) = std::fs::read_to_string(&path) {
             config = serde_json::from_str(&contents).unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "core_settings.json is invalid; using defaults");
+                let kept = path.with_extension("json.invalid");
+                let copied = std::fs::copy(&path, &kept).is_ok();
+                tracing::warn!(
+                    error = %e,
+                    kept = %kept.display(),
+                    copied,
+                    "core_settings.json is invalid; using defaults until it is saved again"
+                );
                 Config::default()
             });
             // Migrate a pre-`log_level` file: an old `debug:true` (and no
@@ -467,6 +474,21 @@ fn ip_in_cidr(ip: IpAddr, network: &str, prefix: &str) -> bool {
     (u32::from(ip) & mask) == (u32::from(net) & mask)
 }
 
+/// Writes `contents` beside `path`, flushes it to disk and renames it into
+/// place, so a crash mid-write leaves the old file or the new one, never a torn one.
+///
+/// # Errors
+/// The staged file could not be written, flushed or renamed.
+pub(crate) fn write_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let staged = path.with_extension("tmp");
+    let mut file = std::fs::File::create(&staged)?;
+    file.write_all(contents)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&staged, path)
+}
+
 /// One-time migration of the shipped plugin's `settings.xml` to the Rust-owned
 /// `core_settings.json`.
 ///
@@ -486,7 +508,7 @@ pub fn migrate_legacy_settings(storage_path: &str) {
 
     let config = config_from_legacy_xml(&xml);
     match serde_json::to_string_pretty(&config) {
-        Ok(json) => match std::fs::write(&new_path, json) {
+        Ok(json) => match write_atomic(&new_path, json.as_bytes()) {
             Ok(()) => tracing::info!("migrated legacy settings.xml -> core_settings.json"),
             Err(e) => tracing::warn!(error = %e, "settings migration: write failed"),
         },
@@ -600,6 +622,30 @@ mod tests {
             Config::load(dir.to_str().unwrap()).log_level,
             LogLevel::Info
         );
+    }
+
+    #[test]
+    fn an_invalid_file_is_kept_aside_before_defaults_are_used() {
+        let dir = crate::test_dir::TestDir::new("cfg-invalid-kept");
+        let broken = r#"{"port":4567,"bind_address":"#;
+        std::fs::write(dir.join("core_settings.json"), broken).unwrap();
+
+        let c = Config::load(dir.to_str().unwrap());
+        assert_eq!(c.port, Config::default().port);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("core_settings.json.invalid")).unwrap(),
+            broken
+        );
+    }
+
+    #[test]
+    fn an_atomic_write_replaces_the_file_and_leaves_nothing_staged() {
+        let dir = crate::test_dir::TestDir::new("cfg-atomic");
+        let path = dir.join("core_settings.json");
+        std::fs::write(&path, "old").unwrap();
+        write_atomic(&path, b"new").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        assert!(!dir.join("core_settings.tmp").exists());
     }
 
     #[test]

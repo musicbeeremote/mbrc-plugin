@@ -57,16 +57,19 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
             inbound = socket.recv() => {
                 let Some(Ok(message)) = inbound else { break };
                 let Message::Text(line) = message else { continue };
-                let outcome = session.handle_frame(
-                    &line,
-                    core.providers.as_ref(),
-                    Some(&core.now_playing),
-                    Some(core.cover_store.as_ref()),
-                    Some(core.metadata_cache.as_ref()),
-                    Some(core.clients.as_ref()),
-                );
-                for frame in &outcome.replies {
-                    if socket.send(Message::Text(frame.clone().into())).await.is_err() {
+                // MusicBee calls block, and may wait on the serial lock behind other clients.
+                let outcome = tokio::task::block_in_place(|| {
+                    session.handle_frame(
+                        &line,
+                        core.providers.as_ref(),
+                        Some(&core.now_playing),
+                        Some(core.cover_store.as_ref()),
+                        Some(core.metadata_cache.as_ref()),
+                        Some(core.clients.as_ref()),
+                    )
+                });
+                for frame in outcome.replies {
+                    if socket.send(Message::Text(frame.into())).await.is_err() {
                         break;
                     }
                 }

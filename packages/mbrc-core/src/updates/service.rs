@@ -161,13 +161,14 @@ fn spawn_publishing(
     job: Job,
     work: impl FnOnce(&Core) -> UpdateStatus + Send + 'static,
 ) {
-    std::thread::spawn(move || {
+    let worker_core = core.clone();
+    core.workers.spawn("update", move || {
         let _job = job;
         if !crate::state::is_initialized() {
             return;
         }
-        let status = work(&core);
-        publish(&core, status);
+        let status = work(&worker_core);
+        publish(&worker_core, status);
     });
 }
 

@@ -152,7 +152,8 @@ pub fn stop(core: std::sync::Arc<Core>, request: &CaptureRequest) -> MbrcResult 
     emit(&core);
 
     let destination = request.destination_dir.clone();
-    std::thread::spawn(move || {
+    let worker_core = core.clone();
+    worker_core.workers.spawn("diagnostics", move || {
         // Checked before the build, not just before the event: zipping takes
         // seconds, and the host's delegates go away at `mbrc_shutdown`.
         if !crate::state::is_initialized() {

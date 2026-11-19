@@ -422,16 +422,14 @@ pub const ARTIST_IMAGES_CLEARED: &str = "library_artist_images_cleared";
 /// picture being stored and deletes a file per picture; then tells V6 clients
 /// and the settings panel.
 pub fn clear_artist_images(core: &Arc<Core>) -> crate::ffi::types::MbrcResult {
-    let core = core.clone();
-    let spawned = std::thread::Builder::new()
-        .name("mbrc-artist-clear".into())
-        .spawn(move || clear_artist_images_now(&core));
-    match spawned {
-        Ok(_) => crate::ffi::types::MbrcResult::Ok,
-        Err(e) => {
-            tracing::warn!(error = %e, "artist pictures: clear not started");
-            crate::ffi::types::MbrcResult::RuntimeError
-        }
+    let clearing = core.clone();
+    if core
+        .workers
+        .spawn("artist-clear", move || clear_artist_images_now(&clearing))
+    {
+        crate::ffi::types::MbrcResult::Ok
+    } else {
+        crate::ffi::types::MbrcResult::RuntimeError
     }
 }
 

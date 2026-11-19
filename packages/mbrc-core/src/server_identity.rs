@@ -70,12 +70,9 @@ pub fn load_or_create(storage: &str) -> Option<String> {
     }
 }
 
-/// Writes `id` beside `path` and renames it into place, so a crash mid-write
-/// leaves the old file or the new one, never a truncated id.
+/// Writes `id` so a crash mid-write leaves the old file or the new one.
 fn save(path: &Path, id: &str) -> std::io::Result<()> {
-    let staged = path.with_extension("tmp");
-    std::fs::write(&staged, id)?;
-    std::fs::rename(&staged, path)
+    crate::config::write_atomic(path, id.as_bytes())
 }
 
 /// A random (version 4) UUID in lowercase hyphenated form.

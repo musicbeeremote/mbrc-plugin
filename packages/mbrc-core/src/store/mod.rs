@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use redb::{
     Builder, Database, DatabaseError, Durability, ReadTransaction, ReadableDatabase,
@@ -26,6 +27,28 @@ use redb::{
 /// cache (no mmap), and our access is O(page), so the working set stays far
 /// under this - it is a ceiling, not a reservation.
 const CACHE_SIZE: usize = 64 * 1024 * 1024;
+
+/// How long an open waits for a file this process still holds: a core
+/// restarting for new settings while a thread of the old one finishes.
+const ALREADY_OPEN_WAIT: Duration = Duration::from_secs(3);
+const ALREADY_OPEN_RETRY: Duration = Duration::from_millis(100);
+
+/// Whether redb cannot read the file at all, the only case worth deleting it.
+///
+/// A file that is not a redb database at all arrives as an I/O error of kind
+/// `InvalidData`; a permission or sharing error is about the disk, not the file.
+fn is_unreadable(e: &DatabaseError) -> bool {
+    match e {
+        DatabaseError::UpgradeRequired(_)
+        | DatabaseError::RepairAborted
+        | DatabaseError::Storage(redb::StorageError::Corrupted(_)) => true,
+        DatabaseError::Storage(redb::StorageError::Io(io)) => matches!(
+            io.kind(),
+            std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
+        ),
+        _ => false,
+    }
+}
 
 /// album_key -> content_hash (the resized cover's SHA1). Replaces the `covers`
 /// map in the old `state.json`.
@@ -158,9 +181,18 @@ pub struct Db(Option<Arc<Database>>);
 
 impl Db {
     /// Opens (or creates) `<storage_path>/mbrc.redb`. An empty path disables
-    /// persistence. A corrupt file is deleted and recreated once; a still-failing
-    /// open also degrades to `Db(None)` (logged, never fatal).
+    /// persistence.
+    ///
+    /// Only a file redb cannot read (corrupt, an old format, a failed repair) is
+    /// deleted and recreated: it also holds pairings and grants, which a busy or
+    /// unreadable disk must not cost. A file still open in this process, as a
+    /// core restarting while an old thread holds it, is waited for, then left
+    /// alone; any other failure degrades to `Db(None)` (logged, never fatal).
     pub fn open(storage_path: &str) -> Self {
+        Self::open_waiting(storage_path, ALREADY_OPEN_WAIT)
+    }
+
+    fn open_waiting(storage_path: &str, wait: Duration) -> Self {
         if storage_path.is_empty() {
             return Db(None);
         }
@@ -170,10 +202,17 @@ impl Db {
             tracing::warn!(error = %e, path = storage_path, "could not create storage dir");
         }
         let path = Path::new(storage_path).join("mbrc.redb");
-        match Self::create_db(&path) {
+        let deadline = Instant::now() + wait;
+        let mut opened = Self::create_db(&path);
+        while matches!(opened, Err(DatabaseError::DatabaseAlreadyOpen)) && Instant::now() < deadline
+        {
+            std::thread::sleep(ALREADY_OPEN_RETRY);
+            opened = Self::create_db(&path);
+        }
+        match opened {
             Ok(db) => Db(Some(Arc::new(db))),
-            Err(e) => {
-                tracing::warn!(error = %e, "mbrc.redb open failed; recreating fresh");
+            Err(e) if is_unreadable(&e) => {
+                tracing::warn!(error = %e, "mbrc.redb unreadable; recreating fresh");
                 let _ = std::fs::remove_file(&path);
                 match Self::create_db(&path) {
                     Ok(db) => Db(Some(Arc::new(db))),
@@ -182,6 +221,10 @@ impl Db {
                         Db(None)
                     }
                 }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "mbrc.redb could not be opened; persistence disabled, file kept");
+                Db(None)
             }
         }
     }
@@ -364,6 +407,56 @@ mod tests {
             Ok(t.get("k")?.map(|g| g.value().to_string()))
         });
         assert_eq!(got, Some(Some("hash".to_string())));
+    }
+
+    fn insert_marker(db: &Db) {
+        db.write(Durability::Immediate, |txn| {
+            txn.open_table(COVER_COVERS)?.insert("k", "hash")?;
+            Ok(())
+        });
+    }
+
+    fn has_marker(db: &Db) -> bool {
+        db.read(|txn| Ok(txn.open_table(COVER_COVERS)?.get("k")?.is_some())) == Some(true)
+    }
+
+    #[test]
+    fn a_file_still_open_is_kept_not_recreated() {
+        let dir = temp_dir("already-open");
+        let first = Db::open(dir.to_str().unwrap());
+        insert_marker(&first);
+
+        let second = Db::open_waiting(dir.to_str().unwrap(), Duration::from_millis(200));
+        assert!(!second.is_active(), "the held file cannot be opened twice");
+        drop(first);
+
+        let reopened = Db::open(dir.to_str().unwrap());
+        assert!(has_marker(&reopened), "the pairings and caches survived");
+    }
+
+    #[test]
+    fn a_file_released_while_waiting_is_opened() {
+        let dir = temp_dir("released");
+        let first = Db::open(dir.to_str().unwrap());
+        insert_marker(&first);
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            drop(first);
+        });
+
+        let second = Db::open_waiting(dir.to_str().unwrap(), Duration::from_secs(3));
+        releaser.join().unwrap();
+        assert!(has_marker(&second));
+    }
+
+    #[test]
+    fn an_unreadable_file_is_recreated() {
+        let dir = temp_dir("garbage");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("mbrc.redb"), b"not a redb file at all").unwrap();
+        let db = Db::open(dir.to_str().unwrap());
+        assert!(db.is_active());
+        assert!(!has_marker(&db));
     }
 
     #[test]

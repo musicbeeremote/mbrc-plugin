@@ -34,6 +34,7 @@ pub mod tag_fields;
 pub mod updates;
 pub mod web;
 pub mod wire;
+pub mod workers;
 
 #[cfg(test)]
 pub(crate) mod test_dir;
