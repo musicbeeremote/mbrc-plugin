@@ -103,43 +103,43 @@ impl<'a> Ctx<'a> {
     pub fn now_track_info(&self) -> Result<TrackInfo, String> {
         match self.now_playing {
             Some(c) => Ok(c.track_info()),
-            None => self.providers.track_info(),
+            None => self.providers.track_info().map_err(String::from),
         }
     }
     pub fn now_track_details(&self) -> Result<TrackDetails, String> {
         match self.now_playing {
             Some(c) => Ok(c.track_details()),
-            None => self.providers.track_details(),
+            None => self.providers.track_details().map_err(String::from),
         }
     }
     pub fn now_cover(&self) -> Result<Cover, String> {
         match self.now_playing {
             Some(c) => Ok(c.cover()),
-            None => self.providers.cover(),
+            None => self.providers.cover().map_err(String::from),
         }
     }
     pub fn now_lyrics(&self) -> Result<Lyrics, String> {
         match self.now_playing {
             Some(c) => Ok(c.lyrics()),
-            None => self.providers.lyrics(),
+            None => self.providers.lyrics().map_err(String::from),
         }
     }
     pub fn now_rating(&self) -> Result<String, String> {
         match self.now_playing {
             Some(c) => Ok(c.rating()),
-            None => self.providers.rating(),
+            None => self.providers.rating().map_err(String::from),
         }
     }
     pub fn now_lfm(&self) -> Result<LastfmStatus, String> {
         match self.now_playing {
             Some(c) => Ok(c.lfm()),
-            None => self.providers.lfm_rating(),
+            None => self.providers.lfm_rating().map_err(String::from),
         }
     }
     pub fn now_player(&self) -> Result<PlayerState, String> {
         match self.now_playing {
             Some(c) => Ok(c.player()),
-            None => self.providers.player_state(),
+            None => self.providers.player_state().map_err(String::from),
         }
     }
 }

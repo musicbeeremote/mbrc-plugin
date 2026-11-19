@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6;
 
-use super::{OpResult, internal};
+use super::{OpResult, host_error};
 use crate::providers::Providers;
 
 /// The op names this domain serves (advertised in the handshake capabilities).
@@ -24,7 +24,7 @@ pub fn dispatch(op: &str, _data: &Value, p: &dyn Providers) -> Option<OpResult> 
 
 fn info(p: &dyn Providers) -> OpResult {
     Ok(json!({
-        "plugin_version": p.plugin_version().map_err(internal)?,
+        "plugin_version": p.plugin_version().map_err(host_error)?,
         "protocol_version": v6::PROTOCOL_VERSION,
     }))
 }

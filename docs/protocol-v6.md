@@ -453,8 +453,8 @@ offending input directly. Its absence means the error is not about a single fiel
 | `not_found` | the requested resource does not exist (e.g. an unknown cover hash) |
 | `stale_list` | the queue or playlist moved since the `version` the request carried |
 | `stale_track` | a write named a track that is no longer the one playing; nothing was written |
-| `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account) |
-| `internal_error` | an unexpected host/plugin failure |
+| `unavailable` | a precondition is unmet (e.g. scrobbling with no last.fm account), MusicBee declined the request (a playlist that is gone, a slot it would not remove), or the plugin cannot reach MusicBee right now; worth showing, and worth retrying later |
+| `internal_error` | an unexpected host/plugin failure: MusicBee threw, or its answer could not be read |
 
 ## Enumerations
 

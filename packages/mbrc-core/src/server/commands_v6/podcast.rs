@@ -19,7 +19,9 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, i32_saturating, internal, page_args, page_json, req_i64, req_str};
+use super::{
+    OpResult, V6Error, host_error, i32_saturating, page_args, page_json, req_i64, req_str,
+};
 use crate::cover::store::CoverStore;
 use crate::protocol::messages::{PodcastEpisode, PodcastSubscription, QueueType};
 use crate::providers::Providers;
@@ -56,7 +58,7 @@ fn subscriptions(data: &Value, p: &dyn Providers, store: Option<&CoverStore>) ->
     let (offset, limit) = page_args(data)?;
     let page = p
         .podcast_subscriptions(i32_saturating(offset), i32_saturating(limit))
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let items = page
         .data
         .iter()
@@ -69,7 +71,7 @@ fn subscription(data: &Value, p: &dyn Providers, store: Option<&CoverStore>) -> 
     let id = req_str(data, "id")?;
     let found = p
         .podcast_subscription(id)
-        .map_err(internal)?
+        .map_err(host_error)?
         .into_iter()
         .next()
         .ok_or_else(|| not_found(format!("no subscription with id: {id}")))?;
@@ -82,7 +84,7 @@ fn episodes(data: &Value, p: &dyn Providers) -> OpResult {
     let id = req_str(data, "id")?;
     let page = p
         .podcast_episodes(id, i32_saturating(offset), i32_saturating(limit))
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let items = page.data.iter().map(episode_json).collect();
     Ok(page_json(page.total.max(0) as usize, offset, items))
 }
@@ -110,7 +112,7 @@ fn episode_play(data: &Value, p: &dyn Providers) -> OpResult {
         _ => String::new(),
     };
     p.queue(queue_type, vec![found.url], &play)
-        .map_err(internal)?;
+        .map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -119,7 +121,7 @@ fn one_episode(data: &Value, p: &dyn Providers) -> Result<PodcastEpisode, V6Erro
     let id = req_str(data, "id")?;
     let index = req_i64(data, "index")?;
     p.podcast_episode(id, i32_saturating(index))
-        .map_err(internal)?
+        .map_err(host_error)?
         .into_iter()
         .next()
         .ok_or_else(|| not_found(format!("no episode {index} in subscription: {id}")))

@@ -222,7 +222,7 @@ pub trait Playback {
 pub struct HostPlayback<'a>(pub &'a dyn Providers);
 
 impl HostPlayback<'_> {
-    fn log(call: &str, result: Result<(), String>) {
+    fn log(call: &str, result: crate::providers::HostResult<()>) {
         if let Err(error) = result {
             tracing::warn!(call, %error, "auto-shutdown: MusicBee refused a player call");
         }
@@ -776,8 +776,8 @@ impl Power {
 /// MusicBee or Windows refused it.
 pub fn execute(action: PowerAction, providers: &dyn Providers) -> Result<(), String> {
     match action {
-        PowerAction::Stop => providers.stop(),
-        PowerAction::Close => providers.close_musicbee(),
+        PowerAction::Stop => providers.stop().map_err(String::from),
+        PowerAction::Close => providers.close_musicbee().map_err(String::from),
         PowerAction::Sleep => windows::sleep(),
         PowerAction::Shutdown => windows::shutdown(),
     }

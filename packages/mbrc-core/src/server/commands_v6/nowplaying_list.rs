@@ -23,8 +23,8 @@ use std::collections::HashMap;
 use serde_json::{Value, json};
 
 use super::{
-    OpResult, V6Error, i32_saturating, internal, opt_bool, opt_i64, page_args, page_json, req_i64,
-    req_str, req_str_array, track,
+    OpResult, V6Error, host_error, i32_saturating, opt_bool, opt_i64, page_args, page_json,
+    req_i64, req_str, req_str_array, track,
 };
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
@@ -87,9 +87,9 @@ fn list(
     } else {
         p.now_playing_list(offset as i32, limit as i32)
     }
-    .map_err(internal)?;
+    .map_err(host_error)?;
 
-    let order = p.now_playing_list_order().map_err(internal)?;
+    let order = p.now_playing_list_order().map_err(host_error)?;
     let play_rank = play_ranks(&order);
     let total = if up_next {
         order.positions.len()
@@ -157,7 +157,7 @@ fn run_time_ms(
     let paths = if up_next {
         order.paths.clone()
     } else {
-        p.now_playing_list_paths().map_err(internal)?
+        p.now_playing_list_paths().map_err(host_error)?
     };
     Ok(track::tags_for_paths(p, cache, &paths)?
         .iter()
@@ -184,10 +184,10 @@ fn list_version(now_playing: Option<&NowPlayingCache>) -> u64 {
 fn guarded(
     data: &Value,
     now_playing: Option<&NowPlayingCache>,
-    mutate: impl FnOnce() -> Result<(), String>,
+    mutate: impl FnOnce() -> crate::providers::HostResult<()>,
 ) -> OpResult {
     check_version(data, now_playing)?;
-    mutate().map_err(internal)?;
+    mutate().map_err(host_error)?;
     bump_version(now_playing);
     Ok(json!({}))
 }
@@ -259,7 +259,7 @@ fn play(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) 
 fn remove(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
     let orders = orders_highest_first(data, "orders")?;
     check_version(data, now_playing)?;
-    let len = p.now_playing_list_paths().map_err(internal)?.len();
+    let len = p.now_playing_list_paths().map_err(host_error)?.len();
     if orders[0] as usize >= len {
         return Err(V6Error::field(
             ErrorCode::InvalidField,
@@ -269,7 +269,7 @@ fn remove(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>
     }
     let removed = orders.iter().try_for_each(|&o| p.remove_list_item(o));
     bump_version(now_playing);
-    removed.map_err(internal)?;
+    removed.map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -319,7 +319,7 @@ fn clear(data: &Value, p: &dyn Providers, now_playing: Option<&NowPlayingCache>)
 }
 
 fn search(data: &Value, p: &dyn Providers) -> OpResult {
-    p.search_list(req_str(data, "query")?).map_err(internal)?;
+    p.search_list(req_str(data, "query")?).map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -328,7 +328,7 @@ fn queue(data: &Value, p: &dyn Providers) -> OpResult {
     let mode = data.get("mode").and_then(Value::as_str).unwrap_or("next");
     let play = data.get("play").and_then(Value::as_str).unwrap_or("");
     p.queue(parse_queue_type(mode)?, paths, play)
-        .map_err(internal)?;
+        .map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -953,7 +953,7 @@ mod tests {
         )
         .unwrap()
         .unwrap_err();
-        assert_eq!(err.code, ErrorCode::Internal);
+        assert_eq!(err.code, ErrorCode::Unavailable);
         assert_eq!(removals(&m), ["remove_list_item(4)"]);
         assert_eq!(cache.list_version(), 1);
     }

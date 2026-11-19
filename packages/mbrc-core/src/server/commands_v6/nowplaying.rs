@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, i32_saturating, internal, opt_bool, req_i64, req_str, track};
+use super::{OpResult, V6Error, host_error, i32_saturating, opt_bool, req_i64, req_str, track};
 use crate::cover::store::CoverStore;
 use crate::nowplaying::NowPlayingCache;
 use crate::protocol::messages::{LastfmStatus, TrackDetails, TrackInfo, TrackTags};
@@ -64,8 +64,8 @@ fn state(
     let (playing, lfm) = match now_playing {
         Some(c) => (c.track_info(), c.lfm()),
         None => (
-            p.track_info().map_err(internal)?,
-            p.lfm_rating().map_err(internal)?,
+            p.track_info().map_err(host_error)?,
+            p.lfm_rating().map_err(host_error)?,
         ),
     };
     let mut track = if playing.path.is_empty() {
@@ -73,7 +73,7 @@ fn state(
     } else {
         match p
             .tracks_detailed_for_paths(vec![playing.path.clone()])
-            .map_err(internal)?
+            .map_err(host_error)?
             .into_iter()
             .next()
         {
@@ -88,7 +88,7 @@ fn state(
             None => Value::Null,
         }
     };
-    let pos = p.playback_position().map_err(internal)?;
+    let pos = p.playback_position().map_err(host_error)?;
     if pos.total > 0
         && let Some(obj) = track.as_object_mut()
     {
@@ -138,7 +138,7 @@ fn take_playing_tags(tags: &mut TrackTags, playing: &TrackInfo) {
 /// and no new FFI surface.
 fn current_list_order(p: &dyn Providers) -> Result<Option<i64>, V6Error> {
     Ok(p.now_playing_list_ordered(0, 1)
-        .map_err(internal)?
+        .map_err(host_error)?
         .data
         .first()
         .map(|npt| npt.position as i64))
@@ -147,7 +147,7 @@ fn current_list_order(p: &dyn Providers) -> Result<Option<i64>, V6Error> {
 fn details(p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
     let d = match now_playing {
         Some(c) => c.track_details(),
-        None => p.track_details().map_err(internal)?,
+        None => p.track_details().map_err(host_error)?,
     };
     Ok(details_json(&d))
 }
@@ -177,12 +177,12 @@ fn details_json(d: &TrackDetails) -> Value {
 }
 
 fn position(p: &dyn Providers) -> OpResult {
-    let pos = p.playback_position().map_err(internal)?;
+    let pos = p.playback_position().map_err(host_error)?;
     Ok(json!({ "position_ms": pos.current, "duration_ms": pos.total }))
 }
 
 fn lyrics(p: &dyn Providers) -> OpResult {
-    let raw = p.now_playing_synced_lyrics().map_err(internal)?;
+    let raw = p.now_playing_synced_lyrics().map_err(host_error)?;
     Ok(parse_lyrics(&raw.lyrics))
 }
 
@@ -194,8 +194,8 @@ fn seek(data: &Value, p: &dyn Providers) -> OpResult {
             "position_ms must be >= 0",
         ));
     }
-    p.set_position(i32_saturating(ms)).map_err(internal)?;
-    let pos = p.playback_position().map_err(internal)?;
+    p.set_position(i32_saturating(ms)).map_err(host_error)?;
+    let pos = p.playback_position().map_err(host_error)?;
     Ok(json!({ "position_ms": pos.current, "duration_ms": pos.total }))
 }
 
@@ -220,8 +220,8 @@ fn set_rating(data: &Value, p: &dyn Providers) -> OpResult {
             format_rating(r)
         }
     };
-    p.set_rating(&value).map_err(internal)?;
-    let back = p.rating().map_err(internal)?;
+    p.set_rating(&value).map_err(host_error)?;
+    let back = p.rating().map_err(host_error)?;
     Ok(json!({ "rating": track::parse_rating(&back) }))
 }
 
@@ -237,8 +237,8 @@ fn set_lfm(data: &Value, p: &dyn Providers) -> OpResult {
             ));
         }
     };
-    p.set_lfm_rating(status).map_err(internal)?;
-    Ok(json!({ "lfm_status": lfm_str(p.lfm_rating().map_err(internal)?) }))
+    p.set_lfm_rating(status).map_err(host_error)?;
+    Ok(json!({ "lfm_status": lfm_str(p.lfm_rating().map_err(host_error)?) }))
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

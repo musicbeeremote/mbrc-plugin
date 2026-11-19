@@ -630,10 +630,38 @@ mod ffi_smoke_tests {
         // A non-null, zero-length result buffer must be freed on the error path.
         let cb = SafeCallbacks::new(mock_callbacks());
         let before = outstanding_allocs();
-        let result: Result<PlaybackPositionResponse, String> =
+        let result: crate::providers::HostResult<PlaybackPositionResponse> =
             cb.query_no_params(QueryType::Lyrics);
         assert!(result.is_err());
         assert_eq!(outstanding_allocs(), before, "empty result buffer leaked");
+    }
+
+    /// The host's status says what kind of failure a call was: `1` is a command
+    /// MusicBee declined, any other non-zero is a failure, and a missing
+    /// callback means MusicBee cannot be reached.
+    #[test]
+    fn a_host_status_becomes_the_matching_kind_of_error() {
+        use crate::providers::HostError;
+
+        extern "C" fn declines(_: i32, _: *const u8, _: u32) -> i32 {
+            1
+        }
+        extern "C" fn throws(_: i32, _: *const u8, _: u32) -> i32 {
+            -1
+        }
+        let with = |exec| MbrcCallbacks {
+            execute_command: Some(exec),
+            ..mock_callbacks()
+        };
+        let run = |cbs| SafeCallbacks::new(cbs).execute_command(CommandType::Play, &());
+
+        assert!(matches!(run(with(declines)), Err(HostError::Refused(_))));
+        assert!(matches!(run(with(throws)), Err(HostError::Failed(_))));
+        let missing = MbrcCallbacks {
+            execute_command: None,
+            ..mock_callbacks()
+        };
+        assert!(matches!(run(missing), Err(HostError::Unreachable(_))));
     }
 
     #[test]

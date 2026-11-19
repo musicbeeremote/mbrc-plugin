@@ -770,6 +770,7 @@ namespace MusicBeePlugin.Ffi
                     () => _commands.Handle(commandType, p), out acquired, out done);
                 RecordCall(((CommandType)commandType).ToString(),
                     acquired - asked, done - acquired, 0, done);
+                // 0 done, 1 MusicBee declined, -1 failed: the core reports each differently.
                 return ok ? 0 : 1;
             }
             catch (Exception ex)

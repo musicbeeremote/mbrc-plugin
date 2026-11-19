@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 
 use super::nowplaying_list::orders_highest_first;
 use super::{
-    OpResult, V6Error, internal, opt_bool, opt_str, page_args, page_json, req_i64, req_str,
+    OpResult, V6Error, host_error, opt_bool, opt_str, page_args, page_json, req_i64, req_str,
     req_str_array, track,
 };
 use crate::cover::store::CoverStore;
@@ -71,7 +71,7 @@ fn list(data: &Value, p: &dyn Providers) -> OpResult {
     // Provider-paginated (like radio); pass the window straight through.
     let page = p
         .playlist_catalog(offset as i32, limit as i32)
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let total = page.total.max(0) as usize;
     let items = page
         .data
@@ -123,7 +123,7 @@ fn tracks(
     };
     let totals = opt_bool(data, "totals")?.unwrap_or(false);
 
-    let files = p.playlist_files(url).map_err(internal)?;
+    let files = p.playlist_files(url).map_err(host_error)?;
     let version = version_of(&files.paths);
 
     let whole = needle.is_some() || totals;
@@ -259,7 +259,7 @@ fn untagged_track(path: &str) -> CachedTags {
 }
 
 fn play(data: &Value, p: &dyn Providers) -> OpResult {
-    p.play_playlist(req_str(data, "url")?).map_err(internal)?;
+    p.play_playlist(req_str(data, "url")?).map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -291,7 +291,7 @@ fn editable_files(data: &Value, p: &dyn Providers, url: &str) -> Result<Playlist
 /// A playlist the host knows, or `not_found`: nothing reaches a host write
 /// with a url MusicBee has not listed as a playlist.
 fn known_files(p: &dyn Providers, url: &str) -> Result<PlaylistFiles, V6Error> {
-    let files = p.playlist_files(url).map_err(internal)?;
+    let files = p.playlist_files(url).map_err(host_error)?;
     if !known(&files.kind) {
         return Err(V6Error::field(
             ErrorCode::NotFound,
@@ -305,7 +305,9 @@ fn known_files(p: &dyn Providers, url: &str) -> Result<PlaylistFiles, V6Error> {
 /// The version after a write, read back rather than predicted, so it is the
 /// token the next `playlist_tracks` will serve.
 fn written_version(p: &dyn Providers, url: &str) -> Result<String, V6Error> {
-    Ok(version_of(&p.playlist_files(url).map_err(internal)?.paths))
+    Ok(version_of(
+        &p.playlist_files(url).map_err(host_error)?.paths,
+    ))
 }
 
 /// The tracks a request names, or `None` when it names none.
@@ -330,7 +332,7 @@ fn named_tracks(
         (false, false, false) => Ok(None),
         (true, false, false) => req_str_array(data, "paths").map(Some),
         (false, true, false) => super::library::scope_paths(data, p, cache).map(Some),
-        (false, false, true) => p.now_playing_list_paths().map(Some).map_err(internal),
+        (false, false, true) => p.now_playing_list_paths().map(Some).map_err(host_error),
         _ => Err(V6Error::new(
             ErrorCode::InvalidField,
             "name the tracks one way: paths, a library scope, or now_playing",
@@ -373,8 +375,8 @@ fn create(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> OpR
         ));
     }
     let paths = named_tracks(data, p, cache)?.unwrap_or_default();
-    let url = p.create_playlist(folder, name, paths).map_err(internal)?;
-    let files = p.playlist_files(&url).map_err(internal)?;
+    let url = p.create_playlist(folder, name, paths).map_err(host_error)?;
+    let files = p.playlist_files(&url).map_err(host_error)?;
     Ok(json!({ "url": url, "name": files.name, "version": version_of(&files.paths) }))
 }
 
@@ -404,7 +406,7 @@ fn is_folder_under_root(folder: &str) -> bool {
 fn delete(data: &Value, p: &dyn Providers) -> OpResult {
     let url = req_str(data, "url")?;
     known_files(p, url)?;
-    p.delete_playlist(url).map_err(internal)?;
+    p.delete_playlist(url).map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -414,7 +416,7 @@ fn add_tracks(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) ->
     let paths = required_tracks(data, p, cache)?;
     let added = paths.len();
     if added > 0 {
-        p.append_to_playlist(url, paths).map_err(internal)?;
+        p.append_to_playlist(url, paths).map_err(host_error)?;
     }
     Ok(json!({ "version": written_version(p, url)?, "added": added }))
 }
@@ -444,7 +446,7 @@ fn remove_tracks(data: &Value, p: &dyn Providers) -> OpResult {
         .filter(|(i, _)| !gone.contains(i))
         .map(|(_, path)| path)
         .collect();
-    p.set_playlist_files(url, kept).map_err(internal)?;
+    p.set_playlist_files(url, kept).map_err(host_error)?;
     Ok(json!({ "version": written_version(p, url)?, "removed": orders.len() }))
 }
 
@@ -468,7 +470,7 @@ fn move_tracks(data: &Value, p: &dyn Providers) -> OpResult {
         ));
     }
     p.set_playlist_files(url, moved_to(files.paths, &from, to as usize))
-        .map_err(internal)?;
+        .map_err(host_error)?;
     Ok(json!({ "version": written_version(p, url)? }))
 }
 
@@ -492,7 +494,7 @@ fn set_tracks(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) ->
     let url = req_str(data, "url")?;
     editable_files(data, p, url)?;
     let paths = required_tracks(data, p, cache)?;
-    p.set_playlist_files(url, paths).map_err(internal)?;
+    p.set_playlist_files(url, paths).map_err(host_error)?;
     Ok(json!({ "version": written_version(p, url)? }))
 }
 
@@ -1493,7 +1495,7 @@ mod tests {
     }
 
     #[test]
-    fn a_write_the_host_refuses_is_internal() {
+    fn a_write_the_host_refuses_is_unavailable() {
         let mut m = mbp(&["/a"]);
         m.refuse_playlist_writes = true;
         let err = edit(
@@ -1502,7 +1504,7 @@ mod tests {
             json!({ "url": URL, "paths": ["/b"] }),
         )
         .unwrap_err();
-        assert_eq!(err.code, ErrorCode::Internal);
+        assert_eq!(err.code, ErrorCode::Unavailable);
     }
 
     #[test]

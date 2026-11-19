@@ -221,7 +221,7 @@ pub(crate) fn switch_output_to(
         return Ok(devices);
     }
     p.switch_output(device)?;
-    p.output_devices()
+    p.output_devices().map_err(String::from)
 }
 
 #[cfg(test)]

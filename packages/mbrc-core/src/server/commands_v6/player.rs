@@ -11,7 +11,7 @@ use crate::nowplaying::NowPlayingCache;
 use crate::protocol::messages::{OutputDevices, PlayState, PlayerState, RepeatMode, ShuffleMode};
 use crate::providers::Providers;
 
-use super::{OpResult, V6Error, internal, req_bool, req_i64, req_str};
+use super::{OpResult, V6Error, host_error, req_bool, req_i64, req_str};
 use mbrc_wire::v6::ErrorCode;
 
 /// The op names this domain serves (advertised in the handshake capabilities).
@@ -63,8 +63,8 @@ pub fn dispatch(
 
 /// A fire-and-forget transport action: empty data on success (the
 /// `play_state_changed` event delivers the resulting state).
-fn transport(r: Result<(), String>) -> OpResult {
-    r.map(|_| json!({})).map_err(internal)
+fn transport(r: crate::providers::HostResult<()>) -> OpResult {
+    r.map(|_| json!({})).map_err(host_error)
 }
 
 fn set_volume(data: &Value, p: &dyn Providers) -> OpResult {
@@ -75,13 +75,13 @@ fn set_volume(data: &Value, p: &dyn Providers) -> OpResult {
             "volume must be between 0 and 100",
         ));
     }
-    p.set_volume(volume as i32).map_err(internal)?;
-    Ok(json!({ "volume": p.player_state().map_err(internal)?.volume }))
+    p.set_volume(volume as i32).map_err(host_error)?;
+    Ok(json!({ "volume": p.player_state().map_err(host_error)?.volume }))
 }
 
 fn set_mute(data: &Value, p: &dyn Providers) -> OpResult {
-    p.set_mute(req_bool(data, "muted")?).map_err(internal)?;
-    Ok(json!({ "muted": p.player_state().map_err(internal)?.mute }))
+    p.set_mute(req_bool(data, "muted")?).map_err(host_error)?;
+    Ok(json!({ "muted": p.player_state().map_err(host_error)?.mute }))
 }
 
 /// Set an explicit shuffle mode (no toggle). AutoDJ-aware, mirroring the legacy
@@ -95,16 +95,16 @@ fn set_shuffle(data: &Value, p: &dyn Providers) -> OpResult {
     let mode = req_str(data, "mode")?;
     match mode {
         "off" => {
-            p.set_shuffle(false).map_err(internal)?;
-            p.set_auto_dj(false).map_err(internal)?;
+            p.set_shuffle(false).map_err(host_error)?;
+            p.set_auto_dj(false).map_err(host_error)?;
         }
         "shuffle" => {
-            p.set_auto_dj(false).map_err(internal)?;
-            p.set_shuffle(true).map_err(internal)?;
+            p.set_auto_dj(false).map_err(host_error)?;
+            p.set_shuffle(true).map_err(host_error)?;
         }
         "autodj" => {
-            p.set_shuffle(true).map_err(internal)?;
-            p.set_auto_dj(true).map_err(internal)?;
+            p.set_shuffle(true).map_err(host_error)?;
+            p.set_auto_dj(true).map_err(host_error)?;
         }
         other => {
             return Err(V6Error::new(
@@ -128,7 +128,7 @@ fn set_repeat(data: &Value, p: &dyn Providers) -> OpResult {
             ));
         }
     };
-    p.set_repeat(repeat).map_err(internal)?;
+    p.set_repeat(repeat).map_err(host_error)?;
     Ok(json!({ "mode": repeat_str(repeat) }))
 }
 
@@ -139,14 +139,14 @@ fn set_repeat(data: &Value, p: &dyn Providers) -> OpResult {
 /// internal failure.
 fn set_scrobbling(data: &Value, p: &dyn Providers) -> OpResult {
     let enabled = req_bool(data, "enabled")?;
-    if enabled && !p.has_lastfm_account().map_err(internal)? {
+    if enabled && !p.has_lastfm_account().map_err(host_error)? {
         return Err(V6Error::new(
             ErrorCode::Unavailable,
             "scrobbling requires a configured last.fm account",
         ));
     }
-    p.set_scrobble(enabled).map_err(internal)?;
-    Ok(json!({ "enabled": p.player_state().map_err(internal)?.scrobble }))
+    p.set_scrobble(enabled).map_err(host_error)?;
+    Ok(json!({ "enabled": p.player_state().map_err(host_error)?.scrobble }))
 }
 
 /// Stops playback at the end of the current track, or cancels that.
@@ -156,26 +156,27 @@ fn set_scrobbling(data: &Value, p: &dyn Providers) -> OpResult {
 /// toggle racing a change from MusicBee's own window lands on the wrong one.
 fn set_stop_after_current(data: &Value, p: &dyn Providers) -> OpResult {
     let enabled = req_bool(data, "enabled")?;
-    p.set_stop_after_current(enabled).map_err(internal)?;
-    Ok(json!({ "enabled": p.player_state().map_err(internal)?.stop_after_current }))
+    p.set_stop_after_current(enabled).map_err(host_error)?;
+    Ok(json!({ "enabled": p.player_state().map_err(host_error)?.stop_after_current }))
 }
 
 /// Full player state (a pure read - served from the now-playing cache when wired).
 fn status(p: &dyn Providers, now_playing: Option<&NowPlayingCache>) -> OpResult {
     let state = match now_playing {
         Some(c) => c.player(),
-        None => p.player_state().map_err(internal)?,
+        None => p.player_state().map_err(host_error)?,
     };
     Ok(player_status_json(&state))
 }
 
 fn output(p: &dyn Providers) -> OpResult {
-    Ok(output_json(&p.output_devices().map_err(internal)?))
+    Ok(output_json(&p.output_devices().map_err(host_error)?))
 }
 
 fn set_output(data: &Value, p: &dyn Providers) -> OpResult {
     let device = req_str(data, "device")?;
-    let devices = crate::server::commands::player::switch_output_to(p, device).map_err(internal)?;
+    let devices =
+        crate::server::commands::player::switch_output_to(p, device).map_err(host_error)?;
     Ok(output_json(&devices))
 }
 

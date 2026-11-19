@@ -11,6 +11,14 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ffi::types::{CommandType, HostEventType, MbrcCallbacks, QueryType};
+use crate::providers::{HostError, HostResult};
+
+/// A call the host carried out; the status contract with `NativeBridge.cs`.
+const HOST_OK: i32 = 0;
+
+/// A command MusicBee answered `false` to. Any other non-zero status is a
+/// failure: the host threw, or does not know the kind it was asked for.
+const HOST_REFUSED: i32 = 1;
 
 pub struct SafeCallbacks {
     raw: MbrcCallbacks,
@@ -39,15 +47,15 @@ impl SafeCallbacks {
         &self,
         query_type: QueryType,
         params: &P,
-    ) -> Result<R, String> {
+    ) -> HostResult<R> {
         let query_fn = self
             .raw
             .query_data
-            .ok_or_else(|| "query_data callback is null".to_string())?;
+            .ok_or_else(|| HostError::Unreachable("query_data callback is null".into()))?;
         let free_fn = self
             .raw
             .free_buffer
-            .ok_or_else(|| "free_buffer callback is null".to_string())?;
+            .ok_or_else(|| HostError::Unreachable("free_buffer callback is null".into()))?;
 
         // Named map: `to_vec` would write a fixarray the C# side cannot read.
         let params_buf = rmp_serde::to_vec_named(params)
@@ -73,38 +81,37 @@ impl SafeCallbacks {
             "query_data",
         );
 
-        if status != 0 {
+        if status != HOST_OK {
             if !result_buf.is_null() {
                 free_fn(result_buf);
             }
-            return Err(format!(
-                "query_data: C# provider returned error status {status}"
-            ));
+            return Err(HostError::Failed(format!(
+                "query_data {query_type:?}: C# provider returned error status {status}"
+            )));
         }
         if result_buf.is_null() {
-            return Err("query_data: success status but null result buffer".to_string());
+            return Err("query_data: success status but null result buffer".into());
         }
         if result_len == 0 {
             // Freed anyway: `AllocHGlobal(0)` is still non-null on Windows.
             free_fn(result_buf);
-            return Err("query_data: success status but empty result buffer".to_string());
+            return Err("query_data: success status but empty result buffer".into());
         }
 
         // SAFETY: the pointer is null-checked above and the contract says it covers that
         // many readable bytes.
         let result_slice = unsafe { std::slice::from_raw_parts(result_buf, result_len as usize) };
-        let result_vec = result_slice.to_vec();
+        let decoded = rmp_serde::from_slice(result_slice)
+            .map_err(|e| HostError::Failed(format!("failed to deserialize query result: {e}")));
         free_fn(result_buf);
-
-        rmp_serde::from_slice(&result_vec)
-            .map_err(|e| format!("failed to deserialize query result: {e}"))
+        decoded
     }
 
     /// A query that takes no parameters (sends an empty msgpack payload).
     ///
     /// # Errors
     /// As [`SafeCallbacks::query`], minus the parameter serialization.
-    pub fn query_no_params<R: DeserializeOwned>(&self, query_type: QueryType) -> Result<R, String> {
+    pub fn query_no_params<R: DeserializeOwned>(&self, query_type: QueryType) -> HostResult<R> {
         self.query(query_type, &())
     }
 
@@ -114,11 +121,11 @@ impl SafeCallbacks {
         &self,
         command_type: CommandType,
         params: &P,
-    ) -> Result<(), String> {
+    ) -> HostResult<()> {
         let exec_fn = self
             .raw
             .execute_command
-            .ok_or_else(|| "execute_command callback is null".to_string())?;
+            .ok_or_else(|| HostError::Unreachable("execute_command callback is null".into()))?;
 
         let params_buf = rmp_serde::to_vec_named(params)
             .map_err(|e| format!("failed to serialize command params: {e}"))?;
@@ -137,12 +144,15 @@ impl SafeCallbacks {
             "execute_command",
         );
 
-        if status != 0 {
-            return Err(format!(
-                "execute_command: C# provider returned error status {status}"
-            ));
+        match status {
+            HOST_OK => Ok(()),
+            HOST_REFUSED => Err(HostError::Refused(format!(
+                "execute_command {command_type:?}: MusicBee declined"
+            ))),
+            _ => Err(HostError::Failed(format!(
+                "execute_command {command_type:?}: C# provider returned error status {status}"
+            ))),
         }
-        Ok(())
     }
 
     /// Pushes a core -> host event via `on_event` (one-way). No-op when the host

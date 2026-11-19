@@ -52,7 +52,7 @@ pub fn browse_genres(data: &Value, ctx: &Ctx) -> HandlerResult {
         return reply_dto("browsegenres", &slice_page(full, offset, limit));
     }
     let page = flat_browse(ctx, KEY_BROWSE_GENRES, offset, limit, || {
-        ctx.providers.browse_genres(0, 0)
+        ctx.providers.browse_genres(0, 0).map_err(String::from)
     })?;
     reply_dto("browsegenres", &page)
 }
@@ -65,7 +65,9 @@ pub fn browse_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
         .unwrap_or(false);
     let key = key_browse_artists(album_artists);
     let page = flat_browse(ctx, &key, offset, limit, || {
-        ctx.providers.browse_artists(0, 0, album_artists)
+        ctx.providers
+            .browse_artists(0, 0, album_artists)
+            .map_err(String::from)
     })?;
     reply_dto("browseartists", &page)
 }
@@ -73,7 +75,7 @@ pub fn browse_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
 pub fn browse_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
     let (offset, limit) = page_request(data, LIST_PAGE);
     let page = flat_browse(ctx, KEY_BROWSE_ALBUMS, offset, limit, || {
-        ctx.providers.browse_albums(0, 0)
+        ctx.providers.browse_albums(0, 0).map_err(String::from)
     })?;
     reply_dto("browsealbums", &page)
 }
@@ -327,7 +329,7 @@ pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
         return reply_dto("librarygenreartists", &list);
     }
     let list = nav_cached(ctx, &format!("{NAV_GENRE_ARTISTS}{genre}"), || {
-        ctx.providers.genre_artists(&genre)
+        ctx.providers.genre_artists(&genre).map_err(String::from)
     })?;
     reply_dto("librarygenreartists", &list)
 }
@@ -335,7 +337,7 @@ pub fn genre_artists(data: &Value, ctx: &Ctx) -> HandlerResult {
 pub fn artist_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
     let artist = as_set_string(data).unwrap_or_default();
     let list = nav_cached(ctx, &format!("{NAV_ARTIST_ALBUMS}{artist}"), || {
-        ctx.providers.artist_albums(&artist)
+        ctx.providers.artist_albums(&artist).map_err(String::from)
     })?;
     reply_dto("libraryartistalbums", &list)
 }
@@ -343,7 +345,7 @@ pub fn artist_albums(data: &Value, ctx: &Ctx) -> HandlerResult {
 pub fn album_tracks(data: &Value, ctx: &Ctx) -> HandlerResult {
     let album = as_set_string(data).unwrap_or_default();
     let list = nav_cached(ctx, &format!("{NAV_ALBUM_TRACKS}{album}"), || {
-        ctx.providers.album_tracks(&album)
+        ctx.providers.album_tracks(&album).map_err(String::from)
     })?;
     reply_dto("libraryalbumtracks", &list)
 }

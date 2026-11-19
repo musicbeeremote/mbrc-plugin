@@ -25,7 +25,7 @@ use mbrc_wire::v6::ErrorCode;
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
-use crate::providers::Providers;
+use crate::providers::{HostError, Providers};
 use crate::server::path_guard;
 
 /// Ops the session answers itself, advertised in the handshake capabilities
@@ -298,9 +298,26 @@ pub(crate) fn req_str_array(data: &Value, field: &str) -> Result<Vec<String>, V6
     }
 }
 
-/// Map a provider/FFI failure string to an internal-error V6 failure.
-pub(crate) fn internal(e: String) -> V6Error {
-    V6Error::new(ErrorCode::Internal, e)
+/// The V6 failure for a call into MusicBee that did not answer.
+///
+/// MusicBee declining or being out of reach is `unavailable`, a precondition a
+/// client can show and retry; a failure is `internal_error`. A plain string is
+/// the core's own failure.
+pub(crate) fn host_error(e: impl Into<HostError>) -> V6Error {
+    match e.into() {
+        HostError::Refused(detail) => {
+            tracing::debug!(%detail, "MusicBee declined a request");
+            V6Error::new(ErrorCode::Unavailable, "MusicBee declined the request")
+        }
+        HostError::Unreachable(detail) => {
+            tracing::debug!(%detail, "MusicBee is out of reach");
+            V6Error::new(
+                ErrorCode::Unavailable,
+                "the plugin cannot reach MusicBee right now",
+            )
+        }
+        HostError::Failed(detail) => V6Error::new(ErrorCode::Internal, detail),
+    }
 }
 
 // ── optional field extractors (absent -> None; present-but-wrong-type -> error) ──
@@ -360,6 +377,27 @@ mod tests {
         assert_eq!(offset, i32::MAX as i64);
         assert_eq!(limit, 0); // negative limit clamps to 0 ("to the end")
         assert_eq!(offset as i32, i32::MAX); // no wrap
+    }
+
+    /// MusicBee declining or being out of reach is a precondition a client can
+    /// show; only a failure is `internal_error`, and only it carries its detail.
+    #[test]
+    fn a_host_error_reaches_the_client_as_its_kind() {
+        let refused = host_error(HostError::Refused("execute_command Play".into()));
+        assert_eq!(refused.code, ErrorCode::Unavailable);
+        assert_eq!(refused.message, "MusicBee declined the request");
+
+        let unreachable = host_error(HostError::Unreachable("callback is null".into()));
+        assert_eq!(unreachable.code, ErrorCode::Unavailable);
+
+        let failed = host_error(HostError::Failed("bad reply".into()));
+        assert_eq!(failed.code, ErrorCode::Internal);
+        assert_eq!(failed.message, "bad reply");
+
+        assert_eq!(
+            host_error("the core's own".to_string()).code,
+            ErrorCode::Internal
+        );
     }
 
     #[test]

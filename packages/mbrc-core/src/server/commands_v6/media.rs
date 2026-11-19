@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use mbrc_wire::v6::ErrorCode;
 
 use super::library::{QueueRequest, albums_page, descending, needle, slice, sort_field};
-use super::{OpResult, V6Error, internal, opt_str, page_args, page_json, req_str, track};
+use super::{OpResult, V6Error, host_error, opt_str, page_args, page_json, req_str, track};
 use crate::cover::store::CoverStore;
 use crate::media::{MediaLibrary, MediaSource, MediaTags, album_cover_key};
 use crate::metadata_cache::{
@@ -60,7 +60,7 @@ fn sources(p: &dyn Providers, media: &MediaLibrary) -> OpResult {
     media.request_relist(&MediaSource::ALL);
     let mut items = Vec::new();
     for source in MediaSource::ALL {
-        let count = media.paths(p, source).map_err(internal)?.len();
+        let count = media.paths(p, source).map_err(host_error)?.len();
         if count > 0 {
             items.push(json!({ "source": source.as_str(), "count": count }));
         }
@@ -90,7 +90,7 @@ fn albums(
 ) -> OpResult {
     let source = source(data)?;
     let (offset, limit) = page_args(data)?;
-    let tags = media.tags(p, source).map_err(internal)?;
+    let tags = media.tags(p, source).map_err(host_error)?;
     let filter = TrackFilter {
         artist: opt_str(data, "artist")?,
         ..TrackFilter::default()
@@ -144,7 +144,7 @@ fn tracks(
     let (offset, limit) = page_args(data)?;
     let sort = sort_field(data)?;
     let descending = descending(data)?;
-    let tags = media.tags(p, source).map_err(internal)?;
+    let tags = media.tags(p, source).map_err(host_error)?;
     let mut selected = select(data, &tags)?;
     match sort {
         Some(field) => selected.sort_by(|a, b| field.compare(a.0, b.0)),
@@ -180,7 +180,7 @@ fn tracks(
 fn queue(data: &Value, p: &dyn Providers, media: &MediaLibrary) -> OpResult {
     let source = source(data)?;
     let request = QueueRequest::parse(data)?;
-    let tags = media.tags(p, source).map_err(internal)?;
+    let tags = media.tags(p, source).map_err(host_error)?;
     let mut selected = select(data, &tags)?;
     selected.sort_by_cached_key(|(t, _)| reading_order(t));
     let paths = selected.into_iter().map(|(_, t)| t.src.clone()).collect();

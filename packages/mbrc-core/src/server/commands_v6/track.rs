@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, internal, req_str};
+use super::{OpResult, V6Error, host_error, req_str};
 use crate::cover::artists::ArtistImages;
 use crate::cover::cover_identifier;
 use crate::cover::store::{Artwork, CoverStore, PLAYING_KEY_PREFIX, track_cover_key};
@@ -52,7 +52,7 @@ fn track_get(data: &Value, p: &dyn Providers, cover_store: Option<&CoverStore>) 
     let src = req_str(data, "src")?;
     let tags = p
         .tracks_detailed_for_paths(vec![src.to_string()])
-        .map_err(internal)?
+        .map_err(host_error)?
         .into_iter()
         .next()
         .ok_or_else(|| V6Error::new(ErrorCode::NotFound, format!("no track for src: {src}")))?;
@@ -368,7 +368,7 @@ pub(crate) fn tags_for_paths(
     if misses.is_empty() {
         return Ok(hits);
     }
-    let fetched = p.tracks_detailed_for_paths(misses).map_err(internal)?;
+    let fetched = p.tracks_detailed_for_paths(misses).map_err(host_error)?;
     let filled: Vec<CachedTags> = fetched.iter().map(CachedTags::from).collect();
     if let Some(cache) = cache {
         cache.put_track_tags(&filled);

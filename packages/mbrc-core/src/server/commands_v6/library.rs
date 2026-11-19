@@ -28,7 +28,7 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, internal, opt_bool, opt_str, page_args, page_json, track};
+use super::{OpResult, V6Error, host_error, opt_bool, opt_str, page_args, page_json, track};
 use crate::cover::artists::ArtistImages;
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
@@ -112,7 +112,7 @@ fn artists(
     };
     let mut all: Vec<ArtistData> = match (credited, genre) {
         (Some(counts), _) => artist_data(counts),
-        (None, Some(genre)) => p.genre_artists(genre).map_err(internal)?,
+        (None, Some(genre)) => p.genre_artists(genre).map_err(host_error)?,
         (None, None) => flat_list(cache, &key_browse_artists(album_artists), || {
             p.browse_artists(0, 0, album_artists)
         })?,
@@ -186,7 +186,7 @@ fn albums(
     let (offset, limit) = page_args(data)?;
     let all: Vec<AlbumData> = match opt_str(data, "artist")? {
         Some(artist) => {
-            let mut own = match p.artist_albums(artist).map_err(internal)? {
+            let mut own = match p.artist_albums(artist).map_err(host_error)? {
                 found if found.is_empty() => albums_the_tags_name(cache, artist),
                 found => found,
             };
@@ -308,7 +308,7 @@ fn album_page(
     offset: i64,
     limit: i64,
 ) -> Result<(usize, Vec<String>), V6Error> {
-    let walk = p.album_tracks(album).map_err(internal)?;
+    let walk = p.album_tracks(album).map_err(host_error)?;
     let chooses = chooses_between_albums(&walk, artist);
     let mut tracks: Vec<CachedTags> = one_album(walk.iter(), chooses)
         .into_iter()
@@ -413,7 +413,7 @@ fn unalbumed_page(
         // Cold cache: the path list, filtered on the path itself since no tags
         // are cached to match against yet.
         _ => {
-            let mut paths = p.track_paths().map_err(internal)?;
+            let mut paths = p.track_paths().map_err(host_error)?;
             if let Some(n) = needle {
                 paths.retain(|path| contains(path, n));
             }
@@ -474,7 +474,7 @@ fn radio(data: &Value, p: &dyn Providers) -> OpResult {
     // Radio is provider-paginated (no cache), so pass the window straight through.
     let page = p
         .radio_stations(offset as i32, limit as i32)
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let total = page.total.max(0) as usize;
     let items = page
         .data
@@ -538,7 +538,7 @@ impl<'d> QueueRequest<'d> {
         }
         let count = paths.len();
         if count > 0 {
-            p.queue(self.mode, paths, self.play).map_err(internal)?;
+            p.queue(self.mode, paths, self.play).map_err(host_error)?;
         }
         Ok(json!({ "count": count }))
     }
@@ -609,7 +609,7 @@ pub(super) fn scope_paths(
 /// an artist's tracks in this genre from their tracks in another.
 fn cold_scope_paths(filter: &TrackFilter<'_>, p: &dyn Providers) -> Result<Vec<String>, V6Error> {
     if let Some(album) = filter.album {
-        let tracks = p.album_tracks(album).map_err(internal)?;
+        let tracks = p.album_tracks(album).map_err(host_error)?;
         return Ok(album_scope_paths(filter, tracks));
     }
 
@@ -617,12 +617,12 @@ fn cold_scope_paths(filter: &TrackFilter<'_>, p: &dyn Providers) -> Result<Vec<S
         (Some(album), _, _) => vec![album.to_string()],
         (None, Some(artist), _) => p
             .artist_albums(artist)
-            .map_err(internal)?
+            .map_err(host_error)?
             .into_iter()
             .map(|a| a.album)
             .collect(),
         (None, None, Some(genre)) => {
-            let tracks = p.genre_tracks(genre).map_err(internal)?;
+            let tracks = p.genre_tracks(genre).map_err(host_error)?;
             let by_query = TrackFilter {
                 query: filter.query,
                 artist: None,
@@ -637,7 +637,7 @@ fn cold_scope_paths(filter: &TrackFilter<'_>, p: &dyn Providers) -> Result<Vec<S
         }
         // No scope at all: the whole library, which the provider lists directly.
         (None, None, None) => {
-            let mut paths = p.track_paths().map_err(internal)?;
+            let mut paths = p.track_paths().map_err(host_error)?;
             if let Some(q) = filter.query {
                 paths.retain(|path| contains(path, q));
             }
@@ -647,7 +647,7 @@ fn cold_scope_paths(filter: &TrackFilter<'_>, p: &dyn Providers) -> Result<Vec<S
 
     let mut paths = Vec::new();
     for album in albums {
-        for track in p.album_tracks(&album).map_err(internal)? {
+        for track in p.album_tracks(&album).map_err(host_error)? {
             if admits(filter, &track) {
                 paths.push(track.src);
             }
@@ -714,7 +714,7 @@ fn admits(filter: &TrackFilter<'_>, track: &Track) -> bool {
 
 fn play_all(data: &Value, p: &dyn Providers) -> OpResult {
     let shuffle = opt_bool(data, "shuffle")?.unwrap_or(false);
-    p.play_all(shuffle).map_err(internal)?;
+    p.play_all(shuffle).map_err(host_error)?;
     Ok(json!({}))
 }
 
@@ -866,14 +866,14 @@ pub(crate) fn artist_data(counts: Vec<(String, u32)>) -> Vec<ArtistData> {
 fn flat_list<T, F>(cache: Option<&MetadataCache>, key: &str, fetch: F) -> Result<Vec<T>, V6Error>
 where
     T: Serialize + DeserializeOwned + Default,
-    F: FnOnce() -> Result<Page<T>, String>,
+    F: FnOnce() -> crate::providers::HostResult<Page<T>>,
 {
     if let Some(c) = cache
         && let Some(page) = c.get::<Page<T>>(key)
     {
         return Ok(page.data);
     }
-    let page = fetch().map_err(internal)?;
+    let page = fetch().map_err(host_error)?;
     if let Some(c) = cache {
         c.put(key, &page);
     }

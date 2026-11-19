@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, internal, req_str};
+use super::{OpResult, V6Error, host_error, req_str};
 use crate::credits::{self, Credit, Role};
 use crate::metadata_cache::{MetadataCache, TagRows};
 use crate::multi_value;
@@ -61,7 +61,7 @@ fn listed() -> impl Iterator<Item = &'static TagField> {
 fn fields(p: &dyn Providers, cache: Option<&MetadataCache>) -> OpResult {
     let names = p
         .field_names(listed().map(|f| f.label).collect())
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let rows = rows(p, cache)?;
     let fields: Vec<Value> = listed()
         .zip(names)
@@ -109,7 +109,7 @@ fn now_playing_tags(data: &Value, p: &dyn Providers, cache: Option<&MetadataCach
     };
     let mut ids: Vec<i32> = wanted.iter().map(|f| f.read).collect();
     ids.push(DISPLAY_ARTIST);
-    let read = p.now_playing_tags(ids).map_err(internal)?;
+    let read = p.now_playing_tags(ids).map_err(host_error)?;
     if read.path.is_empty() {
         return Ok(json!({ "path": null, "tags": {} }));
     }
@@ -140,7 +140,7 @@ fn set_tag(data: &Value, p: &dyn Providers, cache: Option<&MetadataCache>) -> Op
 
     let result = p
         .write_now_playing_tag(path.to_owned(), field.field, field.read, stored.clone())
-        .map_err(internal)?;
+        .map_err(host_error)?;
     match result.outcome.as_str() {
         "written" => {}
         "stale_track" => {
@@ -181,7 +181,7 @@ fn stored_names(
     let names = string_list(field, value)?;
     let read = p
         .now_playing_tags(vec![field.read, DISPLAY_ARTIST])
-        .map_err(internal)?;
+        .map_err(host_error)?;
     let raw = read.values.first().map_or("", String::as_str);
     let display = read.values.get(1).map_or("", String::as_str);
     let current = credits::or_display(raw, display);
@@ -388,14 +388,14 @@ fn read_rows(p: &dyn Providers, cache: Option<&MetadataCache>) -> Result<TagRows
         Some(c) if c.track_count() > 0 => {
             c.track_page_paths(0, i32::try_from(c.track_count()).unwrap_or(i32::MAX))
         }
-        _ => p.track_paths().map_err(internal)?,
+        _ => p.track_paths().map_err(host_error)?,
     };
     let ids = read_ids();
     let mut rows = TagRows::with_capacity(paths.len());
     for batch in paths.chunks(ROW_BATCH) {
         for row in p
             .tags_for_paths(ids.clone(), batch.to_vec())
-            .map_err(internal)?
+            .map_err(host_error)?
         {
             rows.insert(row.path, row.values);
         }

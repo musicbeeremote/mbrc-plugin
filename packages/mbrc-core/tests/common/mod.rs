@@ -8,7 +8,7 @@
 #![allow(dead_code)]
 
 use mbrc_core::protocol::messages::*;
-use mbrc_core::providers::Providers;
+use mbrc_core::providers::{HostResult, Providers};
 
 /// A provider returning fully-populated representative data so every field of
 /// every response schema is observable.
@@ -66,34 +66,34 @@ fn fixture_field(field: i32) -> String {
 }
 
 impl Providers for FixtureProviders {
-    fn play(&self) -> Result<(), String> {
+    fn play(&self) -> HostResult<()> {
         Ok(())
     }
-    fn pause(&self) -> Result<(), String> {
+    fn pause(&self) -> HostResult<()> {
         Ok(())
     }
-    fn play_pause(&self) -> Result<(), String> {
+    fn play_pause(&self) -> HostResult<()> {
         Ok(())
     }
-    fn stop(&self) -> Result<(), String> {
+    fn stop(&self) -> HostResult<()> {
         Ok(())
     }
-    fn close_musicbee(&self) -> Result<(), String> {
+    fn close_musicbee(&self) -> HostResult<()> {
         Ok(())
     }
-    fn next(&self) -> Result<(), String> {
+    fn next(&self) -> HostResult<()> {
         Ok(())
     }
-    fn previous(&self) -> Result<(), String> {
+    fn previous(&self) -> HostResult<()> {
         Ok(())
     }
-    fn set_volume(&self, _v: i32) -> Result<(), String> {
+    fn set_volume(&self, _v: i32) -> HostResult<()> {
         Ok(())
     }
-    fn set_position(&self, _v: i32) -> Result<(), String> {
+    fn set_position(&self, _v: i32) -> HostResult<()> {
         Ok(())
     }
-    fn player_state(&self) -> Result<PlayerState, String> {
+    fn player_state(&self) -> HostResult<PlayerState> {
         Ok(PlayerState {
             play_state: PlayState::Playing,
             volume: 75,
@@ -105,40 +105,40 @@ impl Providers for FixtureProviders {
             stop_after_current: false,
         })
     }
-    fn set_mute(&self, _v: bool) -> Result<(), String> {
+    fn set_mute(&self, _v: bool) -> HostResult<()> {
         Ok(())
     }
-    fn set_shuffle(&self, _v: bool) -> Result<(), String> {
+    fn set_shuffle(&self, _v: bool) -> HostResult<()> {
         Ok(())
     }
-    fn set_auto_dj(&self, _v: bool) -> Result<(), String> {
+    fn set_auto_dj(&self, _v: bool) -> HostResult<()> {
         Ok(())
     }
-    fn set_repeat(&self, _m: RepeatMode) -> Result<(), String> {
+    fn set_repeat(&self, _m: RepeatMode) -> HostResult<()> {
         Ok(())
     }
-    fn set_scrobble(&self, _v: bool) -> Result<(), String> {
+    fn set_scrobble(&self, _v: bool) -> HostResult<()> {
         Ok(())
     }
-    fn set_stop_after_current(&self, _v: bool) -> Result<(), String> {
+    fn set_stop_after_current(&self, _v: bool) -> HostResult<()> {
         Ok(())
     }
-    fn output_devices(&self) -> Result<OutputDevices, String> {
+    fn output_devices(&self) -> HostResult<OutputDevices> {
         Ok(OutputDevices {
             active: "Speakers".into(),
             devices: vec!["Speakers".into(), "Headphones".into()],
         })
     }
-    fn switch_output(&self, _d: &str) -> Result<(), String> {
+    fn switch_output(&self, _d: &str) -> HostResult<()> {
         Ok(())
     }
-    fn playback_position(&self) -> Result<PlaybackPositionResponse, String> {
+    fn playback_position(&self) -> HostResult<PlaybackPositionResponse> {
         Ok(PlaybackPositionResponse {
             current: 1000,
             total: 240000,
         })
     }
-    fn track_info(&self) -> Result<TrackInfo, String> {
+    fn track_info(&self) -> HostResult<TrackInfo> {
         Ok(TrackInfo {
             artist: "Artist".into(),
             title: "Title".into(),
@@ -148,7 +148,7 @@ impl Providers for FixtureProviders {
             multi_artist: "Artist".into(),
         })
     }
-    fn track_details(&self) -> Result<TrackDetails, String> {
+    fn track_details(&self) -> HostResult<TrackDetails> {
         Ok(TrackDetails {
             album_artist: "AlbumArtist".into(),
             genre: "Rock".into(),
@@ -176,43 +176,43 @@ impl Providers for FixtureProviders {
             duration: "240000".into(),
         })
     }
-    fn cover(&self) -> Result<Cover, String> {
+    fn cover(&self) -> HostResult<Cover> {
         Ok(Cover {
             status: 200,
             cover: "base64".into(),
         })
     }
-    fn lyrics(&self) -> Result<Lyrics, String> {
+    fn lyrics(&self) -> HostResult<Lyrics> {
         Ok(Lyrics {
             status: 200,
             lyrics: "la la".into(),
         })
     }
-    fn now_playing_synced_lyrics(&self) -> Result<Lyrics, String> {
+    fn now_playing_synced_lyrics(&self) -> HostResult<Lyrics> {
         Ok(Lyrics {
             status: 200,
             lyrics: "la la".into(),
         })
     }
-    fn rating(&self) -> Result<String, String> {
+    fn rating(&self) -> HostResult<String> {
         Ok("4".into())
     }
-    fn set_rating(&self, _v: &str) -> Result<(), String> {
+    fn set_rating(&self, _v: &str) -> HostResult<()> {
         Ok(())
     }
-    fn lfm_rating(&self) -> Result<LastfmStatus, String> {
+    fn lfm_rating(&self) -> HostResult<LastfmStatus> {
         Ok(LastfmStatus::Love)
     }
-    fn set_lfm_rating(&self, _s: LastfmStatus) -> Result<(), String> {
+    fn set_lfm_rating(&self, _s: LastfmStatus) -> HostResult<()> {
         Ok(())
     }
-    fn has_lastfm_account(&self) -> Result<bool, String> {
+    fn has_lastfm_account(&self) -> HostResult<bool> {
         Ok(true)
     }
-    fn set_tag(&self, _t: &str, _v: &str) -> Result<(), String> {
+    fn set_tag(&self, _t: &str, _v: &str) -> HostResult<()> {
         Ok(())
     }
-    fn now_playing_list(&self, o: i32, l: i32) -> Result<Page<NowPlayingListTrack>, String> {
+    fn now_playing_list(&self, o: i32, l: i32) -> HostResult<Page<NowPlayingListTrack>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -227,14 +227,10 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn now_playing_list_ordered(
-        &self,
-        o: i32,
-        l: i32,
-    ) -> Result<Page<NowPlayingListTrack>, String> {
+    fn now_playing_list_ordered(&self, o: i32, l: i32) -> HostResult<Page<NowPlayingListTrack>> {
         self.now_playing_list(o, l)
     }
-    fn podcast_subscriptions(&self, o: i32, l: i32) -> Result<Page<PodcastSubscription>, String> {
+    fn podcast_subscriptions(&self, o: i32, l: i32) -> HostResult<Page<PodcastSubscription>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -242,10 +238,10 @@ impl Providers for FixtureProviders {
             data: vec![subscription()],
         })
     }
-    fn podcast_subscription(&self, _id: &str) -> Result<Vec<PodcastSubscription>, String> {
+    fn podcast_subscription(&self, _id: &str) -> HostResult<Vec<PodcastSubscription>> {
         Ok(vec![subscription()])
     }
-    fn podcast_episodes(&self, _id: &str, o: i32, l: i32) -> Result<Page<PodcastEpisode>, String> {
+    fn podcast_episodes(&self, _id: &str, o: i32, l: i32) -> HostResult<Page<PodcastEpisode>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -253,23 +249,23 @@ impl Providers for FixtureProviders {
             data: vec![episode()],
         })
     }
-    fn podcast_episode(&self, _id: &str, _index: i32) -> Result<Vec<PodcastEpisode>, String> {
+    fn podcast_episode(&self, _id: &str, _index: i32) -> HostResult<Vec<PodcastEpisode>> {
         Ok(vec![episode()])
     }
-    fn podcast_artwork(&self, _id: &str) -> Result<String, String> {
+    fn podcast_artwork(&self, _id: &str) -> HostResult<String> {
         Ok(String::new())
     }
-    fn artist_picture_thumb(&self, _artist: &str) -> Result<String, String> {
+    fn artist_picture_thumb(&self, _artist: &str) -> HostResult<String> {
         Ok(String::new())
     }
-    fn now_playing_list_order(&self) -> Result<NowPlayingOrder, String> {
+    fn now_playing_list_order(&self) -> HostResult<NowPlayingOrder> {
         let data = self.now_playing_list(0, 0)?.data;
         Ok(NowPlayingOrder {
             positions: data.iter().map(|t| t.position).collect(),
             paths: data.into_iter().map(|t| t.path).collect(),
         })
     }
-    fn now_playing_list_paths(&self) -> Result<Vec<String>, String> {
+    fn now_playing_list_paths(&self) -> HostResult<Vec<String>> {
         Ok(self
             .now_playing_list(0, 0)?
             .data
@@ -277,25 +273,25 @@ impl Providers for FixtureProviders {
             .map(|t| t.path)
             .collect())
     }
-    fn play_list_item(&self, _i: i32) -> Result<(), String> {
+    fn play_list_item(&self, _i: i32) -> HostResult<()> {
         Ok(())
     }
-    fn remove_list_item(&self, _i: i32) -> Result<(), String> {
+    fn remove_list_item(&self, _i: i32) -> HostResult<()> {
         Ok(())
     }
-    fn move_list_item(&self, _f: i32, _t: i32) -> Result<(), String> {
+    fn move_list_item(&self, _f: i32, _t: i32) -> HostResult<()> {
         Ok(())
     }
-    fn search_list(&self, _q: &str) -> Result<(), String> {
+    fn search_list(&self, _q: &str) -> HostResult<()> {
         Ok(())
     }
-    fn clear_list(&self) -> Result<(), String> {
+    fn clear_list(&self) -> HostResult<()> {
         Ok(())
     }
-    fn queue(&self, _q: QueueType, _f: Vec<String>, _p: &str) -> Result<(), String> {
+    fn queue(&self, _q: QueueType, _f: Vec<String>, _p: &str) -> HostResult<()> {
         Ok(())
     }
-    fn browse_genres(&self, o: i32, l: i32) -> Result<Page<GenreData>, String> {
+    fn browse_genres(&self, o: i32, l: i32) -> HostResult<Page<GenreData>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -306,7 +302,7 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn browse_artists(&self, o: i32, l: i32, _aa: bool) -> Result<Page<ArtistData>, String> {
+    fn browse_artists(&self, o: i32, l: i32, _aa: bool) -> HostResult<Page<ArtistData>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -317,7 +313,7 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn browse_albums(&self, o: i32, l: i32) -> Result<Page<AlbumData>, String> {
+    fn browse_albums(&self, o: i32, l: i32) -> HostResult<Page<AlbumData>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -329,7 +325,7 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn browse_tracks(&self, o: i32, l: i32) -> Result<Page<Track>, String> {
+    fn browse_tracks(&self, o: i32, l: i32) -> HostResult<Page<Track>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -337,20 +333,20 @@ impl Providers for FixtureProviders {
             data: vec![track()],
         })
     }
-    fn genre_artists(&self, _g: &str) -> Result<Vec<ArtistData>, String> {
+    fn genre_artists(&self, _g: &str) -> HostResult<Vec<ArtistData>> {
         Ok(vec![ArtistData {
             artist: "Artist".into(),
             count: 3,
         }])
     }
-    fn artist_albums(&self, _a: &str) -> Result<Vec<AlbumData>, String> {
+    fn artist_albums(&self, _a: &str) -> HostResult<Vec<AlbumData>> {
         Ok(vec![AlbumData {
             album: "Album".into(),
             artist: "Artist".into(),
             count: 12,
         }])
     }
-    fn album_tracks(&self, _a: &str) -> Result<Vec<Track>, String> {
+    fn album_tracks(&self, _a: &str) -> HostResult<Vec<Track>> {
         // iOS libraryalbumtracks omits album/genre - leave them empty.
         Ok(vec![Track {
             src: "C:\\Music\\s.mp3".into(),
@@ -362,7 +358,7 @@ impl Providers for FixtureProviders {
             ..Default::default()
         }])
     }
-    fn genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String> {
+    fn genre_tracks(&self, genre: &str) -> HostResult<Vec<Track>> {
         Ok(vec![Track {
             src: "C:\\Music\\g.mp3".into(),
             artist: "Artist".into(),
@@ -374,7 +370,7 @@ impl Providers for FixtureProviders {
             ..Default::default()
         }])
     }
-    fn album_cover(&self, _ar: &str, _al: &str, _h: &str) -> Result<AlbumCover, String> {
+    fn album_cover(&self, _ar: &str, _al: &str, _h: &str) -> HostResult<AlbumCover> {
         Ok(AlbumCover {
             status: 200,
             artist: "Artist".into(),
@@ -383,7 +379,7 @@ impl Providers for FixtureProviders {
             hash: "sha1".into(),
         })
     }
-    fn album_cover_page(&self, o: i32, l: i32) -> Result<Page<AlbumCoverItem>, String> {
+    fn album_cover_page(&self, o: i32, l: i32) -> HostResult<Page<AlbumCoverItem>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -397,13 +393,13 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn cover_cache_status(&self) -> Result<bool, String> {
+    fn cover_cache_status(&self) -> HostResult<bool> {
         Ok(false)
     }
-    fn set_background_task_message(&self, _message: &str) -> Result<(), String> {
+    fn set_background_task_message(&self, _message: &str) -> HostResult<()> {
         Ok(())
     }
-    fn album_identifiers(&self) -> Result<Vec<AlbumIdentifier>, String> {
+    fn album_identifiers(&self) -> HostResult<Vec<AlbumIdentifier>> {
         Ok(vec![AlbumIdentifier {
             artist: "AlbumArtist".into(),
             album: "Album".into(),
@@ -411,34 +407,28 @@ impl Providers for FixtureProviders {
             modified: 0,
         }])
     }
-    fn artwork_location(
-        &self,
-        _path: &str,
-    ) -> Result<mbrc_core::ffi::dtos::ArtworkLocation, String> {
+    fn artwork_location(&self, _path: &str) -> HostResult<mbrc_core::ffi::dtos::ArtworkLocation> {
         Ok(mbrc_core::ffi::dtos::ArtworkLocation::default())
     }
-    fn artwork_raw(&self, _path: &str) -> Result<Vec<u8>, String> {
+    fn artwork_raw(&self, _path: &str) -> HostResult<Vec<u8>> {
         Ok(Vec::new())
     }
-    fn batch_metadata(&self, _paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
+    fn batch_metadata(&self, _paths: Vec<String>) -> HostResult<Vec<TrackMetadata>> {
         Ok(vec![TrackMetadata {
             path: "C:\\Music\\s.mp3".into(),
             artist: "AlbumArtist".into(),
             album: "Album".into(),
         }])
     }
-    fn track_paths(&self) -> Result<Vec<String>, String> {
+    fn track_paths(&self) -> HostResult<Vec<String>> {
         Ok(vec!["C:\\Music\\s.mp3".into()])
     }
-    fn excluded_paths(&self) -> Result<Vec<String>, String> {
+    fn excluded_paths(&self) -> HostResult<Vec<String>> {
         Ok(Vec::new())
     }
     /// The legacy golden traces queue from the share they were recorded on, so the
     /// server has to be known. Videos is the one list no golden snapshot reads.
-    fn media_paths(
-        &self,
-        source: mbrc_core::ffi::types::LibrarySource,
-    ) -> Result<Vec<String>, String> {
+    fn media_paths(&self, source: mbrc_core::ffi::types::LibrarySource) -> HostResult<Vec<String>> {
         Ok(match source {
             mbrc_core::ffi::types::LibrarySource::Videos => {
                 vec!["\\\\host\\media\\v.mp4".to_owned()]
@@ -446,10 +436,10 @@ impl Providers for FixtureProviders {
             _ => Vec::new(),
         })
     }
-    fn tracks_for_paths(&self, _paths: Vec<String>) -> Result<Vec<Track>, String> {
+    fn tracks_for_paths(&self, _paths: Vec<String>) -> HostResult<Vec<Track>> {
         Ok(vec![track()])
     }
-    fn field_names(&self, fields: Vec<i32>) -> Result<Vec<String>, String> {
+    fn field_names(&self, fields: Vec<i32>) -> HostResult<Vec<String>> {
         Ok(fields
             .iter()
             .map(|f| match f {
@@ -463,7 +453,7 @@ impl Providers for FixtureProviders {
         &self,
         fields: Vec<i32>,
         paths: Vec<String>,
-    ) -> Result<Vec<mbrc_core::ffi::dtos::PathTags>, String> {
+    ) -> HostResult<Vec<mbrc_core::ffi::dtos::PathTags>> {
         Ok(paths
             .into_iter()
             .map(|path| mbrc_core::ffi::dtos::PathTags {
@@ -472,7 +462,7 @@ impl Providers for FixtureProviders {
             })
             .collect())
     }
-    fn now_playing_tags(&self, fields: Vec<i32>) -> Result<mbrc_core::ffi::dtos::PathTags, String> {
+    fn now_playing_tags(&self, fields: Vec<i32>) -> HostResult<mbrc_core::ffi::dtos::PathTags> {
         Ok(mbrc_core::ffi::dtos::PathTags {
             path: r"C:\Music\s.mp3".into(),
             values: fields.iter().map(|f| fixture_field(*f)).collect(),
@@ -484,7 +474,7 @@ impl Providers for FixtureProviders {
         _field: i32,
         read_field: i32,
         value: String,
-    ) -> Result<mbrc_core::ffi::dtos::TagWriteResult, String> {
+    ) -> HostResult<mbrc_core::ffi::dtos::TagWriteResult> {
         let playing = path == r"C:\Music\s.mp3";
         Ok(mbrc_core::ffi::dtos::TagWriteResult {
             outcome: if playing { "written" } else { "stale_track" }.into(),
@@ -496,7 +486,7 @@ impl Providers for FixtureProviders {
     /// One populated track per requested path, carrying the raw tag values the
     /// core parses: years inside full dates, an `m:ss` duration, a rating, and an
     /// ISO `date_added`.
-    fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> Result<Vec<TrackTags>, String> {
+    fn tracks_detailed_for_paths(&self, paths: Vec<String>) -> HostResult<Vec<TrackTags>> {
         Ok(paths
             .into_iter()
             .map(|src| TrackTags {
@@ -518,10 +508,10 @@ impl Providers for FixtureProviders {
             })
             .collect())
     }
-    fn sync_delta(&self, _updated_since: i64) -> Result<SyncDelta, String> {
+    fn sync_delta(&self, _updated_since: i64) -> HostResult<SyncDelta> {
         Ok(SyncDelta::default())
     }
-    fn radio_stations(&self, o: i32, l: i32) -> Result<Page<RadioStation>, String> {
+    fn radio_stations(&self, o: i32, l: i32) -> HostResult<Page<RadioStation>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -532,10 +522,10 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn play_all(&self, _s: bool) -> Result<(), String> {
+    fn play_all(&self, _s: bool) -> HostResult<()> {
         Ok(())
     }
-    fn playlists(&self, o: i32, l: i32) -> Result<Page<Playlist>, String> {
+    fn playlists(&self, o: i32, l: i32) -> HostResult<Page<Playlist>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -546,20 +536,17 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn play_playlist(&self, _u: &str) -> Result<(), String> {
+    fn play_playlist(&self, _u: &str) -> HostResult<()> {
         Ok(())
     }
-    fn playlist_files(
-        &self,
-        _u: &str,
-    ) -> Result<mbrc_core::protocol::messages::PlaylistFiles, String> {
+    fn playlist_files(&self, _u: &str) -> HostResult<mbrc_core::protocol::messages::PlaylistFiles> {
         Ok(PlaylistFiles {
             name: "X".into(),
             paths: vec!["C:\\Music\\a.mp3".into(), "C:\\Music\\b.mp3".into()],
             kind: "Mbp".into(),
         })
     }
-    fn playlist_catalog(&self, o: i32, l: i32) -> Result<Page<PlaylistEntry>, String> {
+    fn playlist_catalog(&self, o: i32, l: i32) -> HostResult<Page<PlaylistEntry>> {
         Ok(Page {
             offset: o,
             limit: l,
@@ -571,19 +558,19 @@ impl Providers for FixtureProviders {
             }],
         })
     }
-    fn create_playlist(&self, _f: &str, n: &str, _p: Vec<String>) -> Result<String, String> {
+    fn create_playlist(&self, _f: &str, n: &str, _p: Vec<String>) -> HostResult<String> {
         Ok(format!("playlist://{n}"))
     }
-    fn delete_playlist(&self, _u: &str) -> Result<(), String> {
+    fn delete_playlist(&self, _u: &str) -> HostResult<()> {
         Ok(())
     }
-    fn append_to_playlist(&self, _u: &str, _p: Vec<String>) -> Result<(), String> {
+    fn append_to_playlist(&self, _u: &str, _p: Vec<String>) -> HostResult<()> {
         Ok(())
     }
-    fn set_playlist_files(&self, _u: &str, _p: Vec<String>) -> Result<(), String> {
+    fn set_playlist_files(&self, _u: &str, _p: Vec<String>) -> HostResult<()> {
         Ok(())
     }
-    fn plugin_version(&self) -> Result<String, String> {
+    fn plugin_version(&self) -> HostResult<String> {
         Ok("1.4.0".into())
     }
 }
