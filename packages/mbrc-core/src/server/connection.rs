@@ -320,10 +320,10 @@ pub async fn run(stream: TcpStream, peer: SocketAddr, core: Arc<Core>) -> std::i
 const V6_MISSED_PINGS_BEFORE_REAP: u32 = 3;
 
 /// The deadlines an idle socket is measured against.
-struct IdleTimeouts {
-    unhandshaked: Duration,
+pub(crate) struct IdleTimeouts {
+    pub(crate) unhandshaked: Duration,
     auxiliary: Duration,
-    v6_silence: Duration,
+    pub(crate) v6_silence: Duration,
 }
 
 impl From<&crate::config::Config> for IdleTimeouts {
@@ -523,6 +523,7 @@ impl Conn {
                         .with_pairing(&self.core.pairing, self.peer.ip())
                         .with_power(&self.core.power)
                         .with_server(&self.core.server)
+                        .with_ping_interval(self.core.config.ping_interval_secs)
                         .requiring_pairing(self.core.config.web_auth_required),
                 );
                 let _ = self.terminator.set("\n");

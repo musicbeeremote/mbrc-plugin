@@ -167,7 +167,7 @@ async fn capabilities(
     State(state): State<WebState>,
     headers: axum::http::HeaderMap,
 ) -> Json<Value> {
-    let mut capabilities = crate::server::commands_v6::capabilities();
+    let mut capabilities = crate::server::commands_v6::http_capabilities();
     let principal = state.principal(&headers);
     capabilities["permissions"] = state.core.party_mode.permissions(&principal);
     Json(capabilities)

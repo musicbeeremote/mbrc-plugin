@@ -177,14 +177,14 @@ export class V6Client {
     if (!frame) return
 
     if (frame.kind === 'event') {
-      // Unknown events are skipped, never treated as errors: the catalog grows
-      // additively and a client that rejected one could never be added to.
+      // Unknown events are skipped, never errors: the catalog grows additively.
       this.dispatchEvent(String(frame.event), frame.data)
       return
     }
     if (frame.kind !== 'response') return
 
-    const id = Number(frame.id)
+    const { id } = frame
+    if (typeof id !== 'number') return
     if (id === 0) {
       this.handshaked = frame.error === undefined
       if (this.handshaked) {

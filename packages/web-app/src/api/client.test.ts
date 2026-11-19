@@ -67,6 +67,12 @@ describe('the handshake', () => {
     socket.receive({ id: 0, kind: 'response', error: { code: 'unauthorized', message: 'no' } })
     expect(client.connected).toBe(false)
   })
+
+  it('stays connected after an error that answers no request', () => {
+    const { client, socket } = connectHandshaked()
+    socket.receive({ id: null, kind: 'response', error: { code: 'malformed_frame', message: 'x' } })
+    expect(client.connected).toBe(true)
+  })
 })
 
 describe('op correlation', () => {

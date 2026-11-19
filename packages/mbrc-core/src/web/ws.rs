@@ -5,12 +5,16 @@
 //! [`V6Session::handle_frame`] unaltered. Events arrive the same way they reach a
 //! TCP client, through [`Broadcaster`](crate::server::broadcaster::Broadcaster),
 //! whose frames are already JSON lines.
+//!
+//! It is reaped as a TCP V6 socket is: one that never handshakes within the
+//! un-handshaked window, or falls silent for three ping intervals, is closed.
 
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use tokio::sync::mpsc;
 
+use crate::server::connection::IdleTimeouts;
 use crate::server::permissions::Principal;
 use crate::server::session_v6::V6Session;
 use crate::web::router::WebState;
@@ -40,8 +44,11 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
         .with_pairing(&core.pairing, peer.ip())
         .with_power(&core.power)
         .with_server(&core.server)
+        .with_ping_interval(core.config.ping_interval_secs)
         .with_principal(principal);
     let mut subscribed = false;
+    let timeouts = IdleTimeouts::from(&core.config);
+    let mut deadline = tokio::time::Instant::now() + timeouts.unhandshaked;
 
     tracing::debug!(%peer, conn_id, "websocket opened");
     loop {
@@ -54,6 +61,10 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
                 }
                 None => break,
             },
+            () = tokio::time::sleep_until(deadline) => {
+                tracing::debug!(%peer, conn_id, "websocket silent too long; closing");
+                break;
+            }
             inbound = socket.recv() => {
                 let Some(Ok(message)) = inbound else { break };
                 let Message::Text(line) = message else { continue };
@@ -83,6 +94,12 @@ async fn run(mut socket: WebSocket, state: WebState, principal: Principal) {
                 if outcome.close {
                     break;
                 }
+                let window = if session.is_handshaked() {
+                    timeouts.v6_silence
+                } else {
+                    timeouts.unhandshaked
+                };
+                deadline = tokio::time::Instant::now() + window;
             }
         }
     }

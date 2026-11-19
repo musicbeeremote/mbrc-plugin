@@ -5,11 +5,12 @@ V6 is the **clean-slate** MusicBee Remote protocol (MBRCIP-0003 /
 the frozen legacy [V4/V5 protocol](protocol-v4.md) on the same TCP port (default 3000); the
 server routes each connection by the shape of its first frame.
 
-Unlike V4/V5 (whose quirks are preserved byte-for-byte and never changed), V6 is under active
-development and is what new client work should target.
+Unlike V4/V5 (whose quirks are preserved byte-for-byte and never changed), V6 is what new
+client work should target.
 
-- **Status:** active development. The op catalog below is the current surface; it grows
-  additively and advertises itself via handshake capabilities.
+- **Status:** the contract is fixed from plugin 2.0.0. It grows only by the additions the
+  [compatibility rules](#compatibility-rules) allow, and every server says what it offers in
+  the handshake `capabilities`.
 - **Design goals:** a strict, uniform envelope; string enums (not magic ints); typed numeric
   fields; correlation ids; out-of-order responses; best-effort events; capability negotiation.
 
@@ -32,12 +33,55 @@ Every frame is a JSON object with a `kind`:
 Rules:
 
 - **`id`** is a client-chosen correlation id echoed on the matching response. It is *not* a
-  sequence number: responses may arrive out of order, and the client correlates by `id`. The
-  handshake is always `id:0`.
+  sequence number: responses may arrive out of order, and the client correlates by `id`.
+  - It is an integer from 1 to 2^53 - 1, the largest a JavaScript number holds exactly.
+    Anything else is `invalid_field` with `field: "id"`.
+  - **`0` is the handshake's and nothing else's.** A handshake with another id is refused
+    and closed. Any other request with `id:0` is `invalid_field`. So a reply with `id:0`
+    always answers the handshake.
+  - Its scope is one connection. Do not reuse an id while its request is outstanding.
+  - A frame the server could not read an id from is answered with **`"id":null`**. Such an
+    error answers no request: log it, and do not fail a pending call with it.
 - A response carries **exactly one** of `data` or `error`.
-- **Unknown additive `data` keys are ignored** (forward-compatible); a structurally invalid
-  frame (bad `kind`, missing `op`, not an object) gets a typed error.
+- A structurally invalid frame (bad `kind`, missing `op`, not an object) gets a typed error.
+  Unknown keys are ignored, see [Compatibility rules](#compatibility-rules).
 - Events have **no `id`** and are best-effort broadcasts to subscribed connections.
+
+## Compatibility rules
+
+V6 changes only by addition, so a client built today keeps working against every later
+server. That holds only if the client tolerates what it has not seen yet:
+
+**A client MUST:**
+
+- **ignore unknown keys** at every level: in `data`, in nested objects, in track and list
+  items, in `error`, in `capabilities` and in `permissions`.
+- **ignore a frame whose `kind` it does not know**.
+- **ignore an event it does not know** (see [Events](#events)).
+- **accept an enum value it does not know** in a response or event, and show it as unknown
+  rather than fail the whole reply. A `play_state` it cannot read is best shown as stopped.
+- **treat an error `code` it does not know** as a failure of that one request, with no
+  retry. It is never a reason to drop the connection.
+- **treat a capability, `features` name or Party Mode capability it does not know** as
+  absent, or as gating nothing.
+- **drop its sync cursor and sync again from the start** when `library_changes` sends a
+  `change` it does not know. Skipping the item would silently leave its copy wrong.
+
+A JSON decoder that refuses unknown keys by default (kotlinx.serialization, for one) has to be
+told not to.
+
+**What the server promises:**
+
+- **Additions need no version bump:** a new op, event, key, enum value, error code or
+  `features` name. A client learns of a new op or event from `capabilities`.
+- **A name keeps its meaning.** A key, value or code is never reused for something else,
+  and a field's type never changes. A change that cannot be made by addition is V7.
+- **A request that was valid stays valid** and means the same. The server may accept more
+  than it did, never less.
+- **An event that can fire often** (more than about once a second) is added opt-in: it
+  reaches only a client that asks for it, through a key added with it.
+- **`features`**, in `capabilities`, names optional behaviours beyond the op catalog. It is
+  `[]` in this revision, and its absence means the same.
 
 ## Transports
 
@@ -55,8 +99,9 @@ been without it.
 ### 1. TCP socket (the native transport)
 
 Connect to the port, send the [handshake](#handshake), then send request frames and
-read response and event frames as [newline-delimited JSON](#framing). This is the
-only transport that holds session state, so `handshake` and `ping` exist here alone.
+read response and event frames as [newline-delimited JSON](#framing). It and the
+[WebSocket](#3-websocket---get-ws) are the transports that hold session state, so
+`handshake`, `ping` and `pair` exist only on them.
 Events arrive unsolicited on the same socket unless the handshake asked for
 `no_broadcast`.
 
@@ -97,16 +142,19 @@ a browser, a proxy and `curl` all read it correctly:
 without a connection to hold their state, and a browser pairs through `POST /api/pair`;
 asking for any of them is `unknown_op`.
 
-`GET /api/v6/capabilities` returns the same capability object the handshake carries,
-plus this caller's [`permissions`](#what-a-client-is-told), so an HTTP-only client can
-discover the surface without a socket.
+`GET /api/v6/capabilities` returns the capability object the handshake carries, without
+the three ops above, plus this caller's [`permissions`](#what-a-client-is-told), so an
+HTTP-only client can discover the surface without a socket. Each transport's `ops` lists
+exactly what that transport answers.
 
 ### 3. WebSocket - `GET /ws`
 
-An upgrade on the same port. Once open it is the socket transport exactly: send the
-handshake, then exchange newline-delimited JSON frames, one JSON object per message.
-This is the transport a browser uses when it can hold a connection, and the only one
-besides TCP that carries events without polling.
+An upgrade on the same port. Once open it is the socket transport: send the handshake,
+then exchange JSON frames, one per text message. A binary message is ignored. It is
+held to the same [keepalive](#keepalive-normative) as TCP. It is the transport a browser
+uses when it can hold a connection, and the only one besides TCP that carries events
+without polling. Unlike a TCP socket, it is not counted against the per-client cap, and
+a second one from the same `client_id` does not replace the first.
 
 A browser's `WebSocket` constructor cannot set a header, so its pairing token is the
 cookie it sends by itself.
@@ -250,7 +298,8 @@ Every client has a role. A client nobody assigned has the default role, **Guest*
 | `guest` | `queue_add`, limited to **one track per request** |
 | `listener` | none |
 
-Reads (status, browsing, lists, covers, lyrics) are allowed in every role.
+Reads are allowed in every role. A read returns metadata or artwork (status, browsing, lists,
+covers, lyrics) and changes nothing. An op that served a file's audio would not count as one.
 
 | Capability | Ops |
 |------------|-----|
@@ -364,7 +413,8 @@ The first frame must be the handshake, `id:0`:
 | `client_id` | yes | non-empty string, at most 128 chars; a **per-install UUID**, stable across relaunches |
 | `client_token` | after the first | the token this server issued for that `client_id` - see below |
 | `token` | once paired | the [pairing token](#pair); absent or unknown means unpaired |
-| `client_type` | yes | one of `android`, `ios`, `desktop`, `web`, `cli` |
+| `client_type` | yes | what kind of client this is: `android`, `ios`, `desktop`, `web` or `cli` today. Any non-blank string of at most 64 characters is accepted, so a new kind of client needs no server update. It labels the device in logs and the Configure panel and changes nothing on the wire |
+| `client_version` | no | the client's own version, such as `"1.7.0"`; at most 64 characters. Logged, so a report can say which build sent what |
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
 | `client_name` | no | what the device is called, for the Configure panel's device list ("Pixel 8"); trimmed and cut at 64 chars; a later handshake's name replaces it |
 
@@ -379,6 +429,8 @@ what this client may do under [Party Mode](#what-a-client-is-told):
 |-------|-------|
 | `server_id` | a UUID generated once per plugin installation. Stable across MusicBee restarts, plugin updates and address changes; it changes only if the plugin's storage folder is deleted. **Key anything you cache per server on this, not on the address**: one machine can move to a new IP, and two machines can take turns at one. Optional: absent when the plugin has no storage folder or cannot read or write the id file, in which case fall back to the address |
 | `server_name` | what to show the user: the machine name, the same one discovery reports |
+| `capabilities` | `{"ops":[..],"events":[..],"features":[..]}`: what this server answers and sends. See [Compatibility rules](#compatibility-rules) |
+| `ping_interval_secs` | how often this server expects a [ping](#keepalive-normative), in seconds |
 | `pairing_required` | whether this server holds ops back until a client has paired |
 | `paired` | whether this connection holds a pairing. Show the pairing screen when `pairing_required` is true and this is false |
 
@@ -386,8 +438,8 @@ The same `server_id` is in the mDNS TXT record, so a picker can merge one server
 addresses before connecting.
 
 The client should use `capabilities.ops` / `capabilities.events` to degrade gracefully rather
-than assume an op exists. A validation failure replies with a typed error (echoing `id:0`) and
-closes the connection. A second handshake on an established connection is a protocol error
+than assume an op exists. A validation failure replies with a typed error (echoing the
+handshake's `id`) and closes the connection. A second handshake on an established connection is a protocol error
 (`not_allowed`); any non-handshake op *before* the handshake is `unauthorized` + close.
 
 ### `client_token` - telling two installs with the same id apart
@@ -433,7 +485,8 @@ first claimed this id. It admits nothing and holds no role: that is the [pairing
 ## Error codes
 
 Errors are `{"code":"<code>","message":"<human text>","field":"<name>"}`. The `code` is a
-stable string enum; the `message` is informational and may change. **`field` is present only
+stable string enum, to which codes may be added (see
+[Compatibility rules](#compatibility-rules)); the `message` is informational and may change. **`field` is present only
 when the failure is about one named `data` field** (`missing_field`, `invalid_field` and
 friends), so validation can be handled without parsing the message - a client can point at the
 offending input directly. Its absence means the error is not about a single field.
@@ -517,7 +570,9 @@ A list may add index fields beside these - `order` and `position` on a playlist,
 }
 ```
 
-`cover_hash` is a content hash. A track on an album carries the album's cover. A track with no
+`cover_hash` is opaque: compare it and fetch with it, never parse it. It names one rendition of
+a picture, the size the server serves, and the same rendition always has the same hash. A track
+on an album carries the album's cover. A track with no
 album carries its own, read the first time a page includes it and kept until its file changes,
 so two singles by one artist no longer share a picture. A server spends at most about half a
 second of a request reading those: a track past that comes back without `cover_hash` and gets
@@ -528,6 +583,11 @@ after the track change and is announced with `now_playing_cover_changed`.
 Fetch the image with `cover_get` over any
 transport, or - because it is content-addressed and so can be cached forever - straight from
 `GET /api/cover/{hash}`, which is what lets a browser put one in an `<img src>`.
+
+`GET /api/cover/now-playing` serves the playing track's own artwork at a larger size than the
+list renditions, rendered from the file on each request; 404 when nothing plays. Add
+`?v=<cover_hash>` with the hash `now_playing_state` carries: the response is then cached for
+good, and a stream with no file to render from is answered from the stored picture.
 
 \* `duration_ms` is parsed from MusicBee's formatted tag, the only per-path source there is,
 so it is second-granular. The **playing** track is the exception: `now_playing_state` serves
@@ -541,10 +601,21 @@ names the station and the player names the song on air, which is then its one `a
 `ping_interval_secs` to every subscriber; V6 inverts it, because the side that knows whether
 it still cares is the side that should speak, and it halves the idle traffic.
 
-- A V6 client SHOULD send `{"op":"ping"}` every **15 seconds** while it holds a connection it
-  wants kept - an event subscription especially.
-- A V6 connection silent for **three intervals** is closed. Any frame counts, not just a ping:
-  a client issuing requests is self-evidently alive.
+- The handshake reply's **`ping_interval_secs`** is the interval, 15 seconds by default (the
+  user can change it). A client that holds a connection it wants kept, an event subscription
+  especially, MUST send a request at least that often. With nothing else to send, that is
+  `ping`, a real op answered like any other, which echoes its `data`:
+
+  ```json
+  → {"id":12,"kind":"request","op":"ping","data":{}}
+  ← {"id":12,"kind":"response","data":{}}
+  ```
+
+- A V6 connection, TCP or WebSocket, silent for **three intervals** is closed. Any frame
+  counts, not just a ping: a client issuing requests is self-evidently alive. One that has
+  not completed the handshake is closed sooner.
+- **A client decides the server is gone** when a ping goes unanswered for two intervals:
+  it closes the socket and reconnects, rather than wait for the operating system to notice.
 - The ping doubles as a NAT and Wi-Fi power-save keepalive. A phone that stops pinging loses
   its event socket, which is the intended outcome - reconnect and re-query.
 
@@ -561,10 +632,42 @@ Browse/list ops take `{offset?, limit?}` and return:
 
 `total` is the full count; `items.length` conveys the served window. `offset` defaults to 0.
 
-**`limit` defaults to 1000**, so the laziest possible request - `library_tracks {}` - reads a
-page rather than every tag in the library. An explicit **`limit: 0` still means "to the end"**;
-on a large library that is a deliberate choice, and an expensive one. `now_playing_list` also
-returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
+- **`limit`** defaults to 1000, and `limit: 0` means the same default. A page holds at most
+  5000 rows, whatever `limit` asks for. A negative `offset` or `limit` is `invalid_field`.
+- **A server may serve fewer rows than `limit`.** To read everything, ask again from
+  `offset + items.length` until that reaches `total` or a page comes back empty. Never take
+  a short page to mean the end.
+- `now_playing_list` also returns a `version` - see [Now Playing List](#now-playing-list-the-queue).
+
+## Frame size
+
+A request frame is at most **16 MiB** on a socket; a longer one closes the connection. An
+HTTP-RPC body is at most **2 MiB**, and a longer one is refused with 413 and
+`malformed_frame`. Replies are kept small by paging rather than by a fixed cap. A client must
+read what it is sent: a connection that stops reading may be closed.
+
+## Requests, replies and events
+
+- **Every request gets exactly one response**, unless the connection closes first.
+- **A request whose response never came has an unknown outcome.** It may or may not have
+  been carried out. Before repeating one that is not safe to repeat, read the state again.
+- **Safe to repeat:** every read; the setters that take a value (`player_set_*`,
+  `player_play`, `player_pause`, `player_stop`, `now_playing_seek`, `now_playing_set_rating`,
+  `now_playing_set_lfm`, `now_playing_set_tag`, `playlist_set_tracks`,
+  `now_playing_list_play`); and any queue or playlist edit that
+  carries its `version`, since a repeat of one that already landed is refused `stale_list`.
+- **Not safe to repeat:** `player_play_pause`, `player_next`, `player_previous`, every op that
+  queues (`now_playing_queue`, `library_queue`, `media_queue`, `library_play_all`,
+  `playlist_play`, `podcast_episode_play`), `playlist_create`, `system_set_auto_shutdown`
+  (a repeat starts the timer again), and a queue or playlist edit sent without `version`.
+- **Order.** Responses may arrive in any order. An event a request causes may arrive before
+  or after that request's response, and the connection that sent the request receives it
+  too, like every other subscriber.
+- **Read state after subscribing,** not before: after the handshake reply on a socket, after
+  `: open` on the event stream. A change made between a read and the subscription is
+  otherwise never seen.
+- **A setter's reply** is either the player read back after the write, or the value asked for
+  where MusicBee applies it later. Each is listed with its op.
 
 ## Op catalog
 
@@ -635,11 +738,12 @@ timer ends with MusicBee and is not kept across a restart.
 | `player_output` | `{}` | `{"active":"Speakers","devices":["Speakers","Headphones"]}` |
 | `player_set_output` | `{"device":"<name>"}` | `{"active":<new>,"devices":[...]}` |
 
-> Setters echo the state that was asked for, not a read-back of the player. MusicBee applies
-> auto-DJ asynchronously, so reading the player in the same breath as the write describes the
-> state *before* it: a `player_set_shuffle` of `shuffle` answered `off`, and the three-way
-> cycle collapsed to off/on/off. A setter fails when MusicBee refuses, so one that returned
-> `{}` may answer with the mode it was given.
+> `player_set_volume`, `player_set_mute`, `player_set_scrobbling`,
+> `player_set_stop_after_current` and `player_set_output` reply with the player read back
+> after the write. `player_set_shuffle` and `player_set_repeat` reply with the mode asked
+> for: MusicBee applies auto-DJ later, so a read in the same breath describes the state
+> before the write. A setter fails when MusicBee refuses, so a reply always means it was
+> accepted.
 >
 > `shuffle_changed`, `repeat_changed` and `scrobbling_changed` are broadcast as well, so a
 > client also learns about a change made in MusicBee's own window rather than only about its
@@ -821,7 +925,7 @@ gone, and the `version` has moved, so re-read the list.
 
 > A single view that is *both* shuffle-play-order *and* keeps already-played tracks is impossible -
 > MusicBee's `GetNextIndex` is forward-only, so a played track's play order can't be recovered. The
-> `play_position: -1` marker is the answer instead (#118 §7 / #94).
+> `play_position: -1` marker is the answer instead.
 
 ### Library
 
@@ -847,7 +951,7 @@ tracks filed under no artist at all, which is the only way to reach the untagged
 corner of a library. Omit the key entirely to mean "no filter".
 
 **Credited artists.** Artists are named the way a track's [`artist`](#canonical-track) names
-them (#139): `library_artists` lists every artist and guest a track credits, so
+them: `library_artists` lists every artist and guest a track credits, so
 `Tico feat. Wisin & Yandel, Gadiel` counts under `Tico`, `Wisin & Yandel` and `Gadiel` rather
 than as a row of its own, and a track nobody split counts under its display string. An `artist`
 scope matches any of those names, the album artist or the display string. `library_albums`
@@ -1073,7 +1177,7 @@ separator, a drive, a `.` or `..` part, or a part holding those characters is
 
 ### Podcast
 
-Browse subscriptions and their episodes, and play one (#37). Additive: nothing here
+Browse subscriptions and their episodes, and play one. Additive: nothing here
 changes the player, library, playlist or now-playing surface, and playing an episode
 is the ordinary queue command with a URL the core resolved.
 
@@ -1130,12 +1234,12 @@ MusicBee reports a subscription with no episodes the same way it reports one tha
 there. The single-item ops do say `not_found`.
 
 **No events.** MusicBee has no podcast notifications to forward, so nothing is broadcast and a
-client re-reads when it wants to be current (#118 §8). The one exception is the playback that
+client re-reads when it wants to be current. The one exception is the playback that
 `podcast_episode_play` causes, which surfaces through the ordinary now-playing events.
 
 ### Media
 
-MusicBee's other library categories: Audiobooks, Videos and the Inbox (#145). Each is
+MusicBee's other library categories: Audiobooks, Videos and the Inbox. Each is
 named by a `source`:
 
 ```
@@ -1196,32 +1300,35 @@ seconds; a tag edit to a file it already lists is announced without waiting.
 
 ## Events
 
-Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Most are marker
-events - they carry `{}` (or a small hint like `cover_cache_changed`'s `building`) and mean
-"re-query"; the client refetches the relevant op rather than trusting the event payload as state.
+Broadcast to every subscribed (non-`no_broadcast`) connection, best effort. Each event is one
+of three kinds, and the table says which:
 
-| Event | `data` | Fires when |
-|-------|--------|-----------|
-| `play_state_changed` | `{"play_state":".."}` | playback starts/pauses/stops |
-| `volume_changed` | `{"volume":N}` | volume changes |
-| `mute_changed` | `{"muted":bool}` | mute toggles |
-| `shuffle_changed` | `{"shuffle":".."}` | the shuffle mode changes, including from MusicBee's own window |
-| `repeat_changed` | `{"repeat":".."}` | the repeat mode changes |
-| `scrobbling_changed` | `{"scrobbling":bool}` | scrobbling is turned on or off |
-| `stop_after_current_changed` | `{"stop_after_current":bool}` | stop-after-current is turned on or off, including from MusicBee's own window and when it clears itself after firing |
-| `now_playing_changed` | `{"artist":[..],"artist_display":..,"title":..,"album":..,"path":..}`, `artist` shaped as on the track | the track changes |
-| `now_playing_lyrics_changed` | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
-| `now_playing_cover_changed` | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
-| `now_playing_tags_changed` | `{"path":..}` | the playing track's tags were edited, from a client or in MusicBee -> re-query `now_playing_tags`. Sent about two seconds after the edit, once MusicBee has applied it: it reports an edit to the playing file before applying it |
-| `now_playing_list_changed` | `{}` | the queue changed -> re-query `now_playing_list`. Sent once per burst, about 150ms after the first change, so a multi-step edit such as play-now is one event; the list `version` still moves with every step |
-| `cover_cache_changed` | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
-| `library_changed` | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
-| `media_changed` | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
-| `library_artist_image_updated` | `{"artist":..,"image_hash":..,"image_source"?:..,"image_credit"?:{..}}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
-| `library_artist_images_cleared` | `{}` | the user deleted every stored artist picture -> drop each `image_hash` held, since its file is gone, and send [`library_artist_images`](#artist-pictures) again for the artists on screen |
-| `auto_shutdown_changed` | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began waiting for the last track, began its final countdown or fired |
-| `server_shutdown` | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
-| `permissions_changed` | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
+- **value**: `data` is the new state. Apply it as it is; there is nothing to re-read.
+- **marker**: `data` says only what changed, `{}` or a small hint. Re-read the op named.
+- **summary**: enough to draw at once, with the full state one read away.
+
+| Event | Kind | `data` | Fires when |
+|-------|------|--------|-----------|
+| `play_state_changed` | value | `{"play_state":".."}` | playback starts/pauses/stops |
+| `volume_changed` | value | `{"volume":N}` | volume changes |
+| `mute_changed` | value | `{"muted":bool}` | mute toggles |
+| `shuffle_changed` | value | `{"shuffle":".."}` | the shuffle mode changes, including from MusicBee's own window |
+| `repeat_changed` | value | `{"repeat":".."}` | the repeat mode changes |
+| `scrobbling_changed` | value | `{"scrobbling":bool}` | scrobbling is turned on or off |
+| `stop_after_current_changed` | value | `{"stop_after_current":bool}` | stop-after-current is turned on or off, including from MusicBee's own window and when it clears itself after firing |
+| `now_playing_changed` | summary | `{"artist":[..],"artist_display":..,"title":..,"album":..,"path":..}`, `artist` shaped as on the track | the track changes |
+| `now_playing_lyrics_changed` | marker | `{}` | lyrics finished loading for the current track -> re-query `now_playing_lyrics` |
+| `now_playing_cover_changed` | marker | `{}` | artwork finished loading for the current track, which for a stream comes after `now_playing_changed` -> re-query `now_playing_state` for `cover_hash` |
+| `now_playing_tags_changed` | marker | `{"path":..}` | the playing track's tags were edited, from a client or in MusicBee -> re-query `now_playing_tags`. Sent about two seconds after the edit, once MusicBee has applied it: it reports an edit to the playing file before applying it |
+| `now_playing_list_changed` | marker | `{}` | the queue changed -> re-query `now_playing_list`. Sent once per burst, about 150ms after the first change, so a multi-step edit such as play-now is one event; the list `version` still moves with every step |
+| `cover_cache_changed` | marker | `{"building":bool}` | album-cover cache changed (`building` = a build is in progress vs finished) -> re-resolve `cover_hash` |
+| `library_changed` | marker | `{"epoch":..,"generation":N}`, or `{}` before the index is built | the library changed (add/scan/switch) -> re-browse, or read [`library_changes`](#library-sync) if the pair differs from the stored cursor |
+| `media_changed` | marker | `{"source":"audiobooks"\|"videos"\|"inbox"}` | that [media](#media) source's files or their tags changed -> re-read it. One event per source per check |
+| `library_artist_image_updated` | value | `{"artist":..,"image_hash":..,"image_source"?:..,"image_credit"?:{..}}` | a picture queued by [`library_artist_images`](#artist-pictures) was stored. Sent once per name it was asked for under, so "A" and "A feat. B" each get one |
+| `library_artist_images_cleared` | marker | `{}` | the user deleted every stored artist picture -> drop each `image_hash` held, since its file is gone, and send [`library_artist_images`](#artist-pictures) again for the artists on screen |
+| `auto_shutdown_changed` | value | the [auto-shutdown](#auto-shutdown) status, without `power_allowed` | the timer was set, cancelled, began waiting for the last track, began its final countdown or fired |
+| `server_shutdown` | notice | `{}` | the server is going away deliberately (MusicBee closing, networking stopped) |
+| `permissions_changed` | value | the [`permissions`](#what-a-client-is-told) object | this client's Party Mode permissions changed; sent only to the client concerned |
 
 **Clients MUST ignore events they do not recognize.** The catalog grows additively, so an
 unknown `event` name is skipped, never treated as an error. Without this rule no event can
@@ -1233,15 +1340,13 @@ a MusicBee that is closing. It is best-effort like every other event - a crash o
 cable produces no goodbye, so a dropped connection with no preceding `server_shutdown` still
 means "retry".
 
-**Shuffle, repeat and scrobbling are polled, not announced.** MusicBee raises no
-notification for any of the three, so the server diffs them once a second and
-broadcasts what moved. That is what makes a change someone makes in MusicBee's own
-window visible to a client at all, and it is why these three carry their new value
-rather than being markers: there is nothing cheaper to re-query.
+**Shuffle, repeat, scrobbling and stop-after-current are polled, not announced.** MusicBee
+raises no notification for them, so the server diffs them once a second and broadcasts what
+moved. That is what makes a change someone makes in MusicBee's own window visible to a client
+at all.
 
-> There is still no `lfm_changed` event, so the love/ban state refreshes on the next
-> `now_playing_state` (or from a setter's reply). A candidate addition, tracked
-> against #118.
+There is no `lfm_changed` event, so the love/ban state refreshes on the next
+`now_playing_state`, or from a setter's reply.
 
 ## Differences from V4 / V5
 

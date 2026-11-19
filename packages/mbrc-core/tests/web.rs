@@ -189,6 +189,69 @@ fn a_cross_site_websocket_upgrade_is_refused() {
     assert!(status.starts_with("HTTP/1.1 403"), "status was {status}");
 }
 
+/// A WebSocket is held to the socket's keepalive, so one that never handshakes
+/// does not hold a connection open for good.
+#[test]
+fn a_websocket_that_never_handshakes_is_closed() {
+    let (port, net) = start_on_free_port(|port| Config {
+        unhandshaked_timeout_secs: 2,
+        ..Config::for_test(port)
+    });
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET /ws HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+                 Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\n\
+                 Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+    let opened = std::time::Instant::now();
+
+    let mut seen = Vec::new();
+    let mut buf = [0u8; 256];
+    let mut closed = false;
+    while opened.elapsed() < Duration::from_secs(8) {
+        match stream.read(&mut buf) {
+            Ok(0) => {
+                closed = true;
+                break;
+            }
+            Ok(n) => seen.extend_from_slice(&buf[..n]),
+            Err(e) => {
+                closed = !matches!(
+                    e.kind(),
+                    std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                );
+                break;
+            }
+        }
+        let head_end = seen.windows(4).position(|w| w == b"\r\n\r\n");
+        // 0x88 opens a WebSocket close frame.
+        if head_end.is_some_and(|end| seen.get(end + 4) == Some(&0x88)) {
+            closed = true;
+            break;
+        }
+    }
+    net.stop();
+
+    assert!(
+        String::from_utf8_lossy(&seen).starts_with("HTTP/1.1 101"),
+        "no upgrade: {seen:?}"
+    );
+    assert!(closed, "the socket outlived its window");
+    assert!(
+        opened.elapsed() >= Duration::from_secs(1),
+        "closed before its window: {:?}",
+        opened.elapsed()
+    );
+}
+
 /// A body with no JSON `Content-Type` is what a cross-site page can send with no
 /// preflight, so it must never reach an op, even one that takes no arguments.
 #[test]
