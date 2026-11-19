@@ -460,6 +460,7 @@ fn broadcast_artist_image(core: &Core, artist: &str, hash: &str) {
 
 /// `{artist, image_hash}`, with the picture's source and credit while it is
 /// still the one stored.
+#[cfg(any(windows, test))]
 fn artist_image_event(
     images: &crate::cover::artists::ArtistImages,
     artist: &str,
