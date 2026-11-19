@@ -12,7 +12,9 @@
     "dependencyDashboardApproval": true,
     "addLabels": ["security"]
   },
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "dependencyDashboardApproval": true,
   "automerge": false,
   "rangeStrategy": "pin",
