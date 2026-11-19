@@ -495,6 +495,25 @@ impl From<CachedTags> for BrowseRow {
 
 type GenreRows = Vec<BrowseRow>;
 
+/// Row counts per stored order, with the generation they were counted in.
+///
+/// An order is rewritten across several transactions, so a count read during
+/// a rebuild is kept only if no rewrite finished while it was being read.
+#[derive(Default)]
+struct SortCounts {
+    generation: u64,
+    rows: HashMap<String, u64>,
+}
+
+/// One track as a plain search reads it: its place in the track index and
+/// the two names a query matches, lowercased once. An untagged track's title
+/// is its file name, which is what it is searched by.
+struct SearchRow {
+    position: u32,
+    title: String,
+    artist: String,
+}
+
 /// Every track's values of the tag-editing fields, by path, each row in the
 /// order the reader asked for them.
 pub type TagRows = HashMap<String, Vec<String>>;
@@ -509,6 +528,7 @@ struct TagsMoved<'a>(&'a MetadataCache);
 impl Drop for TagsMoved<'_> {
     fn drop(&mut self) {
         *self.0.genre_rows.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *self.0.search_rows.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -532,6 +552,12 @@ pub struct MetadataCache {
     /// Every track's `(genre, artist)`, kept once the tags are complete and
     /// dropped by any write to them, so genre browse decodes no tag rows.
     genre_rows: Mutex<Option<Arc<GenreRows>>>,
+    /// Every indexed track's search names, kept once read and dropped by any
+    /// write to the tags or the index, so a search decodes no tag rows.
+    search_rows: Mutex<Option<Arc<Vec<SearchRow>>>>,
+    /// Each stored order's row count, which counting would otherwise walk the
+    /// whole order for on every sorted page; see [`SortCounts`].
+    sort_counts: Mutex<SortCounts>,
     /// The tag-editing fields of every track, kept once read.
     tag_rows: Mutex<Option<Arc<TagRows>>>,
     /// Held while the tag rows are read, so a second reader waits for the
@@ -556,6 +582,8 @@ impl MetadataCache {
             db,
             validated: AtomicBool::new(false),
             genre_rows: Mutex::new(None),
+            search_rows: Mutex::new(None),
+            sort_counts: Mutex::new(SortCounts::default()),
             tag_rows: Mutex::new(None),
             tag_rows_read: Mutex::new(()),
             tags_generation: AtomicU64::new(0),
@@ -696,6 +724,7 @@ impl MetadataCache {
             txn.delete_table(ALBUM_STAMPS)?;
             Ok(())
         });
+        self.forget_sort_counts();
     }
 
     /// Runtime library switch: gate reads off and clear the table. The follow-up
@@ -817,10 +846,10 @@ impl MetadataCache {
     /// Caches the given tracks, keyed by each track's `src` path, in one write
     /// transaction. No-op when disabled, not validated, or empty.
     pub fn put_track_tags(&self, tracks: &[CachedTags]) {
-        let _moved = TagsMoved(self);
         if !self.is_validated() || tracks.is_empty() {
             return;
         }
+        let _moved = TagsMoved(self);
         self.db.write(Durability::Immediate, |txn| {
             let mut table = txn.open_table(TRACK_TAGS)?;
             for track in tracks {
@@ -836,10 +865,10 @@ impl MetadataCache {
     /// re-read lazily on the next serve). No-op when disabled, not validated, or
     /// empty.
     pub fn drop_track_tags(&self, paths: &[String]) {
-        let _moved = TagsMoved(self);
         if !self.is_validated() || paths.is_empty() {
             return;
         }
+        let _moved = TagsMoved(self);
         self.db.write(Durability::Immediate, |txn| {
             let mut table = txn.open_table(TRACK_TAGS)?;
             for path in paths {
@@ -1213,6 +1242,26 @@ impl MetadataCache {
         if !self.is_validated() {
             return Vec::new();
         }
+        if let TrackFilter {
+            query: Some(query),
+            artist: None,
+            album: None,
+            genre: None,
+        } = filter
+            && sort.is_none()
+        {
+            return self.searched_paths(query);
+        }
+        self.scanned_paths(filter, sort, descending)
+    }
+
+    /// [`Self::track_paths_where`] by reading every indexed track's tag row.
+    fn scanned_paths(
+        &self,
+        filter: &TrackFilter<'_>,
+        sort: Option<SortField>,
+        descending: bool,
+    ) -> Vec<String> {
         let mut matched: Vec<(u8, Option<CachedTags>, String)> = self
             .db
             .read(|txn| {
@@ -1251,6 +1300,81 @@ impl MetadataCache {
         matched.into_iter().map(|(_, _, path)| path).collect()
     }
 
+    /// The indexed paths whose title or artist holds `query`, best answer
+    /// first and in index order among equals, as [`Self::track_paths_where`]
+    /// answers a plain search, read from the in-memory search rows.
+    fn searched_paths(&self, query: &str) -> Vec<String> {
+        let needle = query.to_lowercase();
+        let rows = self.search_rows();
+        let mut matched: Vec<(u8, u32)> = rows
+            .iter()
+            .filter(|r| r.title.contains(&needle) || r.artist.contains(&needle))
+            .map(|r| {
+                let rank = relevance(&r.title, &needle).min(relevance(&r.artist, &needle));
+                (rank, r.position)
+            })
+            .collect();
+        matched.sort_by_key(|(rank, _)| *rank);
+        self.db
+            .read(|txn| {
+                let paths = match txn.open_table(TRACK_PATHS) {
+                    Ok(p) => p,
+                    Err(_) => return Ok(Vec::new()),
+                };
+                let mut found = Vec::with_capacity(matched.len());
+                for (_, position) in &matched {
+                    if let Some(path) = paths.get(*position)? {
+                        found.push(path.value().to_string());
+                    }
+                }
+                Ok(found)
+            })
+            .unwrap_or_default()
+    }
+
+    /// The search rows, read from the index and the tag rows the first time.
+    ///
+    /// The memo's lock is held while they are read, so a write's [`TagsMoved`]
+    /// waits and then drops what was read rather than leaving it in place.
+    fn search_rows(&self) -> Arc<Vec<SearchRow>> {
+        let mut memo = self.search_rows.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(rows) = memo.as_ref() {
+            return rows.clone();
+        }
+        let rows = self
+            .db
+            .read(|txn| {
+                let paths = match txn.open_table(TRACK_PATHS) {
+                    Ok(p) => p,
+                    Err(_) => return Ok(Vec::new()),
+                };
+                let tags = txn.open_table(TRACK_TAGS).ok();
+                let mut rows = Vec::new();
+                for row in paths.iter()? {
+                    let (position, path) = row?;
+                    let path = path.value();
+                    let cached = tags
+                        .as_ref()
+                        .and_then(|t| t.get(path).ok().flatten())
+                        .and_then(|g| rmp_serde::from_slice::<CachedTags>(g.value()).ok());
+                    let (title, artist) = match cached {
+                        Some(t) => (t.title.to_lowercase(), t.artist.to_lowercase()),
+                        None => (file_name(path).to_lowercase(), String::new()),
+                    };
+                    rows.push(SearchRow {
+                        position: position.value(),
+                        title,
+                        artist,
+                    });
+                }
+                Ok(rows)
+            })
+            .unwrap_or_default();
+        let rows = Arc::new(rows);
+        *memo = Some(rows.clone());
+        rows
+    }
+
     /// Rebuilds every sort order from the cached tags. Returns rows indexed.
     ///
     /// Ascending is stored, and descending is the same range walked backwards,
@@ -1266,6 +1390,7 @@ impl MetadataCache {
             txn.delete_table(TRACK_SORT)?;
             Ok(())
         });
+        self.forget_sort_counts();
         let mut indexed = 0;
         let stored = SortField::ALL.into_iter().map(|f| (f, f.as_str(), false));
         let mirrored = SortField::ALL
@@ -1283,6 +1408,7 @@ impl MetadataCache {
             });
             indexed = sorted.len();
         }
+        self.forget_sort_counts();
         indexed
     }
 
@@ -1302,6 +1428,33 @@ impl MetadataCache {
         if !self.is_validated() {
             return 0;
         }
+        let generation = {
+            let counts = self.lock_sort_counts();
+            if let Some(rows) = counts.rows.get(key) {
+                return *rows;
+            }
+            counts.generation
+        };
+        let rows = self.count_order_rows(key);
+        let mut counts = self.lock_sort_counts();
+        if counts.generation == generation {
+            counts.rows.insert(key.to_owned(), rows);
+        }
+        rows
+    }
+
+    /// Forgets every kept order count; called once an order has been rewritten.
+    fn forget_sort_counts(&self) {
+        let mut counts = self.lock_sort_counts();
+        counts.generation += 1;
+        counts.rows.clear();
+    }
+
+    fn lock_sort_counts(&self) -> std::sync::MutexGuard<'_, SortCounts> {
+        self.sort_counts.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn count_order_rows(&self, key: &str) -> u64 {
         self.db
             .read(|txn| {
                 let table = match txn.open_table(TRACK_SORT) {
@@ -1500,6 +1653,7 @@ impl MetadataCache {
             derived.remove(KEY_ALBUM_YEARS)?;
             Ok(())
         });
+        self.forget_sort_counts();
     }
 
     fn stored_album_stamps(&self) -> HashMap<String, i64> {
@@ -1620,6 +1774,80 @@ mod tests {
         let dir = crate::test_dir::TestDir::new(&format!("meta-{name}"));
         let db = Db::open(dir.to_str().unwrap());
         dir.holding(MetadataCache::new(db))
+    }
+
+    fn searchable_cache(name: &str) -> crate::test_dir::InTestDir<MetadataCache> {
+        let cache = temp_cache(name);
+        cache.reconcile(&[], 1);
+        let paths: Vec<String> = [
+            "/a.mp3",
+            "/Metal Gods.mp3",
+            "/b.mp3",
+            "/c.mp3",
+            "/d.mp3",
+            "/e.mp3",
+        ]
+        .map(String::from)
+        .to_vec();
+        cache.replace_track_index(&paths);
+        let row = |src: &str, title: &str, artist: &str| CachedTags {
+            src: src.into(),
+            title: title.into(),
+            artist: artist.into(),
+            ..Default::default()
+        };
+        cache.put_track_tags(&[
+            row("/a.mp3", "Heavy METAL Thunder", "Saxon"),
+            row("/b.mp3", "Metal", "Accept"),
+            row("/c.mp3", "Rain", "Metallica"),
+            row("/d.mp3", "Gold", "Ölmetal"),
+            row("/e.mp3", "Nothing here", "Nobody"),
+        ]);
+        cache
+    }
+
+    /// A plain search is answered from memory, and must give exactly what
+    /// reading every tag row gives: the same tracks, best answer first, index
+    /// order among equals, an untagged track found by its file name.
+    #[test]
+    fn a_plain_search_from_memory_matches_the_scan() {
+        let cache = searchable_cache("search-memo");
+        for query in ["metal", "met", "ölm", "gods", "zzz", "a"] {
+            let filter = TrackFilter {
+                query: Some(query),
+                ..TrackFilter::default()
+            };
+            assert_eq!(
+                cache.track_paths_where(&filter, None, false),
+                cache.scanned_paths(&filter, None, false),
+                "query {query}"
+            );
+        }
+        let metal = TrackFilter {
+            query: Some("metal"),
+            ..TrackFilter::default()
+        };
+        assert_eq!(
+            cache.track_paths_where(&metal, None, false),
+            ["/b.mp3", "/Metal Gods.mp3", "/c.mp3", "/a.mp3", "/d.mp3"]
+        );
+    }
+
+    /// The search rows are kept between searches, and a tag edit must still show.
+    #[test]
+    fn a_tag_edit_reaches_the_kept_search_rows() {
+        let cache = searchable_cache("search-memo-edit");
+        let filter = TrackFilter {
+            query: Some("nothing"),
+            ..TrackFilter::default()
+        };
+        assert_eq!(cache.track_paths_where(&filter, None, false), ["/e.mp3"]);
+        cache.put_track_tags(&[CachedTags {
+            src: "/e.mp3".into(),
+            title: "Renamed".into(),
+            ..Default::default()
+        }]);
+        assert!(cache.track_paths_where(&filter, None, false).is_empty());
     }
 
     /// The genre list is kept between reads, and a tag edit must still show.
@@ -2164,6 +2392,21 @@ mod tests {
                 .map(|y| (y.year, y.original_year)),
             Some((0, 1971))
         );
+    }
+
+    /// An order's count is kept between pages, and a rebuild must still show.
+    #[test]
+    fn a_kept_order_count_follows_a_rebuild() {
+        let one = [dated("/a.mp3", 2000, 0)];
+        let cache = sorted_cache("sorted-count-memo", &one);
+        assert_eq!(cache.sorted_track_count(SortField::Year), 1);
+
+        let two = [dated("/a.mp3", 2000, 0), dated("/b.mp3", 1990, 0)];
+        cache.replace_track_index(&two.iter().map(|t| t.src.clone()).collect::<Vec<_>>());
+        cache.put_track_tags(&two);
+        cache.rebuild_sort_orders();
+        assert_eq!(cache.sorted_track_count(SortField::Year), 2);
+        assert_eq!(cache.sorted_track_count(SortField::OriginalYear), 2);
     }
 
     fn dated(src: &str, year: i32, original_year: i32) -> CachedTags {

@@ -29,7 +29,7 @@ use super::{
 use crate::cover::store::CoverStore;
 use crate::metadata_cache::MetadataCache;
 use crate::nowplaying::NowPlayingCache;
-use crate::protocol::messages::{NowPlayingListTrack, NowPlayingOrder, QueueType, TrackTags};
+use crate::protocol::messages::{NowPlayingListTrack, NowPlayingOrder, QueueType};
 use crate::providers::Providers;
 use mbrc_wire::v6::ErrorCode;
 
@@ -105,8 +105,7 @@ fn list(
         .map(|t| t.path.clone())
         .filter(|p| !p.is_empty())
         .collect();
-    let tags = p.tracks_detailed_for_paths(paths).map_err(internal)?;
-    let by_path: HashMap<&str, &TrackTags> = tags.iter().map(|t| (t.src.as_str(), t)).collect();
+    let by_path = track::tags_by_path(p, cache, &paths)?;
 
     let covers = track::Covers::new(store, p);
     let items = page
@@ -115,7 +114,7 @@ fn list(
         .enumerate()
         .map(|(i, npt)| {
             let mut obj = match by_path.get(npt.path.as_str()) {
-                Some(t) => track::track_json(t, covers.track(t).as_deref(), track::Credits::Lead),
+                Some(t) => track::cached_track_json(t, covers.cached(t).as_deref()),
                 None => basic_track_json(npt),
             };
             let rank = offset + i as i64;
@@ -358,6 +357,7 @@ pub(crate) fn parse_queue_type(mode: &str) -> Result<QueueType, V6Error> {
 mod tests {
     use super::*;
     use crate::protocol::messages::Page;
+    use crate::protocol::messages::TrackTags;
     use crate::providers::MockProviders;
 
     /// The play order as the host reports it: storage index and path per step.

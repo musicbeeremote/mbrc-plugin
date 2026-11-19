@@ -13,6 +13,7 @@
 //! as the tag ops carry them. `artist_display` is MusicBee's display string,
 //! which is the user's own text ("A feat. B") and cannot be rebuilt from them.
 
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
@@ -374,6 +375,18 @@ pub(crate) fn tags_for_paths(
     }
     hits.extend(filled);
     Ok(hits)
+}
+
+/// [`tags_for_paths`] keyed by path, for a caller that keeps its own order.
+pub(crate) fn tags_by_path(
+    p: &dyn Providers,
+    cache: Option<&MetadataCache>,
+    paths: &[String],
+) -> Result<HashMap<String, CachedTags>, V6Error> {
+    Ok(tags_for_paths(p, cache, paths)?
+        .into_iter()
+        .map(|t| (t.src.clone(), t))
+        .collect())
 }
 
 fn non_empty(s: &str) -> Option<&str> {

@@ -34,9 +34,7 @@ use crate::cover::store::CoverStore;
 use crate::metadata_cache::{
     AlbumYears, CachedTags, MetadataCache, SortField, TrackFilter, album_key, collate, relevance,
 };
-use crate::protocol::messages::{
-    AlbumData, ArtistData, GenreData, Page, QueueType, Track, TrackTags,
-};
+use crate::protocol::messages::{AlbumData, ArtistData, GenreData, Page, QueueType, Track};
 use crate::providers::Providers;
 use crate::server::commands::library::{KEY_BROWSE_ALBUMS, KEY_BROWSE_GENRES, key_browse_artists};
 
@@ -355,13 +353,13 @@ fn tracks(
         )?,
         None => unalbumed_page(data, p, cache, &needle, sort, descending, offset, limit)?,
     };
-    // One batch read for the page's typed tags -> canonical tracks.
-    let tags = p.tracks_detailed_for_paths(page_paths).map_err(internal)?;
-    cache_browse_tags(cache, &tags);
+    // The cache answers what it holds; one host batch reads the rest.
+    let tags = track::tags_by_path(p, cache, &page_paths)?;
     let covers = track::Covers::new(store, p);
-    let items = tags
+    let items = page_paths
         .iter()
-        .map(|t| track::track_json(t, covers.track(t).as_deref(), track::Credits::Lead))
+        .filter_map(|path| tags.get(path))
+        .map(|t| track::cached_track_json(t, covers.cached(t).as_deref()))
         .collect();
     Ok(page_json(total, offset, items))
 }
@@ -718,18 +716,6 @@ fn play_all(data: &Value, p: &dyn Providers) -> OpResult {
     let shuffle = opt_bool(data, "shuffle")?.unwrap_or(false);
     p.play_all(shuffle).map_err(internal)?;
     Ok(json!({}))
-}
-
-/// Files a browsed page's tags into the cache the way the V4 handler does.
-///
-/// Browsing is the only thing that fills the tag cache, and until it is filled a
-/// track search has nothing but file paths to match on. Writing here means
-/// searching gets better as the library is browsed rather than staying blind
-/// wherever V4 has never been.
-fn cache_browse_tags(cache: Option<&MetadataCache>, tags: &[TrackTags]) {
-    let Some(cache) = cache else { return };
-    let cached: Vec<CachedTags> = tags.iter().map(CachedTags::from).collect();
-    cache.put_track_tags(&cached);
 }
 
 /// Applies the one order a name list has, when asked for.
@@ -1518,6 +1504,51 @@ mod tests {
         .unwrap();
 
         assert_eq!(out["items"][0]["album"], "25");
+    }
+
+    /// A track page reads the cache first: tracks it holds cost no host call,
+    /// and only the one it lacks is asked for, in the page's own order.
+    #[test]
+    fn a_track_page_asks_the_host_only_for_tracks_the_cache_lacks() {
+        use crate::metadata_cache::MetadataCache;
+        use crate::store::Db;
+
+        let dir = crate::test_dir::TestDir::new("tracks-cache-first");
+        let cache = MetadataCache::new(Db::open(dir.to_str().unwrap()));
+        cache.reconcile(&[], 1);
+        cache.replace_track_index(&["/a.mp3".into(), "/b.mp3".into(), "/c.mp3".into()]);
+        let cached = |src: &str, title: &str| CachedTags {
+            src: src.into(),
+            title: title.into(),
+            ..CachedTags::default()
+        };
+        cache.put_track_tags(&[cached("/a.mp3", "A"), cached("/c.mp3", "C")]);
+
+        let m = MockProviders {
+            tracks_detailed: vec![TrackTags {
+                src: "/b.mp3".into(),
+                title: "B".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let out = dispatch("library_tracks", &json!({}), &m, None, Some(&cache))
+            .unwrap()
+            .unwrap();
+
+        let titles: Vec<&str> = out["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["title"].as_str().unwrap())
+            .collect();
+        assert_eq!(titles, ["A", "B", "C"]);
+        assert_eq!(m.recorded(), ["tracks_detailed_for_paths(1)"]);
+
+        dispatch("library_tracks", &json!({}), &m, None, Some(&cache))
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.recorded().len(), 1, "a warm page asks the host nothing");
     }
 
     /// Albums sort by when each first came out, falling back to the year for
