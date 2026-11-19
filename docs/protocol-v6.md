@@ -413,7 +413,7 @@ The first frame must be the handshake, `id:0`:
 | `client_id` | yes | non-empty string, at most 128 chars; a **per-install UUID**, stable across relaunches |
 | `client_token` | after the first | the token this server issued for that `client_id` - see below |
 | `token` | once paired | the [pairing token](#pair); absent or unknown means unpaired |
-| `client_type` | yes | what kind of client this is: `android`, `ios`, `desktop`, `web` or `cli` today. Any non-blank string of at most 64 characters is accepted, so a new kind of client needs no server update. It labels the device in logs and the Configure panel and changes nothing on the wire |
+| `client_type` | yes | what kind of client this is: `android`, `ios`, `desktop`, `web` or `cli` today. Any non-blank string of at most 64 characters, with no control characters, is accepted, so a new kind of client needs no server update. It labels the device in logs and the Configure panel and changes nothing on the wire |
 | `client_version` | no | the client's own version, such as `"1.7.0"`; at most 64 characters. Logged, so a report can say which build sent what |
 | `no_broadcast` | no | `true` = a command-only / auxiliary socket that receives no events (default `false`) |
 | `client_name` | no | what the device is called, for the Configure panel's device list ("Pixel 8"); trimmed and cut at 64 chars; a later handshake's name replaces it |
@@ -1064,7 +1064,8 @@ only what moved since it last looked. It is a cursor read, not a page:
 - **First sync:** omit `since`. Every track in the library comes back as an `upsert`;
   deletes are left out because there is nothing to delete yet.
 - **Paging:** while `next` is non-null, send the same op with `after` set to `next`,
-  unchanged (it is opaque). `limit` defaults to 1000 and is clamped to 1..5000.
+  unchanged (it is opaque). `limit` follows the [paging rule](#pagination): 1000 by
+  default or for `0`, at most 5000.
 - **Progress:** `total` is how many items the whole read holds, the same on every page
   (it travels in `next`, so a resumed read keeps it). On a first sync it is the number of
   tracks in the library. It is counted when the read starts, so treat it as an upper

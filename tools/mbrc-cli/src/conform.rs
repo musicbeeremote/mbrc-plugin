@@ -714,6 +714,13 @@ fn read_all(c: &mut V6Client, op: &str, mut data: Value) -> Result<Value, String
         let total = page["total"].as_u64().ok_or("total not an int")? as usize;
         let served = page["items"].as_array().cloned().unwrap_or_default();
         let done = served.is_empty();
+        if page["offset"].as_u64() != Some((start + items.len()) as u64) {
+            return Err(format!(
+                "{op} served offset {} when asked for {}",
+                page["offset"],
+                start + items.len()
+            ));
+        }
         items.extend(served);
         if done || start + items.len() >= total {
             page["items"] = Value::Array(items);

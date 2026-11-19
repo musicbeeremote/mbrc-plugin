@@ -74,9 +74,13 @@ pub struct V6Session {
 /// The longest `client_type` or `client_version` kept; longer is `invalid_field`.
 const MAX_CLIENT_LABEL_LEN: usize = 64;
 
-/// Whether a handshake label (`client_type`, `client_version`) is one to keep.
+/// Whether a handshake label (`client_type`, `client_version`) is one to keep:
+/// not blank, not too long, and free of control characters, since it is logged
+/// and stored as given.
 fn is_client_label(label: &str) -> bool {
-    !label.trim().is_empty() && label.chars().count() <= MAX_CLIENT_LABEL_LEN
+    !label.trim().is_empty()
+        && label.chars().count() <= MAX_CLIENT_LABEL_LEN
+        && !label.chars().any(char::is_control)
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -1279,6 +1283,7 @@ mod tests {
         for data in [
             r#"{"protocol_version":6,"client_id":"x","client_type":" "}"#,
             r#"{"protocol_version":6,"client_id":"x","client_type":"cli","client_version":7}"#,
+            r#"{"protocol_version":6,"client_id":"x","client_type":"a\u0007b"}"#,
         ] {
             let mut s = V6Session::default();
             let out = feed(

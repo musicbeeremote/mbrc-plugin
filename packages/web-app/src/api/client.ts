@@ -11,6 +11,7 @@ import { MAX_ATTEMPTS, delayFor } from './backoff'
 import { isAuthFailure, isIdentityRefusal } from './refusals'
 import { EventStream } from './event-stream'
 import { callOverHttp } from './http'
+import { Keepalive } from './keepalive'
 import { WireEvent } from './ops'
 import type { EventName, Op, OpRequests } from './ops'
 import { EventPayloadSchemas } from './responses'
@@ -20,14 +21,7 @@ import { permissionsIn } from './permissions'
 import { installId, keepIssuedToken, renewIdentity, storedClientToken } from './session'
 import { ErrorCode } from './types'
 
-/**
- * Listeners and pending calls are stored untyped and handed back typed by
- * `on` and `call`.
- *
- * The alternative is a map keyed by event name with a differently-typed value
- * per key, which TypeScript cannot express for a heterogeneous Map without the
- * same assertion happening somewhere less visible.
- */
+/** Listeners and pending calls are stored untyped and handed back typed by `on` and `call`. */
 type Listener = (data: never) => void
 
 interface Pending {
@@ -47,6 +41,7 @@ export class V6Client {
   private closedDeliberately = false
   private handshaked = false
   private readonly events = new EventStream()
+  private readonly keepalive = new Keepalive()
 
   /** Per-install id, so the server can group this browser connections. */
   private clientId = installId()
@@ -84,6 +79,7 @@ export class V6Client {
     socket.addEventListener('close', () => {
       if (this.socket !== socket) return
       this.handshaked = false
+      this.keepalive.stop()
       this.failAllPending(new Error('connection closed'))
       if (this.closedDeliberately) {
         this.emitConnection(false)
@@ -101,6 +97,7 @@ export class V6Client {
   disconnect(): void {
     this.closedDeliberately = true
     this.events.stop()
+    this.keepalive.stop()
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -148,12 +145,17 @@ export class V6Client {
   }
 
   private callOverSocket<K extends Op>(op: K, data: OpRequests[K]): Promise<OpResponses[K]> {
+    return new Promise<OpResponses[K]>((resolve, reject) => {
+      this.pending.set(this.send(op, data), { op, resolve: resolve as Pending['resolve'], reject })
+    })
+  }
+
+  /** Sends one request and returns its id. A reply nobody is pending on is dropped. */
+  private send(op: string, data: unknown): number {
     const id = this.nextId
     this.nextId += 1
-    return new Promise<OpResponses[K]>((resolve, reject) => {
-      this.pending.set(id, { op, resolve: resolve as Pending['resolve'], reject })
-      this.socket?.send(JSON.stringify({ id, kind: 'request', op, data }))
-    })
+    this.socket?.send(JSON.stringify({ id, kind: 'request', op, data }))
+    return id
   }
 
   private handshake(): void {
@@ -197,6 +199,7 @@ export class V6Client {
         // The socket carries events too, so leaving the stream open would
         // deliver every one of them twice.
         this.events.stop()
+        this.keepalive.start(frame.data, () => this.send('ping', {}))
       } else if (isIdentityRefusal(frame.error)) {
         this.clientId = renewIdentity()
       } else if (isAuthFailure(frame.error)) {
@@ -224,13 +227,7 @@ export class V6Client {
     }
   }
 
-  /**
-   * Drops a token the server will not accept and stops reconnecting.
-   *
-   * Retrying with the same rejected token is an infinite loop that can only be
-   * broken by pairing again, so the app is told to ask rather than left
-   * reconnecting into the same refusal.
-   */
+  /** Drops a token the server will not accept and stops: retrying it would loop until a new pairing. */
   private rejectAuth(): void {
     this.disconnect()
     this.dispatchEvent('auth_required', {})
