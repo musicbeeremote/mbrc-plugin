@@ -89,8 +89,9 @@ enum Proto {
     Pending,
     /// Legacy V4/V5 (`{"context":...}`).
     Legacy(Session),
-    /// V6 clean-slate (`{"kind":...}`).
-    V6(V6Session),
+    /// V6 clean-slate (`{"kind":...}`), boxed: its session is several times the size
+    /// of the legacy one.
+    V6(Box<V6Session>),
 }
 
 impl Proto {
@@ -517,7 +518,7 @@ impl Conn {
                 true
             }
             Route::V6 => {
-                *proto = Proto::V6(
+                *proto = Proto::V6(Box::new(
                     V6Session::default()
                         .with_party_mode(&self.core.party_mode)
                         .with_pairing(&self.core.pairing, self.peer.ip())
@@ -525,7 +526,7 @@ impl Conn {
                         .with_server(&self.core.server)
                         .with_ping_interval(self.core.config.ping_interval_secs)
                         .requiring_pairing(self.core.config.web_auth_required),
-                );
+                ));
                 let _ = self.terminator.set("\n");
                 true
             }
@@ -697,7 +698,7 @@ mod tests {
     /// its subscribers is what broke library syncs.
     #[test]
     fn only_v6_is_expected_to_keep_itself_alive() {
-        assert!(Proto::V6(V6Session::default()).pings_itself());
+        assert!(Proto::V6(Box::default()).pings_itself());
         assert!(!Proto::Legacy(Session::default()).pings_itself());
         assert!(!Proto::Pending.pings_itself());
     }
@@ -720,7 +721,7 @@ mod tests {
         assert_eq!(Proto::Pending.cap_refusal(), None);
         assert_eq!(Proto::Legacy(Session::default()).cap_refusal(), None);
 
-        let frame = Proto::V6(V6Session::default())
+        let frame = Proto::V6(Box::default())
             .cap_refusal()
             .expect("V6 refuses in words");
         let v: serde_json::Value = serde_json::from_str(&frame).expect("a JSON frame");
