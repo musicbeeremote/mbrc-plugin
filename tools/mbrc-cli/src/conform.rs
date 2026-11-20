@@ -549,7 +549,7 @@ fn browse_differential(
         }
         r.check(&format!("browse parity: {v6op} == {v4ctx}"), || {
             let big = json!({ "offset": 0, "limit": 1_000_000 });
-            let v6d = v6.request(v6op, big.clone())?.ok()?;
+            let v6d = read_all(v6, v6op, json!({}))?;
             let v4d = v4.query(v4ctx, big)?;
             let v6total = v6d["total"].as_i64().ok_or("v6 total not an int")?;
             let v4total = v4d["total"].as_i64().ok_or("v4 total not an int")?;
@@ -687,16 +687,12 @@ impl Snapshot {
 
 /// Every `src` in the queue, in queue order.
 fn queue_paths(c: &mut V6Client) -> Result<Vec<String>, String> {
-    let data = c
-        .request("now_playing_list", json!({ "offset": 0, "limit": 0 }))?
-        .ok()?;
+    let data = read_all(c, "now_playing_list", json!({}))?;
     Ok(srcs(&data["items"]))
 }
 
 fn playlist_names(c: &mut V6Client) -> Result<Vec<String>, String> {
-    let data = c
-        .request("playlist_list", json!({ "offset": 0, "limit": 0 }))?
-        .ok()?;
+    let data = read_all(c, "playlist_list", json!({}))?;
     let mut names: Vec<String> = data["items"]
         .as_array()
         .into_iter()
@@ -705,6 +701,32 @@ fn playlist_names(c: &mut V6Client) -> Result<Vec<String>, String> {
         .collect();
     names.sort();
     Ok(names)
+}
+
+/// Every row of a paged op from `data["offset"]` on, a page at a time: the last
+/// page's `data`, with `items` holding all of them.
+fn read_all(c: &mut V6Client, op: &str, mut data: Value) -> Result<Value, String> {
+    let start = data["offset"].as_u64().unwrap_or(0) as usize;
+    let mut items = Vec::new();
+    loop {
+        data["offset"] = json!(start + items.len());
+        let mut page = c.request(op, data.clone())?.ok()?;
+        let total = page["total"].as_u64().ok_or("total not an int")? as usize;
+        let served = page["items"].as_array().cloned().unwrap_or_default();
+        let done = served.is_empty();
+        if page["offset"].as_u64() != Some((start + items.len()) as u64) {
+            return Err(format!(
+                "{op} served offset {} when asked for {}",
+                page["offset"],
+                start + items.len()
+            ));
+        }
+        items.extend(served);
+        if done || start + items.len() >= total {
+            page["items"] = Value::Array(items);
+            return Ok(page);
+        }
+    }
 }
 
 fn srcs(items: &Value) -> Vec<String> {
@@ -1011,9 +1033,7 @@ fn queue_total(c: &mut V6Client) -> Result<usize, String> {
 
 /// The queue's version and the `src`s from slot `start` to the end.
 fn queue_tail(c: &mut V6Client, start: usize) -> Result<(i64, Vec<String>), String> {
-    let data = c
-        .request("now_playing_list", json!({ "offset": start, "limit": 0 }))?
-        .ok()?;
+    let data = read_all(c, "now_playing_list", json!({ "offset": start }))?;
     let version = data["version"].as_i64().ok_or("no version")?;
     Ok((version, srcs(&data["items"])))
 }
@@ -1172,9 +1192,7 @@ fn playlist_writes(
 }
 
 fn fixture_playlist_urls(c: &mut V6Client) -> Result<Vec<String>, String> {
-    let data = c
-        .request("playlist_list", json!({ "offset": 0, "limit": 0 }))?
-        .ok()?;
+    let data = read_all(c, "playlist_list", json!({}))?;
     Ok(data["items"]
         .as_array()
         .into_iter()

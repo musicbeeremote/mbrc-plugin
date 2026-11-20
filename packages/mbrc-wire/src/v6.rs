@@ -22,6 +22,9 @@ pub const PROTOCOL_VERSION: u64 = 6;
 /// The handshake op name - the first frame on every V6 connection.
 pub const OP_HANDSHAKE: &str = "handshake";
 
+/// The largest request `id`: the biggest integer a JavaScript number holds exactly.
+pub const MAX_ID: u64 = (1 << 53) - 1;
+
 /// Envelope discriminator. Every V6 frame is one of these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,10 +70,10 @@ impl ClientType {
     }
 }
 
-/// The closed set of framing and handshake error codes.
+/// The error codes this server sends.
 ///
-/// An op that needs a code of its own adds it here; the set is closed so a
-/// client can match on it exhaustively.
+/// The set grows additively: a client must treat a code it does not know as a
+/// failure of that one request, never as a reason to drop the connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
@@ -148,7 +151,15 @@ pub fn response_ok(id: u64, data: Value) -> String {
 
 /// A failure response echoing the request `id` and carrying a typed `error`.
 pub fn response_error(id: u64, code: ErrorCode, message: &str) -> String {
-    error_frame(id, code, message, None)
+    error_frame(Some(id), code, message, None)
+}
+
+/// A failure that answers no request, because the frame had no readable `id`.
+///
+/// It carries `"id":null`, so a client never mistakes it for the reply to a
+/// request it sent, the handshake's `id:0` included.
+pub fn response_error_uncorrelated(code: ErrorCode, message: &str, field: Option<&str>) -> String {
+    error_frame(None, code, message, field)
 }
 
 /// A failure that names the offending `data` field.
@@ -158,10 +169,10 @@ pub fn response_error(id: u64, code: ErrorCode, message: &str) -> String {
 /// separate key so validation is machine-readable, and it is omitted rather than
 /// empty when the error is not about one field.
 pub fn response_error_field(id: u64, code: ErrorCode, message: &str, field: &str) -> String {
-    error_frame(id, code, message, Some(field))
+    error_frame(Some(id), code, message, Some(field))
 }
 
-fn error_frame(id: u64, code: ErrorCode, message: &str, field: Option<&str>) -> String {
+fn error_frame(id: Option<u64>, code: ErrorCode, message: &str, field: Option<&str>) -> String {
     let mut error = json!({ "code": code.as_str(), "message": message });
     if let Some(field) = field
         && let Some(obj) = error.as_object_mut()
@@ -220,14 +231,20 @@ pub struct IncomingRequest {
 /// Why an inbound request envelope was rejected. Each maps to an [`ErrorCode`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RequestError {
-    /// Not JSON, or not a JSON object. No `id` recoverable -> responses use id 0.
+    /// Not JSON, or not a JSON object. No `id` is recoverable.
     Malformed,
     /// A required envelope field (`id`, `kind`, `op`) is absent. Carries the id if
     /// one was still readable, for response correlation.
-    MissingField { id: u64, field: &'static str },
+    MissingField {
+        id: Option<u64>,
+        field: &'static str,
+    },
     /// A present envelope field has the wrong type or value (`kind != "request"`,
-    /// `id` not a u64).
-    InvalidField { id: u64, field: &'static str },
+    /// `id` not an integer from 0 to [`MAX_ID`]).
+    InvalidField {
+        id: Option<u64>,
+        field: &'static str,
+    },
 }
 
 impl RequestError {
@@ -240,10 +257,10 @@ impl RequestError {
         }
     }
 
-    /// The request `id` to echo on the error response (0 when unrecoverable).
-    pub fn id(&self) -> u64 {
+    /// The request `id` to echo on the error response, `None` when unreadable.
+    pub fn id(&self) -> Option<u64> {
         match self {
-            Self::Malformed => 0,
+            Self::Malformed => None,
             Self::MissingField { id, .. } | Self::InvalidField { id, .. } => *id,
         }
     }
@@ -261,22 +278,52 @@ pub fn parse_request(line: &str) -> Result<IncomingRequest, RequestError> {
 
     // `id` first, so later errors can echo it for correlation.
     let id = match obj.get("id") {
-        None => return Err(RequestError::MissingField { id: 0, field: "id" }),
+        None => {
+            return Err(RequestError::MissingField {
+                id: None,
+                field: "id",
+            });
+        }
         Some(v) => v
             .as_u64()
-            .ok_or(RequestError::InvalidField { id: 0, field: "id" })?,
+            .filter(|id| *id <= MAX_ID)
+            .ok_or(RequestError::InvalidField {
+                id: None,
+                field: "id",
+            })?,
     };
+    let correlated = Some(id);
 
     match obj.get("kind").and_then(Value::as_str) {
-        None => return Err(RequestError::MissingField { id, field: "kind" }),
+        None => {
+            return Err(RequestError::MissingField {
+                id: correlated,
+                field: "kind",
+            });
+        }
         Some("request") => {}
-        Some(_) => return Err(RequestError::InvalidField { id, field: "kind" }),
+        Some(_) => {
+            return Err(RequestError::InvalidField {
+                id: correlated,
+                field: "kind",
+            });
+        }
     }
 
     let op = match obj.get("op") {
-        None => return Err(RequestError::MissingField { id, field: "op" }),
+        None => {
+            return Err(RequestError::MissingField {
+                id: correlated,
+                field: "op",
+            });
+        }
         Some(Value::String(s)) => s.clone(),
-        Some(_) => return Err(RequestError::InvalidField { id, field: "op" }),
+        Some(_) => {
+            return Err(RequestError::InvalidField {
+                id: correlated,
+                field: "op",
+            });
+        }
     };
 
     let data = obj.get("data").cloned().unwrap_or(Value::Null);
@@ -399,30 +446,69 @@ mod tests {
         assert_eq!(parse_request("[1,2,3]"), Err(RequestError::Malformed));
         assert_eq!(
             parse_request(r#"{"kind":"request","op":"ping"}"#),
-            Err(RequestError::MissingField { id: 0, field: "id" })
+            Err(RequestError::MissingField {
+                id: None,
+                field: "id"
+            })
         );
         assert_eq!(
             parse_request(r#"{"id":"x","kind":"request","op":"ping"}"#),
-            Err(RequestError::InvalidField { id: 0, field: "id" })
+            Err(RequestError::InvalidField {
+                id: None,
+                field: "id"
+            })
         );
         assert_eq!(
             parse_request(r#"{"id":1,"op":"ping"}"#),
             Err(RequestError::MissingField {
-                id: 1,
+                id: Some(1),
                 field: "kind"
             })
         );
         assert_eq!(
             parse_request(r#"{"id":1,"kind":"response","op":"ping"}"#),
             Err(RequestError::InvalidField {
-                id: 1,
+                id: Some(1),
                 field: "kind"
             })
         );
         assert_eq!(
             parse_request(r#"{"id":1,"kind":"request"}"#),
-            Err(RequestError::MissingField { id: 1, field: "op" })
+            Err(RequestError::MissingField {
+                id: Some(1),
+                field: "op"
+            })
         );
+    }
+
+    /// A JavaScript client cannot hold an id past 2^53 - 1 exactly, so it could
+    /// never match the reply to one.
+    #[test]
+    fn an_id_a_javascript_number_cannot_hold_is_refused() {
+        assert!(
+            parse_request(&format!(
+                r#"{{"id":{MAX_ID},"kind":"request","op":"ping"}}"#
+            ))
+            .is_ok()
+        );
+        for id in [format!("{}", MAX_ID + 1), "-1".into(), "1.5".into()] {
+            assert_eq!(
+                parse_request(&format!(r#"{{"id":{id},"kind":"request","op":"ping"}}"#)),
+                Err(RequestError::InvalidField {
+                    id: None,
+                    field: "id"
+                }),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_uncorrelated_error_carries_a_null_id() {
+        let frame = response_error_uncorrelated(ErrorCode::MalformedFrame, "not json", None);
+        let v: Value = serde_json::from_str(&frame).unwrap();
+        assert!(v["id"].is_null());
+        assert!(parse_response(&frame).is_none());
     }
 
     #[test]

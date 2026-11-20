@@ -57,12 +57,28 @@ pub const SUPPORTED_EVENTS: &[&str] = &[
     crate::server::permissions::gate::PERMISSIONS_CHANGED,
 ];
 
+/// Optional behaviours this server offers beyond the op catalog, by name.
+///
+/// Empty today. A client treats a name it does not know as absent, so a feature
+/// can be added without a protocol bump.
+const FEATURES: &[&str] = &[];
+
 /// The capability set advertised in the handshake response.
 ///
-/// The ops the server accepts and the events it may emit. Additive (#118 §9
-/// Q5), so clients tolerate its absence; each domain appends its own `OPS`.
+/// The ops a socket may send, the events it may receive and the optional
+/// `features`; each domain appends its own `OPS`.
 pub fn capabilities() -> Value {
-    let ops: Vec<&str> = SESSION_OPS
+    capabilities_with(SESSION_OPS)
+}
+
+/// The capability set `GET /api/v6/capabilities` serves: the same, without the
+/// ops only a socket answers.
+pub fn http_capabilities() -> Value {
+    capabilities_with(&[])
+}
+
+fn capabilities_with(session_ops: &[&'static str]) -> Value {
+    let ops: Vec<&str> = session_ops
         .iter()
         .chain(player::OPS)
         .chain(system::OPS)
@@ -77,7 +93,7 @@ pub fn capabilities() -> Value {
         .chain(crate::power::OPS)
         .copied()
         .collect();
-    json!({ "ops": ops, "events": SUPPORTED_EVENTS })
+    json!({ "ops": ops, "events": SUPPORTED_EVENTS, "features": FEATURES })
 }
 
 /// A typed V6 op failure: an error code plus a human message. Rendered by the
@@ -179,30 +195,46 @@ pub(crate) fn page_json(total: usize, offset: i64, items: Vec<Value>) -> Value {
     json!({ "total": total, "offset": offset, "items": items })
 }
 
-/// The page size served when a request names none.
-///
-/// Absent `limit` used to mean "to the end", which made the laziest possible
-/// call - `library_tracks {}` - read every tag in the library and serialize it
-/// into one frame. A default page keeps the obvious request cheap; a client that
-/// genuinely wants everything still asks for it with an explicit `limit: 0`.
+/// The page size served when a request names none, or names `0`.
 pub(crate) const DEFAULT_PAGE_LIMIT: i64 = 1000;
 
-/// `(offset, limit)` from a paginated request, each clamped to the non-negative
-/// `i32` range the providers accept.
+/// The most rows one page serves, whatever `limit` asks for.
 ///
-/// An absent `limit` is [`DEFAULT_PAGE_LIMIT`]; an explicit `0` still means "to
-/// the end". Clamping here means the downstream `as i32` casts can never wrap a
-/// huge or negative client value into a bogus page index (or an FFI-crossing
-/// negative), and the `offset` echoed in the response envelope always matches
-/// the one actually used.
+/// Every page has an end, so no request puts a whole library in one frame; a
+/// client reads on until `offset + items.length` reaches `total`.
+pub(crate) const MAX_PAGE_LIMIT: i64 = 5000;
+
+/// `(offset, limit)` from a paginated request.
+///
+/// A negative value is `invalid_field`. `limit` absent or `0` is
+/// [`DEFAULT_PAGE_LIMIT`] and is capped at [`MAX_PAGE_LIMIT`]; `offset` is capped
+/// at `i32::MAX`, the widest index the providers take, so the `offset` echoed in
+/// the response is always the one used.
 pub(crate) fn page_args(data: &Value) -> Result<(i64, i64), V6Error> {
-    let offset = opt_i64(data, "offset")?
+    let offset = non_negative(data, "offset")?
         .unwrap_or(0)
-        .clamp(0, i32::MAX as i64);
-    let limit = opt_i64(data, "limit")?
-        .unwrap_or(DEFAULT_PAGE_LIMIT)
-        .clamp(0, i32::MAX as i64);
-    Ok((offset, limit))
+        .min(i32::MAX as i64);
+    Ok((offset, page_limit(data)?))
+}
+
+/// The `limit` of a paged request, by the rule [`page_args`] describes.
+pub(crate) fn page_limit(data: &Value) -> Result<i64, V6Error> {
+    Ok(match non_negative(data, "limit")? {
+        None | Some(0) => DEFAULT_PAGE_LIMIT,
+        Some(limit) => limit.min(MAX_PAGE_LIMIT),
+    })
+}
+
+/// An optional integer `field` that may not be negative.
+fn non_negative(data: &Value, field: &str) -> Result<Option<i64>, V6Error> {
+    match opt_i64(data, field)? {
+        Some(n) if n < 0 => Err(V6Error::field(
+            ErrorCode::InvalidField,
+            field,
+            format!("{field} may not be negative"),
+        )),
+        n => Ok(n),
+    }
 }
 
 /// Narrow a client-supplied `i64` index/position to `i32` (the FFI/provider width)
@@ -370,13 +402,20 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn page_args_clamp_huge_and_negative_to_i32_range() {
-        // A huge (valid u64) offset must clamp, not wrap on the downstream `as i32`.
+    fn a_huge_page_is_capped() {
         let (offset, limit) =
-            page_args(&json!({ "offset": 2_147_483_648_i64, "limit": -5 })).unwrap();
+            page_args(&json!({ "offset": 2_147_483_648_i64, "limit": 1_000_000 })).unwrap();
         assert_eq!(offset, i32::MAX as i64);
-        assert_eq!(limit, 0); // negative limit clamps to 0 ("to the end")
-        assert_eq!(offset as i32, i32::MAX); // no wrap
+        assert_eq!(limit, MAX_PAGE_LIMIT);
+    }
+
+    #[test]
+    fn a_negative_offset_or_limit_is_invalid_field() {
+        for field in ["offset", "limit"] {
+            let err = page_args(&json!({ field: -1 })).unwrap_err();
+            assert_eq!(err.code, ErrorCode::InvalidField);
+            assert_eq!(err.field.as_deref(), Some(field));
+        }
     }
 
     /// MusicBee declining or being out of reach is a precondition a client can
@@ -416,11 +455,10 @@ mod tests {
         assert_eq!(limit, DEFAULT_PAGE_LIMIT);
     }
 
-    /// The escape hatch stays: a caller that means everything says so.
     #[test]
-    fn an_explicit_zero_limit_still_means_everything() {
+    fn a_zero_limit_is_the_default_page() {
         let (_, limit) = page_args(&json!({ "limit": 0 })).unwrap();
-        assert_eq!(limit, 0);
+        assert_eq!(limit, DEFAULT_PAGE_LIMIT);
     }
 
     #[test]

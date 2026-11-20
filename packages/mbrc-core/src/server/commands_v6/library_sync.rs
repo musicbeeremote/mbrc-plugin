@@ -9,19 +9,11 @@ use serde_json::{Value, json};
 
 use mbrc_wire::v6::ErrorCode;
 
-use super::{OpResult, V6Error, opt_i64, track};
+use super::{OpResult, V6Error, page_limit, track};
 use crate::cover::store::CoverStore;
 use crate::library_changes::{Change, ChangePage, Continuation, Cursor, ReadFrom};
 use crate::metadata_cache::{CachedTags, MetadataCache};
 use crate::providers::Providers;
-
-/// Changes served per page when the request names no `limit`.
-const DEFAULT_LIMIT: i64 = 1000;
-/// The most changes one page serves.
-///
-/// Every upsert carries a whole track, and the first read of a library is all
-/// upserts, so an unbounded page would be the library in one frame.
-const MAX_LIMIT: i64 = 5000;
 
 pub fn changes(
     data: &Value,
@@ -31,9 +23,7 @@ pub fn changes(
 ) -> OpResult {
     let since = cursor_arg(data)?;
     let after = continuation_arg(data)?;
-    let limit = opt_i64(data, "limit")?
-        .unwrap_or(DEFAULT_LIMIT)
-        .clamp(1, MAX_LIMIT) as usize;
+    let limit = page_limit(data)? as usize;
 
     let from = match (&after, &since) {
         (Some(after), _) => ReadFrom::Resume(after),

@@ -6,7 +6,8 @@
 //!
 //! Contract highlights (all from #118 §2-§5):
 //! - First frame must be `op:"handshake"` (`id:0`); it carries `protocol_version`,
-//!   a required per-install `client_id`, and a `client_type`.
+//!   a required per-install `client_id`, and a `client_type`. Any other frame
+//!   with `id:0` is refused, so a reply with that id always answers the handshake.
 //! - Any non-handshake op before the handshake -> `unauthorized` + close.
 //! - Reject bad *structure* (non-object, missing/mistyped envelope fields, unknown
 //!   `kind`/`op`); *ignore* unknown additive keys inside `data`.
@@ -17,7 +18,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use mbrc_wire::v6::{self, ClientType, ErrorCode, RequestError};
+use mbrc_wire::v6::{self, ErrorCode, RequestError};
 
 use super::clients::{ClientIdentities, Identity, Introduction, MAX_CLIENT_ID_LEN};
 use super::commands_v6;
@@ -37,8 +38,8 @@ pub struct V6Session {
     handshaked: bool,
     /// Required per-install client id (session key + caps grouping).
     client_id: String,
-    /// Client identification (metadata only; never forks wire behavior).
-    client_type: Option<ClientType>,
+    /// What kind of client this is, as it said (metadata only; never forks wire behavior).
+    client_type: Option<String>,
     /// If true, this connection does not receive event broadcasts (an auxiliary /
     /// command-only socket). Default false = a main connection.
     no_broadcast: bool,
@@ -66,6 +67,20 @@ pub struct V6Session {
     client_name: Option<String>,
     /// Set when `pair` succeeds, until the transport has acted on it.
     newly_paired: bool,
+    /// The keepalive interval this server holds clients to, told in the handshake reply.
+    ping_interval_secs: Option<u64>,
+}
+
+/// The longest `client_type` or `client_version` kept; longer is `invalid_field`.
+const MAX_CLIENT_LABEL_LEN: usize = 64;
+
+/// Whether a handshake label (`client_type`, `client_version`) is one to keep:
+/// not blank, not too long, and free of control characters, since it is logged
+/// and stored as given.
+fn is_client_label(label: &str) -> bool {
+    !label.trim().is_empty()
+        && label.chars().count() <= MAX_CLIENT_LABEL_LEN
+        && !label.chars().any(char::is_control)
 }
 
 /// Log an inbound V6 frame. DEBUG caps list bodies to a sample + schema summary;
@@ -185,6 +200,12 @@ impl V6Session {
         self
     }
 
+    /// Tells the client, in the handshake reply, how often to ping. Builder-style.
+    pub fn with_ping_interval(mut self, secs: u64) -> Self {
+        self.ping_interval_secs = Some(secs);
+        self
+    }
+
     /// Holds every op but `ping` and `pair` until this client has paired. Builder-style.
     pub fn requiring_pairing(mut self, required: bool) -> Self {
         self.pairing_required = required;
@@ -291,7 +312,7 @@ impl V6Session {
         Some(super::RegMeta {
             client_id: Some(self.client_id.clone()),
             is_main: !self.no_broadcast,
-            platform: self.client_type.map(|c| c.as_str().to_string()),
+            platform: self.client_type.clone(),
             protocol: v6::PROTOCOL_VERSION as u8,
         })
     }
@@ -305,11 +326,16 @@ impl V6Session {
             RequestError::MissingField { field, .. } => format!("missing required field: {field}"),
             RequestError::InvalidField { field, .. } => format!("invalid field: {field}"),
         };
-        let frame = match &err {
-            RequestError::Malformed => v6::response_error(err.id(), err.code(), &message),
+        let field = match &err {
+            RequestError::Malformed => None,
             RequestError::MissingField { field, .. } | RequestError::InvalidField { field, .. } => {
-                v6::response_error_field(err.id(), err.code(), &message, field)
+                Some(*field)
             }
+        };
+        let frame = match (err.id(), field) {
+            (Some(id), Some(field)) => v6::response_error_field(id, err.code(), &message, field),
+            (Some(id), None) => v6::response_error(id, err.code(), &message),
+            (None, field) => v6::response_error_uncorrelated(err.code(), &message, field),
         };
         if self.handshaked {
             Outcome::reply(frame)
@@ -328,6 +354,20 @@ impl V6Session {
         metadata_cache: Option<&MetadataCache>,
         clients: Option<&ClientIdentities>,
     ) -> Outcome {
+        if req.op == v6::OP_HANDSHAKE && req.id != 0 {
+            return self.reject(RequestError::InvalidField {
+                id: Some(req.id),
+                field: "id",
+            });
+        }
+        if req.op != v6::OP_HANDSHAKE && req.id == 0 && self.handshaked {
+            return Outcome::reply(v6::response_error_field(
+                0,
+                ErrorCode::InvalidField,
+                "id 0 is the handshake's; number other requests from 1",
+                "id",
+            ));
+        }
         if req.op == v6::OP_HANDSHAKE {
             if self.handshaked {
                 // A repeat handshake is a protocol-state error: the connection
@@ -428,8 +468,11 @@ impl V6Session {
     }
 
     /// Validates the three required handshake fields - `protocol_version` exactly
-    /// the version we speak, a non-empty `client_id`, a known `client_type` - and
+    /// the version we speak, a non-empty `client_id`, a non-empty `client_type` - and
     /// records the negotiated session, or rejects and closes.
+    ///
+    /// `client_type` is open: a kind of client this server has not heard of is
+    /// admitted, since the field only labels the device in logs and the panel.
     fn handle_handshake(
         &mut self,
         req: v6::IncomingRequest,
@@ -457,11 +500,13 @@ impl V6Session {
 
         let client_type = match data.get("client_type") {
             None => return self.reject_handshake(ErrorCode::MissingField, "client_type"),
-            Some(Value::String(s)) => match ClientType::parse(s) {
-                Some(ct) => ct,
-                None => return self.reject_handshake(ErrorCode::InvalidField, "client_type"),
-            },
+            Some(Value::String(s)) if is_client_label(s) => s.clone(),
             Some(_) => return self.reject_handshake(ErrorCode::InvalidField, "client_type"),
+        };
+        let client_version = match data.get("client_version") {
+            None => None,
+            Some(Value::String(s)) if is_client_label(s) => Some(s.as_str()),
+            Some(_) => return self.reject_handshake(ErrorCode::InvalidField, "client_version"),
         };
 
         // Absent or wrong-typed is false - a main connection - per the
@@ -475,7 +520,7 @@ impl V6Session {
         let name = data.get("client_name").and_then(Value::as_str);
         let about = Introduction {
             name,
-            client_type: client_type.as_str(),
+            client_type: &client_type,
             address: self.pairing.as_ref().map(|(_, peer)| *peer),
         };
         let issued = match clients.map(|c| c.identify(&client_id, token, &about)) {
@@ -501,14 +546,15 @@ impl V6Session {
         self.client_name = name.map(str::to_owned);
         self.handshaked = true;
         self.client_id = client_id;
-        self.client_type = Some(client_type);
-        self.no_broadcast = no_broadcast;
         tracing::debug!(
-            client_type = client_type.as_str(),
+            client_type,
+            client_version,
             no_broadcast,
             issued_token = issued.is_some(),
             "v6 handshake complete"
         );
+        self.client_type = Some(client_type);
+        self.no_broadcast = no_broadcast;
         // Advertise the op/event surface so a client can degrade gracefully.
         // Additive (#118 §9 Q5); older clients ignore it.
         let mut reply = json!({ "server_version": v6::PROTOCOL_VERSION });
@@ -524,6 +570,9 @@ impl V6Session {
         }
         reply["paired"] = json!(self.is_paired());
         reply["pairing_required"] = json!(self.pairing_required);
+        if let Some(secs) = self.ping_interval_secs {
+            reply["ping_interval_secs"] = json!(secs);
+        }
         if let (Some(gate), Some(principal)) = (&self.party_mode, &self.principal) {
             let permissions = gate.permissions(principal);
             reply["permissions"] = permissions.clone();
@@ -570,7 +619,7 @@ impl V6Session {
             .client_name
             .as_deref()
             .filter(|name| !name.trim().is_empty())
-            .or(self.client_type.map(ClientType::as_str))
+            .or(self.client_type.as_deref())
             .unwrap_or("app");
         let paired = match pairing.redeem(code, label, *peer) {
             Ok(paired) => paired,
@@ -603,7 +652,7 @@ impl V6Session {
             }
             ErrorCode::MissingField => format!("missing required field: {field}"),
             ErrorCode::InvalidToken => format!(
-                "{field} does not match the one issued for this client_id;                  generate a new client_id and handshake again"
+                "{field} does not match the one issued for this client_id; generate a new client_id and handshake again"
             ),
             _ => format!("invalid field: {field}"),
         };
@@ -1218,14 +1267,63 @@ mod tests {
     }
 
     #[test]
-    fn unknown_client_type_is_invalid_field() {
+    fn a_client_type_this_server_does_not_know_is_admitted() {
         let mut s = V6Session::default();
         let out = feed(
             &mut s,
-            r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"x","client_type":"toaster"}}"#,
+            r#"{"id":0,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"x","client_type":"toaster","client_version":"2.1.0"}}"#,
+        );
+        assert!(!out.close);
+        assert!(parse(&out.replies[0])["data"].is_object());
+        assert_eq!(s.reg_meta().unwrap().platform.as_deref(), Some("toaster"));
+    }
+
+    #[test]
+    fn a_blank_client_type_or_version_is_invalid_field() {
+        for data in [
+            r#"{"protocol_version":6,"client_id":"x","client_type":" "}"#,
+            r#"{"protocol_version":6,"client_id":"x","client_type":"cli","client_version":7}"#,
+            r#"{"protocol_version":6,"client_id":"x","client_type":"a\u0007b"}"#,
+        ] {
+            let mut s = V6Session::default();
+            let out = feed(
+                &mut s,
+                &format!(r#"{{"id":0,"kind":"request","op":"handshake","data":{data}}}"#),
+            );
+            assert!(out.close, "{data}");
+            assert_eq!(parse(&out.replies[0])["error"]["code"], "invalid_field");
+        }
+    }
+
+    /// Only the handshake is `id:0`, so a client can take any reply with that id
+    /// as the handshake's answer.
+    #[test]
+    fn id_zero_belongs_to_the_handshake_alone() {
+        let mut s = V6Session::default();
+        let out = feed(
+            &mut s,
+            r#"{"id":5,"kind":"request","op":"handshake","data":{"protocol_version":6,"client_id":"x","client_type":"cli"}}"#,
         );
         assert!(out.close);
-        assert_eq!(parse(&out.replies[0])["error"]["code"], "invalid_field");
+        let reply = parse(&out.replies[0]);
+        assert_eq!(reply["id"], 5);
+        assert_eq!(reply["error"]["field"], "id");
+
+        let mut s = handshaked();
+        let out = feed(&mut s, r#"{"id":0,"kind":"request","op":"ping","data":{}}"#);
+        assert!(!out.close);
+        let reply = parse(&out.replies[0]);
+        assert_eq!(reply["error"]["code"], "invalid_field");
+        assert_eq!(reply["error"]["field"], "id");
+    }
+
+    #[test]
+    fn a_frame_with_no_readable_id_is_answered_with_a_null_id() {
+        let mut s = handshaked();
+        let out = feed(&mut s, "not json");
+        let reply = parse(&out.replies[0]);
+        assert!(reply["id"].is_null());
+        assert_eq!(reply["error"]["code"], "malformed_frame");
     }
 
     #[test]
