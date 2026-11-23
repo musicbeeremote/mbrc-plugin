@@ -44,7 +44,7 @@ base64 = "=0.23.1"
 # library metadata cache) in one `mbrc.redb` file. Pure Rust, no C
 # toolchain, and redb removed mmap in 2.0 so it does its own buffered/paged I/O
 # - a good fit for the 32-bit i686 target (no mmap address-space ceiling).
-redb = "=4.4.0"
+redb = "=4.6.0"
 # SHA1 for cover cache identities (album key + content hash). Not cryptographic;
 # must byte-match the C# HashingUtilities (lowercase hex). Pure Rust, i686 OK.
 sha1 = "=0.11.0"
@@ -55,13 +55,13 @@ tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # gzip for rolled log generations. `rust_backend` (miniz_oxide) is pure Rust, so
 # i686-msvc cross-compiles with no C/zlib toolchain.
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 # Writing the diagnostics bundle. Same version and features mbrc-release already
 # pins for reading update zips, so this adds no crate to the graph: mbrc-core
 # takes mbrc-release with `client`, which already compiles zip in. `deflate-flate2`
 # rides on the pure-Rust miniz_oxide above, so i686-msvc stays free of a C
 # toolchain.
-zip = { version = "=9.2.1", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.6.0", default-features = false, features = ["deflate-flate2"] }
 # Cross-platform process RSS for the O(page) memory proof (validation plan): a
 # periodic + per-reconcile log line so a paging sweep on a huge library shows
 # resident memory staying flat. Pure bindings (GetProcessMemoryInfo on Windows),
@@ -79,12 +79,12 @@ socket2 = "=0.6.5"
 # Rust with no async-runtime dependency of its own - it runs its own daemon
 # thread - so i686-msvc stays free of a C toolchain. `logging` is left off: the
 # crate would pull in `log`, and the core's logging goes through `tracing`.
-mdns-sd = { version = "=0.21.6", default-features = false }
+mdns-sd = { version = "=0.21.7", default-features = false }
 axum = { version = "=0.8.9", default-features = false, features = ["http1", "ws", "json", "query", "matched-path"] }
 tower-http = { version = "=0.7.1", default-features = false, features = ["set-header"] }
 # Only for the SSE body's `Stream`; already in the tree under axum.
 futures-core = "=0.3.34"
-rust-embed = { version = "=8.13.0", default-features = false }
+rust-embed = { version = "=8.14.0", default-features = false }
 hyper-util = { version = "=0.1.21", default-features = false, features = ["service", "tokio"] }
 hyper = { version = "=1.12.0", default-features = false, features = ["server", "http1"] }
 
@@ -128,7 +128,7 @@ windows-sys = { version = "=0.61.2", features = [
 [build-dependencies]
 mbrc-buildinfo = { workspace = true }
 csbindgen = "=1.9.8"
-syn = { version = "=3.0.9", features = ["full"] }
+syn = { version = "=3.0.10", features = ["full"] }
 
 [dev-dependencies]
 mbrc-capture = { workspace = true }
